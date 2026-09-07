@@ -1,5 +1,9 @@
 # 质量门与停止规则
 
+测试 ID、容差和反例按 [测试规格](06-test-specification.md) 实施，适用阶段及判决以
+[验收流程](07-acceptance-and-release.md) 为准。工具未实现或环境缺失必须标 NOT_RUN/BLOCKED。
+下列要求针对受影响的已开放能力；M0 不以尚未开发的 M2 状态工具作为前置条件。
+
 ## 每次提交
 
 - Fortran 编译无新增 warning；
@@ -12,7 +16,7 @@
 
 | 质量门 | 判据 |
 |---|---|
-| Build | Debug、Sanitize、Release 至少在支持平台构建 |
+| Build | 支持平台的 Debug/Release 及编译器可用的运行时检查通过；不可用检测及第三方盲区单列 |
 | Input | schema、单位、引用、范围和组合检查通过 |
 | State | 新旧入口状态相同，或差异被逐字段批准 |
 | Numerical | 位移、反力、应力、特征值等在各自容差内 |
@@ -42,4 +46,3 @@
 - `EXPECTED_REFORMULATION`：算法或离散方式明确变化，需要独立基准和版本说明。
 
 禁止以“新结果看起来合理”关闭差异。
-

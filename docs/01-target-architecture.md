@@ -55,8 +55,11 @@ YL 现状会在读取过程中不断改变 `global_var`，一旦中途失败便�
 
 ```fortran
 call load_problem(source, draft, errors)
+if (errors%any()) return
 call validate_problem(draft, errors)
+if (errors%any()) return
 call finalize_problem(draft, problem, manifest, errors)
+if (errors%any()) return
 call build_runtime(problem, runtime, errors)
 if (errors%any()) return
 call commit_legacy_globals(runtime)
@@ -64,6 +67,9 @@ call commit_legacy_globals(runtime)
 
 `commit_legacy_globals` 是迁移期唯一允许写入旧全局输入变量的入口。计算模块完成显式参数化后，
 该 bridge 逐步缩小直至删除。
+
+提交阶段不得再解析输入或执行可能失败的分配。先准备完整所有权和所需数组，再转移所有权；
+指针别名、生命周期与失败后的再次加载必须单测。输入模式由命令行显式指定。
 
 ## 4. 三种运行模式
 
@@ -90,6 +96,12 @@ phases.json
 numerics.json
 ```
 
+第一次组装只是检查点之一。YL 会在分析阶段内继续读取 `.man` 等输入；迁移必须登记
+`model_ready`、`phase_ready(phase_id)`、`increment_ready(phase_id, step_id)`，
+以及使用重启时的 `restart_ready`。对消费路径涉及的每个检查点比较已生效参数。
+两个实现使用独立进程，不在同一 `global_var` 上先后运行两套 reader。
+哈希用于识别完全相同的数据，带容差的浮点比较必须读取结构化值，不能只比较哈希。
+
 迁移判据首先是旧路径与新路径进入计算核心时的状态是否等价，其次才是最终结果。文本完全
 相同既非必要条件，也不足以证明物理语义相同。
 
@@ -103,4 +115,3 @@ numerics.json
 - 非法组合报错；
 - 未验证组合由 capability gate 拒绝；
 - 几何集合优先使用命名实体和拓扑选择，避免节点号长表。
-

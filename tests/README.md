@@ -1,5 +1,8 @@
 # 测试层次
 
+具体测试矩阵、反例、比较算法、容差登记和执行频率见
+[测试规格](../docs/06-test-specification.md)。此处为待实现目录规划，不代表测试已存在。
+
 ```text
 unit/             类型、解析、校验、派生和错误处理
 state/            新旧路径的 ProblemState/RuntimeState 等价
@@ -10,4 +13,3 @@ integration/      从输入到求解结果的完整运行
 ```
 
 “进程退出码为 0”只能算 integration smoke，不代表 numerical 或 physics 通过。
-

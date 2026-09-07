@@ -47,6 +47,16 @@ docs/                    架构、计划、质量门和决策记录
 
 详细执行顺序见 [docs/02-migration-plan.md](docs/02-migration-plan.md)。
 
+## 迁移工作入口
+
+从 [执行与任务拆分](docs/05-execution-backlog.md) 开始。测试按
+[测试规格](docs/06-test-specification.md) 执行，阶段结项使用
+[验收与发布流程](docs/07-acceptance-and-release.md) 和
+[验收模板](docs/templates/acceptance.md)。当前进度见
+[STATUS.md](docs/STATUS.md)，风险见 [风险登记表](docs/08-risk-register.md)。
+
+这些文件描述待实施契约；目录、Schema 或算例存在不代表功能实现或验证通过。
+
 ## 开始工作的规则
 
 1. 先在 `cases/manifest.toml` 登记能力和验证等级。
