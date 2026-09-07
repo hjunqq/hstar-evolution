@@ -13,5 +13,11 @@ yl-run                运行并生成 build/run manifest
 yl-import-case        从登记来源导入算例，不导入运行垃圾
 ```
 
+已实现：
+
+| 计划命令 | 实现 | 说明 |
+|---|---|---|
+| `yl-case hash` | `tools/yl_manifest.py generate / check` | 逐文件 SHA-256 清单；`check` 对缺失、篡改、未登记文件均非零退出 |
+
 工具实现必须 fail-closed：无法判断时返回未验证，不得返回通过。
 

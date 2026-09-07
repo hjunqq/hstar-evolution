@@ -1,0 +1,216 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-07T05:02:19+00:00",
+  "root": "legacy",
+  "file_count": 39,
+  "total_bytes": 55681465,
+  "excludes": [
+    "BASELINE.md",
+    "source-manifest.json"
+  ],
+  "meta": {
+    "source_repository": "/home/huijun/HSTAR_Next/hstarYLOrig",
+    "source_commit": "5414e737484edf2f53efbfd2bafd3702ebbbb88a",
+    "source_tree": "HSTAR/",
+    "stub_origin": "/home/huijun/HSTAR_Next/_archive/src/gidpost_stub.c",
+    "note": "yl/ is the historical snapshot; stubs/ is the Linux link-only GiD stub (126 BIND(C) symbols covered)"
+  },
+  "case_insensitive_collisions": [],
+  "files": [
+    {
+      "path": "stubs/gidpost_stub.c",
+      "bytes": 13974,
+      "sha256": "c87eb19a72eb1e3fec9d0eefa03bc956f46ca83c9eb28dc0773071a611f41fd6"
+    },
+    {
+      "path": "yl/Array.f90",
+      "bytes": 22358,
+      "sha256": "5a444f390ba83d75c82983bff2fc4684bc3e33e8b04815489d4029a9858fa442"
+    },
+    {
+      "path": "yl/Elements.f90",
+      "bytes": 103572,
+      "sha256": "801f92fc2e5750ef15887bbb28889f45a99212bfe24cc1ddc426cb0f52166b63"
+    },
+    {
+      "path": "yl/Fem.f90",
+      "bytes": 721622,
+      "sha256": "1845f1655f919fa3498e4144d19fb6bcdbfa33cb0fcee63db3e8c5068f9ba444"
+    },
+    {
+      "path": "yl/Global.f90",
+      "bytes": 194884,
+      "sha256": "a2a4779a31176411954028d3f3d8df503a956e822d579dd54bc2d3be25decc5a"
+    },
+    {
+      "path": "yl/Level.f90",
+      "bytes": 86651,
+      "sha256": "87616b09cdbfe73bbc19051086b3116fcd30f150e2ef7f9da8b33c064081d67d"
+    },
+    {
+      "path": "yl/Load.f90",
+      "bytes": 66873,
+      "sha256": "86322321176007e4f71fe21965f0c4523f6736cd807f2b6f8a8658e439b37f6b"
+    },
+    {
+      "path": "yl/Material.f90",
+      "bytes": 64804,
+      "sha256": "63b300bcdf962f2f1ce31a1b86b117ce26eff2557a15749c3d643a9c81db22ee"
+    },
+    {
+      "path": "yl/OPT.F90",
+      "bytes": 8728,
+      "sha256": "9a6a83f21277546838f97e49bb8c442fe2eedc5e0dfd41681e36197128780ee8"
+    },
+    {
+      "path": "yl/Output.f90",
+      "bytes": 214743,
+      "sha256": "9443041c178fe732cdecea08607500c474a9638a62e8edb9b39aa24bbb520734"
+    },
+    {
+      "path": "yl/Prescrib.f90",
+      "bytes": 17885,
+      "sha256": "b1ba95c013dc4d1919c77ac47c86eebef3f079a222e5be79428021faaedc865c"
+    },
+    {
+      "path": "yl/Residu.f90",
+      "bytes": 232568,
+      "sha256": "00bb722801bd26cb758624c9f6cf8b6d6fb10c3414f3231aad9f935cf91ae243"
+    },
+    {
+      "path": "yl/Solver.f90",
+      "bytes": 407393,
+      "sha256": "af0b4d5ac32a30813cde089a4e1581f5253d98a2213a9b93b425ed61e074e5ff"
+    },
+    {
+      "path": "yl/Stiff.f90",
+      "bytes": 438755,
+      "sha256": "9047fd2eb776c143890898ff0adf4f96344cc48c0bd4d46e6c9c95428f050201"
+    },
+    {
+      "path": "yl/Temper.f90",
+      "bytes": 53064,
+      "sha256": "c91fe5816bde5141d1c75d4a605476e1362eb48e20abc0ea1df80e52ad602b2c"
+    },
+    {
+      "path": "yl/Vartype.f90",
+      "bytes": 678,
+      "sha256": "9128d2e5518a3406ad098126b830a7a409ae9639d38376072f04a9bc7d366528"
+    },
+    {
+      "path": "yl/dagangshan.u2d",
+      "bytes": 38,
+      "sha256": "4844f2de3094f8322c5fa9b0f75352ac123e05cd4d6ef2407ed2311a925d3800"
+    },
+    {
+      "path": "yl/errcheck.inc",
+      "bytes": 24246,
+      "sha256": "ababc21300f5bec17bfdc57fa9aa5c466e50cc99e04c7b4702942117843f9c05"
+    },
+    {
+      "path": "yl/ex_nlsqp_f.f",
+      "bytes": 10671,
+      "sha256": "fd958d97dadb5a38b678b401bd4fc54536da45543a90e9fef4597287431e4444"
+    },
+    {
+      "path": "yl/gauss_random.txt",
+      "bytes": 32000,
+      "sha256": "33ae9c1a8fcc810a8b812ff7479484f855545db81e41e621f124b345d3a31804"
+    },
+    {
+      "path": "yl/generatedata.inc",
+      "bytes": 24695,
+      "sha256": "8e1ae1fa4e003354fbf1e8125e36d252e6cb650fdab98b7052c382f66a21b439"
+    },
+    {
+      "path": "yl/gidpost.F90",
+      "bytes": 124831,
+      "sha256": "0fefe906ae9e20baf8732948121ae8b7f30a29cb056334be2bf84d065d021e5b"
+    },
+    {
+      "path": "yl/hstar.u2d",
+      "bytes": 38,
+      "sha256": "4844f2de3094f8322c5fa9b0f75352ac123e05cd4d6ef2407ed2311a925d3800"
+    },
+    {
+      "path": "yl/hstar.vfproj",
+      "bytes": 6541,
+      "sha256": "91d814a98125168a6300f0b06382696910c4b76d15f79bfa2f6e817367bc815f"
+    },
+    {
+      "path": "yl/inp",
+      "bytes": 211,
+      "sha256": "de15f08e1b4a43b586c2322c1ed2399abfedbbba6f7c48892165669bd86f3e6f"
+    },
+    {
+      "path": "yl/libiomp5md.dll",
+      "bytes": 1602416,
+      "sha256": "15e6f874a53cb54a8e266099c8da92484c6f50301d117f9a5443846e9ece90b5"
+    },
+    {
+      "path": "yl/memory_leak_check.md",
+      "bytes": 1860,
+      "sha256": "9a7093cd00e6281f0ab63c7b75c48bc09fc6a86d665e449062bc9256a656bc42"
+    },
+    {
+      "path": "yl/meshfine.f90",
+      "bytes": 133982,
+      "sha256": "74c03a6efa95ce375c78d04e3ef648fab15d5aa23e65c3702ce4491c800c20ef"
+    },
+    {
+      "path": "yl/sanitizer_guide.md",
+      "bytes": 834,
+      "sha256": "856f29976de9e03d1edb9adae6ce81ddefb2ca67b58cbf108c17e6b1c67dbebb"
+    },
+    {
+      "path": "yl/statchars.inc",
+      "bytes": 24151,
+      "sha256": "245dc16fc9bfa37c598a0aa25213f697cca40f9da6ec62480d88d787ceecf313"
+    },
+    {
+      "path": "yl/statcheck.inc",
+      "bytes": 6492,
+      "sha256": "6304d88f4d45d7497f0178f96e84956a06b5712eda1d8aff5fc0c5208d55ff87"
+    },
+    {
+      "path": "yl/vdrnggaussianmv_full.f",
+      "bytes": 4591,
+      "sha256": "206852e13af495aa9d63913aa7d7a424d83bf7caa4fce9fc17a6582f807d6180"
+    },
+    {
+      "path": "yl/vdrnggaussianmv_packed.f",
+      "bytes": 8509,
+      "sha256": "b9185b27f36bc350d88ed9aafc6422b809f66a50b4634b61693c9f7b96f6ef8d"
+    },
+    {
+      "path": "yl/vsl_gauss_module.f90",
+      "bytes": 6796,
+      "sha256": "d25e207910e318870966adf0f5a12602712179efc493d17468a56f64bd193615"
+    },
+    {
+      "path": "yl/HSTAR/HSTAR.vtuneproj",
+      "bytes": 797,
+      "sha256": "cbe4074bd31a945b5d5d8894645bcef91d09e5faebfad068171d00c29535aa6b"
+    },
+    {
+      "path": "yl/lib64/gidpost.lib",
+      "bytes": 780790,
+      "sha256": "aaad4ba6c74456328392e3ab110d6358213c8699512938179b8887d434268f71"
+    },
+    {
+      "path": "yl/lib64/libhdf5.lib",
+      "bytes": 48535438,
+      "sha256": "ee2b0bf65d1b17c9576e13c1657869e914d3f5afe275449e1eb4984635c26cda"
+    },
+    {
+      "path": "yl/lib64/libhdf5_hl.lib",
+      "bytes": 1247862,
+      "sha256": "8eae8184d1fdabd6ad41cce39531d5ad61aeb4b03d9aa511c1a8e80122a8c8b9"
+    },
+    {
+      "path": "yl/lib64/zlib.lib",
+      "bytes": 455124,
+      "sha256": "157d5c8e7733ec77c6aacc0cd878c5043b0f6c9611c69ba8f189b6fc2c119dfa"
+    }
+  ]
+}

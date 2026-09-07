@@ -1,0 +1,107 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-07T05:02:19+00:00",
+  "root": "cases/golden/static_2d/cooks_membrane/legacy",
+  "file_count": 16,
+  "total_bytes": 40527,
+  "excludes": [],
+  "meta": {
+    "case_id": "static_2d.cooks_membrane",
+    "source_repository": "/home/huijun/HSTAR_Next/cases",
+    "source_commit": "d3e921cb416722d8b46ab64dab177dee1e17abe3",
+    "source_path": "cases/cooks_membrane",
+    "actually_opened_load_file": "1.loa",
+    "note": "Solver inputs only; source dir also holds historical run outputs (1.chk, 1.flavia.res, ...) that were not imported"
+  },
+  "case_insensitive_collisions": [
+    {
+      "paths": [
+        "1.LOA",
+        "1.loa"
+      ],
+      "identical_bytes": true
+    }
+  ],
+  "files": [
+    {
+      "path": "1.LOA",
+      "bytes": 347,
+      "sha256": "9381ab97d2c4d32bf07cf18162e40ed7c0dd760b1638142069f356dd1ec7d548"
+    },
+    {
+      "path": "1.aqu",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "1.cor",
+      "bytes": 15606,
+      "sha256": "99ae04107a08a74edcf9514314ad2ef1c6c8ce081628490c754ccaa54e661331"
+    },
+    {
+      "path": "1.ele",
+      "bytes": 12032,
+      "sha256": "30ab312490c9766b5328b5fa49e938b8300834c985d90019e0b9a1d8a4f57e88"
+    },
+    {
+      "path": "1.ftr",
+      "bytes": 72,
+      "sha256": "5a6bc4c49e60511b7ab9080c1779320847979214450fa5306248bc25014e6bfc"
+    },
+    {
+      "path": "1.glb",
+      "bytes": 2410,
+      "sha256": "50148ab768554192e52ca753797dfd6d9b923c127ffd413a8cb41355456ff7d8"
+    },
+    {
+      "path": "1.ifs",
+      "bytes": 73,
+      "sha256": "237a1f4f804e4815f29cb4f4b643089e363b398f6a6c4120713f22e3c728eb9b"
+    },
+    {
+      "path": "1.loa",
+      "bytes": 347,
+      "sha256": "9381ab97d2c4d32bf07cf18162e40ed7c0dd760b1638142069f356dd1ec7d548"
+    },
+    {
+      "path": "1.man",
+      "bytes": 95,
+      "sha256": "d42edfdbaaacf90f13266d94e1c8432e04c9024602d43510c5c7fc6e6d9ecbe5"
+    },
+    {
+      "path": "1.mat",
+      "bytes": 371,
+      "sha256": "4e8335c9e6bda62b7f0faec132b5e2b78ad434ae013fee4a515dff1d47eb33d9"
+    },
+    {
+      "path": "1.nrt",
+      "bytes": 91,
+      "sha256": "969193fc453109c96ba5786cc5085c77c29b3a4466e518287a86f42a2b5e25d4"
+    },
+    {
+      "path": "1.opr",
+      "bytes": 219,
+      "sha256": "2b23bff52983db51251a327e6d9e2472188df582e86993eaca3348f943b9f02c"
+    },
+    {
+      "path": "1.pre",
+      "bytes": 545,
+      "sha256": "39f01977617c4225145b797c05f16cc4054d142ca6d2b98308485a297204299e"
+    },
+    {
+      "path": "1.sol",
+      "bytes": 8000,
+      "sha256": "731953774729842473e89657d1ee94b7efdd6fb83562e31bc675c39dd6573b91"
+    },
+    {
+      "path": "1.tem",
+      "bytes": 248,
+      "sha256": "110dabf3b657fd524285aa54cf178bfe7c9c33ac3cc48308ce4b465b733f1bd0"
+    },
+    {
+      "path": "inp",
+      "bytes": 71,
+      "sha256": "fec43e97e94d091f2327003dae2f5a86a9f41c996294efeb5778fb45fe0f58fe"
+    }
+  ]
+}
