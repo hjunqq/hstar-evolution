@@ -447,12 +447,12 @@ linet=linet+3
 
 			   end do
 			   nullify(lnods)
-			   if(sum(icpipe)>2) stop !'error in boundt of pipe'
+			   if(sum(icpipe)>2) call diag_abort('REF',EXIT_INPUT,'Temper.f90:boundt','pipe segment '//trim(diag_itoa(int(ie,i8)))//' of pipe '//trim(diag_itoa(int(ipipe,i8)))//' touches more than 2 nodes of element '//trim(diag_itoa(int(ielem,i8))))   ! M1-03 R20
 			   !if(ictran==0.and.sum(icpipe)==2) goto 15
                if(sum(icpipe)==2) goto 15
 			   end do
 			   print *,'stop in no find element for pipes'
-			   stop !'error in boundt of pipe'
+			   call diag_abort('REF',EXIT_INPUT,'Temper.f90:boundt','no element contains segment '//trim(diag_itoa(int(ie,i8)))//' of pipe '//trim(diag_itoa(int(ipipe,i8))))   ! M1-03 R20
 	15    pipeinfo(ipipe)%aelem(ie)=ielem
                 do inode=1,2                 !2
                 ipoin=pipeinfo(ipipe)%line_pipe(inode,ie)

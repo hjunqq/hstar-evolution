@@ -1,0 +1,23 @@
+schema = 1
+id = "N01_glb_npoin_negative"
+base_case = "static_2d.cooks_membrane"
+description = "1.glb line 2 field 1 (npoin) 289 -> -5: the sizes guard in global_data runs right after the sizes read and before the first allocate; npoin < 1 is RANGE and fails immediately (it decides allocation sizes)."
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 2
+field = 1
+value = "-5"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "RANGE"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.sizes_and_switches"
+field = "npoin"
+value = "-5"
+no_core = true
+max_wall_seconds = 10

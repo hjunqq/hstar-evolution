@@ -1,0 +1,24 @@
+schema = 1
+id = "N16_pre_ifixvar8_zero_curve"
+base_case = "static_2d.cooks_membrane"
+description = "1.pre line 3 field 1 (ifixvar of set 1) 1 -> 8 while itcurve (field 3) stays 0: R18 says itcurve=0 means dfact=1 for ordinary constraints, but the ifixvar=8/10 branch uses dfact as a water level/temperature and needs a real curve, so set_header reports REF on itcurve (value=0) at ifixset=1."
+
+[[derive]]
+op = "set_field"
+file = "1.pre"
+line = 3
+field = 1
+value = "8"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "REF"
+stage = "startup"
+file_suffix = ".pre"
+reader = "PRE.prescrib_set.set_header"
+field = "itcurve"
+index = 1
+value = "0"
+no_core = true
+max_wall_seconds = 10

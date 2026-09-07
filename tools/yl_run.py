@@ -8,9 +8,11 @@ Every run:
      single-threaded, without LD_LIBRARY_PATH, under a wall-clock timeout
      (SIGTERM to the group, then SIGKILL after a grace period);
   4. parses the binary's structured diagnostics (stderr `HSTAR_DIAG ...` lines,
-     M1-02 exit protocol; every integer key must be an integer) and check-mode
-     summary (stdout `HSTAR_CHECK*` lines: schema=1, mode=check-legacy, integer
-     errors, readers_executed == number of HSTAR_CHECK_READER lines);
+     M1-02 exit protocol; every integer key must be an integer; every record is
+     kept in order, M1-03 string keys value= / allowed= included) and check-mode
+     summary (stdout `HSTAR_CHECK*` lines, same strict shlex rules as HSTAR_DIAG:
+     schema=1, mode=check-legacy, integer errors, readers_executed == number of
+     HSTAR_CHECK_READER lines, zero included);
   5. parses the required output and re-verifies the golden inputs;
   6. classifies the outcome (first match in STATUS_ORDER wins): INPUT_ERROR /
      UNSUPPORTED / INIT_ERROR / SOLVE_ERROR / INTERNAL_ERROR require rc == the
@@ -116,7 +118,8 @@ def parse_kv_line(line: str, int_keys: set[str], strict: bool = False) -> dict:
 
 def parse_diag_line(body: str) -> dict:
     """Strict HSTAR_DIAG record: shlex-parsable, schema=1, a code, an integer exit, and every
-    present integer key (exit/seq/index/iostat/schema) an integer. ValueError otherwise."""
+    present integer key (exit/seq/index/iostat/schema) an integer. ValueError otherwise.
+    String keys (field, message, M1-03 value / allowed, ...) are kept as parsed."""
     kv = parse_kv_line(body, DIAG_INT_KEYS, strict=True)
     if kv.get("schema") != DIAG_SCHEMA:
         raise ValueError(f"schema {kv.get('schema')!r} != {DIAG_SCHEMA}")
@@ -148,18 +151,30 @@ def parse_diagnostics(stderr_text: str) -> tuple[list[dict], list[str], list[str
 def parse_check_summary(stdout_text: str) -> tuple[dict | None, list[str]]:
     """Collect stdout HSTAR_CHECK / HSTAR_CHECK_READER lines -> (summary, problems).
     summary is None when the binary emitted none. problems lists every deviation from the
-    check-mode contract: exactly one HSTAR_CHECK line with schema=1, mode=check-legacy, a
-    status, integer errors and readers_executed; readers_executed equal to the number of
-    HSTAR_CHECK_READER lines (when any); every HSTAR_CHECK_READER with an id and integer n."""
+    check-mode contract: every line strictly shlex-parsable (unbalanced quotes reject the
+    line); exactly one HSTAR_CHECK line with schema=1, mode=check-legacy, a status, integer
+    errors and readers_executed; readers_executed equal to the number of HSTAR_CHECK_READER
+    lines (zero included); every HSTAR_CHECK_READER with an id and integer n."""
     summary: dict | None = None
     readers: dict[str, int] = {}
     problems: list[str] = []
     reader_lines = 0
+    summary_malformed = False
     for ln in stdout_text.splitlines():
         if not ln.startswith(CHECK_PREFIX):
             continue
         tag, _, rest = ln.partition(" ")
-        kv = parse_kv_line(rest, CHECK_INT_KEYS)
+        try:
+            kv = parse_kv_line(rest, CHECK_INT_KEYS, strict=True)
+        except ValueError as exc:  # unbalanced quotes: the line is rejected as a whole
+            problems.append(f"malformed {tag} line ({exc}): {ln[:200]}")
+            if tag == "HSTAR_CHECK_READER":
+                reader_lines += 1
+            elif tag == "HSTAR_CHECK":
+                summary_malformed = True
+                if summary is None:
+                    summary = {"status": None, "readers_executed": None}
+            continue
         if tag == "HSTAR_CHECK_READER":
             reader_lines += 1
             rid, n = kv.get("id"), kv.get("n")
@@ -180,7 +195,7 @@ def parse_check_summary(stdout_text: str) -> tuple[dict | None, list[str]]:
     if summary is None:
         summary = {"status": None, "readers_executed": None}
         problems.append("HSTAR_CHECK summary line missing")
-    else:
+    elif not summary_malformed:
         if summary.get("schema") != DIAG_SCHEMA:
             problems.append(f"schema {summary.get('schema')!r} != {DIAG_SCHEMA}")
         if summary.get("mode") != CHECK_MODE:
@@ -191,7 +206,7 @@ def parse_check_summary(stdout_text: str) -> tuple[dict | None, list[str]]:
             problems.append(f"errors {summary.get('errors')!r} is not an integer")
         if not isinstance(summary.get("readers_executed"), int):
             problems.append(f"readers_executed {summary.get('readers_executed')!r} is not an integer")
-        elif reader_lines and summary["readers_executed"] != reader_lines:
+        elif summary["readers_executed"] != reader_lines:  # zero lines must match readers_executed=0 too
             problems.append(f"readers_executed={summary['readers_executed']} but {reader_lines} HSTAR_CHECK_READER lines")
     summary["readers"] = readers
     return summary, problems

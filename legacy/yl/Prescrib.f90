@@ -5,6 +5,7 @@
     use variable_types
     use global_var
     use meshfine
+    use applied_load, only: ntcurve   ! M1-03: itcurve must refer to a curve read by external_load_1
 
     implicit none
 
@@ -218,12 +219,25 @@
           if (type_abc=='MIF')call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_reached_only_Prescrib_213,ifixset)
           if (type_abc/='MIF')read(punit,*,iostat=yl_ios,iomsg=yl_msg)ifixvar,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr ! 20230402
           if (type_abc/='MIF')call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_header,ifixset)
+          ! M1-03 set header guard: nfixnods sizes list_fix, ifixvar indexes lmdofn, itcurve indexes tcurves (0 = no curve, R18)
+          yl_idx=RD_PRE_prescrib_set_set_header
+          if (type_abc=='MIF')yl_idx=RD_PRE_prescrib_set_reached_only_Prescrib_213
+          if ((ifixvar==8.or.ifixvar==10).and.itcurve==0) &
+             call diag_ref(yl_idx,ifixset,'itcurve',int(itcurve,i8),1_i8,int(ntcurve,i8))   ! water level / temperature sets need a real curve (R18)
+          call diag_range(yl_idx,ifixset,'nfixnods',int(nfixnods,i8),1_i8,int(npoin,i8))
+          call diag_range(yl_idx,ifixset,'ifixvar',int(ifixvar,i8),1_i8,int(mdofn,i8))
+          call diag_ref(yl_idx,ifixset,'itcurve',int(itcurve,i8),0_i8,int(ntcurve,i8))
+          call diag_flush_stage()
 
           ! tfixvar =0, u(or p, Pw); tfixvar=1, V or DP/Dt; tfixvar=2, a;; tfixvar=3, ÐéÄâÔ¼Êøµã
           ! tfixvar indicates the time  order of the input fixed value
           allocate(list_fix(nfixnods))
           read(punit,*,iostat=yl_ios,iomsg=yl_msg)list_fix(1:nfixnods)
           call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_nodes,ifixset)
+          do ifixnods=1,nfixnods   ! M1-03: every listed node must exist (consumed by nodfn below)
+             call diag_ref(RD_PRE_prescrib_set_set_nodes,ifixset,'list_fix',int(list_fix(ifixnods),i8),1_i8,int(npoin,i8))
+          end do
+          call diag_flush_stage()
           allocate(val_fix(nfixnods))
           read(punit,*,iostat=yl_ios,iomsg=yl_msg)val_fix(1:nfixnods)
           call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_values,ifixset)
@@ -286,7 +300,7 @@
                       if  (i0/=1)then   !i0/=1
                          write(*,*)'stop for i0/=1, in Prescribe.f90 , for MIF'
                          write(*,*)'i0=',i0,' ifixnods=',ifixnods
-                            stop
+                            call diag_abort('REF',EXIT_INPUT,'Prescrib.f90:prescrib_set','MIF: '//trim(diag_itoa(int(i0,i8)))//' nodes match the layer coordinates of ifixnods='//trim(diag_itoa(int(ifixnods,i8)))//', expected exactly 1')   ! M1-03 R20
                             endif !i0/=1
                          prescribx(ndofix)%ldofixb(ilaymif)=ldofx(ilaymif)
                          prescribx(ndofix)%lnofixb(ilaymif)=lnofx(ilaymif)

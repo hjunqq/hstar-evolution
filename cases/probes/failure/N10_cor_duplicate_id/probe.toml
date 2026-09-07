@@ -1,0 +1,24 @@
+schema = 1
+id = "N10_cor_duplicate_id"
+base_case = "static_2d.cooks_membrane"
+description = "1.cor line 2 field 1 (node id) 2 -> 1: the new .cor contract requires id == row order; row 2 carrying id 1 repeats an id already seen, so node_coordinates reports DUPLICATE at ipoin=2 (accumulated, flushed at end of .cor)."
+
+[[derive]]
+op = "set_field"
+file = "1.cor"
+line = 2
+field = 1
+value = "1"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "DUPLICATE"
+stage = "startup"
+file_suffix = ".cor"
+reader = "COR.global_data.node_coordinates"
+field = "i0"
+index = 2
+value = "1"
+no_core = true
+max_wall_seconds = 10

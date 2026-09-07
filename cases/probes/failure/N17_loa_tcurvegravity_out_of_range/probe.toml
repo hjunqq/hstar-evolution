@@ -1,0 +1,23 @@
+schema = 1
+id = "N17_loa_tcurvegravity_out_of_range"
+base_case = "static_2d.cooks_membrane"
+description = "1.loa line 16 field 1 (tcurvegravity for group 1) 1 -> 3 with ntcurve=1: the gravity curve reference must be 0..ntcurve, so gravity_curves reports REF (value=3); reader index is 0 so index is not asserted."
+
+[[derive]]
+op = "set_field"
+file = "1.loa"
+line = 16
+field = 1
+value = "3"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "REF"
+stage = "startup"
+file_suffix = ".loa"
+reader = "LOA.external_load_2.gravity_curves"
+field = "tcurvegravity"
+value = "3"
+no_core = true
+max_wall_seconds = 10

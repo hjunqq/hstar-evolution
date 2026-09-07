@@ -581,7 +581,7 @@
                     elseif(icpspring(lnods(2))==0)then
                         ipoin=lnods(1)
                     else
-                        stop 'stop here!'
+                        call diag_abort('REF',EXIT_INPUT,'Stiff.f90:stiff_u','steel element '//trim(diag_itoa(int(ielem,i8)))//': neither node is a free (icpspring=0) node')   ! M1-03 R20
                     endif
                     rotstar=prot(:,:,ipoin)
                     unitx=matmul(rotation,transpose(rotstar))
@@ -601,7 +601,7 @@
                         if ((icpnorm(lnods(1))==0.and.icpnorm(lnods(2))==0).or.(icpnorm(lnods(1))/=0.and.icpnorm(lnods(2))/=0))then
                             write(*,*)'stop for (icpnorm(lnods(1))==0.and.icpnorm(lnods(2))==0).or.(icpnorm(lnods(1))/=0.and.icpnorm(lnods(2))/=0)'
                             write(*,*)'ielem=',ielem,lnods
-                            stop
+                            call diag_abort('REF',EXIT_INPUT,'Stiff.f90:stiff_u','steel element '//trim(diag_itoa(int(ielem,i8)))//': icpnorm must be set on exactly one of its two nodes')   ! M1-03 R20
                         endif
                     endif
                     dgap1=ddisp(1)
@@ -652,7 +652,7 @@
                         endif
                     else
                         write(*,*)'stop for Sub. Residu, line 601'
-                        stop
+                        call diag_abort('REF',EXIT_INPUT,'Stiff.f90:stiff_u','steel element '//trim(diag_itoa(int(ielem,i8)))//': neither node is a free (icpspring=0) node')   ! M1-03 R20
                     endif
                     estif=matmul(matmul(transpose(ksx),ks),ksx) !K=BDB
                     !if(abs(element(ielem)%field(1)%gpvar(nstre+5,1)-1.)<0.001)estif=0. !for lhg

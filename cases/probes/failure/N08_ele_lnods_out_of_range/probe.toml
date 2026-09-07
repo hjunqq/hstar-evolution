@@ -1,0 +1,26 @@
+schema = 1
+id = "N08_ele_lnods_out_of_range"
+base_case = "static_2d.cooks_membrane"
+description = "1.ele line 1 field 2 (first connectivity node of element 1) 1 -> 300 with npoin=289: read_element raises REF for lnods (allowed=1..npoin), marks the element invalid and skips coord(:,lnods); the accumulated failure is flushed at end of file (exactly one record, index=1)."
+
+[[derive]]
+op = "set_field"
+file = "1.ele"
+line = 1
+field = 2
+value = "300"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "REF"
+stage = "startup"
+file_suffix = ".ele"
+reader = "ELE.read_element.element_connectivity"
+field = "lnods"
+index = 1
+value = "300"
+diag_count = 1
+indices = [1]
+no_core = true
+max_wall_seconds = 10

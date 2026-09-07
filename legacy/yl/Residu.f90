@@ -1,5 +1,6 @@
     module internal_force
 
+    use yl_diag   ! M1-03 R20
     use variable_types
     use stiffness_matrix
     use applied_load
@@ -774,7 +775,7 @@
                     elseif(icpspring(lnods(2))==0)then
                         ipoin=lnods(1)
                     else
-                        stop 'stop here!'
+                        call diag_abort('REF',EXIT_INPUT,'Residu.f90:residu_f','steel element '//trim(diag_itoa(int(ielem,i8)))//': neither node is a free (icpspring=0) node')   ! M1-03 R20
                     endif
                     ! if(ielem==1109)then
                     !     write(7,*)'ie=',ielem,'nstre=',nstre
@@ -793,7 +794,7 @@
                         if ((icpnorm(lnods(1))==0.and.icpnorm(lnods(2))==0).or.(icpnorm(lnods(1))/=0.and.icpnorm(lnods(2))/=0))then
                             write(*,*)'stop for (icpnorm(lnods(1))==0.and.icpnorm(lnods(2))==0).or.(icpnorm(lnods(1))/=0.and.icpnorm(lnods(2))/=0)'
                             write(*,*)'ielem=',ielem,lnods
-                            stop
+                            call diag_abort('REF',EXIT_INPUT,'Residu.f90:residu_f','steel element '//trim(diag_itoa(int(ielem,i8)))//': icpnorm must be set on exactly one of its two nodes')   ! M1-03 R20
                         endif
                     endif
                     dgap1=ddisp(1)
@@ -852,7 +853,7 @@
                         endif
                     else
                         write(*,*)'stop for Sub. Residu, line 601'
-                        stop
+                        call diag_abort('REF',EXIT_INPUT,'Residu.f90:residu_f','steel element '//trim(diag_itoa(int(ielem,i8)))//': neither node is a free (icpspring=0) node')   ! M1-03 R20
                     endif
                     estif=matmul(matmul(transpose(ksx),ks),ksx) !K=BDB
                     eload=0.
@@ -939,7 +940,7 @@
                                 if(ndimn==3)fn=sqrt(eload2(2)**2+eload2(3)**2)
                                 forcx=fn*tand(fai)+sigmac*aera
                             else
-                                stop 'stop for icreep>2!'
+                                call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Residu.f90:residu_f','icreep>2 is not implemented for steel elements')   ! M1-03 R20
                             endif
                             if (abs(eload1(1))>forcx)then
                                 eload1(1)=eload1(1)/abs(eload1(1))*forcx
@@ -959,12 +960,12 @@
                                 if (icreep==1)then
                                     forcx=aera*strenth
                                 elseif (icreep==2)then
-                                    stop 'stop for icreep==2!' !fn should be obtained in element level, tload-eload
+                                    call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Residu.f90:residu_f','icreep=2 is not implemented for this steel element branch')   ! M1-03 R20 !fn should be obtained in element level, tload-eload
                                     !if(ndimn==2)fn=abs(eload2(2)) !abs?
                                     !if(ndimn==3)fn=sqrt(eload2(2)**2+eload2(3)**2)
                                     !forcx=fn*tand(fai)+sigmac*aera
                                 else
-                                    stop 'stop for icreep>2!'
+                                    call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Residu.f90:residu_f','icreep>2 is not implemented for steel elements')   ! M1-03 R20
                                 endif
                                 if (abs(eload2(1))>forcx)then
                                     eload2(1)=eload2(1)/abs(eload2(1))*forcx
@@ -983,12 +984,12 @@
                                 if (icreep==1)then
                                     forcx=aera*strenth
                                 elseif (icreep==2)then
-                                    stop 'stop for icreep==2!'
+                                    call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Residu.f90:residu_f','icreep=2 is not implemented for this steel element branch')   ! M1-03 R20
                                     !if(ndimn==2)fn=abs(eload1(2))
                                     !if(ndimn==3)fn=sqrt(eload1(2)**2+eload1(3)**2)
                                     !forcx=fn*tand(fai)+sigmac*aera
                                 else
-                                    stop 'stop for icreep>2!'
+                                    call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Residu.f90:residu_f','icreep>2 is not implemented for steel elements')   ! M1-03 R20
                                 endif
                                 if (abs(eload1(1))>forcx)then
                                     eload1(1)=eload1(1)/abs(eload1(1))*forcx

@@ -1,0 +1,23 @@
+schema = 1
+id = "N18_loa_ntcurve_negative"
+base_case = "static_2d.cooks_membrane"
+description = "1.loa line 2 field 1 (ntcurve) 1 -> -1: ntcurve sizes tcurves and bounds the curve loop, so curve_count reports RANGE immediately (allowed=0..cap) before allocate."
+
+[[derive]]
+op = "set_field"
+file = "1.loa"
+line = 2
+field = 1
+value = "-1"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "RANGE"
+stage = "startup"
+file_suffix = ".loa"
+reader = "LOA.external_load_1.curve_count"
+field = "ntcurve"
+value = "-1"
+no_core = true
+max_wall_seconds = 10

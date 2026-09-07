@@ -144,6 +144,8 @@
     call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_title_1,0)
     read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)ntcurve
     call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_curve_count,0)
+    call diag_range(RD_LOA_external_load_1_curve_count,0,'ntcurve',int(ntcurve,i8),0_i8,diag_max_entities())   ! M1-03: sizes tcurves
+    call diag_flush_stage()
     if (allocated(tcurves)) deallocate(tcurves)
     if (ntcurve.ne.0)allocate(tcurves(ntcurve))
     lineload=lineload+2
@@ -153,6 +155,9 @@
 
        read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)ntime,type_curve,nstoch_curve,nline
        call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_curve_header,0)
+       call diag_range(RD_LOA_external_load_1_curve_header,itcurve,'ntime',int(ntime,i8),0_i8,diag_max_entities())   ! M1-03: sizes dfact_curve
+       call diag_range(RD_LOA_external_load_1_curve_header,itcurve,'nstoch_curve',int(nstoch_curve,i8),0_i8,diag_max_entities())
+       call diag_flush_stage()
        tcurves(itcurve)%nstoch_curve=nstoch_curve
        print *,'ntime=',ntime,type_curve,nstoch_curve,nline
        lineload=lineload+1
@@ -207,7 +212,7 @@
           ncdis=nodfn(idofn,inode)
           tcurves(itcurve)%ncdis=ncdis
           if (ncdis==0) then
-             stop 'error in input of arclength control'
+             call diag_abort('REF',EXIT_INPUT,'Load.f90:external_load_1','error in input of arclength control: node '//trim(diag_itoa(int(inode,i8)))//' dof '//trim(diag_itoa(int(idofn,i8)))//' has no equation')   ! M1-03 R20
           endif
        endif
        case default
@@ -915,6 +920,10 @@ end subroutine element_in_out
     call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_gravity_curve_title,0)
     read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)tcurvegravity(1:ngroup)
     call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_gravity_curves,0)
+    do igroup=1,ngroup   ! M1-03: 0 = no curve, otherwise an existing curve
+       call diag_ref(RD_LOA_external_load_2_gravity_curves,igroup,'tcurvegravity',int(tcurvegravity(igroup),i8),0_i8,int(ntcurve,i8))
+    end do
+    call diag_flush_stage()
 print *,'tcurv=',tcurvegravity(1:ngroup)
 
     lineload=lineload+nline+1
@@ -1285,7 +1294,7 @@ print *,'tcurv=',tcurvegravity(1:ngroup)
                             endif
                            end do
                          print *, 'stop  for error in find position for qstatic_force'
-                         stop
+                         call diag_abort('RANGE',EXIT_INPUT,'Load.f90:gravity','gauss point of element '//trim(diag_itoa(int(ielem,i8)))//' lies outside every qstatic_force coefficient range')   ! M1-03 R20
 11                       continue             
                          gcomQ=thick*coefx*qstatic_force%qfactor
                          !write(7,*)'gcomQ=',gcomQ   !20221104

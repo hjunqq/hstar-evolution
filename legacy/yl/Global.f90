@@ -541,6 +541,7 @@
         idfn(2),jdfn(2),jtotv,idimn,i1,mgroup,jdimn,jdofn,xdofn   !20230523
     integer (ink) ncouple,icouple,ifield,field1,field2,nevab,nevab1,nevab2,ipoin1,ipoin2
     integer (ink) ne_unode,lnode,inode,nrfields,len1,nfdof,tne,jelem
+    integer (ink) nelsum   ! M1-03: running sum of nelgroup over the groups
     integer (ink) index,matno,nelgroup,nnode,npairs,ipair,nnode1,nnode2
     integer (ink) iforce,lgroup,node_face,neface,tsel,itsel,translg,ntlg
     integer (ink) transgroup,itrans,nintf,itotv,inintf,ne_include,ntransnode,itransgroup !!int20200805
@@ -628,24 +629,24 @@
     !   read *,probn
     len1=len_trim(probn)
     open(gunit,     file=probn(1:len1)//'.glb',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.glb','gunit','Global.f90:630')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.glb','gunit','Global.f90:631')
     open(cunit,     file=probn(1:len1)//'.cor',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.cor','cunit','Global.f90:632')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.cor','cunit','Global.f90:633')
     open(eunit,     file=probn(1:len1)//'.ele',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ele','eunit','Global.f90:634')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ele','eunit','Global.f90:635')
     open(punit,     file=probn(1:len1)//'.pre',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.pre','punit','Global.f90:636')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.pre','punit','Global.f90:637')
     open(munit,     file=probn(1:len1)//'.mat',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.mat','munit','Global.f90:638')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.mat','munit','Global.f90:639')
     open(loadunit,  file=probn(1:len1)//'.loa',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.loa','loadunit','Global.f90:640')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.loa','loadunit','Global.f90:641')
     open(chkunit,   file=probn(1:len1)//'.chk')
     open(solveunit, file=probn(1:len1)//'.sol',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.sol','solveunit','Global.f90:643')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.sol','solveunit','Global.f90:644')
     open(mainunit,  file=probn(1:len1)//'.man',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.man','mainunit','Global.f90:645')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.man','mainunit','Global.f90:646')
     open(outpread,  file=probn(1:len1)//'.opr',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.opr','outpread','Global.f90:647')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.opr','outpread','Global.f90:648')
     open(outpwrite, file=probn(1:len1)//'.opw')
     open(outewrite, file=probn(1:len1)//'.oew')
     open(outgwrite, file=probn(1:len1)//'.ogw')
@@ -658,15 +659,15 @@
     if(Uopt_R==1) &
         open(vcor_unit,  file=probn(1:len1)//'.vcor')  !20210502
     open(tunit,     file=probn(1:len1)//'.tem',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.tem','tunit','Global.f90:660')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.tem','tunit','Global.f90:661')
     open(ftfunit,   file=probn(1:len1)//'.ftf')
     open(ftfread,   file=probn(1:len1)//'.ftr',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ftr','ftfread','Global.f90:663')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ftr','ftfread','Global.f90:664')
     open(ifsunit,   file=probn(1:len1)//'.ifs',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ifs','ifsunit','Global.f90:665')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ifs','ifsunit','Global.f90:666')
     open(mwaqu_unit,file=probn(1:len1)//'.aqu')  !20220330
     open(nrtunit,   file=probn(1:len1)//'.nrt',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.nrt','nrtunit','Global.f90:668')
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.nrt','nrtunit','Global.f90:669')
     open(outbar,    file=probn(1:len1)//'.bar')
     open(outbeam,   file=probn(1:len1)//'.bem')
     open(outcontact,file=probn(1:len1)//'.ctr')
@@ -693,7 +694,19 @@
     read(gunit,*,iostat=yl_ios,iomsg=yl_msg)npoin,npoinb,nelem,ndimn,nmats,ngroup,ntlink,outplot,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde
     call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_sizes_and_switches,0)
     print *, npoin,npoinb,nelem,ndimn,nmats,ngroup,ntlink,outplot,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde
-    allocate(pnorm(ndimn,npoin),prot(ndimn,ndimn,npoin),icpnorm(npoin),lelenrt(nelem),icpspring(npoin)) !steel 2006
+    ! M1-03 sizes guard: these decide every allocation below, so fail before the first allocate
+    call diag_range(RD_GLB_global_data_sizes_and_switches,0,'npoin',int(npoin,i8),1_i8,diag_max_entities())
+    call diag_range(RD_GLB_global_data_sizes_and_switches,0,'npoinb',int(npoinb,i8),0_i8,diag_max_entities())
+    call diag_range(RD_GLB_global_data_sizes_and_switches,0,'nelem',int(nelem,i8),1_i8,diag_max_entities())
+    if(ndimn/=2.and.ndimn/=3)call diag_unsupported(RD_GLB_global_data_sizes_and_switches,0,'ndimn',diag_itoa(int(ndimn,i8)),'2 | 3')
+    call diag_range(RD_GLB_global_data_sizes_and_switches,0,'nmats',int(nmats,i8),1_i8,diag_max_entities())
+    call diag_range(RD_GLB_global_data_sizes_and_switches,0,'ngroup',int(ngroup,i8),1_i8,diag_max_entities())
+    call diag_range(RD_GLB_global_data_sizes_and_switches,0,'ntlink',int(ntlink,i8),0_i8,diag_max_entities())
+    call diag_product(RD_GLB_global_data_sizes_and_switches,0,'npoin*ndimn',[int(npoin,i8),int(ndimn,i8)])
+    call diag_product(RD_GLB_global_data_sizes_and_switches,0,'npoin*ndimn*ndimn',[int(npoin,i8),int(ndimn,i8),int(ndimn,i8)])
+    call diag_flush_stage()
+    allocate(pnorm(ndimn,npoin),prot(ndimn,ndimn,npoin),icpnorm(npoin),lelenrt(nelem),icpspring(npoin),stat=yl_st,errmsg=yl_msg) !steel 2006
+    if(yl_st/=0)call diag_abort('INIT',EXIT_INIT,'Global.f90:global_data','first allocate failed: '//trim(yl_msg))
     pnorm=0. ; prot=0. ; icpnorm=0 ; lelenrt=0 ; icpspring=0
 
     allocate(ipp4(npoin)) ; ipp4=0 !p42010   !20221124
@@ -936,6 +949,8 @@
     call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_10,0)
     read(gunit,*,iostat=yl_ios,iomsg=yl_msg)mdofn
     call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_mdofn,0)
+    call diag_range(RD_GLB_global_data_mdofn,0,'mdofn',int(mdofn,i8),1_i8,diag_max_entities())   ! M1-03
+    call diag_flush_stage()
     allocate(lmdofn(mdofn),lcdofn(mdofn),order_time_mdofn(mdofn))
     read(gunit,*,iostat=yl_ios,iomsg=yl_msg)lmdofn(1:mdofn) !0,no the freedom;1,the freedom occur
     call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_lmdofn,0)
@@ -1160,7 +1175,15 @@
     do ipoin=1,npoin   !!!read coordinate
         read(cunit,*,iostat=yl_ios,iomsg=yl_msg)i0,coord(1:ndimn,ipoin)
         call diag_check_read(yl_ios,yl_msg,RD_COR_global_data_node_coordinates,ipoin)
+        if(i0/=ipoin)then   ! M1-03 contract: node id equals record order (old code ignored i0)
+            if(i0>=1.and.i0<ipoin)then
+                call diag_dup(RD_COR_global_data_node_coordinates,ipoin,'i0',int(i0,i8))
+            else
+                call diag_range(RD_COR_global_data_node_coordinates,ipoin,'i0',int(i0,i8),int(ipoin,i8),int(ipoin,i8))
+            endif
+        endif
     end do
+    call diag_flush_stage()
 
     if(Blarge==1)coord0=coord   !20221102
 
@@ -1186,6 +1209,7 @@
 
     tne=0
     ielem=0
+    nelsum=0
     do igroup=1,ngroup    !!igroup  for elements
 
         print *,'igroup=',igroup
@@ -1197,6 +1221,16 @@
             group(igroup)%uplift_ic,group(igroup)%liquj  !20220409
         call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_header,igroup)
         print *,'name=',group(igroup)%name
+        ! M1-03 group header guard: index selects the element kind table, nrfields/nelgroup size allocations, matno is consumed per element
+        if(group(igroup)%index<1.or.group(igroup)%index>ekind) &
+            call diag_unsupported(RD_GLB_global_data_group_header,igroup,'index',diag_itoa(int(group(igroup)%index,i8)),'1..'//trim(diag_itoa(int(ekind,i8))))
+        call diag_range(RD_GLB_global_data_group_header,igroup,'nrfields',int(group(igroup)%nrfields,i8),1_i8,diag_max_entities())
+        call diag_ref(RD_GLB_global_data_group_header,igroup,'matno',int(group(igroup)%matno,i8),1_i8,int(nmats,i8))
+        call diag_range(RD_GLB_global_data_group_header,igroup,'nelgroup',int(group(igroup)%nelgroup,i8),0_i8,int(nelem,i8)-int(nelsum,i8))
+        call diag_flush_stage()
+        nelsum=nelsum+group(igroup)%nelgroup
+        call diag_product(RD_GLB_global_data_group_header,igroup,'nelgroup*nnode',[int(group(igroup)%nelgroup,i8),int(elkn(group(igroup)%index)%nnode,i8)])
+        call diag_flush_stage()
 
         nrfields=group(igroup)%nrfields
         group(igroup)%elcod_local=elcod_local
@@ -1220,12 +1254,18 @@
         do ifield=1,nrfields
             read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nfdof
             call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_nfdof,igroup)
+            call diag_range(RD_GLB_global_data_group_nfdof,igroup,'nfdof',int(nfdof,i8),1_i8,int(mdofn,i8))   ! M1-03
+            call diag_flush_stage()
             !print *,'ifield=',ifield,'nfdof=',nfdof
             group(igroup)%dof(ifield)%nfdof=nfdof
             mdof(ifield)=nfdof
             allocate(group(igroup)%dof(ifield)%listdof_f(nfdof))
             read(gunit,*,iostat=yl_ios,iomsg=yl_msg)group(igroup)%dof(ifield)%listdof_f(1:nfdof)
             call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_listdof,igroup)
+            do i0=1,nfdof   ! M1-03: every listed dof must exist
+                call diag_range(RD_GLB_global_data_group_listdof,igroup,'listdof',int(group(igroup)%dof(ifield)%listdof_f(i0),i8),1_i8,int(mdofn,i8))
+            end do
+            call diag_flush_stage()
         end do
 
         index=group(igroup)%index
@@ -1256,6 +1296,7 @@
             call read_element(index, igroup,name,matno,nstre,nelem,          &
                 ielem,coord,eunit,element,mdof,ndimn,           &
                 special,elcod_local,group_inf,src,group(igroup)%point_direct)
+            if(ele_scan_only)cycle   ! M1-03: a bad .ele record was seen; only scan the rest, fail after the groups
 
 
             !         write(chkunit,10)ielem,element(ielem)%field(1)%lnods_f,igroup
@@ -1319,6 +1360,10 @@
             end do
             group(igroup)%list(ielgroup)=ielem
         end do !!ielgroup
+        if(ele_scan_only)then   ! M1-03: nothing below may touch the unread elements
+            deallocate(mdof)
+            cycle
+        endif
         if(index/=20.and.index/=21)write(chkunit,*)'igroup=',igroup,'tvol=',tvol
 
         !!!!!!!!!2003/10/31
@@ -1410,6 +1455,9 @@
         deallocate(mdof)
         write(chkunit,*)'igroup=',igroup,'tne=',tne
     end do   !!igroup
+    ! M1-03: the groups must account for every element; also flushes .ele record diagnostics
+    call diag_range(RD_GLB_global_data_group_header,ngroup,'nelgroup',int(nelsum,i8),int(nelem,i8),int(nelem,i8))
+    call diag_flush_stage()
 
     !stop
 
@@ -4527,7 +4575,7 @@
         read(gunit,*)nel_pipe
         if(sum(nel_pipe)/=group(listgroup_w)%nelgroup)then
             print *,'sum(nel_pipe)/=group(%listgroup_w%nelgroup)'
-            stop
+            call diag_abort('RANGE',EXIT_INPUT,'Global.f90:link_concrete_and_water_pipe','sum(nel_pipe)/=group(listgroup_w)%nelgroup')   ! M1-03 R20
         endif
 
         allocate(wc_pipe(i0)%line_g_w(nline_g_w))
@@ -4654,7 +4702,7 @@
         read(gunit,*)nel_steel
         if(sum(nel_steel)/=group(listgroup_s)%nelgroup)then
             print *,'sum(nel_steel)/=group(%listgroup_s%nelgroup)'
-            stop
+            call diag_abort('RANGE',EXIT_INPUT,'Global.f90:link_concrete_and_steel','sum(nel_steel)/=group(listgroup_s)%nelgroup')   ! M1-03 R20
         endif
 
         allocate(rc_steel(i0)%line_g_sc(nline_g_sc))

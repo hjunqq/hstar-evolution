@@ -1,0 +1,23 @@
+schema = 1
+id = "N03_glb_nelem_negative"
+base_case = "static_2d.cooks_membrane"
+description = "1.glb line 2 field 3 (nelem) 256 -> -1: nelem < 1 is RANGE in the sizes guard, immediate failure before the first allocate."
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 2
+field = 3
+value = "-1"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "RANGE"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.sizes_and_switches"
+field = "nelem"
+value = "-1"
+no_core = true
+max_wall_seconds = 10

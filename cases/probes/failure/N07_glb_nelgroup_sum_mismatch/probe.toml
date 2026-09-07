@@ -1,0 +1,24 @@
+schema = 1
+id = "N07_glb_nelgroup_sum_mismatch"
+base_case = "static_2d.cooks_membrane"
+description = "1.glb line 59 (group 1 header) field 9 (nelgroup) 256 -> 255 while nelem=256: sum(nelgroup) over the single group != nelem; the group_header guard reports RANGE on nelgroup (255 chosen so 1.ele is not over-read, i.e. no EOF competes with the semantic diagnostic)."
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 59
+field = 9
+value = "255"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "RANGE"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.group_header"
+field = "nelgroup"
+index = 1
+value = "255"
+no_core = true
+max_wall_seconds = 10

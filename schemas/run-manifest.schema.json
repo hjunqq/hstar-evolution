@@ -44,7 +44,7 @@
     "core_dump": { "type": "boolean", "description": "a file named core or core.* appeared in the work dir; status is at least CRASHED" },
     "diagnostics": {
       "type": "array",
-      "description": "well-formed stderr lines starting with `HSTAR_DIAG ` (M1-02 exit protocol: shlex-parsable, schema=1, code, integer exit), parsed as key=value; order preserved",
+      "description": "every well-formed stderr line starting with `HSTAR_DIAG ` (M1-02 exit protocol: shlex-parsable, schema=1, code, integer exit), parsed as key=value; all records kept, order preserved",
       "items": {
         "type": "object",
         "properties": {
@@ -61,6 +61,8 @@
           "index": { "type": "integer" },
           "iostat": { "type": "integer" },
           "field": { "type": "string" },
+          "value": { "type": "string", "description": "M1-03: offending value (RANGE/REF/DUPLICATE/UNSUPPORTED); empty string when not applicable" },
+          "allowed": { "type": "string", "description": "M1-03: allowed range or set, e.g. \"1..289\" or \"<=cap\"; empty string when not applicable" },
           "message": { "type": "string" }
         },
         "additionalProperties": true
@@ -89,7 +91,7 @@
     "check_malformed": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "deviations of the HSTAR_CHECK* lines from the check-mode contract (missing/duplicate HSTAR_CHECK, schema != 1, mode != check-legacy, non-integer errors/readers_executed/n, readers_executed != number of HSTAR_CHECK_READER lines); non-empty forces status FAILED"
+      "description": "deviations of the HSTAR_CHECK* lines from the check-mode contract (unbalanced quotes, missing/duplicate HSTAR_CHECK, schema != 1, mode != check-legacy, non-integer errors/readers_executed/n, readers_executed != number of HSTAR_CHECK_READER lines, zero included); non-empty forces status FAILED"
     },
     "protocol_violation": {
       "type": ["string", "null"],

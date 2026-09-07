@@ -1,0 +1,24 @@
+schema = 1
+id = "N02_glb_npoin_huge"
+base_case = "static_2d.cooks_membrane"
+description = "1.glb line 2 field 1 (npoin) 289 -> 99999999 with --max-entities=100000: the sizes guard first reports RANGE on npoin itself (allowed=1..cap), then the int64 product pre-check (ndimn*npoin, per-item a > cap/b) adds two product records, all before any allocate; no huge allocation is attempted."
+binary_args = "--max-entities=100000"
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 2
+field = 1
+value = "99999999"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "RANGE"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.sizes_and_switches"
+field = "npoin"
+value = "99999999"
+no_core = true
+max_wall_seconds = 10

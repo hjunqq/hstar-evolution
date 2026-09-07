@@ -1,0 +1,23 @@
+schema = 1
+id = "N04_glb_ndimn_unsupported"
+base_case = "static_2d.cooks_membrane"
+description = "1.glb line 2 field 4 (ndimn) 2 -> 4: a legal-looking but unsupported dimension; the sizes guard reports UNSUPPORTED (exit 3, allowed=2..3) immediately, since ndimn sizes coord/pnorm allocations."
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 2
+field = 4
+value = "4"
+
+[expect]
+status = "UNSUPPORTED"
+exit_code = 3
+code = "UNSUPPORTED"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.sizes_and_switches"
+field = "ndimn"
+value = "4"
+no_core = true
+max_wall_seconds = 10

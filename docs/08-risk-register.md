@@ -20,10 +20,11 @@
 | R13 | 原仓库脏树《修改报告.md》与实际 diff 不符；Stiff.f90 含密度循环前 `factw` 未初始化修复 | 按报告归类补丁会漏掉影响重力路径的修复 | 已完成 M0-04c：candidate 两例与 reference 逐值相同，脏树对静力切片无影响；`factw` 初始化并入 M1-03 防御性修复。对其他能力切片开工时须重新对照 |
 | R14 | 旧程序多处 `stop '文本'` 退出码为 0；`.chk` 与 stdout 含时间戳 | 仅凭退出码或字节比较误判成功 | M0-03 组合判据；比较只用解析后的 `1.flavia.res` |
 | R15 | 种子算例关闭反力输出，且静力单增量流程是否调用 GiD 写出未经运行确认 | 首跑可能无可解析结果；反力平衡判据不可用 | 已确认 `1.flavia.res` 在 nincs=1 静力流程写出（M0-02/04a）；反力平衡仍需 M5 新建探针 |
-| R17 | `Elements.f90:197` `kinddefine` 对一维单元类型不赋值 `t/u` 即调用 `shfunc`（`Elements.f90:2588`），使用未初始化实数 | 任何 `-init=snan`/`-fpe0` 运行在启动即中止；结果不受影响（相关项未用于线单元） | M1-03 初始化 `t=u=0`，用 strict profile 两例完整运行作关闭证据 |
-| R18 | `Fem.f90:12288` `modf_var_prescribed` 在约束集 `itcurve=0` 时读 `tcurves(0)%dfact/type_curve`，越界 | `-check bounds` 中止；release 下读到相邻内存，两例结果未受影响但不可保证 | M1-03 增加 `itcurve==0` 分支（因子 1，无曲线），用 debug profile 两例完整运行作关闭证据 |
+| R17 | `Elements.f90:197` `kinddefine` 对一维单元类型不赋值 `t/u` 即调用 `shfunc`（`Elements.f90:2588`），使用未初始化实数 | 任何 `-init=snan`/`-fpe0` 运行在启动即中止；结果不受影响（相关项未用于线单元） | **CLOSED（M1-03，2026-09-07）**：每个积分点先 `t=u=0`；strict profile 两例 COMPLETED 且与 reference 精确相同（`docs/m1/M1-03-semantic-guards.md`） |
+| R18 | `Fem.f90:12288` `modf_var_prescribed` 在约束集 `itcurve=0` 时读 `tcurves(0)%dfact/type_curve`，越界 | `-check bounds` 中止；release 下读到相邻内存，两例结果未受影响但不可保证 | **CLOSED（M1-03，2026-09-07）**：`itcurve==0` ⇒ `dfact=1`、`type_curve='NONE'`（`modf_var_prescribed` 与 `time_dependent`）；`.pre` 读取处校验 itcurve∈0..ntcurve 且 ifixvar=8/10 必须有曲线；debug profile 两例 COMPLETED 且精确相同 |
 | R19 | list-directed READ 遇记录字段不足时静默跨到下一记录，`iostat=0`（ifx 实验与探针 F21 证实） | 少一个值的 deck 会整体错位而不报错 | M4 记录级 Legacy Adapter；M1-02 只保证 EOF/语法错可控 |
-| R20 | 旧程序约 90 处裸 `stop`/`stop '文本'` 退出码为 0，未纳入退出协议 | 求解失败或内部错误仍可能以 rc=0 结束 | 登记为未迁移；M1-03 起按路径逐处替换为 `diag_*`；运行器以组合判据兜底 |
+| R20 | 旧程序约 90 处裸 `stop`/`stop '文本'` 退出码为 0，未纳入退出协议 | 求解失败或内部错误仍可能以 rc=0 结束 | M1-03 已替换 static_2d 路径上的 38 处、39 条语句（审计表见 `docs/m1/M1-03-semantic-guards.md`：正常结束→exit 0，输入错→2，能力不支持→3，内部表→6）；路径上另有 3 处行内 `if(...) stop`（`Fem.f90:1902`、`Fem.f90:9336`、`Load.f90:1073`，复核发现，两例不触发）与路径外约 50 处保持 OPEN，运行器以组合判据兜底 |
+| R22 | M1-03 起 `.cor`/`.ele` 的 id 必须等于行序、`.glb` Σnelgroup 必须等于 nelem、未知命令行参数报错（旧代码忽略 id、多余单元静默不读、只看首个参数） | 乱序 id 或多余单元的历史 deck 会被拒绝（RANGE/DUPLICATE），而旧程序能跑 | 契约变更登记于 `docs/m1/M1-03-semantic-guards.md`；两例 golden 满足；乱序 id 若有真实需求由 M4 Adapter 支持 |
 | R21 | ifx list-directed 整数项接受实数形式并截断（`5.5`→5，`iostat=0`） | 输入错误被静默吞掉 | M4 记录级解析按字段类型严格判定；探针 F27 改用非数字 token |
 | R16 | 初稿 ProblemState 自创分类，与 CAE 惯例和 YL 对象都不对应 | 三套词汇并存，输入更混乱 | ADR-0003 采用 CAE 对象模型；docs/01、03 与 schema 已改，M3/M5 按其实施 |
 

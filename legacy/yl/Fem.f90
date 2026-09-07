@@ -296,7 +296,7 @@
             call out_full_write
             if(outplot(1:3)=='GID')   call OUT_GID_WRITE
             if(outplot(1:6)=='COSMOS')call OUT_COSMOS_WRITE
-            stop
+            call diag_exit(EXIT_OK)   ! M1-03 R20: restart output written, normal end
         endif
         do iblks=1,lblks
             read(mainunit,*)text
@@ -357,14 +357,14 @@
         call matrix_rigid_dis
         call observe_back_analysis_read
         call rigid_dis_back_analysis
-        stop
+        call diag_exit(EXIT_OK)   ! M1-03 R20: back analysis done, normal end
     else if(Bparameter==4)then
 
         call matrix_nodal_value
         call observe_back_analysis_read
 
         call nodal_value_back_analysis
-        stop
+        call diag_exit(EXIT_OK)   ! M1-03 R20: back analysis done, normal end
     else
         if(nbackdT==2) &     !20230216
             call observe_back_analysis_read
@@ -3593,6 +3593,8 @@
     call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_title_1,0)
     read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)nincs
     call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_nincs,0)
+    call diag_range(RD_MAN_STATIC_U_nincs,0,'nincs',int(nincs,i8),1_i8,diag_max_entities())   ! M1-03: increment loop bound
+    call diag_flush_stage()
 
     print *,' in static_U**'
 
@@ -3622,6 +3624,10 @@
 
         read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)miter,ditime,noutn,noutf,nstep,inc_step,nresta,cwater,Qstatic
         call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_increment_control,iincs)
+        call diag_range(RD_MAN_STATIC_U_increment_control,iincs,'miter',int(miter,i8),1_i8,diag_max_entities())   ! M1-03: loop bounds
+        call diag_range(RD_MAN_STATIC_U_increment_control,iincs,'nstep',int(nstep,i8),1_i8,diag_max_entities())
+        call diag_range(RD_MAN_STATIC_U_increment_control,iincs,'inc_step',int(inc_step,i8),1_i8,diag_max_entities())
+        call diag_flush_stage()
         read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)toler_force,toler_var(1:mdofn)
         call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_tolerances,iincs)
         if(cwater/=0.and.delgroup>0)then
@@ -3940,7 +3946,7 @@
                             enddo
                         else !restart_ctt
                             write(*,*)'no such restart_ctt!!'
-                            stop
+                            call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Fem.f90:static_u','no such restart_ctt (see write above)')   ! M1-03 R20
                         endif !restart_ctt
                     endif  !!ctt2005
                     !logx=nrcsteel/=0.and.(iiter==1.and.istep==inc_step).and.iincs==(lincs+1) !20220311
@@ -9259,7 +9265,8 @@
             if (nextrf/=0)then  !2004/9/11
                 do idofix=1,ndofix
                     itcurve =prescrib(idofix)%itcurve
-                    type_curve=tcurves(itcurve)%type_curve
+                    type_curve='NONE'   ! M1-03 R18: itcurve=0 has no curve
+                    if(itcurve/=0)type_curve=tcurves(itcurve)%type_curve
                     if (type_curve=='EXTRAPOLATION')then
                         if (istep>nextrf)then
                             do iextrf=1,nextrf-1
@@ -12299,12 +12306,17 @@
 
     do idofix=1,ndofix
         itcurve =prescrib(idofix)%itcurve
-        dfact   =tcurves(itcurve)%dfact
+        if(itcurve==0)then   ! M1-03 R18: no curve -> unit factor; never index tcurves(0)
+            dfact=1.0_irk
+            type_curve='NONE'
+        else
+            dfact   =tcurves(itcurve)%dfact
+            type_curve=tcurves(itcurve)%type_curve
+        endif
         ldofix  =prescrib(idofix)%ldofix
         ifixvar =prescrib(idofix)%ifixvar  !20230402
         jfixvar=prescrib(idofix)%jfixvar  !20220304
 
-        type_curve=tcurves(itcurve)%type_curve
 
 
         if(type_curve=='EQUINCRE')then !2007/9/28
@@ -12714,7 +12726,7 @@
             goto 1
         else
             print *,'itcurve=',itcurve, 'no type_curve=',type_curve
-            stop 'no type_curve'
+            call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Fem.f90:dfact_time_curve','itcurve='//trim(diag_itoa(int(itcurve,i8)))//': no such type_curve '//trim(type_curve))   ! M1-03 R20
         end if
         tcurves(itcurve)%dfact=dfact
 1       continue

@@ -1,0 +1,59 @@
+schema = 1
+id = "N12_mat_imat_duplicate"
+base_case = "static_2d.cooks_membrane"
+description = "Duplicate imat: (1) 1.glb line 2 field 5 nmats 1 -> 2 so props(1:2) exist; (2) 1.mat line 15 field 1 mmats 1 -> 2 so material_set loops twice; (3) six insert_line ops append a copy of the block at lines 16-21 (material_serial 2, header MECHANICAL SOLID imat=1, nphase, SOLID, ELASTIC_ISOTROPIC, extra) after line 21 in original order. The second header re-uses imat=1, so material_header reports DUPLICATE (value=1). Order matters: the block must exist before the second loop iteration reads it; the same 1.mat is also read by the material_class path unchanged."
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 2
+field = 5
+value = "2"
+[[derive]]
+op = "set_field"
+file = "1.mat"
+line = 15
+field = 1
+value = "2"
+[[derive]]
+op = "insert_line"
+file = "1.mat"
+after = 21
+text = "     material_serial         2"
+[[derive]]
+op = "insert_line"
+file = "1.mat"
+after = 22
+text = "          MECHANICAL           SOLID     1"
+[[derive]]
+op = "insert_line"
+file = "1.mat"
+after = 23
+text = "  1"
+[[derive]]
+op = "insert_line"
+file = "1.mat"
+after = 24
+text = "               SOLID"
+[[derive]]
+op = "insert_line"
+file = "1.mat"
+after = 25
+text = "ELASTIC_ISOTROPIC       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000E-01       1.000E-05  0  0  0"
+[[derive]]
+op = "insert_line"
+file = "1.mat"
+after = 26
+text = "  0  0       1.000E+03"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "DUPLICATE"
+stage = "startup"
+file_suffix = ".mat"
+reader = "MAT.material_set.material_header"
+field = "imat"
+value = "1"
+no_core = true
+max_wall_seconds = 10

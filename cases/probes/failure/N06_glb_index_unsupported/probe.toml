@@ -1,0 +1,24 @@
+schema = 1
+id = "N06_glb_index_unsupported"
+base_case = "static_2d.cooks_membrane"
+description = "1.glb line 59 (group 1 header) field 3 (element-type index) 5 -> 999: no kinddefine entry exists for this index, so the group_header guard reports UNSUPPORTED (exit 3) at igroup=1, before elkn/gauss tables are consulted."
+
+[[derive]]
+op = "set_field"
+file = "1.glb"
+line = 59
+field = 3
+value = "999"
+
+[expect]
+status = "UNSUPPORTED"
+exit_code = 3
+code = "UNSUPPORTED"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.group_header"
+field = "index"
+index = 1
+value = "999"
+no_core = true
+max_wall_seconds = 10

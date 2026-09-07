@@ -1,4 +1,4 @@
-# 故障注入探针（M1-02）
+# 故障注入探针（M1-02 / M1-03）
 
 每个子目录是一条探针：`<probe_id>/probe.toml` 描述"从哪个 golden 算例派生、破坏哪个输入文件、
 期望二进制给出什么诊断"。运行器是 `tools/yl_probe.py`；探针**不复制 deck**，
@@ -38,7 +38,36 @@ max_wall_seconds = 10      # 传给 yl_run.py --timeout；防 call exit 在运�
 
 `reader` / `index` 省略的探针只核对 status、exit_code、code、stage、file_suffix、no_core。派生按 LF 分行（CRLF 保留，裸 CR 不分行），物化后行数与原文件一致。
 
-## 矩阵（29 条，2026-09-07 全部 PASS）
+## 语义探针矩阵（M1-03，N01–N18，2026-09-07 全部 PASS）
+
+所有探针 base_case 为 `static_2d.cooks_membrane`（npoin=289、nelem=256、nmats=1、ngroup=1、mdofn=2、ntcurve=1），期望 `no_core=true`；
+exit 2 / `INPUT_ERROR` 除非注明 exit 3 / `UNSUPPORTED`。派生原语：`set_field(file,line,field,value)` 替换第 field 个空白分隔 token，
+`insert_line(file,after,text)`，`duplicate_line(file,line,count)`。断言除 M1-02 的 status/code/stage/file/reader/index 外，还有
+`value`（首条报文 `value=` 精确）、`field`（首条 `field=` 子串）、`diag_count`（报文条数）、`indices`（全部报文 index 顺序）；
+`binary_args` 顶层键传给二进制（N02 用 `--max-entities=100000`）。
+
+| 探针 | 派生 | code | reader（index） | field=value |
+|---|---|---|---|---|
+| N01_glb_npoin_negative | 1.glb 第 2 行 field 1 `289`→`-5` | RANGE | GLB.global_data.sizes_and_switches | npoin=-5 |
+| N02_glb_npoin_huge | 同上 →`99999999`，`--max-entities=100000` | RANGE | 同上 | npoin=99999999（allowed 1..100000；随后还有 npoin×ndimn 两条乘积报文） |
+| N03_glb_nelem_negative | 第 2 行 field 3 `256`→`-1` | RANGE | 同上 | nelem=-1 |
+| N04_glb_ndimn_unsupported | 第 2 行 field 4 `2`→`4` | UNSUPPORTED（exit 3） | 同上 | ndimn=4 |
+| N05_glb_matno_out_of_range | 第 59 行（组头）field 10 `1`→`7` | REF | GLB.global_data.group_header（1） | matno=7 |
+| N06_glb_index_unsupported | 第 59 行 field 3 `5`→`999` | UNSUPPORTED（exit 3） | 同上（1） | index=999 |
+| N07_glb_nelgroup_sum_mismatch | 第 59 行 field 9 `256`→`255` | RANGE | 同上（1，组循环末） | nelgroup=255（allowed 256..256） |
+| N08_ele_lnods_out_of_range | 1.ele 第 1 行 field 2 `1`→`300` | REF | ELE.read_element.element_connectivity（1） | lnods=300；diag_count=1，indices=[1] |
+| N09_ele_lnods_accumulated | 第 1/3/5 行各改一个节点为 0 / 290 / -1 | REF | 同上（1） | lnods=0；diag_count=3，indices=[1,3,5] |
+| N10_cor_duplicate_id | 1.cor 第 2 行 field 1 `2`→`1` | DUPLICATE | COR.global_data.node_coordinates（2） | i0=1 |
+| N11_mat_imat_out_of_range | 1.mat 第 17 行 field 3 `1`→`2` | RANGE | MAT.material_set.material_header | imat=2 |
+| N12_mat_imat_duplicate | 1.glb nmats→2、1.mat nmats→2 并插入第二个材料块（imat 仍为 1） | DUPLICATE | 同上 | imat=1 |
+| N13_pre_itcurve_out_of_range | 1.pre 第 3 行 field 3 `0`→`5` | REF | PRE.prescrib_set.set_header（1） | itcurve=5 |
+| N14_pre_nfixnods_too_large | 第 3 行 field 2 `17`→`300` | RANGE | 同上（1） | nfixnods=300 |
+| N15_pre_list_fix_out_of_range | 第 4 行 field 1 `1`→`290` | REF | PRE.prescrib_set.set_nodes（1） | list_fix=290 |
+| N16_pre_ifixvar8_zero_curve | 第 3 行 field 1 `1`→`8`（itcurve 仍 0） | REF | PRE.prescrib_set.set_header（1） | itcurve=0（R18：水位集合必须有曲线；随后还有 ifixvar 越界 RANGE） |
+| N17_loa_tcurvegravity_out_of_range | 1.loa 第 16 行 field 1 `1`→`3` | REF | LOA.external_load_2.gravity_curves | tcurvegravity=3 |
+| N18_loa_ntcurve_negative | 第 2 行 field 1 `1`→`-1` | RANGE | LOA.external_load_1.curve_count | ntcurve=-1 |
+
+## 结构探针矩阵（M1-02，29 条，2026-09-07 全部 PASS）
 
 所有探针 base_case 均为 `static_2d.cooks_membrane`，期望 `status=INPUT_ERROR`、`exit_code=2`、`no_core=true`。
 

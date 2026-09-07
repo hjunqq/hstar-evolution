@@ -236,6 +236,7 @@
     character (30) name,phase,material,criteria,property,type_curve
     character (10 ) model
     character (80) text
+    logical,allocatable::yl_seen(:)   ! M1-03: imat already defined
 
     allocate(props(nmats))
 
@@ -270,6 +271,9 @@
     call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_title_2,0)
     read(munit,*,iostat=yl_ios,iomsg=yl_msg)mmats  ! !20200617
     call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_nmats,0)
+    call diag_range(RD_MAT_material_set_nmats,0,'nmats',int(mmats,i8),int(nmats,i8),int(nmats,i8))   ! M1-03: must equal .glb nmats (props is sized by it)
+    call diag_flush_stage()
+    allocate(yl_seen(nmats)) ; yl_seen=.false.
 
     do jmat=1,mmats
 
@@ -278,6 +282,11 @@
         call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_title_3,0)
         read(munit,*,iostat=yl_ios,iomsg=yl_msg)property,name,imat
         call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_material_header,0)
+        call diag_range(RD_MAT_material_set_material_header,jmat,'imat',int(imat,i8),1_i8,int(nmats,i8))   ! M1-03: props(imat) is written next
+        call diag_flush_stage()
+        if(yl_seen(imat))call diag_dup(RD_MAT_material_set_material_header,jmat,'imat',int(imat,i8))
+        call diag_flush_stage()
+        yl_seen(imat)=.true.
 
         print *,property,name,imat
 
@@ -420,7 +429,7 @@
                         if(props(imat)%mechanical%solid%gap_define%gap_kind==1)then
                             if(ndimn/=2)then
                                 print *, 'stop for igap0=2 and gap_kind=1,but ndimn/=2'
-                                stop
+                                call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Material.f90:material_set','igap0=2 with gap_kind=1 is only implemented for ndimn=2')   ! M1-03 R20
                             endif   !ndimn==2
                             allocate(centerx(ndimn),gapx(ngapx),gapalfax(ngapx))
                             allocate(props(imat)%mechanical%solid%gap_define%centerx(ndimn),  &
@@ -927,7 +936,8 @@
                         case default
 
                         print *, 'no such material'
-                        stop
+                        call diag_unsupported(RD_MAT_material_set_material_header,jmat,'material',trim(material),'a material model name known to material_set')   ! M1-03 R20
+                        call diag_flush_stage()
 
                     end select material_select
 
@@ -975,7 +985,8 @@
 
                     case default
                     print *, 'no such phase',phase
-                    stop
+                    call diag_unsupported(RD_MAT_material_set_material_header,jmat,'phase',trim(phase),'SOLID | FLUID')   ! M1-03 R20
+                    call diag_flush_stage()
                 end select phase_select
 
             end do     !! for nphase
@@ -1010,7 +1021,8 @@
 
             case default
             print *, 'no such property',name
-            stop
+            call diag_unsupported(RD_MAT_material_set_material_header,jmat,'property',trim(property),'MECHANICAL | HEAT | GEOMETRY')   ! M1-03 R20
+            call diag_flush_stage()
         end select property_select
 
     end do

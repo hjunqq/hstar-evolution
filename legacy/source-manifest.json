@@ -1,9 +1,9 @@
 {
   "manifest_version": 1,
-  "generated_at": "2026-09-07T06:44:32+00:00",
+  "generated_at": "2026-09-07T08:30:27+00:00",
   "root": "legacy",
   "file_count": 39,
-  "total_bytes": 55699334,
+  "total_bytes": 55713054,
   "excludes": [
     "BASELINE.md",
     "source-manifest.json"
@@ -13,8 +13,8 @@
     "source_commit": "5414e737484edf2f53efbfd2bafd3702ebbbb88a",
     "source_tree": "HSTAR/",
     "stub_origin": "/home/huijun/HSTAR_Next/_archive/src/gidpost_stub.c",
-    "modified_by": "M1-02",
-    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping (iostat/iomsg + diag_check_* on registered read sites and 14 input opens); reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
+    "modified_by": "M1-03",
+    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements) on the static_2d path; reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
   },
   "case_insensitive_collisions": [],
   "files": [
@@ -30,18 +30,18 @@
     },
     {
       "path": "yl/Elements.f90",
-      "bytes": 103720,
-      "sha256": "ada63e407883902cf088adef70a774dda0fd4e1f3e0c3efd79a3fb5a6d8f5d62"
+      "bytes": 106090,
+      "sha256": "501b27dcadb89bfba5a3dee5b827afacb268c2310a8aca2d6929669d80b02bf7"
     },
     {
       "path": "yl/Fem.f90",
-      "bytes": 722721,
-      "sha256": "a63d7f0d03819908b41ca3ce5e1c876d67652b8dd358da16c725e79c6136ed8c"
+      "bytes": 724012,
+      "sha256": "30c3263d52824bb4df41536634d7df1c12ef993883493a6762f15437c4e7aba5"
     },
     {
       "path": "yl/Global.f90",
-      "bytes": 204832,
-      "sha256": "9e8a51e6873172d56154388054ef7ed2ae031d1f593a15ef541ef711121fef11"
+      "bytes": 208957,
+      "sha256": "940d1a38bbe351da05ded40d891406987f263a9db77579c0d531fc1be443a0df"
     },
     {
       "path": "yl/Level.f90",
@@ -50,13 +50,13 @@
     },
     {
       "path": "yl/Load.f90",
-      "bytes": 68891,
-      "sha256": "da66f34b655540204ab1d368229c8eb8ee269e4a70c045d68a80dd437b700c84"
+      "bytes": 69953,
+      "sha256": "6e6fce45a76548428f21ed1279f6d5cb0890f0ed8f67a83a8604a261fd0370eb"
     },
     {
       "path": "yl/Material.f90",
-      "bytes": 66136,
-      "sha256": "bf785c8acbc4ceb143d1d0cec53a55e45087a2a62518d8768fb4475fdd3178c7"
+      "bytes": 67427,
+      "sha256": "d685ae0617063d3313765e705d099053503a10a79e4630d8e7cbede40976073b"
     },
     {
       "path": "yl/OPT.F90",
@@ -65,18 +65,18 @@
     },
     {
       "path": "yl/Output.f90",
-      "bytes": 215271,
-      "sha256": "9cf0c4878d18575b1b6d4027f6e1cca92f3b24c08439a5ab1476a28ce3730901"
+      "bytes": 215614,
+      "sha256": "62b2c4ac1ffb52b70df2d091b4edbde5c3a1d0e40ff89990533c2c9251812892"
     },
     {
       "path": "yl/Prescrib.f90",
-      "bytes": 18630,
-      "sha256": "7531720882d70a9d3ff5deffba284cd0ec2ab221372e382d31901b5b5729bfec"
+      "bytes": 19988,
+      "sha256": "6b396345f58e45a33a926a3f94db88bb8465e5273b8f711f34b2d84564221438"
     },
     {
       "path": "yl/Residu.f90",
-      "bytes": 232568,
-      "sha256": "00bb722801bd26cb758624c9f6cf8b6d6fb10c3414f3231aad9f935cf91ae243"
+      "bytes": 233633,
+      "sha256": "b114f73a66827dc9742cf3405720c9f754c8ed0752c4785fbfb6cc31db53144f"
     },
     {
       "path": "yl/Solver.f90",
@@ -85,13 +85,13 @@
     },
     {
       "path": "yl/Stiff.f90",
-      "bytes": 439665,
-      "sha256": "1b827e671f55d44d9be37b5abac4ad1978a1534115cbdb8e24625890cb146396"
+      "bytes": 440139,
+      "sha256": "0baa060b082d02d9bcf5f91c6cf77bd3d159bc94c36d26e688c6463e3e62138f"
     },
     {
       "path": "yl/Temper.f90",
-      "bytes": 53964,
-      "sha256": "ffa01fb412bbb8b355f31cfb5da51dfb1d610ee55a6fd23e6eb238a84ed25c02"
+      "bytes": 54305,
+      "sha256": "f0a90af7ac7fddd010ca8e711bc87a5abc3d0fef4cd7fcd1660c3fab8dc1af7b"
     },
     {
       "path": "yl/Vartype.f90",

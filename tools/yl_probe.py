@@ -13,7 +13,8 @@ status / diagnostic the checked-I/O binary must produce.
      then regenerate case/input-manifest.json with tools/yl_manifest.py;
   2. run: tools/yl_run.py --case-dir <case> --expect-status <expect.status>;
   3. assert: run-manifest.json status, first diagnostic (code / stage / file
-     suffix / reader / index), exit code, no core file;
+     suffix / reader / index / value / field), diagnostic count and per-entry
+     indices over all diagnostics, exit code, no core file;
   4. summarise into <report> and print a table. Exit 1 if any probe fails.
 
 Write guards (checked before anything is deleted or written; exit 2 on violation):
@@ -38,6 +39,22 @@ Derive operations (all paths are relative to case/legacy/):
   replace_token(file, line, old, new,       replace `old` on line `line`; `count`
                 count=1, occurrence=1)      replacements starting at the
                                             `occurrence`-th match (1-based)
+  set_field(file, line, field, value)       replace the `field`-th (1-based)
+                                            whitespace-separated token of line
+                                            `line` by `value`; every other token,
+                                            the spacing and the line ending stay
+  duplicate_line(file, line, count=1)       insert `count` copies of line `line`
+                                            right after it
+  insert_line(file, after, text)            insert a new line after line `after`
+                                            (0 = at the top of the file); the line
+                                            ending of the neighbouring line is used
+
+probe.toml (M1-03 additions):
+  binary_args = "--max-entities=1000"   top level; passed to yl_run.py --binary-args
+  [expect] diag_count = 2               exact number of HSTAR_DIAG records
+  [expect] indices = [3, 7]             index of every record, in order
+  [expect] value = "999"                first record's value=
+  [expect] field = "npoin"              substring of the first record's field=
 Only the Python standard library is used.
 """
 from __future__ import annotations
@@ -59,7 +76,8 @@ YL_RUN = REPO_ROOT / "tools" / "yl_run.py"
 YL_MANIFEST = REPO_ROOT / "tools" / "yl_manifest.py"
 CASE_COPY_FILES = ("observables.toml", "tolerances.toml")
 CORE_FILE = re.compile(r"^core(\.\d+)?$")
-DERIVE_OPS = {"delete_file", "empty_file", "truncate_lines", "truncate_bytes", "replace_line", "replace_token"}
+DERIVE_OPS = {"delete_file", "empty_file", "truncate_lines", "truncate_bytes", "replace_line", "replace_token",
+              "set_field", "duplicate_line", "insert_line"}
 EXPECT_REQUIRED = ("status", "exit_code", "code", "stage", "file_suffix", "no_core", "max_wall_seconds")
 CASES_DIR = REPO_ROOT / "cases"
 
@@ -88,6 +106,16 @@ def load_probe(path: Path) -> dict:
     missing = [k for k in EXPECT_REQUIRED if k not in probe["expect"]]
     if missing:
         raise ProbeError(f"{path}: expect missing {missing}")
+    if "binary_args" in probe and not isinstance(probe["binary_args"], str):
+        raise ProbeError(f"{path}: binary_args must be a string")
+    exp = probe["expect"]
+    if "diag_count" in exp and (isinstance(exp["diag_count"], bool) or not isinstance(exp["diag_count"], int)):
+        raise ProbeError(f"{path}: expect.diag_count must be an integer")
+    if "indices" in exp and not (isinstance(exp["indices"], list) and all(isinstance(x, int) and not isinstance(x, bool) for x in exp["indices"])):
+        raise ProbeError(f"{path}: expect.indices must be an array of integers")
+    for k in ("value", "field"):
+        if k in exp and not isinstance(exp[k], str):
+            raise ProbeError(f"{path}: expect.{k} must be a string")
     probe["_path"] = path
     return probe
 
@@ -160,6 +188,37 @@ def line_ending(line: bytes) -> bytes:
     return b""
 
 
+def set_field(body: str, field: int, value: str, where: str) -> str:
+    """Replace the `field`-th (1-based) whitespace-separated token of `body`; the other
+    tokens and all spacing are kept byte for byte."""
+    if field < 1:
+        raise ProbeError(f"set_field: field must be >= 1, got {field}")
+    parts = re.split(r"(\s+)", body)  # tokens and whitespace runs alternate; parts[0] is "" when body starts with blanks
+    tokens = [i for i, x in enumerate(parts) if x and not x.isspace()]
+    if field > len(tokens):
+        raise ProbeError(f"set_field: {where} has {len(tokens)} field(s), field={field}")
+    if not value or any(c.isspace() for c in value):
+        raise ProbeError(f"set_field: value {value!r} must be one non-empty token")
+    parts[tokens[field - 1]] = value
+    return "".join(parts)
+
+
+def insert_lines(lines: list[bytes], after: int, bodies: list[bytes]) -> None:
+    """Insert `bodies` (without line endings) after line `after` (0 = top). The line ending
+    of line `after` (or of line 1 when after == 0) is reused; when the file's last line
+    has no ending, it receives one and the last inserted line takes over the bare end."""
+    if not lines:
+        ending = b"\n"
+    else:
+        ref = lines[after - 1] if after >= 1 else lines[0]
+        ending = line_ending(ref) or line_ending(lines[0]) or b"\n"
+    new = [b + ending for b in bodies]
+    if lines and after == len(lines) and not line_ending(lines[-1]):
+        lines[-1] = lines[-1] + ending
+        new[-1] = bodies[-1]
+    lines[after:after] = new
+
+
 def apply_derive(legacy: Path, d: dict) -> str:
     op = d["op"]
     check_derive_file_name(str(d["file"]), f"derive {op}")
@@ -184,14 +243,30 @@ def apply_derive(legacy: Path, d: dict) -> str:
             raise ProbeError(f"truncate_lines: {d['file']} has only {len(lines)} lines, keep={keep}")
         target.write_bytes(b"".join(lines[:keep]))
         return f"{d['file']}: kept {keep} of {len(lines)} lines"
+    if op == "insert_line":
+        after = int(d["after"])
+        if not 0 <= after <= len(lines):
+            raise ProbeError(f"insert_line: {d['file']} has {len(lines)} lines, after={after}")
+        insert_lines(lines, after, [str(d["text"]).encode("latin-1")])
+        target.write_bytes(b"".join(lines))
+        return f"{d['file']}: inserted after line {after}: {str(d['text']).strip()!r}"
     ln = int(d["line"])
     if not 1 <= ln <= len(lines):
         raise ProbeError(f"{op}: {d['file']} has {len(lines)} lines, line={ln}")
     old_line = lines[ln - 1]
     ending = line_ending(old_line)
     body = old_line[: len(old_line) - len(ending)].decode("latin-1")
+    if op == "duplicate_line":
+        count = int(d.get("count", 1))
+        if count < 1:
+            raise ProbeError(f"duplicate_line: count must be >= 1, got {count}")
+        insert_lines(lines, ln, [body.encode("latin-1")] * count)
+        target.write_bytes(b"".join(lines))
+        return f"{d['file']} line {ln}: duplicated x{count}: {body.strip()!r}"
     if op == "replace_line":
         new_body = str(d["text"])
+    elif op == "set_field":
+        new_body = set_field(body, int(d["field"]), str(d["value"]), f"{d['file']} line {ln}")
     else:  # replace_token
         old, new = str(d["old"]), str(d["new"])
         count, occurrence = int(d.get("count", 1)), int(d.get("occurrence", 1))
@@ -237,6 +312,8 @@ def run_case(probe: dict, probe_root: Path, binary: Path) -> dict:
     cmd = [sys.executable, str(YL_RUN), "--case-id", probe["base_case"], "--case-dir", str(probe_root / "case"),
            "--binary", str(binary), "--timeout", str(expect["max_wall_seconds"]), "--runs-root", str(runs_root),
            "--label", probe["id"], "--expect-status", str(expect["status"])]
+    if probe.get("binary_args"):
+        cmd.append(f"--binary-args={probe['binary_args']}")
     r = subprocess.run(cmd, capture_output=True, text=True)
     run_dir = None
     m = re.search(r"->\s+(\S+)\s*$", r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "")
@@ -250,6 +327,13 @@ def run_case(probe: dict, probe_root: Path, binary: Path) -> dict:
     if run_dir and (run_dir / "run-manifest.json").is_file():
         out["run_manifest"] = json.loads((run_dir / "run-manifest.json").read_text(encoding="utf-8"))
     return out
+
+
+def as_int(x) -> int | None:
+    try:
+        return int(x)
+    except (TypeError, ValueError):
+        return None
 
 
 def check_expectations(probe: dict, run: dict) -> list[str]:
@@ -285,6 +369,16 @@ def check_expectations(probe: dict, run: dict) -> list[str]:
                 got_i = None
             if got_i != int(exp["index"]):
                 problems.append(f"diag index {got!r} != {exp['index']!r}")
+        if "value" in exp and str(d.get("value", "")) != exp["value"]:
+            problems.append(f"diag value {d.get('value')!r} != {exp['value']!r}")
+        if "field" in exp and exp["field"] not in str(d.get("field", "")):
+            problems.append(f"diag field {d.get('field')!r} does not contain {exp['field']!r}")
+    if "diag_count" in exp and len(diags) != exp["diag_count"]:
+        problems.append(f"diag count {len(diags)} != {exp['diag_count']}")
+    if "indices" in exp:
+        got_all = [as_int(d.get("index")) for d in diags]
+        if got_all != list(exp["indices"]):
+            problems.append(f"diag indices {got_all} != {list(exp['indices'])}")
     if exp["no_core"]:
         cores = [o.get("name") for o in man.get("outputs", []) if CORE_FILE.match(str(o.get("name", "")))]
         if cores or man.get("core_dump"):

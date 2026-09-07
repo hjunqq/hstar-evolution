@@ -985,7 +985,7 @@
                     end do
                 else
                     print *,'ndimn must be 2 or 3,now ndimn=',ndimn
-                    stop
+                    call diag_abort('INTERNAL',EXIT_INTERNAL,'Output.f90:out_gid_write','ndimn='//trim(diag_itoa(int(ndimn,i8)))//' passed the .glb guard but is not 2 or 3')   ! M1-03 R20
                 end if
             end if
             write(out_gid_msh,*)'end coordinates'
@@ -4135,7 +4135,7 @@
 
     if(ierror/=0)then
         write(*,*)'stop for ierror/=0 ! ,ierror=',ierror
-        stop
+        call diag_abort('RANGE',EXIT_INPUT,'Output.f90:gid_output_parameter','res_* output flag set without the matching gidres_* flag, ierror='//trim(diag_itoa(int(ierror,i8))))   ! M1-03 R20
     endif
 
 

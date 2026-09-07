@@ -8,6 +8,7 @@ module   elements
  
     integer(ink) ekind
     parameter(ekind=26) !20230910
+    logical,save::ele_scan_only=.false.   ! M1-03: set by read_element on a bad record; the rest of .ele is only scanned
 
     type gauss_global
        character (10) name
@@ -192,6 +193,7 @@ contains
           elkn(ikind)%ggaus(ikg)%weigp=weigp
     
           do igaus=1,ngaus !igaus
+             t=0.0_irk ; u=0.0_irk   ! M1-03 R17: 1-D kinds never set t/u before shfunc
              s=posgp(1,igaus)
              if(lnidmn.ge.2)t=posgp(2,igaus)
              if(lnidmn.eq.3)u=posgp(3,igaus)   
@@ -1084,6 +1086,19 @@ contains
     !read(iunit,*)i0,ii,lnods(1:nnode)
    read(iunit,*,iostat=yl_ios,iomsg=yl_msg)i0,lnods(1:nnode)
    call diag_check_read(yl_ios,yl_msg,RD_ELE_read_element_element_connectivity,ielem)
+   ! M1-03: connectivity must refer to existing nodes; element id must equal record order (old code ignored i0)
+   do in=1,nnode
+      call diag_ref(RD_ELE_read_element_element_connectivity,ielem,'lnods',int(lnods(in),i8),1_i8,int(size(coord,2),i8))
+   end do
+   if(i0/=ielem)then
+      if(i0>=1.and.i0<ielem)then
+         call diag_dup(RD_ELE_read_element_element_connectivity,ielem,'i0',int(i0,i8))
+      else
+         call diag_range(RD_ELE_read_element_element_connectivity,ielem,'i0',int(i0,i8),int(ielem,i8),int(ielem,i8))
+      endif
+   endif
+   if(any(lnods<1.or.lnods>size(coord,2)))ele_scan_only=.true.
+   if(ele_scan_only)return   ! never index coord with a bad node; global_data flushes after the groups
     do in=1,nnode
        elcod(:,in)=coord(:,lnods(in))
     end do
@@ -2236,7 +2251,7 @@ contains
           weigp(3)  =4./9.
        else
           write(*,*) 'No gauss rule for 1D elem. ngaus=',ngaus
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:getgauss','no gauss rule for 1D element, ngaus='//trim(diag_itoa(int(ngaus,i8))))   ! M1-03 R20
        endif
     ENDIF
 
@@ -2324,7 +2339,7 @@ contains
           enddo
        else
           write(*,*) ' Gauss rule not provided for Triang. ',ngaus
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:getgauss','no gauss rule for triangle, ngaus='//trim(diag_itoa(int(ngaus,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2391,7 +2406,7 @@ contains
           end do
        else
           write(*,*) ' no gauss rule for quad ', ngaus
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:getgauss','no gauss rule for quad, ngaus='//trim(diag_itoa(int(ngaus,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2450,7 +2465,7 @@ contains
           return
        else
           write(*,*) ' No gauss rule for brick with ngaus=',ngaus
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:getgauss','no gauss rule for brick, ngaus='//trim(diag_itoa(int(ngaus,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2496,7 +2511,7 @@ contains
        else
 
           write(*,*) ' No gauss rule for TETR with ngaus=',ngaus
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:getgauss','no gauss rule for tetrahedron, ngaus='//trim(diag_itoa(int(ngaus,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2532,7 +2547,7 @@ contains
        else
 
           write(*,*) ' No gauss rule for TETR with ngaus=',ngaus
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:getgauss','no gauss rule for tetrahedron, ngaus='//trim(diag_itoa(int(ngaus,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2757,7 +2772,7 @@ contains
           return
        else
           write(*,*) ' No brick with ',nnode,' nodes in SHAPE '
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:shfunc','no shape function for brick, nnode='//trim(diag_itoa(int(nnode,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2829,7 +2844,7 @@ contains
           return
        else
           write(*,*) ' No elem. with ',nnode,' in SHAPE '
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:shfunc','no shape function for tetrahedron, nnode='//trim(diag_itoa(int(nnode,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2896,7 +2911,7 @@ contains
           deriv(2,6) =   4*(1-s-t2) - deriv(2,7)*4*y*(1-x-y)
        else
           write(*,*) ' No SHAPE for Triangle nnode= ',nnode
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:shfunc','no shape function for triangle, nnode='//trim(diag_itoa(int(nnode,i8))))   ! M1-03 R20
        endif
 
     ENDIF
@@ -2946,7 +2961,7 @@ contains
           DERIV(2,8)=-T+ST
        else
           write(*,*) ' no shape function for quad ', nnode
-          stop
+          call diag_abort('INTERNAL',EXIT_INTERNAL,'Elements.f90:shfunc','no shape function for quad, nnode='//trim(diag_itoa(int(nnode,i8))))   ! M1-03 R20
        endif
 
     endif

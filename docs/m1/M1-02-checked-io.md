@@ -34,14 +34,15 @@ HSTAR_DIAG schema=1 code=EOF exit=2 severity=fatal stage="startup" file=".cor" u
 | file / unit / reader / site / seq / field | 取自注册表；`file` 对读错误是扩展名（`.cor`），对缺文件是实际文件名（`1.cor`） |
 | index | 传入的循环索引（节点号、单元号、约束集号、增量号），0 表示无 |
 | iostat / message | 编译器运行时原值；`message` 不参与断言 |
+| value / allowed | M1-03 起：违规值与允许范围（如 `"1..289"`、`"<=100000"`），紧跟 `field=`；不适用时为空串 |
 
 所有文本值（stage/file/unit/reader/site/field/message）一律双引号，内部 `"` 与 `\` 反斜杠转义，换行替换为空格；`file` 字段容量 256 字符（缺文件报实际路径名）。
 Python 端用 `shlex.split` 严格解析：解析失败、`schema≠1`、缺 `code`、`exit`/`seq`/`index`/`iostat`/`schema` 任一非整数的行记入 `diagnostics_malformed` 并判 FAILED。
-退出统一为 `flush` 后 `call exit(code)`。旧程序约 90 处裸 `stop` 未替换（R20）。
+退出统一为 `flush` 后 `call exit(code)`。static_2d 路径上的 39 处裸 `stop` 已在 M1-03 替换（`diag_abort`/`diag_exit`，`stage="runtime"`）；路径外仍未替换（R20）。
 
 ## `--check-legacy`
 
-- 触发：第一个命令行参数为 `--check-legacy`。
+- 触发：命令行含 `--check-legacy`（M1-03 起扫描全部参数，可与 `--max-entities=N` 任意顺序；未知参数 → `code=PARSE stage="argv"` exit 2）。
 - 收口点：`process_analysis` 入口第一条语句，在 `.sol`（PROFILE 内）与 `.man`（STATIC_U 内）延迟读取之前。
 - 覆盖：14 个输入文件存在性、143 个 startup reader（含 `.man/.sol` 的存在性但不含其内容）。
 - 输出（stdout）：`HSTAR_CHECK schema=1 mode=check-legacy status=OK errors=0 readers_executed=N readers_registered=152` 与每个执行过的 reader 一行 `HSTAR_CHECK_READER id=… n=…`；退出 0。

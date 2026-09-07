@@ -1,0 +1,23 @@
+schema = 1
+id = "N11_mat_imat_out_of_range"
+base_case = "static_2d.cooks_membrane"
+description = "1.mat line 17 field 3 (imat of material block 1) 1 -> 2 with nmats=1: imat indexes props(1:nmats), so material_header reports RANGE (allowed=1..nmats) before props(imat) is touched; the reader passes index 0, so index is not asserted."
+
+[[derive]]
+op = "set_field"
+file = "1.mat"
+line = 17
+field = 3
+value = "2"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "RANGE"
+stage = "startup"
+file_suffix = ".mat"
+reader = "MAT.material_set.material_header"
+field = "imat"
+value = "2"
+no_core = true
+max_wall_seconds = 10

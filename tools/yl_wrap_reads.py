@@ -229,7 +229,23 @@ def locate(edits: FileEdits, site: str, anchor: str) -> int:
 
 
 def squash(text: str) -> str:
-    return strip_comment(text).lower().replace(" ", "").replace("\t", "")
+    """Normalise Fortran code for comparison: drop the trailing comment, then lower-case and
+    remove blanks/tabs outside string literals only; the contents of '...' / "..." literals
+    (file names, unit names, sites) are kept byte for byte so a differing literal is seen."""
+    out, quote = [], None
+    for ch in strip_comment(text):
+        if quote:
+            out.append(ch)
+            if ch == quote:
+                quote = None
+        elif ch in ("'", '"'):
+            quote = ch
+            out.append(ch)
+        elif ch in (" ", "\t"):
+            continue
+        else:
+            out.append(ch.lower())
+    return "".join(out)
 
 
 def check_call_args(nxt: str, fn: str) -> list[str] | None:
@@ -302,7 +318,7 @@ def already_wrapped_open(edits: FileEdits, i: int, entry: dict) -> bool:
     expect = None
     if has_status:
         _, file_expr = open_file_expr(strip_comment(edits.lines[i]), entry["site"])
-        expect = ["yl_ios", "yl_msg", squash(file_expr), f"'{entry['unit_var'].lower()}'", f"'{edits.name.lower()}:{i + 1}'"]
+        expect = ["yl_ios", "yl_msg", squash(file_expr), f"'{entry['unit_var']}'", f"'{edits.name}:{i + 1}'"]
     has_call = expect is not None and args == expect
     if has_status and has_call:
         return True
