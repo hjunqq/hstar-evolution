@@ -15,6 +15,7 @@
 | M0-03 隔离运行器 | IN_REVIEW | 七种状态各有反例；两例 COMPLETED |
 | M0-04 参考结果 | IN_REVIEW | 两例各 3 次逐值相等（B02）；候选脏树二进制两例与 reference 相同（04c）；reference 已冻结到 `cases/golden/*/reference/` |
 | M0-05b M0 报告 | IN_REVIEW | `docs/m0/M0-report.md`；无第二复核人，阶段停在 IN_REVIEW |
+| M1-01 reader 清单 | IN_REVIEW | 静态全集 1022 处；两例 gdb 实证命中 211 位点（read 152）；`docs/m1/reader-inventory.toml` 经 `check` 通过 |
 | M1～M5 实现及验收 | TODO | 尚无 checked I/O、状态比较器、现代初始化或可运行 TOML |
 | M6～M9 | BACKLOG | 按真实需求逐能力启动 |
 
@@ -22,4 +23,4 @@
 本轮核实了环境（ifx 2025.3、MKL 2026.1、无 gfortran）、原仓库脏树差异、两例 deck 内容与输出路径，
 并据此修正文档；没有更改求解器或算例输入。
 
-下一步：M0 等待复核签收；M1-01 首条静力路径 reader 清单可以开始（M1-03 已有 R17/R18 两个明确目标）。
+下一步：M1-02 结构化 Error、checked I/O 与退出协议（以 `docs/m1/reader-inventory.toml` 的 149 个已执行读取点为包装范围）。

@@ -21,7 +21,8 @@ yl-import-case        从登记来源导入算例，不导入运行垃圾
 | `yl-run` | `tools/yl_run.py` | 隔离目录、单线程、进程组超时、前后 golden 重哈希；状态 INPUT_HASH_MISMATCH / TIMEOUT / CRASHED / FAILED / MISSING_OUTPUT / GOLDEN_MODIFIED / COMPLETED，仅 COMPLETED 退出 0 |
 | （结果解析） | `tools/yl_parse_flavia.py` | 解析 `1.flavia.res`，检查节点数、有限性、重复 ID、列数一致 |
 | `yl-state diff`（数值部分） | `tools/yl_compare.py` | 先结构后数值的逐分量比较；默认精确相等；可加载 `tolerances.toml` 指定节 |
-| 构建 | `tools/env.sh`、`tools/build.sh` | 见 `docs/build-linux.md` |
+| 构建 | `tools/env.sh`、`tools/build.sh` | 见 `docs/build-linux.md`；`trace` profile 供 gdb 计数 |
+| （reader 清单） | `tools/yl_io_inventory.py`、`tools/yl_io_trace.sh` | 静态 I/O 普查、gdb 断点实证、注册表校验与渲染（M1-01） |
 
 工具实现必须 fail-closed：无法判断时返回未验证，不得返回通过。
 

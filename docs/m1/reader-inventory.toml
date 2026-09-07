@@ -1,0 +1,4002 @@
+# HSTAR Evolution — M1-01 reader inventory (authoritative, hand-maintained)
+# Generated 2026-09-07 from docs/m1/io-sites.json + docs/m1/evidence/*/hits.json; edit by hand afterwards.
+# Validate with: python3 tools/yl_io_inventory.py check --evidence docs/m1/evidence/*/hits.json
+# ID rule: <FILE>.<routine>.<record_slug>[#k]; anchor (site+hash) is a locator only and may drift.
+# fields entries: name[dims]:type[:ProblemState target]; state_target vocabulary: see tools/yl_io_inventory.py
+
+version = 1
+cases = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+path = "static_2d: 2D Q4 plane-strain linear-elastic, PROFILE, gravity, single increment"
+census = "docs/m1/io-sites.json"
+
+[[reader]]
+id = "INP.FEM90.title#1"
+site = "Fem.f90:93"
+anchor = "ec3235bd8466"
+file = "inp"
+unit_var = "inpunit"
+routine = "FEM90"
+statement = "read (inpunit,*) text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "FEM90"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "INP.FEM90.run_control"
+site = "Fem.f90:94"
+anchor = "44a6f2fc4c50"
+file = "inp"
+unit_var = "inpunit"
+routine = "FEM90"
+statement = "read (inpunit,*) restart,relis,sysrelis,ADINA,Uopt_R,gamamax"
+seq = 2
+fields = ["restart:int", "relis:int", "sysrelis:int", "ADINA:int", "Uopt_R:int", "gamamax:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "FEM90 (restart/relis branches), STATIC_U"
+state_target = "not_migrated"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "restart=0 on both cases; restart/reliability/ADINA/optimisation switches are outside the static slice"
+
+[[reader]]
+id = "INP.FEM90.title#2"
+site = "Fem.f90:95"
+anchor = "ec3235bd8466"
+file = "inp"
+unit_var = "inpunit"
+routine = "FEM90"
+statement = "read (inpunit,*) text"
+seq = 3
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "FEM90"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "INP.FEM90.problem_name"
+site = "Fem.f90:96"
+anchor = "19f3065a053d"
+file = "inp"
+unit_var = "inpunit"
+routine = "FEM90"
+statement = "read (inpunit,*) probn"
+seq = 4
+fields = ["probn:str"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data (open of every probn-based file)"
+state_target = "case.name"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "also the stem of every input/output file name"
+
+[[reader]]
+id = "GLB.global_data.title#1"
+site = "Global.f90:675"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.sizes_and_switches"
+site = "Global.f90:677"
+anchor = "ccfdf0f6eb88"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)npoin,npoinb,nelem,ndimn,nmats,ngroup,ntlink,outplot,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde"
+seq = 2
+fields = ["npoin:int:derived(mesh.nodes)", "npoinb:int:derived", "nelem:int:derived(mesh.elements)", "ndimn:int:mesh.dimension", "nmats:int:derived(materials)", "ngroup:int:derived(sections)", "ntlink:int:unused_switch", "outplot:str:output_control", "kstab:real:unused_switch", "mat_curve:int:unused_switch", "meshc:int:unused_switch", "rmesh:int:unused_switch", "level_set_problem:int:unused_switch", "ljdp:int:unused_switch", "stab_matde:int:unused_switch"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data allocations; every reader"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "counts must be derived in ProblemState; outplot=GIDR selects the text flavia writer"
+
+[[reader]]
+id = "GLB.global_data.title#2"
+site = "Global.f90:690"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 3
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.reached_only_Global_691"
+site = "Global.f90:691"
+anchor = "75e95b43276a"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "if(rmesh/=0)read(gunit,*)valv1,valv2"
+reached_only = true
+condition_value = "rmesh/=0 is false (rmesh=0)"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#3"
+site = "Global.f90:693"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "ndivide title; no value read when rmesh==0"
+
+[[reader]]
+id = "GLB.global_data.title#4"
+site = "Global.f90:726"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 6
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.init_and_blocks"
+site = "Global.f90:728"
+anchor = "70aad34acc86"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)ninit,kinit,winit,nblks,nlinks,nonsym,outinp,outintr,outintw,neuman,equvs,type_ABC,block_stab,nbackf,nbspring,ebody,outind,nbackdT,ninistn"
+seq = 7
+fields = ["ninit:int:unused_switch", "kinit:int:unused_switch", "winit:int:unused_switch", "nblks:int:derived(steps)", "nlinks:int:unused_switch", "nonsym:int:solver.symmetric", "outinp:int:output_control", "outintr:int:output_control", "outintw:int:output_control", "neuman:int:unused_switch", "equvs:int:unused_switch", "type_ABC:str:interactions(absorbing)", "block_stab:int:unused_switch", "nbackf:int:unused_switch", "nbspring:int:unused_switch", "ebody:int:unused_switch", "outind:int:output_control", "nbackdT:int:unused_switch", "ninistn:int:unused_switch"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data, process_analysis, prescrib_set (type_ABC), FEM90 (nbackf)"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "type_ABC='FIX' selects PRE.prescrib_set.set_header (8 fields) and disables VIE/MIF reads; nbackf=0 disables back_analysis"
+
+[[reader]]
+id = "GLB.global_data.title#5"
+site = "Global.f90:751"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 8
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.problem_type"
+site = "Global.f90:753"
+anchor = "969d6acf0d09"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb,state_change,Bparameter,balgor,upliftin"
+seq = 9
+fields = ["type_problem:str:steps[0].procedure", "type_solver:str:solver.linear", "type_load:str:steps[0].load_mode", "type_nl:int:steps[0].controls", "stabpw:int:unused_switch", "nlayer:int:unused_switch", "kglb:int:unused_switch", "state_change:int:unused_switch", "Bparameter:int:unused_switch", "balgor:int:unused_switch", "upliftin:int:unused_switch"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "process_analysis dispatch (Q -> STATIC_U), PROFILE"
+state_target = "steps[0].procedure"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "Q=static, PROFILE solver; nlayer=0 disables GLB.global_data.layer_types; Bparameter=0 disables all conditional rewinds"
+
+[[reader]]
+id = "GLB.global_data.title#6"
+site = "Global.f90:770"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 10
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.reached_only_Global_772"
+site = "Global.f90:772"
+anchor = "de11893207f6"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "if(nlayer==2)read(gunit,*) type_nl_layer1,type_nl_layer2,solver_iter"
+reached_only = true
+condition_value = "nlayer==2 is false (nlayer=0)"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#7"
+site = "Global.f90:773"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 12
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.material_class_counts"
+site = "Global.f90:775"
+anchor = "9da72b66ce73"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+seq = 13
+fields = ["nmass:int:unused_switch", "nsmat:int:derived", "nhmat:int:unused_switch", "nqmat:int:unused_switch", "nldfl:int:unused_switch", "kgmat:int:unused_switch", "nswkw:int:unused_switch", "uwcpl:int:unused_switch", "NGRAV:int:steps[0].load(gravity)", "nflow:int:unused_switch", "ECWPIPE:int:unused_switch"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "material_set, external_load_2 (NGRAV)"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "NGRAV=1 enables the gravity body-force records in .loa"
+
+[[reader]]
+id = "GLB.global_data.title#8"
+site = "Global.f90:777"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 14
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "nfreeflownode title"
+
+[[reader]]
+id = "GLB.global_data.title#9"
+site = "Global.f90:788"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 15
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.special_counts"
+site = "Global.f90:790"
+anchor = "8e06dfd847f8"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel"
+seq = 16
+fields = ["ntsmat:int:unused_switch", "nthmat:int:unused_switch", "kstat:int:unused_switch", "ground_inf:int:unused_switch", "src:int:unused_switch", "nextrf:int:unused_switch", "submodel:int:unused_switch"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "999/999/0 on both cases"
+
+[[reader]]
+id = "FTR.global_data.title#1"
+site = "Global.f90:834"
+anchor = "c7ccc925608f"
+file = ".ftr"
+unit_var = "ftfread"
+routine = "global_data"
+statement = "read(ftfread,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "FTR.global_data.force_counts"
+site = "Global.f90:835"
+anchor = "3b470d221a8d"
+file = ".ftr"
+unit_var = "ftfread"
+routine = "global_data"
+statement = "read(ftfread,*)nforce,ngaps,nforce_gaps,nsafety_gaps"
+seq = 2
+fields = ["nforce:int", "ngaps:int", "nforce_gaps:int", "nsafety_gaps:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "surface force / gap safety"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 0 0"
+
+[[reader]]
+id = "GLB.global_data.title#10"
+site = "Global.f90:902"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 17
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.mdofn"
+site = "Global.f90:903"
+anchor = "d3660c766821"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)mdofn"
+seq = 18
+fields = ["mdofn:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data DOF map, every field loop"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "derive from section formulation (2 for 2D displacement)"
+
+[[reader]]
+id = "GLB.global_data.lmdofn"
+site = "Global.f90:905"
+anchor = "fc96a4d3c922"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)lmdofn(1:mdofn)"
+seq = 19
+fields = ["lmdofn[1:mdofn]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data DOF map, Output, prescrib_set"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "global->condensed dof map; identity for full-dof decks"
+
+[[reader]]
+id = "GLB.global_data.order_time_mdofn"
+site = "Global.f90:906"
+anchor = "d6c0efb9e096"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)order_time_mdofn(1:mdofn)"
+seq = 20
+fields = ["order_time_mdofn[1:mdofn]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "dynamic time integration"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 on both cases; dynamic only"
+
+[[reader]]
+id = "GLB.global_data.title#11"
+site = "Global.f90:907"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 21
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.newmark"
+site = "Global.f90:908"
+anchor = "84c84abc8419"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)beeta1,beeta2,theta1"
+seq = 22
+fields = ["beeta1:real", "beeta2:real", "theta1:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "dynamic time integration"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "Newmark parameters; static slice ignores them"
+
+[[reader]]
+id = "GLB.global_data.title#12"
+site = "Global.f90:919"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 23
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.equvs_process"
+site = "Global.f90:921"
+anchor = "d89f51bdcb7b"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)equvs_process(1:ngroup)"
+seq = 24
+fields = ["equvs_process[1:ngroup]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#13"
+site = "Global.f90:924"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 25
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.appear_level"
+site = "Global.f90:926"
+anchor = "dfa58631db22"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)appear_level(1:ngroup)"
+seq = 26
+fields = ["appear_level[1:ngroup]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#14"
+site = "Global.f90:927"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 27
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.appear_process"
+site = "Global.f90:930"
+anchor = "173d1924ca6a"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)appear_process(1:ngroup,iblk)"
+seq = 28
+fields = ["appear_process[1:ngroup,iblk]:int"]
+format = "list_directed"
+guard = "loop iblk=1..nblks (1)"
+phase = "startup"
+consumers = "process_analysis activation of groups per block"
+state_target = "steps[0].activation"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "1 = group active in step 1"
+
+[[reader]]
+id = "GLB.global_data.title#15"
+site = "Global.f90:934"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 29
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.matno_process"
+site = "Global.f90:937"
+anchor = "f9e2324950e2"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)matno_process(1:ngroup,iblk)"
+seq = 30
+fields = ["matno_process[1:ngroup,iblk]:int"]
+format = "list_directed"
+guard = "loop iblk=1..nblks (1)"
+phase = "startup"
+consumers = "material assignment per block"
+state_target = "sections[].material"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "material id per group per step; 1"
+
+[[reader]]
+id = "GLB.global_data.title#16"
+site = "Global.f90:950"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 31
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.force_process"
+site = "Global.f90:952"
+anchor = "fdb9352b3d55"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)force_process(1:ngroup)"
+seq = 32
+fields = ["force_process[1:ngroup]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#17"
+site = "Global.f90:957"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 33
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.average_appear"
+site = "Global.f90:958"
+anchor = "6b33b9ed2e2f"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)average_appear(1:ngroup)"
+seq = 34
+fields = ["average_appear[1:ngroup]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "Output nodal stress averaging"
+state_target = "steps[0].output.stress_averaging"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "2 = direct averaging of Gauss stresses to nodes"
+
+[[reader]]
+id = "GLB.global_data.title#18"
+site = "Global.f90:959"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 35
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.gid_flags"
+site = "Global.f90:960"
+anchor = "631573ec26db"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)gid_u,gid_s,gid_ms,gid_f,gid_rot,gid_v,gid_a,gid_T,gid_P, gid_Pv,gid_ep,gid_Y,gid_FC,gid_Ns,gid_Ss,gid_Mxy,gid_bem,gid_wh,gid_wv,gid_bcs"
+seq = 36
+fields = ["gid_u:int", "gid_s:int", "gid_ms:int", "gid_f:int", "gid_rot:int", "gid_v:int", "gid_a:int", "gid_T:int", "gid_P:int", "gid_Pv:int", "gid_ep:int", "gid_Y:int", "gid_FC:int", "gid_Ns:int", "gid_Ss:int", "gid_Mxy:int", "gid_bem:int", "gid_wh:int", "gid_wv:int", "gid_bcs:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "Output OUT_GID_WRITE"
+state_target = "steps[0].output.field"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "gid_u=gid_s=1 -> DISPLACEMENT and STRESS blocks in 1.flavia.res; gid_f=0 -> no reactions"
+
+[[reader]]
+id = "GLB.global_data.title#19"
+site = "Global.f90:962"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 37
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.res_flags"
+site = "Global.f90:963"
+anchor = "70912db18760"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P, res_Pv,res_ep,res_Y,res_FC,res_Ns,res_Ss,res_Tv,res_Pa"
+seq = 38
+fields = ["res_u:int", "res_s:int", "res_ms:int", "res_f:int", "res_rot:int", "res_v:int", "res_a:int", "res_T:int", "res_P:int", "res_Pv:int", "res_ep:int", "res_Y:int", "res_FC:int", "res_Ns:int", "res_Ss:int", "res_Tv:int", "res_Pa:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "Output binary .res writer"
+state_target = "output_control"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "all 0"
+
+[[reader]]
+id = "GLB.global_data.title#20"
+site = "Global.f90:986"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 39
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.fsi_params"
+site = "Global.f90:987"
+anchor = "d45e202cfc8d"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+seq = 40
+fields = ["Icaddmass:int", "swlifs2006:real", "toth:real", "ifswater:int", "ifsgravity:real", "absorb:real", "alfa_p4:real", "stiff_p4:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "fluid-structure / absorbing boundary"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "M7.6 scope"
+
+[[reader]]
+id = "GLB.global_data.title#21"
+site = "Global.f90:988"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 41
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.crack_and_beam"
+site = "Global.f90:989"
+anchor = "7a4fa6141181"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nlocalbeam),lelenrt(1:ndimnrt)"
+seq = 42
+fields = ["ftcrack:real", "coefMpa:real", "ikindks:int", "doubsig:int", "ktan1:real", "ktan2:real", "nlocalbeam:int", "ndimnrt:int", "listglocbeam[1:nlocalbeam]:int", "lelenrt[1:ndimnrt]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "concrete damage, beam local axes"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "trailing arrays have zero length on both cases"
+
+[[reader]]
+id = "GLB.global_data.title#22"
+site = "Global.f90:999"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 43
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.transform_and_mif"
+site = "Global.f90:1000"
+anchor = "66e7716bbe99"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+seq = 44
+fields = ["ntrans:int", "nlaymif:int", "epsMIFb:real", "gamaMIF:real", "ifixvar0_inpb:int", "camif:real", "dxmif:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data (.nrt reading when ntrans/=0), MIF boundary"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "ntrans=0 skips the interpolation-group reads in .nrt"
+
+[[reader]]
+id = "GLB.global_data.title#23"
+site = "Global.f90:1001"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 45
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.hdam"
+site = "Global.f90:1002"
+anchor = "e8da14776e5f"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)hdam(1:nblks)"
+seq = 46
+fields = ["hdam[1:nblks]:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "water load"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#24"
+site = "Global.f90:1004"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 47
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.water_level"
+site = "Global.f90:1005"
+anchor = "d0c162ebb896"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)water_level(1:nblks)"
+seq = 48
+fields = ["water_level[1:nblks]:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "water load / uplift"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "-99 = none"
+
+[[reader]]
+id = "GLB.global_data.title#25"
+site = "Global.f90:1007"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 49
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.modf_dis_blocks"
+site = "Global.f90:1008"
+anchor = "aa7021923968"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)modf_dis_blocks(1:nblks)"
+seq = 50
+fields = ["modf_dis_blocks[1:nblks]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "displacement reset between blocks"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#26"
+site = "Global.f90:1009"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 51
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.uinitial"
+site = "Global.f90:1010"
+anchor = "c99c301bfe22"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)uinitial(1:nblks)"
+seq = 52
+fields = ["uinitial[1:nblks]:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "initial displacement"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.title#27"
+site = "Global.f90:1015"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 53
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "backf()% title; nbackf=0 so no data"
+
+[[reader]]
+id = "GLB.global_data.title#28"
+site = "Global.f90:1055"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 54
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "ILINKS title; nlinks=0"
+
+[[reader]]
+id = "GLB.global_data.title#29"
+site = "Global.f90:1069"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 55
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "tLINKS title; ntlink=0"
+
+[[reader]]
+id = "COR.global_data.node_coordinates"
+site = "Global.f90:1089"
+anchor = "d32424eb58df"
+file = ".cor"
+unit_var = "cunit"
+routine = "global_data"
+statement = "read(cunit,*)i0,coord(1:ndimn,ipoin)"
+seq = 1
+fields = ["i0:int:mesh.nodes[].id", "coord[1:ndimn]:real:mesh.nodes[].xyz"]
+format = "list_directed"
+guard = "loop ipoin=1..npoin"
+phase = "startup"
+consumers = "everything"
+state_target = "mesh.nodes"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 289, "static_2d.lame_cylinder" = 81}
+note = "one record per node; id is read but the row index ipoin is what is stored"
+
+[[reader]]
+id = "GLB.global_data.title#30"
+site = "Global.f90:1096"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 56
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "group section title 1/5"
+
+[[reader]]
+id = "GLB.global_data.title#31"
+site = "Global.f90:1098"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 57
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "group section title 2/5"
+
+[[reader]]
+id = "GLB.global_data.title#32"
+site = "Global.f90:1099"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 58
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "group section title 3/5"
+
+[[reader]]
+id = "GLB.global_data.title#33"
+site = "Global.f90:1100"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 59
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "group section title 4/5"
+
+[[reader]]
+id = "GLB.global_data.title#34"
+site = "Global.f90:1101"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 60
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "group section title 5/5"
+
+[[reader]]
+id = "GLB.global_data.group_header"
+site = "Global.f90:1114"
+anchor = "f6bfd348b828"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)group(igroup)%name,       group(igroup)%kname,      group(igroup)%index, group(igroup)%class,      group(igroup)%nrfields,   group(igroup)%fieldid, group(igroup)%special,    group(igroup)%sptype,     group(igroup)%nelgroup, group(igroup)%matno,      group(igroup)%type_nalgo, group(igroup)%type_stiff, group(igroup)%type_ecoint,group(igroup)%ilayer,     elcod_local,group_inf, group(igroup)%uplift_ic,group(igroup)%liquj"
+seq = 61
+fields = ["name:str:sections[].element", "kname:str:sections[].name", "index:int:sections[].element_kind", "class:str:sections[].class", "nrfields:int:derived", "fieldid:str:sections[].fields", "special:str", "sptype:str:sections[].formulation", "nelgroup:int:derived(elset size)", "matno:int:sections[].material", "type_algo:int", "type_stiff:int", "type_ecoint:int", "ilayer:int", "elcod_local:real", "group_inf:int", "uplift_ic:int", "liquj:int"]
+format = "list_directed"
+guard = "loop igroup=1..ngroup (1)"
+phase = "startup"
+consumers = "global_data, read_element (nelgroup), Stiff, Output"
+state_target = "sections[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "YL group = elset + section + material reference; split in ProblemState. Q4/CO/U/ST/PE on both cases"
+
+[[reader]]
+id = "GLB.global_data.group_mass_damping"
+site = "Global.f90:1129"
+anchor = "7bad59ba9464"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)group(igroup)%type_mass(1:nrfields),group(igroup)%alfa,group(igroup)%beta"
+seq = 62
+fields = ["type_mass[1:nrfields]:int", "alfa:real", "beta:real"]
+format = "list_directed"
+guard = "loop igroup"
+phase = "startup"
+consumers = "dynamic mass/damping"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0.0 0.0"
+
+[[reader]]
+id = "GLB.global_data.group_order_time"
+site = "Global.f90:1131"
+anchor = "c7656caef408"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)(group(igroup)%order_time(:,ifield),ifield=1,group(igroup)%nrfields)"
+seq = 63
+fields = ["order_time[:,1:nrfields]:int"]
+format = "list_directed"
+guard = "loop igroup"
+phase = "startup"
+consumers = "dynamic"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.global_data.group_nfdof"
+site = "Global.f90:1140"
+anchor = "95a29c82088f"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)nfdof"
+seq = 64
+fields = ["nfdof:int"]
+format = "list_directed"
+guard = "loop igroup x nrfields"
+phase = "startup"
+consumers = "DOF allocation per field"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "2 = dofs per node of the U field; derive from formulation"
+
+[[reader]]
+id = "GLB.global_data.group_listdof"
+site = "Global.f90:1145"
+anchor = "623eed522fb1"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)group(igroup)%dof(ifield)%listdof_f(1:nfdof)"
+seq = 65
+fields = ["listdof_f[1:nfdof]:int"]
+format = "list_directed"
+guard = "loop igroup x nrfields"
+phase = "startup"
+consumers = "DOF allocation per field"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "1 2 = ux,uy"
+
+[[reader]]
+id = "ELE.read_element.element_connectivity"
+site = "Elements.f90:1083"
+anchor = "a29d9528e945"
+file = ".ele"
+unit_var = "iunit"
+routine = "read_element"
+statement = "read(iunit,*)i0,lnods(1:nnode)"
+seq = 1
+fields = ["i0:int:mesh.elements[].id", "lnods[1:nnode]:int:mesh.elements[].nodes"]
+format = "list_directed"
+guard = "loop over elements of each group"
+phase = "startup"
+consumers = "everything"
+state_target = "mesh.elements"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 256, "static_2d.lame_cylinder" = 64}
+note = "group id column at the end of each .ele row is consumed by the same statement via list-directed tail? No: only nnode ids read; trailing group number ignored by list-directed read"
+
+[[reader]]
+id = "NRT.global_data.title#1"
+site = "Global.f90:1361"
+anchor = "c8e8c055f147"
+file = ".nrt"
+unit_var = "nrtunit"
+routine = "global_data"
+statement = "read(nrtunit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "NRT.global_data.title#2"
+site = "Global.f90:1362"
+anchor = "c8e8c055f147"
+file = ".nrt"
+unit_var = "nrtunit"
+routine = "global_data"
+statement = "read(nrtunit,*)text"
+seq = 2
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "NRT.global_data.transgroup"
+site = "Global.f90:1363"
+anchor = "fee4519794b3"
+file = ".nrt"
+unit_var = "nrtunit"
+routine = "global_data"
+statement = "read(nrtunit,*)transgroup"
+seq = 3
+fields = ["transgroup:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "global_data interpolation groups"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; ntrans=0"
+
+[[reader]]
+id = "GLB.global_data.title#35"
+site = "Global.f90:1675"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 66
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "tension_joint title"
+
+[[reader]]
+id = "GLB.global_data.tension_joint_count"
+site = "Global.f90:1677"
+anchor = "511e6af93226"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)tsel"
+seq = 67
+fields = ["tsel:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "joint elements"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0"
+
+[[reader]]
+id = "GLB.global_data.title#36"
+site = "Global.f90:1690"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)text"
+seq = 68
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "global_data"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "contact_joint title"
+
+[[reader]]
+id = "GLB.global_data.contact_joint_count"
+site = "Global.f90:1692"
+anchor = "511e6af93226"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "read(gunit,*)tsel"
+seq = 69
+fields = ["tsel:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "joint elements"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0"
+
+[[reader]]
+id = "INP.FEM90.runblks"
+site = "Fem.f90:177"
+anchor = "5bdb9ebdb060"
+file = "inp"
+unit_var = "inpunit"
+routine = "FEM90"
+statement = "read (inpunit,*)runblks"
+seq = 5
+fields = ["runblks:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "FEM90 block loop"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "derive from len(steps); deck value 1"
+
+[[reader]]
+id = "MAT.material_set.title#1"
+site = "Material.f90:240"
+anchor = "3555c9071e44"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "material_set"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "MAT.material_set.curve_count"
+site = "Material.f90:241"
+anchor = "9e806f4e5a1c"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)nscurve"
+seq = 2
+fields = ["nscurve:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "material_set"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 property curves"
+
+[[reader]]
+id = "MAT.material_set.comment_line_count"
+site = "Material.f90:256"
+anchor = "8691cc12f032"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)nline"
+seq = 3
+fields = ["nline:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "material_set"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "10 comment lines follow"
+
+[[reader]]
+id = "MAT.material_set.comment_line#1"
+site = "Material.f90:258"
+anchor = "13eed09b2340"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*) text"
+seq = 4
+fields = ["text:str"]
+format = "text_skip"
+guard = "loop 1..nline (10)"
+phase = "startup"
+consumers = "material_set"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 10, "static_2d.lame_cylinder" = 10}
+note = "free comment lines"
+
+[[reader]]
+id = "MAT.material_set.title#2"
+site = "Material.f90:263"
+anchor = "3555c9071e44"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "material_set"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "nmats title"
+
+[[reader]]
+id = "MAT.material_set.nmats"
+site = "Material.f90:264"
+anchor = "2662b3c55e6b"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)mmats"
+seq = 6
+fields = ["mmats:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "material_set"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "must equal .glb nmats; derive from len(materials)"
+
+[[reader]]
+id = "MAT.material_set.title#3"
+site = "Material.f90:269"
+anchor = "3555c9071e44"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)text"
+seq = 7
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "material_set"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "material_serial line"
+
+[[reader]]
+id = "MAT.material_set.material_header"
+site = "Material.f90:270"
+anchor = "11d4289dfcbf"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)property,name,imat"
+seq = 8
+fields = ["property:str:materials[].kind", "name:str:materials[].name", "imat:int:materials[].id"]
+format = "list_directed"
+guard = "loop imat=1..mmats (1)"
+phase = "startup"
+consumers = "material_set"
+state_target = "materials[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "MECHANICAL SOLID 1"
+
+[[reader]]
+id = "MAT.material_set.material_nphase"
+site = "Material.f90:279"
+anchor = "767ca161a7e8"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)nphase"
+seq = 9
+fields = ["nphase:int"]
+format = "list_directed"
+guard = "loop imat"
+phase = "startup"
+consumers = "material_set"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "1"
+
+[[reader]]
+id = "MAT.material_set.material_phase"
+site = "Material.f90:282"
+anchor = "0ea946197a66"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)phase"
+seq = 10
+fields = ["phase:str"]
+format = "list_directed"
+guard = "loop imat x nphase"
+phase = "startup"
+consumers = "material_set"
+state_target = "materials[].phase"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "SOLID"
+
+[[reader]]
+id = "MAT.material_set.elastic_isotropic"
+site = "Material.f90:289"
+anchor = "ba5beb2800d7"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)material,density,ratio,thickness,e,nu,alfa,icreep,kind_wt,jliqu"
+seq = 11
+fields = ["material:str:materials[].model", "density:real:materials[].density", "ratio:real", "thickness:real:sections[].thickness", "e:real:materials[].E", "nu:real:materials[].nu", "alfa:real:materials[].thermal_expansion", "icreep:int", "kind_wt:int", "jliqu:int"]
+format = "list_directed"
+guard = "material=='ELASTIC_ISOTROPIC'"
+phase = "startup"
+consumers = "Stiff element stiffness, gravity body force"
+state_target = "materials[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "2400 1.0 1.0 2.5e10 0.2 1e-5 0 0 0"
+
+[[reader]]
+id = "MAT.material_set.elastic_extra"
+site = "Material.f90:291"
+anchor = "a995ac2d525f"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)iE,iNu,density_w"
+seq = 12
+fields = ["iE:int", "iNu:int", "density_w:real"]
+format = "list_directed"
+guard = "material=='ELASTIC_ISOTROPIC'"
+phase = "startup"
+consumers = "material_set"
+state_target = "unused_switch"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 1000"
+
+[[reader]]
+id = "GLB.contact_point_to_point.title#1"
+site = "Global.f90:3328"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "contact_point_to_point"
+statement = "read(gunit,*)text"
+seq = 70
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "contact_point_to_point"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.contact_point_to_point.contact_control"
+site = "Global.f90:3330"
+anchor = "9ca598b65c3f"
+file = ".glb"
+unit_var = "gunit"
+routine = "contact_point_to_point"
+statement = "read(gunit,*)ngaps,ngapb,contactpe,miter_bt,tor_bt,iblks_bt,nonsbt,xlwsol,method_gapi,miter_state,type_solver_ctt,restart_ctt,damp_ctt,istatec"
+seq = 71
+fields = ["ngaps:int", "ngapb:int", "contactpe:int", "miter_bt:int", "tor_bt:real", "iblks_bt:int", "nonsbt:int", "xlwsol:int", "method_gapi:int", "miter_state:int", "type_solver_ctt:str", "restart_ctt:int", "damp_ctt:real", "istatec:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "contact_point_to_point, STATIC_U (recttunit reads when ngapb/=0)"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "ngaps=ngapb=0 -> interactions empty; M6.6"
+
+[[reader]]
+id = "GLB.link_concrete_and_steel.title#1"
+site = "Global.f90:4536"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "link_concrete_and_steel"
+statement = "read(gunit,*)text"
+seq = 72
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "link_concrete_and_steel"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.link_concrete_and_steel.rc_steel_count"
+site = "Global.f90:4538"
+anchor = "c9228d9563b9"
+file = ".glb"
+unit_var = "gunit"
+routine = "link_concrete_and_steel"
+statement = "read(gunit,*)nrcsteel"
+seq = 73
+fields = ["nrcsteel:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "reinforcement"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M6.8"
+
+[[reader]]
+id = "GLB.link_concrete_and_water_pipe.title#1"
+site = "Global.f90:4402"
+anchor = "4fbc2c6c6901"
+file = ".glb"
+unit_var = "gunit"
+routine = "link_concrete_and_water_pipe"
+statement = "read(gunit,*)text"
+seq = 74
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "link_concrete_and_water_pipe"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "GLB.link_concrete_and_water_pipe.water_pipe_count"
+site = "Global.f90:4404"
+anchor = "074ba6e6389f"
+file = ".glb"
+unit_var = "gunit"
+routine = "link_concrete_and_water_pipe"
+statement = "read(gunit,*)nwcpipe"
+seq = 75
+fields = ["nwcpipe:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "cooling pipes"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M9"
+
+[[reader]]
+id = "IFS.stiff_interface_fluid_solid.title#1"
+site = "Stiff.f90:10212"
+anchor = "6b9a8d5e5d4e"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_interface_fluid_solid"
+statement = "read(ifsunit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "stiff_interface_fluid_solid"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "IFS.stiff_interface_fluid_solid.ifs_group_count"
+site = "Stiff.f90:10213"
+anchor = "161a6eec2eaa"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_interface_fluid_solid"
+statement = "read(ifsunit,*)nifsgroup"
+seq = 2
+fields = ["nifsgroup:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "stiff_interface_fluid_solid"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M7.6"
+
+[[reader]]
+id = "IFS.stiff_absorb_fluid.title#1"
+site = "Stiff.f90:10314"
+anchor = "6b9a8d5e5d4e"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_absorb_fluid"
+statement = "read(ifsunit,*)text"
+seq = 3
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "stiff_absorb_fluid"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "IFS.stiff_absorb_fluid.absorb_fluid_count"
+site = "Stiff.f90:10315"
+anchor = "2088a09e3292"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_absorb_fluid"
+statement = "read(ifsunit,*)nabsfgroup"
+seq = 4
+fields = ["nabsfgroup:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "stiff_absorb_fluid"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M7.6"
+
+[[reader]]
+id = "IFS.stiff_absorb_solid.title#1"
+site = "Stiff.f90:10411"
+anchor = "6b9a8d5e5d4e"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_absorb_solid"
+statement = "read(ifsunit,*)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "stiff_absorb_solid"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "IFS.stiff_absorb_solid.absorb_solid_count"
+site = "Stiff.f90:10412"
+anchor = "865107aa218d"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_absorb_solid"
+statement = "read(ifsunit,*)nabssgroup"
+seq = 6
+fields = ["nabssgroup:int", "exx:real", "uxx:real", "densxx:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "stiff_absorb_solid"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 0 0; M7.5 (record has 4 values, statement reads 1)"
+
+[[reader]]
+id = "IFS.stiff_ifs2006.title#1"
+site = "Stiff.f90:9579"
+anchor = "6b9a8d5e5d4e"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_ifs2006"
+statement = "read(ifsunit,*)text"
+seq = 7
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "stiff_ifs2006"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "IFS.stiff_ifs2006.ifs_edge_count"
+site = "Stiff.f90:9580"
+anchor = "1c9624f21b49"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "stiff_ifs2006"
+statement = "read(ifsunit,*)ifsnedge"
+seq = 8
+fields = ["ifsnedge:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "stiff_ifs2006"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M7.6"
+
+[[reader]]
+id = "OPR.output_read.title#1"
+site = "Output.f90:4152"
+anchor = "6623a1095b3a"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "read(outpread,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "OPR.output_read.title#2"
+site = "Output.f90:4153"
+anchor = "6623a1095b3a"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "read(outpread,*)text"
+seq = 2
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "OPR.output_read.output_control"
+site = "Output.f90:4155"
+anchor = "e2639631192a"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "read(outpread,*)irecover,wpgroup,wegroup,wggroup,wjgroup"
+seq = 3
+fields = ["irecover:int", "wpgroup:int", "wegroup:int", "wggroup:int", "wjgroup:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "Output writers (.opw/.oew/.ogw/.ojw)"
+state_target = "output_control"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "all 0 -> no observation-point output"
+
+[[reader]]
+id = "OPR.output_read.title#3"
+site = "Output.f90:4158"
+anchor = "6623a1095b3a"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "read(outpread,*)text"
+seq = 4
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "OPR.output_read.title#4"
+site = "Output.f90:4159"
+anchor = "6623a1095b3a"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "read(outpread,*)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "LOA.external_load_1.title#1"
+site = "Load.f90:141"
+anchor = "2e02449cdb01"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_1"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "LOA.external_load_1.curve_count"
+site = "Load.f90:142"
+anchor = "70640dc8fd1b"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)ntcurve"
+seq = 2
+fields = ["ntcurve:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "external_load_1"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "derive from len(amplitudes)"
+
+[[reader]]
+id = "LOA.external_load_1.curve_header"
+site = "Load.f90:150"
+anchor = "44db310b9f84"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)ntime,type_curve,nstoch_curve,nline"
+seq = 3
+fields = ["ntime:int:derived", "type_curve:str:amplitudes[].type", "nstoch_curve:int", "nline:int"]
+format = "list_directed"
+guard = "loop itcurve=1..ntcurve (1)"
+phase = "startup"
+consumers = "external_load_1, dfact_time_curve"
+state_target = "amplitudes[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "2 LINEAR 0 2"
+
+[[reader]]
+id = "LOA.external_load_1.curve_points"
+site = "Load.f90:210"
+anchor = "c27b6a282839"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)tcurves(itcurve)%ttime_curve(1:ntime)"
+seq = 4
+fields = ["ttime_curve[1:ntime]:real:amplitudes[].points"]
+format = "list_directed"
+guard = "type_curve=='LINEAR' (branch selected by type)"
+phase = "startup"
+consumers = "dfact_time_curve"
+state_target = "amplitudes[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "records: times then factors; (0,1),(1,1)"
+
+[[reader]]
+id = "LOA.external_load_1.title#2"
+site = "Load.f90:228"
+anchor = "2e02449cdb01"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_1"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "point load title"
+
+[[reader]]
+id = "LOA.external_load_1.point_load_count"
+site = "Load.f90:229"
+anchor = "748388c25621"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)nplgroup,kpload"
+seq = 6
+fields = ["nplgroup:int", "kpload:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "external_load_1"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 -> no cload"
+
+[[reader]]
+id = "LOA.external_load_1.title#3"
+site = "Load.f90:350"
+anchor = "2e02449cdb01"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)text"
+seq = 7
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_1"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "edges title"
+
+[[reader]]
+id = "LOA.external_load_1.edge_count"
+site = "Load.f90:351"
+anchor = "b67fc999e6c2"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*)nedge"
+seq = 8
+fields = ["nedge:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "external_load_1 edge definitions"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 -> no surfaces"
+
+[[reader]]
+id = "PRE.prescrib_set.title#1"
+site = "Prescrib.f90:208"
+anchor = "b29d06f3816d"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "read(punit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "prescrib_set"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "PRE.prescrib_set.set_count"
+site = "Prescrib.f90:209"
+anchor = "cd6a8d5faea7"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "read(punit,*)nfixsets,nline"
+seq = 2
+fields = ["nfixsets:int", "nline:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "prescrib_set loop"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "derive from len(steps[0].boundary)"
+
+[[reader]]
+id = "PRE.prescrib_set.reached_only_Prescrib_213"
+site = "Prescrib.f90:213"
+anchor = "7eb47a3e7b15"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "if (type_abc=='MIF')read(punit,*)ifixvar,ifixvar0,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr"
+reached_only = true
+condition_value = "type_abc=='MIF' is false (type_abc='FIX')"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 2, "static_2d.lame_cylinder" = 2}
+
+[[reader]]
+id = "PRE.prescrib_set.set_header"
+site = "Prescrib.f90:214"
+anchor = "a17ab950fb31"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "if (type_abc/='MIF')read(punit,*)ifixvar,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr"
+inline_if = "type_abc/='MIF'"
+seq = 4
+fields = ["ifixvar:int:steps[0].boundary[].dof", "nfixnods:int:derived(nset size)", "itcurve:int:steps[0].boundary[].amplitude", "tfixvar:real", "outfix:int", "jfixvar:int", "gamawx:real", "nextr:int"]
+format = "list_directed"
+guard = "type_abc/='MIF' (true) ; loop ifixset=1..nfixsets"
+phase = "startup"
+consumers = "prescrib_set, modf_var_prescribed (itcurve -> R18 when 0)"
+state_target = "steps[0].boundary[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 2, "static_2d.lame_cylinder" = 2}
+note = "8-field variant; the 9-field MIF variant at :213 is reached but not executed"
+
+[[reader]]
+id = "PRE.prescrib_set.set_nodes"
+site = "Prescrib.f90:219"
+anchor = "7fffe39d1f09"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "read(punit,*)list_fix(1:nfixnods)"
+seq = 5
+fields = ["list_fix[1:nfixnods]:int:mesh.sets(nset)"]
+format = "list_directed"
+guard = "loop ifixset"
+phase = "startup"
+consumers = "prescrib_set -> iffix"
+state_target = "mesh.sets"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 2, "static_2d.lame_cylinder" = 2}
+note = "generate a named nset per constraint set"
+
+[[reader]]
+id = "PRE.prescrib_set.set_values"
+site = "Prescrib.f90:221"
+anchor = "862736d1ea9a"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "read(punit,*)val_fix(1:nfixnods)"
+seq = 6
+fields = ["val_fix[1:nfixnods]:real:steps[0].boundary[].value"]
+format = "list_directed"
+guard = "loop ifixset"
+phase = "startup"
+consumers = "prescrib_set -> fixed()"
+state_target = "steps[0].boundary[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 2, "static_2d.lame_cylinder" = 2}
+note = "17*0. / 9*0. on the decks"
+
+[[reader]]
+id = "LOA.external_load_2.title#1"
+site = "Load.f90:734"
+anchor = "2e02449cdb01"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read(loadunit,*)text"
+seq = 9
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "LOA.external_load_2.title#2"
+site = "Load.f90:735"
+anchor = "2e02449cdb01"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read(loadunit,*)text"
+seq = 10
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "LOA.external_load_2.edge_load_groups"
+site = "Load.f90:737"
+anchor = "8ab017e08edd"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read(loadunit,*)edge_load_group,delgroup"
+seq = 11
+fields = ["edge_load_group:int", "delgroup:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2, STATIC_U (delgroup gates coef_water reads)"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 -> no pressure loads; delgroup=0 also disables MAN coef_water records"
+
+[[reader]]
+id = "LOA.external_load_2.title#3"
+site = "Load.f90:892"
+anchor = "43e41ad7eb0b"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read (loadunit,*) text"
+seq = 12
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "body force title"
+
+[[reader]]
+id = "LOA.external_load_2.gravity"
+site = "Load.f90:893"
+anchor = "953aeb12af5f"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read (loadunit,*) gravy,factg(1:ndimn),factf(1:ndimn)"
+seq = 13
+fields = ["gravy:real:steps[0].load(gravity).magnitude", "factg[1:ndimn]:real:steps[0].load(gravity).direction", "factf[1:ndimn]:real"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "gravity / gravity1 / gravity2 body force assembly"
+state_target = "steps[0].load"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "9.81 (0,-1) (0,-1)"
+
+[[reader]]
+id = "LOA.external_load_2.gravity_curve_title"
+site = "Load.f90:899"
+anchor = "d08a5a4e12a9"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read(loadunit,*)text,nline"
+seq = 14
+fields = ["text:str", "nline:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "'Time_curve_for_each_group 1'"
+
+[[reader]]
+id = "LOA.external_load_2.gravity_curves"
+site = "Load.f90:900"
+anchor = "c73a987b22b6"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read(loadunit,*)tcurvegravity(1:ngroup)"
+seq = 15
+fields = ["tcurvegravity[1:ngroup]:int:steps[0].load(gravity).amplitude"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "gravity subroutines (0 = no gravity in group)"
+state_target = "steps[0].load"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "1"
+
+[[reader]]
+id = "LOA.external_load_2.title#4"
+site = "Load.f90:905"
+anchor = "43e41ad7eb0b"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read (loadunit,*) text"
+seq = 16
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "LOA.external_load_2.beam_load_count"
+site = "Load.f90:906"
+anchor = "9a5f7e32e03c"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read (loadunit,*) nbeamload"
+seq = 17
+fields = ["nbeamload:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "beam loads"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0"
+
+[[reader]]
+id = "LOA.external_load_2.title#5"
+site = "Load.f90:984"
+anchor = "43e41ad7eb0b"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read (loadunit,*) text"
+seq = 18
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "external_load_2"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "LOA.external_load_2.plate_load_count"
+site = "Load.f90:985"
+anchor = "7b50d6559d5e"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_2"
+statement = "read (loadunit,*) nplateload"
+seq = 19
+fields = ["nplateload:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "plate loads"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0"
+
+[[reader]]
+id = "TEM.boundt.title#1"
+site = "Temper.f90:122"
+anchor = "7ff34c8e4d5b"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "TEM.boundt.temp_surface_count"
+site = "Temper.f90:123"
+anchor = "d964c3a6d716"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)ntemp_surface"
+seq = 2
+fields = ["ntemp_surface:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M8"
+
+[[reader]]
+id = "TEM.boundt.title#2"
+site = "Temper.f90:148"
+anchor = "7ff34c8e4d5b"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)text"
+seq = 3
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "TEM.boundt.temp_edge_count"
+site = "Temper.f90:149"
+anchor = "0a429bfaabd6"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)ntedge"
+seq = 4
+fields = ["ntedge:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M8"
+
+[[reader]]
+id = "TEM.boundt.title#3"
+site = "Temper.f90:238"
+anchor = "7ff34c8e4d5b"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "TEM.boundt.temp_elgroup_count"
+site = "Temper.f90:239"
+anchor = "a539de5fd1d8"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)ntelgroup"
+seq = 6
+fields = ["ntelgroup:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0; M8"
+
+[[reader]]
+id = "TEM.boundt.title#4"
+site = "Temper.f90:297"
+anchor = "b86eb63afe50"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "22    read(tunit,*)text"
+seq = 7
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "labelled statement 22"
+
+[[reader]]
+id = "TEM.boundt.title#5"
+site = "Temper.f90:298"
+anchor = "7ff34c8e4d5b"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)text"
+seq = 8
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[reader]]
+id = "TEM.boundt.pipe_count"
+site = "Temper.f90:300"
+anchor = "43ac362cac1a"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "read(tunit,*)npipe,algo_pipe"
+seq = 9
+fields = ["npipe:int", "algo_pipe:int"]
+format = "list_directed"
+guard = "always"
+phase = "startup"
+consumers = "boundt cooling pipes"
+state_target = "empty_section"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 3; M9"
+
+[[reader]]
+id = "SOL.PROFILE.title#1"
+site = "Solver.f90:6827"
+anchor = "7dd92e979524"
+file = ".sol"
+unit_var = "solveunit"
+routine = "PROFILE"
+statement = "Read (solveunit,*) text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "type_solver=='PROFILE'"
+phase = "solver_lazy"
+consumers = "PROFILE"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "read inside the linear solver on first call"
+
+[[reader]]
+id = "SOL.PROFILE.profile_control"
+site = "Solver.f90:6828"
+anchor = "1827c986d15f"
+file = ".sol"
+unit_var = "solveunit"
+routine = "PROFILE"
+statement = "Read (solveunit,*) iafile,icond,ipdchk,ising"
+seq = 2
+fields = ["iafile:int", "icond:int", "ipdchk:int", "ising:int"]
+format = "list_directed"
+guard = "PROFILE first call"
+phase = "solver_lazy"
+consumers = "PROFILE (iafile selects scratch-file storage; ising singularity check)"
+state_target = "solver"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "0 0 1 1; the file holds 15 identical repeats but only the first pair of records is consumed"
+
+[[reader]]
+id = "MAN.STATIC_U.title#1"
+site = "Fem.f90:3582"
+anchor = "a708072a3a2a"
+file = ".man"
+unit_var = "mainunit"
+routine = "STATIC_U"
+statement = "read(mainunit,*)text"
+seq = 1
+fields = ["text:str"]
+format = "text_skip"
+guard = "type_problem=='Q' (STATIC_U)"
+phase = "phase_lazy(1)"
+consumers = "STATIC_U"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "read inside the analysis routine, after all startup readers"
+
+[[reader]]
+id = "MAN.STATIC_U.nincs"
+site = "Fem.f90:3583"
+anchor = "f0d70b0f572e"
+file = ".man"
+unit_var = "mainunit"
+routine = "STATIC_U"
+statement = "read(mainunit,*)nincs"
+seq = 2
+fields = ["nincs:int"]
+format = "list_directed"
+guard = "STATIC_U"
+phase = "phase_lazy(1)"
+consumers = "STATIC_U increment loop"
+state_target = "derived"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "derive from steps[0].controls.increments; the rest of the record (cdtest, earthquake_curve) is ignored by list-directed read"
+
+[[reader]]
+id = "MAN.STATIC_U.increment_control"
+site = "Fem.f90:3611"
+anchor = "c20f6512f303"
+file = ".man"
+unit_var = "mainunit"
+routine = "STATIC_U"
+statement = "read(mainunit,*)miter,ditime,noutn,noutf,nstep,inc_step,nresta,cwater,Qstatic"
+seq = 3
+fields = ["miter:int:steps[0].controls.max_iterations", "ditime:real:steps[0].controls.time_increment", "noutn:int:steps[0].output.frequency", "noutf:int:steps[0].output.frequency", "nstep:int:steps[0].controls.steps", "inc_step:int:steps[0].controls.step_increment", "nresta:int:steps[0].controls.restart_frequency", "cwater:int", "Qstatic:int"]
+format = "list_directed"
+guard = "loop iincs=lincs+1..nincs (1)"
+phase = "increment_lazy(1,1)"
+consumers = "STATIC_U step loop, RESTA_READ_WRITE (nresta)"
+state_target = "steps[0].controls"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "9 fields; back_analysis variant reads 8 (not on path)"
+
+[[reader]]
+id = "MAN.STATIC_U.tolerances"
+site = "Fem.f90:3612"
+anchor = "25a03761c6b9"
+file = ".man"
+unit_var = "mainunit"
+routine = "STATIC_U"
+statement = "read(mainunit,*)toler_force,toler_var(1:mdofn)"
+seq = 4
+fields = ["toler_force:real:steps[0].controls.tolerance_force", "toler_var[1:mdofn]:real:steps[0].controls.tolerance_dof"]
+format = "list_directed"
+guard = "loop iincs"
+phase = "increment_lazy(1,1)"
+consumers = "convergence checks in STATIC_U"
+state_target = "steps[0].controls"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "3*1e-5"
+
+[[cursor_op]]
+id = "INP.FEM90.open_Fem_92"
+site = "Fem.f90:92"
+anchor = "7e1ae6be4d5e"
+stmt = "open"
+file = "inp"
+unit_var = "inpunit"
+routine = "FEM90"
+statement = "open(inpunit,file='inp')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "GLB.global_data.open_Global_628"
+site = "Global.f90:628"
+anchor = "603fe58ac87e"
+stmt = "open"
+file = ".glb"
+unit_var = "gunit"
+routine = "global_data"
+statement = "open(gunit,     file=probn(1:len1)//'.glb')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "COR.global_data.open_Global_629"
+site = "Global.f90:629"
+anchor = "6caf39704690"
+stmt = "open"
+file = ".cor"
+unit_var = "cunit"
+routine = "global_data"
+statement = "open(cunit,     file=probn(1:len1)//'.cor')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "ELE.global_data.open_Global_630"
+site = "Global.f90:630"
+anchor = "63f2d6287e9f"
+stmt = "open"
+file = ".ele"
+unit_var = "eunit"
+routine = "global_data"
+statement = "open(eunit,     file=probn(1:len1)//'.ele')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "PRE.global_data.open_Global_631"
+site = "Global.f90:631"
+anchor = "7cea5f5a43ad"
+stmt = "open"
+file = ".pre"
+unit_var = "punit"
+routine = "global_data"
+statement = "open(punit,     file=probn(1:len1)//'.pre')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MAT.global_data.open_Global_632"
+site = "Global.f90:632"
+anchor = "69d0cfea13d2"
+stmt = "open"
+file = ".mat"
+unit_var = "munit"
+routine = "global_data"
+statement = "open(munit,     file=probn(1:len1)//'.mat')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "LOA.global_data.open_Global_633"
+site = "Global.f90:633"
+anchor = "9279f5569549"
+stmt = "open"
+file = ".loa"
+unit_var = "loadunit"
+routine = "global_data"
+statement = "open(loadunit,  file=probn(1:len1)//'.loa')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "CHKUNIT.global_data.open_Global_634"
+site = "Global.f90:634"
+anchor = "578ceab8365f"
+stmt = "open"
+file = ".chk"
+unit_var = "chkunit"
+routine = "global_data"
+statement = "open(chkunit,   file=probn(1:len1)//'.chk')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "SOL.global_data.open_Global_635"
+site = "Global.f90:635"
+anchor = "48dd89be4f79"
+stmt = "open"
+file = ".sol"
+unit_var = "solveunit"
+routine = "global_data"
+statement = "open(solveunit, file=probn(1:len1)//'.sol')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MAN.global_data.open_Global_636"
+site = "Global.f90:636"
+anchor = "fc63da8a9046"
+stmt = "open"
+file = ".man"
+unit_var = "mainunit"
+routine = "global_data"
+statement = "open(mainunit,  file=probn(1:len1)//'.man')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OPR.global_data.open_Global_637"
+site = "Global.f90:637"
+anchor = "6df573ad5c31"
+stmt = "open"
+file = ".opr"
+unit_var = "outpread"
+routine = "global_data"
+statement = "open(outpread,  file=probn(1:len1)//'.opr')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTPWRITE.global_data.open_Global_638"
+site = "Global.f90:638"
+anchor = "4f9577b9cd6f"
+stmt = "open"
+file = ".opw"
+unit_var = "outpwrite"
+routine = "global_data"
+statement = "open(outpwrite, file=probn(1:len1)//'.opw')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTEWRITE.global_data.open_Global_639"
+site = "Global.f90:639"
+anchor = "646cf96b22de"
+stmt = "open"
+file = ".oew"
+unit_var = "outewrite"
+routine = "global_data"
+statement = "open(outewrite, file=probn(1:len1)//'.oew')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTGWRITE.global_data.open_Global_640"
+site = "Global.f90:640"
+anchor = "bf325987f6b6"
+stmt = "open"
+file = ".ogw"
+unit_var = "outgwrite"
+routine = "global_data"
+statement = "open(outgwrite, file=probn(1:len1)//'.ogw')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTJWRITE.global_data.open_Global_641"
+site = "Global.f90:641"
+anchor = "3bd240e346f0"
+stmt = "open"
+file = ".ojw"
+unit_var = "outjwrite"
+routine = "global_data"
+statement = "open(outjwrite, file=probn(1:len1)//'.ojw')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTDIS.global_data.open_Global_642"
+site = "Global.f90:642"
+anchor = "2861992df9d4"
+stmt = "open"
+file = ".dis"
+unit_var = "outdis"
+routine = "global_data"
+statement = "open(outdis,    file=probn(1:len1)//'.dis')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTACT.global_data.open_Global_643"
+site = "Global.f90:643"
+anchor = "4c6260dc6bfa"
+stmt = "open"
+file = ".act"
+unit_var = "outact"
+routine = "global_data"
+statement = "open(outact,    file=probn(1:len1)//'.act')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTGPVAR.global_data.open_Global_644"
+site = "Global.f90:644"
+anchor = "5d0d161335fe"
+stmt = "open"
+file = ".gpv"
+unit_var = "outgpvar"
+routine = "global_data"
+statement = "open(outgpvar,  file=probn(1:len1)//'.gpv')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "INITUNIT.global_data.open_Global_645"
+site = "Global.f90:645"
+anchor = "98f8faacbe6f"
+stmt = "open"
+file = ".ini"
+unit_var = "initunit"
+routine = "global_data"
+statement = "open(initunit,  file=probn(1:len1)//'.ini')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "INITWUNIT.global_data.open_Global_646"
+site = "Global.f90:646"
+anchor = "ae1764553f65"
+stmt = "open"
+file = ".inw"
+unit_var = "initwunit"
+routine = "global_data"
+statement = "open(initwunit,  file=probn(1:len1)//'.inw')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "TEM.global_data.open_Global_649"
+site = "Global.f90:649"
+anchor = "197419430b78"
+stmt = "open"
+file = ".tem"
+unit_var = "tunit"
+routine = "global_data"
+statement = "open(tunit,     file=probn(1:len1)//'.tem')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "FTFUNIT.global_data.open_Global_650"
+site = "Global.f90:650"
+anchor = "03313a41692e"
+stmt = "open"
+file = ".ftf"
+unit_var = "ftfunit"
+routine = "global_data"
+statement = "open(ftfunit,   file=probn(1:len1)//'.ftf')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "FTR.global_data.open_Global_651"
+site = "Global.f90:651"
+anchor = "81da5d2bd9df"
+stmt = "open"
+file = ".ftr"
+unit_var = "ftfread"
+routine = "global_data"
+statement = "open(ftfread,   file=probn(1:len1)//'.ftr')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "IFS.global_data.open_Global_652"
+site = "Global.f90:652"
+anchor = "8cb882dee375"
+stmt = "open"
+file = ".ifs"
+unit_var = "ifsunit"
+routine = "global_data"
+statement = "open(ifsunit,   file=probn(1:len1)//'.ifs')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MWAQU_UNIT.global_data.open_Global_653"
+site = "Global.f90:653"
+anchor = "ee976cffe6cf"
+stmt = "open"
+file = ".aqu"
+unit_var = "mwaqu_unit"
+routine = "global_data"
+statement = "open(mwaqu_unit,file=probn(1:len1)//'.aqu')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "NRT.global_data.open_Global_654"
+site = "Global.f90:654"
+anchor = "b577f1c742da"
+stmt = "open"
+file = ".nrt"
+unit_var = "nrtunit"
+routine = "global_data"
+statement = "open(nrtunit,   file=probn(1:len1)//'.nrt')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTBAR.global_data.open_Global_655"
+site = "Global.f90:655"
+anchor = "c4eafdd25f20"
+stmt = "open"
+file = ".bar"
+unit_var = "outbar"
+routine = "global_data"
+statement = "open(outbar,    file=probn(1:len1)//'.bar')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTBEAM.global_data.open_Global_656"
+site = "Global.f90:656"
+anchor = "b12698ddb2ea"
+stmt = "open"
+file = ".bem"
+unit_var = "outbeam"
+routine = "global_data"
+statement = "open(outbeam,   file=probn(1:len1)//'.bem')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTCONTACT.global_data.open_Global_657"
+site = "Global.f90:657"
+anchor = "8c322d8d881d"
+stmt = "open"
+file = ".ctr"
+unit_var = "outcontact"
+routine = "global_data"
+statement = "open(outcontact,file=probn(1:len1)//'.ctr')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTGOODMAN.global_data.open_Global_658"
+site = "Global.f90:658"
+anchor = "db0d1f0d8584"
+stmt = "open"
+file = ".gdm"
+unit_var = "outgoodman"
+routine = "global_data"
+statement = "open(outgoodman,file=probn(1:len1)//'.gdm')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "STOCUNIT.global_data.open_Global_659"
+site = "Global.f90:659"
+anchor = "a51cb6adec33"
+stmt = "open"
+file = ".sto"
+unit_var = "stocunit"
+routine = "global_data"
+statement = "open(stocunit,file=probn(1:len1)//'.sto')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "RESTAUNIT.global_data.open_Global_661"
+site = "Global.f90:661"
+anchor = "11b651db6d68"
+stmt = "open"
+file = ".rtt"
+unit_var = "restaunit"
+routine = "global_data"
+statement = "open(restaunit, file=probn(1:len1)//'.rtt',FORM='UNFORMATTED')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MIDSTIF.global_data.open_Global_662"
+site = "Global.f90:662"
+anchor = "e10e93b7bb3a"
+stmt = "open"
+file = ".stf"
+unit_var = "midstif"
+routine = "global_data"
+statement = "open(midstif,   file=probn(1:len1)//'.stf',FORM='UNFORMATTED')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "RESUNIT.global_data.open_Global_664"
+site = "Global.f90:664"
+anchor = "25aac08588e8"
+stmt = "open"
+file = ".res"
+unit_var = "resunit"
+routine = "global_data"
+statement = "open(resunit,  file=probn(1:len1)//'.res',FORM='binary')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "RESBUNIT.global_data.open_Global_665"
+site = "Global.f90:665"
+anchor = "76eae5e27593"
+stmt = "open"
+file = ".resb"
+unit_var = "resbunit"
+routine = "global_data"
+statement = "open(resbunit,  file=probn(1:len1)//'.resb',FORM='binary')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "FAIUNIT.global_data.open_Global_671"
+site = "Global.f90:671"
+anchor = "cde7d1e9a393"
+stmt = "open"
+file = ".fai"
+unit_var = "faiunit"
+routine = "global_data"
+statement = "open(faiunit,  file=probn(1:len1)//'.fai',FORM='UNFORMATTED')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "RECTTUNIT.global_data.open_Global_673"
+site = "Global.f90:673"
+anchor = "44fb61084e51"
+stmt = "open"
+file = ".ctt"
+unit_var = "recttunit"
+routine = "global_data"
+statement = "open(recttunit,file=probn(1:len1)//'.ctt',FORM='UNFORMATTED')"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUT_GID_MSH.global_data.open_Global_701"
+site = "Global.f90:701"
+anchor = "88f8839d5966"
+stmt = "open"
+file = ".flavia.msh"
+unit_var = "out_gid_msh"
+routine = "global_data"
+statement = "open(out_gid_msh,file=probn(1:len1)//'.flavia.msh',buffered='YES',blocksize=1048576)"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUT_GID_DIS.global_data.open_Global_703"
+site = "Global.f90:703"
+anchor = "b2ec4f6d4dec"
+stmt = "open"
+file = ".flavia.res"
+unit_var = "out_gid_dis"
+routine = "global_data"
+statement = "if(outplot=='GIDR')open(out_gid_dis,file=probn(1:len1)//'.flavia.res',buffered='YES',blocksize=1048576)"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+condition_value = "outplot=='GIDR' (true): open .flavia.res"
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUT_GID_DIS.global_data.open_Global_704"
+site = "Global.f90:704"
+anchor = "855d88a2ec91"
+stmt = "open"
+file = ".flavia.res"
+unit_var = "out_gid_dis"
+routine = "global_data"
+statement = "if(outplot=='GIDA')open(out_gid_dis,file=probn(1:len1)//'.flavia.res',ACCESS='append',buffered='YES',blocksize=1048576)"
+reached_only = true
+condition_value = "outplot=='GIDA' is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTINDUNIT.global_data.open_Global_733"
+site = "Global.f90:733"
+anchor = "63ce1132da27"
+stmt = "open"
+file = ".oid"
+unit_var = "outindunit"
+routine = "global_data"
+statement = "if(outind/=0)open(outindunit,file=probn(1:len1)//'.oid')"
+reached_only = true
+condition_value = "outind/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "OUTINPUNIT.global_data.open_Global_735"
+site = "Global.f90:735"
+anchor = "9418a6a4f3c8"
+stmt = "open"
+file = ".oip"
+unit_var = "outinpunit"
+routine = "global_data"
+statement = "if(outinp/=0)open(outinpunit,file=probn(1:len1)//'.oip')"
+reached_only = true
+condition_value = "outinp/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "TELOAW.global_data.open_Global_739"
+site = "Global.f90:739"
+anchor = "a86c85607ec3"
+stmt = "open"
+file = ".tlw"
+unit_var = "teloaw"
+routine = "global_data"
+statement = "if(equvs/=0)open(teloaw,file=probn(1:len1)//'.tel',FORM='UNFORMATTED')"
+reached_only = true
+condition_value = "condition false on both decks"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "STNUNIT.global_data.open_Global_743"
+site = "Global.f90:743"
+anchor = "d2e1e6acad3a"
+stmt = "open"
+file = ".stn"
+unit_var = "stnunit"
+routine = "global_data"
+statement = "if(stnunit/=0)open(stnunit,file=probn(1:len1)//'.stn')"
+reached_only = true
+condition_value = "condition false on both decks"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "SUB_MSH_UNIT.global_data.open_Global_792"
+site = "Global.f90:792"
+anchor = "edc7414645b0"
+stmt = "open"
+file = ".sub.msh"
+unit_var = "sub_msh_unit"
+routine = "global_data"
+statement = "if(submodel==-1)open(sub_msh_unit,file=probn(1:len1)//'.msh')"
+reached_only = true
+condition_value = "submodel/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MAN.FEM90.rewind_Fem_317"
+site = "Fem.f90:317"
+anchor = "fd8c72ada4da"
+stmt = "rewind"
+file = ".man"
+unit_var = "mainunit"
+routine = "FEM90"
+statement = "rewind(mainunit)"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "rewind after the restart pre-scan loop, which runs 0 times when restart=0; pure cursor reset before STATIC_U reads .man from the top"
+
+[[cursor_op]]
+id = "LOA.external_load_1.rewind_Load_138"
+site = "Load.f90:138"
+anchor = "4a33382f160d"
+stmt = "rewind"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "if (meshc==1.or.rmesh/=0)rewind(loadunit)"
+reached_only = true
+condition_value = "meshc==1.or.rmesh/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "LOA.external_load_1.rewind_Load_139"
+site = "Load.f90:139"
+anchor = "711fed41a7fe"
+stmt = "rewind"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "if(Bparameter/=0)rewind(loadunit)"
+reached_only = true
+condition_value = "Bparameter/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "PRE.prescrib_set.rewind_Prescrib_177"
+site = "Prescrib.f90:177"
+anchor = "65e15c608a86"
+stmt = "rewind"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "if (meshc==1.or.rmesh/=0)rewind(punit)"
+reached_only = true
+condition_value = "meshc==1.or.rmesh/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "PRE.prescrib_set.rewind_Prescrib_178"
+site = "Prescrib.f90:178"
+anchor = "548d34fed28a"
+stmt = "rewind"
+file = ".pre"
+unit_var = "punit"
+routine = "prescrib_set"
+statement = "if(Bparameter/=0)rewind(punit)"
+reached_only = true
+condition_value = "Bparameter/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "TEM.boundt.rewind_Temper_68"
+site = "Temper.f90:68"
+anchor = "ec57d103e7e1"
+stmt = "rewind"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "if (meshc==1.or.rmesh/=0)rewind(tunit)"
+reached_only = true
+condition_value = "meshc==1.or.rmesh/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "TEM.boundt.rewind_Temper_69"
+site = "Temper.f90:69"
+anchor = "2ae845c806db"
+stmt = "rewind"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "if(Bparameter/=0.and.iblks==1)rewind(tunit)"
+reached_only = true
+condition_value = "Bparameter/=0.and.iblks==1 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "SOL.PROFILE.rewind_Solver_6825"
+site = "Solver.f90:6825"
+anchor = "7ce2777453b9"
+stmt = "rewind"
+file = ".sol"
+unit_var = "solveunit"
+routine = "PROFILE"
+statement = "if(meshc==1.or.rmesh/=0)rewind(solveunit)"
+reached_only = true
+condition_value = "meshc==1.or.rmesh/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "SOL.PROFILE.rewind_Solver_6826"
+site = "Solver.f90:6826"
+anchor = "e2ea02de137c"
+stmt = "rewind"
+file = ".sol"
+unit_var = "solveunit"
+routine = "PROFILE"
+statement = "if(Bparameter/=0)rewind(solveunit)"
+reached_only = true
+condition_value = "Bparameter/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "IAFILE.PROFILE.open_Solver_6829"
+site = "Solver.f90:6829"
+anchor = "bc3b9f355b29"
+stmt = "open"
+file = "(iafile)"
+unit_var = "iafile"
+routine = "PROFILE"
+statement = "if(iafile/=0)open(iafile,file='forpivots',form='unformatted')"
+reached_only = true
+condition_value = "iafile/=0 is false (iafile=0): scratch file not opened"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MAN.STATIC_U.rewind_Fem_3577"
+site = "Fem.f90:3577"
+anchor = "faeb28be0d0a"
+stmt = "rewind"
+file = ".man"
+unit_var = "mainunit"
+routine = "STATIC_U"
+statement = "if (meshc==1.or.rmesh/=0)rewind(mainunit)"
+reached_only = true
+condition_value = "meshc==1.or.rmesh/=0 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "MAN.STATIC_U.rewind_Fem_3578"
+site = "Fem.f90:3578"
+anchor = "7a9fa4b35455"
+stmt = "rewind"
+file = ".man"
+unit_var = "mainunit"
+routine = "STATIC_U"
+statement = "if(Bparameter/=0.and.iblks==1)rewind(mainunit)"
+reached_only = true
+condition_value = "Bparameter/=0.and.iblks==1 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "UPLIFTUNIT.STATIC_U.rewind_Fem_3579"
+site = "Fem.f90:3579"
+anchor = "093c50595f3e"
+stmt = "rewind"
+file = ".upf"
+unit_var = "upliftunit"
+routine = "STATIC_U"
+statement = "if(Bparameter/=0.and.iblks==1)rewind(upliftunit)"
+reached_only = true
+condition_value = "Bparameter/=0.and.iblks==1 is false"
+executed_by = []
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+
+[[cursor_op]]
+id = "RESTAUNIT.RESTA_READ_WRITE.rewind_Fem_16353"
+site = "Fem.f90:16353"
+anchor = "9e43ec4a5429"
+stmt = "rewind"
+file = ".rtt"
+unit_var = "restaunit"
+routine = "RESTA_READ_WRITE"
+statement = "rewind(restaunit)"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "rewind of the unformatted restart file before RESTA_READ_WRITE rewrites it at the end of the increment (write path)"
+
+[[not_on_path]]
+unit_var = "mainunit"
+file = ".man"
+site_count = 156
+routines = "FEM90, GHM2ADINA, STATIC_U, STATIC_U_P, STATIC_U_PW, STATIC_U_PWm, STATIC_U_reli, STATIC_rigid_1, STATIC_rigid_reli, back_analysis, back_d_analysis, explicit, frequency_analysis, parameter_back_analysis_verify, parameter_back_analysis_verify_read, response_spectrum, time_dependent"
+reason = ".man records for back_analysis, dynamic (F), thermal (T), seepage, VIE/MIF excitation, cwater/Qstatic sections"
+migration_phase = "M6.7/M7/M8"
+
+[[not_on_path]]
+unit_var = "munit"
+file = ".mat"
+site_count = 104
+routines = "material_set"
+reason = ".mat records for property curves and non-elastic material models"
+migration_phase = "M6.4/M6.5"
+
+[[not_on_path]]
+unit_var = "gunit"
+file = ".glb"
+site_count = 52
+routines = "contact_point_to_point, estif_semi_space, estif_semi_space_center, global_data, link_concrete_and_steel, link_concrete_and_water_pipe"
+reason = ".glb records for layers, links, backf, level-set, contact pairs, steel, pipes; all counts are 0 on this path"
+migration_phase = "M6~M9 per feature"
+
+[[not_on_path]]
+unit_var = "back_ctl_unit"
+file = "?"
+site_count = 47
+routines = "global_data, matrix_nodal_value, matrix_rigid_dis, output_read, parameter_back_analysis_read, parameter_back_analysis_verify_read, trust_region_back_analysis_read"
+reason = "back_analysis parameter file (.btl); opened only when nbackf/=0"
+migration_phase = "M9 反分析"
+
+[[not_on_path]]
+unit_var = "nrtunit"
+file = ".nrt"
+site_count = 40
+routines = "global_data"
+reason = "interpolation group data beyond transgroup=0"
+migration_phase = "M6.2"
+
+[[not_on_path]]
+unit_var = "glbunitl"
+file = "?"
+site_count = 37
+routines = "fixpc, globaldate, readbondary, readinitial, readprescrib, static_pressure"
+reason = "level-set mesh files (_l.glb); level_set_problem/=0"
+migration_phase = "M9 网格细化/水平集"
+
+[[not_on_path]]
+unit_var = "loadunit"
+file = ".loa"
+site_count = 33
+routines = "external_load_1, external_load_2"
+reason = ".loa records for point loads, edges, edge loads, beam/plate loads; counts are 0"
+migration_phase = "M5.pressure/M6"
+
+[[not_on_path]]
+unit_var = "solveunit"
+file = ".sol"
+site_count = 29
+routines = "JPCG, MAIN_PARDISO, PBCG, PROFILE, PROFILEW, SSORPBCG"
+reason = ".sol records for PARDISO / other solver branches and iafile/=0"
+migration_phase = "M5 PARDISO variant"
+
+[[not_on_path]]
+unit_var = "unitread"
+file = "?"
+site_count = 29
+routines = "read_initial"
+reason = "generic reread of restart/intermediate files; restart/=0 or meshc/=0"
+migration_phase = "M6.7 重启"
+
+[[not_on_path]]
+unit_var = "restaunit"
+file = ".rtt"
+site_count = 28
+routines = "RESTA_READ_WRITE"
+reason = "restart file .rtt is only read when restart/=0; on this path it is written"
+migration_phase = "M6.7 重启"
+
+[[not_on_path]]
+unit_var = "tunit"
+file = ".tem"
+site_count = 26
+routines = "boundt"
+reason = "temperature boundary data beyond the zero counts read on this path"
+migration_phase = "M8"
+
+[[not_on_path]]
+unit_var = "punit"
+file = ".pre"
+site_count = 20
+routines = "GHM2ADINA, prescrib_set, time_dependent"
+reason = ".pre records for MIF/VIE boundaries and interpolation slaves; type_abc/='FIX' or ntrans/=0"
+migration_phase = "M7.5/M7.7"
+
+[[not_on_path]]
+unit_var = "stocunit"
+file = ".sto"
+site_count = 18
+routines = "STATIC_U_reli, STATIC_rigid_reli"
+reason = "stochastic/reliability data (.sto); sysrelis/relis/=0"
+migration_phase = "M9 可靠度"
+
+[[not_on_path]]
+unit_var = "recttunit"
+file = ".ctt"
+site_count = 16
+routines = "STATIC_U, STATIC_U_PW, STATIC_U_reli, STATIC_rigid_1, STATIC_rigid_reli, back_analysis, back_d_analysis, time_dependent"
+reason = "contact matrix scratch (.ctt) read only when ngapb/=0"
+migration_phase = "M6.6 接触"
+
+[[not_on_path]]
+unit_var = "ftfread"
+file = ".ftr"
+site_count = 13
+routines = "global_data"
+reason = "surface force lists beyond the zero counts"
+migration_phase = "M6.2"
+
+[[not_on_path]]
+unit_var = "outpread"
+file = ".opr"
+site_count = 13
+routines = "output_read"
+reason = ".opr observation-point lists; irecover/w*group are 0"
+migration_phase = "M5 output"
+
+[[not_on_path]]
+unit_var = "ifsunit"
+file = ".ifs"
+site_count = 13
+routines = "stiff_absorb_fluid, stiff_absorb_solid, stiff_ifs2006, stiff_interface_fluid_solid"
+reason = "fluid-solid / absorbing boundary definitions beyond the zero counts read on this path"
+migration_phase = "M7.5/M7.6"
+
+[[not_on_path]]
+unit_var = "resbunit"
+file = ".resb"
+site_count = 12
+routines = "global_data, value_submodel_boundary"
+reason = "binary result reread for restart/relis"
+migration_phase = "M6.7"
+
+[[not_on_path]]
+unit_var = "observ_unit"
+file = "?"
+site_count = 11
+routines = "OUT_record_WRITE, global_data, observe_back_analysis_read, parameter_back_analysis_verify_read"
+reason = "observation data (.obsc) for back analysis; nbackf/=0"
+migration_phase = "M9 反分析"
+
+[[not_on_path]]
+unit_var = "vcor_unit"
+file = "?"
+site_count = 10
+routines = "FEM90, global_data"
+reason = "moving-coordinate file (.vcor); nvarp_U/=0"
+migration_phase = "M6.2"
+
+[[not_on_path]]
+unit_var = "mwaqu_unit"
+file = ".aqu"
+site_count = 10
+routines = "stiff_ifs2006"
+reason = "aquifer/seepage data (.aqu); nflow/=0"
+migration_phase = "M8.3 渗流"
+
+[[not_on_path]]
+unit_var = "observc_unit"
+file = "?"
+site_count = 9
+routines = "global_data"
+reason = "observation data for back analysis; nbackf/=0"
+migration_phase = "M9 反分析"
+
+[[not_on_path]]
+unit_var = "bouunitl"
+file = "?"
+site_count = 7
+routines = "boundary, globaldate"
+reason = "level-set boundary file; level_set_problem/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "1"
+file = "?"
+site_count = 6
+routines = "readm, readmi"
+reason = "hard-coded unit 1 (level-set / mesh refinement helpers)"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "gamamaxunit"
+file = "?"
+site_count = 6
+routines = "process_analysis, readgamamax, writegamamax"
+reason = "gamamax storage; gamamax/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "outindunit"
+file = ".oid"
+site_count = 5
+routines = "global_data, modf_var_prescribed, prescrib_set"
+reason = "write-only output unit (.oid) opened only when outind/=0"
+migration_phase = "n/a"
+
+[[not_on_path]]
+unit_var = "iafile"
+file = "(iafile)"
+site_count = 5
+routines = "pivots"
+reason = "PROFILE scratch file; iafile/=0"
+migration_phase = "M5 PARDISO variant"
+
+[[not_on_path]]
+unit_var = "outint"
+file = "?"
+site_count = 5
+routines = "FEM90, modf_var_prescribed"
+reason = "intermediate result file (.oit, FORM=BINARY) opened only when outintr/outintw/=0"
+migration_phase = "M6.7 重启"
+
+[[not_on_path]]
+unit_var = "midstif"
+file = ".stf"
+site_count = 5
+routines = "kdelt, neuman_expan, write_stiff_u"
+reason = "stiffness scratch file reread; kstab/=0 or restart"
+migration_phase = "M6.7"
+
+[[not_on_path]]
+unit_var = "upliftunit"
+file = ".upf"
+site_count = 4
+routines = "FEM90, STATIC_U_PW, modf_var_prescribed, time_dependent"
+reason = "uplift pressure file (.upf); upliftin/=0"
+migration_phase = "M8"
+
+[[not_on_path]]
+unit_var = "lquunit"
+file = "?"
+site_count = 4
+routines = "liquifaction_judge, time_dependent"
+reason = "liquefaction data; jliqu/=0"
+migration_phase = "M6.4"
+
+[[not_on_path]]
+unit_var = "stnunit"
+file = ".stn"
+site_count = 4
+routines = "read_permanent_strain"
+reason = "permanent-strain file read by read_permanent_strain when ninistn/=0"
+migration_phase = "M6.7"
+
+[[not_on_path]]
+unit_var = "bem_msh_unit"
+file = "?"
+site_count = 3
+routines = "OUT_GID_WRITE, OUT_GID_WRITE_BIN, global_data"
+reason = "beam GiD mesh writer; open/rewind only, gid_bem=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "mxy_msh_unit"
+file = "?"
+site_count = 3
+routines = "OUT_GID_WRITE, OUT_GID_WRITE_BIN, global_data"
+reason = "plate GiD mesh writer; open/rewind only, gid_Mxy=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "out_cosm_dis"
+file = "?"
+site_count = 2
+routines = "global_data"
+reason = "COSMOS displacement writer; outplot/='COSM'"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "out_cosm_gpvar"
+file = "?"
+site_count = 2
+routines = "global_data"
+reason = "COSMOS Gauss-point writer; outplot/='COSM'"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "out_msh"
+file = "?"
+site_count = 2
+routines = "FEM90, global_data"
+reason = "alternative mesh writer; open/rewind only"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "bcs_msh_unit"
+file = "?"
+site_count = 2
+routines = "OUT_GID_WRITE, global_data"
+reason = "boundary-condition GiD mesh writer; gid_bcs=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "out_gid_msh"
+file = ".flavia.msh"
+site_count = 2
+routines = "OUT_GID_WRITE, OUT_GID_WRITE_BIN"
+reason = "GiD mesh writer rewinds inside OUT_GID_WRITE; the open at Global.f90:701 is executed and registered as a cursor_op"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "omgunit"
+file = "?"
+site_count = 2
+routines = "time_dependent"
+reason = "optimisation output"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "outinpunit"
+file = ".oip"
+site_count = 2
+routines = "modf_var_prescribed"
+reason = "prescribed-value echo file (.oip) reread; outinp/=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "adnunit"
+file = "?"
+site_count = 2
+routines = "GHM2ADINA"
+reason = "ADINA import (.in); ADINA/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "bem_res_unit"
+file = "?"
+site_count = 1
+routines = "global_data"
+reason = "beam GiD result writer; gid_bem=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "bcs_res_unit"
+file = "?"
+site_count = 1
+routines = "global_data"
+reason = "boundary-condition GiD result writer; gid_bcs=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "mxy_res_unit"
+file = "?"
+site_count = 1
+routines = "global_data"
+reason = "plate GiD result writer; gid_Mxy=0"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "cunit"
+file = ".cor"
+site_count = 1
+routines = "contact_point_to_point"
+reason = "coordinate reread for moving mesh (rmesh/=0)"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "out_gid_dismax"
+file = "?"
+site_count = 1
+routines = "OUT_GID_MAX"
+reason = "max-displacement writer OUT_GID_MAX; not called on the static path"
+migration_phase = "n/a (output)"
+
+[[not_on_path]]
+unit_var = "initwunit"
+file = ".inw"
+site_count = 1
+routines = "OUT_NEXT_WRITE"
+reason = "initial water file (.inw)"
+migration_phase = "M8"
+
+[[not_on_path]]
+unit_var = "bounchsl"
+file = "?"
+site_count = 1
+routines = "globaldate"
+reason = "level-set boundary mesh writer (globaldate); level_set_problem/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "gidmshl"
+file = "?"
+site_count = 1
+routines = "globaldate"
+reason = "level-set GiD mesh writer; level_set_problem/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "gidresl"
+file = "?"
+site_count = 1
+routines = "globaldate"
+reason = "level-set GiD result writer; level_set_problem/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "chkunitl"
+file = "?"
+site_count = 1
+routines = "globaldate"
+reason = "level-set check file; level_set_problem/=0"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "disunit"
+file = "?"
+site_count = 1
+routines = "time_dependent"
+reason = "displacement reread (d.dis)"
+migration_phase = "M9"
+
+[[not_on_path]]
+unit_var = "pmtunit"
+file = "?"
+site_count = 1
+routines = "time_dependent"
+reason = "parameter file for optimisation; Uopt_R/=0"
+migration_phase = "M9"

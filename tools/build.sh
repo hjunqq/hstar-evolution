@@ -5,6 +5,8 @@
 #
 # Profiles:
 #   release  -O2                                  (reference numerics)
+#   trace    -O0 -g -traceback, no runtime checks; for gdb breakpoint
+#            counting of I/O statements (tools/yl_io_trace.sh, M1-01)
 #   debug    -O0 -g -traceback -check bounds,pointers
 #            On the pure snapshot this aborts at Fem.f90:12288 (tcurves(0)
 #            read when a prescribed set has itcurve=0) -> M1 firewall target.
@@ -34,7 +36,7 @@ source "$ROOT/tools/env.sh"
 PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        release|debug|strict|sanitize) PROFILE="$1";;
+        release|trace|debug|strict|sanitize) PROFILE="$1";;
         --src) SRC="$(cd "$2" && pwd)"; shift;;
         --out) OUT="$2"; shift;;
         --label) LABEL="$2"; shift;;
@@ -53,6 +55,7 @@ MKL_LIB="$HSTAR_MKLROOT/lib"
 
 case "$PROFILE" in
     release)  FFLAGS=(-O2);;
+    trace)    FFLAGS=(-O0 -g -traceback);;
     debug)    FFLAGS=(-O0 -g -traceback -check bounds,pointers);;
     strict)   FFLAGS=(-O0 -g -traceback -check bounds,pointers -init=snan,arrays -fpe0);;
     sanitize) FFLAGS=(-O0 -g -traceback -check bounds,pointers,uninit -init=snan,arrays -fpe0);;
