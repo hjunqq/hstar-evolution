@@ -1,0 +1,184 @@
+{
+  "manifest_version": 1,
+  "profile": "release",
+  "started_at": "2026-09-07T05:10:33Z",
+  "finished_at": "2026-09-07T05:12:50Z",
+  "platform": {
+    "os": "Linux-6.17.0-35-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "python": "3.12.3"
+  },
+  "toolchain": {
+    "HSTAR_FC": "/opt/intel/oneapi/compiler/2025.3/bin/ifx",
+    "HSTAR_CC": "/usr/bin/gcc",
+    "HSTAR_MKLROOT": "/opt/intel/oneapi/mkl/2026.1",
+    "HSTAR_IOMP_LIBDIR": "/opt/intel/oneapi/compiler/2025.3/lib",
+    "HSTAR_UNIT_PROFILE": "SI-v1",
+    "fc_version": "ifx (IFX) 2025.3.3 20260319",
+    "cc_version": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0"
+  },
+  "flags": {
+    "fflags": [
+      "-O2"
+    ],
+    "ldflags": [
+      "-qopenmp",
+      "-L/opt/intel/oneapi/mkl/2026.1/lib",
+      "-lmkl_intel_lp64",
+      "-lmkl_intel_thread",
+      "-lmkl_core",
+      "-L/opt/intel/oneapi/compiler/2025.3/lib",
+      "-liomp5",
+      "-lpthread",
+      "-lm",
+      "-ldl",
+      "-Wl,--disable-new-dtags",
+      "-Wl,-rpath,/opt/intel/oneapi/mkl/2026.1/lib",
+      "-Wl,-rpath,/opt/intel/oneapi/compiler/2025.3/lib"
+    ]
+  },
+  "sources": {
+    "dir": "/home/huijun/HSTAR_Next/hstar-evolution/legacy/yl",
+    "identity": "legacy/source-manifest.json",
+    "files": [
+      {
+        "path": "Vartype.f90",
+        "sha256": "9128d2e5518a3406ad098126b830a7a409ae9639d38376072f04a9bc7d366528"
+      },
+      {
+        "path": "Array.f90",
+        "sha256": "5a444f390ba83d75c82983bff2fc4684bc3e33e8b04815489d4029a9858fa442"
+      },
+      {
+        "path": "Elements.f90",
+        "sha256": "801f92fc2e5750ef15887bbb28889f45a99212bfe24cc1ddc426cb0f52166b63"
+      },
+      {
+        "path": "gidpost.F90",
+        "sha256": "0fefe906ae9e20baf8732948121ae8b7f30a29cb056334be2bf84d065d021e5b"
+      },
+      {
+        "path": "vsl_gauss_module.f90",
+        "sha256": "d25e207910e318870966adf0f5a12602712179efc493d17468a56f64bd193615"
+      },
+      {
+        "path": "Global.f90",
+        "sha256": "a2a4779a31176411954028d3f3d8df503a956e822d579dd54bc2d3be25decc5a"
+      },
+      {
+        "path": "Material.f90",
+        "sha256": "63b300bcdf962f2f1ce31a1b86b117ce26eff2557a15749c3d643a9c81db22ee"
+      },
+      {
+        "path": "meshfine.f90",
+        "sha256": "74c03a6efa95ce375c78d04e3ef648fab15d5aa23e65c3702ce4491c800c20ef"
+      },
+      {
+        "path": "Load.f90",
+        "sha256": "86322321176007e4f71fe21965f0c4523f6736cd807f2b6f8a8658e439b37f6b"
+      },
+      {
+        "path": "Prescrib.f90",
+        "sha256": "b1ba95c013dc4d1919c77ac47c86eebef3f079a222e5be79428021faaedc865c"
+      },
+      {
+        "path": "Solver.f90",
+        "sha256": "af0b4d5ac32a30813cde089a4e1581f5253d98a2213a9b93b425ed61e074e5ff"
+      },
+      {
+        "path": "Output.f90",
+        "sha256": "9443041c178fe732cdecea08607500c474a9638a62e8edb9b39aa24bbb520734"
+      },
+      {
+        "path": "Temper.f90",
+        "sha256": "c91fe5816bde5141d1c75d4a605476e1362eb48e20abc0ea1df80e52ad602b2c"
+      },
+      {
+        "path": "Stiff.f90",
+        "sha256": "9047fd2eb776c143890898ff0adf4f96344cc48c0bd4d46e6c9c95428f050201"
+      },
+      {
+        "path": "Residu.f90",
+        "sha256": "00bb722801bd26cb758624c9f6cf8b6d6fb10c3414f3231aad9f935cf91ae243"
+      },
+      {
+        "path": "Level.f90",
+        "sha256": "87616b09cdbfe73bbc19051086b3116fcd30f150e2ef7f9da8b33c064081d67d"
+      },
+      {
+        "path": "Fem.f90",
+        "sha256": "1845f1655f919fa3498e4144d19fb6bcdbfa33cb0fcee63db3e8c5068f9ba444"
+      }
+    ]
+  },
+  "gidpost": "stub (link-only, no GiD binary output)",
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+    "bytes": 7758264,
+    "sha256": "6df6ea8d18c9fa5d4a5c8a74268ad0105bb78c48fc93a5ed666cf328dffcc98a"
+  },
+  "runtime_dependencies": [
+    {
+      "soname": "libmkl_intel_lp64.so.3",
+      "path": "/opt/intel/oneapi/mkl/2026.1/lib/libmkl_intel_lp64.so.3",
+      "sha256": "9dbdb7d4193679f028787da6b9b2b545e0e16b87a95a64ee7318f544da8b08ac"
+    },
+    {
+      "soname": "libmkl_intel_thread.so.3",
+      "path": "/opt/intel/oneapi/mkl/2026.1/lib/libmkl_intel_thread.so.3",
+      "sha256": "22b3423271a40a24cc3b1294639dbc2a992144ed2bf6c6b8a07f37a872110001"
+    },
+    {
+      "soname": "libmkl_core.so.3",
+      "path": "/opt/intel/oneapi/mkl/2026.1/lib/libmkl_core.so.3",
+      "sha256": "b4f086651ee5a8471140d53fedfdbbaba606287784763b0739f282872c31aa9b"
+    },
+    {
+      "soname": "libiomp5.so",
+      "path": "/opt/intel/oneapi/compiler/2025.3/lib/libiomp5.so",
+      "sha256": "2f035e8415e1afa89c81dd1d0c76efbc737a54b243b7543dbdf6e605e108533a"
+    },
+    {
+      "soname": "libimf.so",
+      "path": "/opt/intel/oneapi/compiler/2025.3/lib/libimf.so",
+      "sha256": "16efc27aa9c0aeef3c12afa7d57c74f3fa9501beeedaf56fc51d5a2f7013228a"
+    },
+    {
+      "soname": "libm.so.6",
+      "path": "/lib/x86_64-linux-gnu/libm.so.6",
+      "sha256": "e9c4b28d340e415b8137480ec442662f981e1399386c5931dae0e886e3639e91"
+    },
+    {
+      "soname": "libc.so.6",
+      "path": "/lib/x86_64-linux-gnu/libc.so.6",
+      "sha256": "8db37cf3f2169f59a0f07ef1fea308c35656668c64c8ff294e1860f4121eb161"
+    },
+    {
+      "soname": "libgcc_s.so.1",
+      "path": "/lib/x86_64-linux-gnu/libgcc_s.so.1",
+      "sha256": "d93224d2b0dab4247598be683adca02f5cf00586f99c187579cd7e92058fb7cb"
+    },
+    {
+      "soname": "libdl.so.2",
+      "path": "/lib/x86_64-linux-gnu/libdl.so.2",
+      "sha256": "292d5f5af2e7360b3e18c56591a4960115373ecf40627660f9149b6c68a33f80"
+    },
+    {
+      "soname": "libpthread.so.0",
+      "path": "/lib/x86_64-linux-gnu/libpthread.so.0",
+      "sha256": "a27ffa9bf233d61a5f02ddb0cf770dd6579021afc1aa8aec0fb58ee4a965281a"
+    },
+    {
+      "soname": "librt.so.1",
+      "path": "/lib/x86_64-linux-gnu/librt.so.1",
+      "sha256": "c6e6288545e24b0b3cfbf33320bda9236521625d8c3d628f3444f1ed40e5c7c5"
+    },
+    {
+      "soname": "libintlc.so.5",
+      "path": "/opt/intel/oneapi/compiler/2025.3/lib/libintlc.so.5",
+      "sha256": "36d59dd44cbe8eb622ac1e477b0d5c775e95452f026dc1edad38ce55f72f981e"
+    }
+  ],
+  "warnings_or_remarks": 0,
+  "unresolved_runtime_deps": []
+}

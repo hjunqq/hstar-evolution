@@ -1,0 +1,230 @@
+{
+  "manifest_version": 1,
+  "case_id": "static_2d.cooks_membrane",
+  "case_dir": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/cooks_membrane",
+  "label": "candidate",
+  "status": "COMPLETED",
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release-candidate/hstar",
+    "sha256": "dea1a66d0b57daf400a3bd21c906e760c1a9ff02dc952f0e29fa62de408fc68c"
+  },
+  "build_manifest": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release-candidate/build-manifest.json",
+    "profile": "release",
+    "binary_sha256": "dea1a66d0b57daf400a3bd21c906e760c1a9ff02dc952f0e29fa62de408fc68c"
+  },
+  "platform": {
+    "os": "Linux-6.17.0-35-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "hostname": "FemChat"
+  },
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "timeout_seconds": 120.0,
+  "input_check_before": {
+    "ok": true,
+    "problems": []
+  },
+  "input_check_after": {
+    "ok": true,
+    "problems": []
+  },
+  "process": {
+    "command": [
+      "/home/huijun/HSTAR_Next/hstar-evolution/build/release-candidate/hstar"
+    ],
+    "cwd": "/home/huijun/HSTAR_Next/hstar-evolution/runs/static_2d.cooks_membrane/20260907T052827Z_b04ea896_candidate/work",
+    "started_at": "2026-09-07T05:28:27+00:00",
+    "wall_seconds": 0.032,
+    "user_seconds": 0.019853,
+    "system_seconds": 0.007525,
+    "max_rss_kib": 27580,
+    "returncode": 0,
+    "signal": null,
+    "timed_out": false,
+    "stderr_bytes": 16,
+    "stderr_unexpected_lines": [],
+    "stderr_crash_pattern": false,
+    "inputs_copied": [
+      "1.LOA",
+      "1.aqu",
+      "1.cor",
+      "1.ele",
+      "1.ftr",
+      "1.glb",
+      "1.ifs",
+      "1.loa",
+      "1.man",
+      "1.mat",
+      "1.nrt",
+      "1.opr",
+      "1.pre",
+      "1.sol",
+      "1.tem",
+      "inp"
+    ]
+  },
+  "required_output": {
+    "file": "1.flavia.res",
+    "present": true,
+    "bytes": 44654,
+    "sha256": "5b92878e6a331e4e8b4118f60919781a48404942db5cfc699be1d01f7db18961",
+    "parse": {
+      "ok": true,
+      "problems": [],
+      "summary": {
+        "blocks": [
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 289,
+            "max_abs": 0.0075684219
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 289,
+            "max_abs": 4001703.6
+          }
+        ]
+      }
+    }
+  },
+  "outputs": [
+    {
+      "name": "1.act",
+      "bytes": 1796,
+      "sha256": "05f5d021d648f62632e4ef84a636248ec7561b67c7226f87c855d94e6cfad75a"
+    },
+    {
+      "name": "1.bar",
+      "bytes": 81,
+      "sha256": "6748ad9dfef908b46bc79a4f5f7b6dbb194d050fa4ecccc0e270f012c51d6131"
+    },
+    {
+      "name": "1.bem",
+      "bytes": 162,
+      "sha256": "0b04385c3212086f53e82e13c20c2c77a382d2b697f9c64f5a2dc1f15214c910"
+    },
+    {
+      "name": "1.chk",
+      "bytes": 3604,
+      "sha256": "3f092aa5d8baee144833f754e005d14c6db98b9193d203b5d1972823adc3f48e"
+    },
+    {
+      "name": "1.ctr",
+      "bytes": 254,
+      "sha256": "f6b269900501c6a12056f5c7cb9187a040c3c04d4822ca75cbe7c4709b9fb00d"
+    },
+    {
+      "name": "1.ctt",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.dis",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.fai",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.msh",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.res",
+      "bytes": 44654,
+      "sha256": "5b92878e6a331e4e8b4118f60919781a48404942db5cfc699be1d01f7db18961"
+    },
+    {
+      "name": "1.ftf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.gdm",
+      "bytes": 37,
+      "sha256": "c5ad17f98d718d5d50e91b3cc1a27ba3fd48257720cf641d58eb06e7f4b140c2"
+    },
+    {
+      "name": "1.gpv",
+      "bytes": 113727,
+      "sha256": "3d0081045b04a04292fbc789842aaa5984107492b2f2f562676a5ba46c6994dd"
+    },
+    {
+      "name": "1.ini",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.inw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.oew",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ogw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ojw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.opw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.res",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.resb",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.rtt",
+      "bytes": 105580,
+      "sha256": "940fadbed735dfa922896805e59b9ecb6d346c05081de49b59642e35f392f4e6"
+    },
+    {
+      "name": "1.stf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.sto",
+      "bytes": 0,
+      "sha256": null
+    }
+  ],
+  "finished_at": "2026-09-07T05:28:27+00:00",
+  "run_dir": "/home/huijun/HSTAR_Next/hstar-evolution/runs/static_2d.cooks_membrane/20260907T052827Z_b04ea896_candidate"
+}

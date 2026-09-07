@@ -44,6 +44,7 @@ __pycache__/
 .vscode/
 .idea/
 .ccg/
+runs/
 
 # Keep intentional empty legacy input fixtures
 !cases/**/*.aqu

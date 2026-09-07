@@ -9,8 +9,9 @@ source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
 input_manifest = "golden/static_2d/cooks_membrane/input-manifest.json"
 purpose = "2D Q4 linear-static state and numerical baseline"
 migration_phase = "M0-M5"
-status = "inputs-hashed"
-verification = "pending-baseline-run"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass"
+reference = "reference/"
 
 [[case]]
 id = "static_2d.lame_cylinder"
@@ -21,8 +22,9 @@ source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
 input_manifest = "golden/static_2d/lame_cylinder/input-manifest.json"
 purpose = "2D elasticity analytical benchmark and boundary-condition baseline"
 migration_phase = "M0-M5"
-status = "inputs-hashed"
-verification = "pending-baseline-run"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass"
+reference = "reference/"
 
 [[planned_case]]
 id = "static_3d.mini_3d"

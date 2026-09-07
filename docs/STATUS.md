@@ -12,7 +12,9 @@
 | M0-01 来源清单与哈希 | IN_REVIEW | 源码/算例逐文件 SHA-256、gidpost 桩入库、脏树 15 组 hunk 分类（3 项待 M0-04c 验证） |
 | M0-02 Linux 构建 | IN_REVIEW | `env -i` 下 release/debug 可构建，依赖固定并入 manifest；release 冒烟两例与历史输出逐字节相同；检查型 profile 暴露 R17/R18 |
 | M0-05a 模型说明与容差登记 | IN_REVIEW | 两例 MODEL.md / observables.toml / tolerances.toml；两例均为重力回归例 |
-| M0-03、M0-04、M0-05b | TODO | 隔离运行器、参考结果三次运行、脏树对照、报告 |
+| M0-03 隔离运行器 | IN_REVIEW | 七种状态各有反例；两例 COMPLETED |
+| M0-04 参考结果 | IN_REVIEW | 两例各 3 次逐值相等（B02）；候选脏树二进制两例与 reference 相同（04c）；reference 已冻结到 `cases/golden/*/reference/` |
+| M0-05b M0 报告 | IN_REVIEW | `docs/m0/M0-report.md`；无第二复核人，阶段停在 IN_REVIEW |
 | M1～M5 实现及验收 | TODO | 尚无 checked I/O、状态比较器、现代初始化或可运行 TOML |
 | M6～M9 | BACKLOG | 按真实需求逐能力启动 |
 
@@ -20,4 +22,4 @@
 本轮核实了环境（ifx 2025.3、MKL 2026.1、无 gfortran）、原仓库脏树差异、两例 deck 内容与输出路径，
 并据此修正文档；没有更改求解器或算例输入。
 
-下一步：M0-03 隔离运行器，然后 M0-04a/b/c，最后 M0-05b 冻结参考结果。
+下一步：M0 等待复核签收；M1-01 首条静力路径 reader 清单可以开始（M1-03 已有 R17/R18 两个明确目标）。

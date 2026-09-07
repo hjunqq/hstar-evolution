@@ -1,0 +1,68 @@
+{
+  "case_id": "static_2d.lame_cylinder",
+  "test_id": "B02",
+  "frozen_at": "2026-09-07T05:25:49+00:00",
+  "binary_sha256": "6df6ea8d18c9fa5d4a5c8a74268ad0105bb78c48fc93a5ed666cf328dffcc98a",
+  "build_profile": "release",
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "runs": [
+    {
+      "label": "ref1",
+      "status": "COMPLETED",
+      "wall_seconds": 0.032,
+      "max_rss_kib": 24908,
+      "flavia_res_sha256": "ebfd0a204c2fdf4e67f4ce5fb86f20d72f29f939e7d1237bc924c1a09e83be73"
+    },
+    {
+      "label": "ref2",
+      "status": "COMPLETED",
+      "wall_seconds": 0.032,
+      "max_rss_kib": 24928,
+      "flavia_res_sha256": "ebfd0a204c2fdf4e67f4ce5fb86f20d72f29f939e7d1237bc924c1a09e83be73"
+    },
+    {
+      "label": "ref3",
+      "status": "COMPLETED",
+      "wall_seconds": 0.032,
+      "max_rss_kib": 24908,
+      "flavia_res_sha256": "ebfd0a204c2fdf4e67f4ce5fb86f20d72f29f939e7d1237bc924c1a09e83be73"
+    }
+  ],
+  "all_completed": true,
+  "output_sha_identical": true,
+  "compare_1v2_passed": true,
+  "compare_1v3_passed": true,
+  "max_abs_diff_across_repeats": 0.0,
+  "verdict": "PASS",
+  "observables_summary": {
+    "blocks": [
+      {
+        "name": "DISPLACEMENT",
+        "result_type": 2,
+        "step": 1.0,
+        "components": [],
+        "ncomp": 2,
+        "nodes": 81,
+        "max_abs": 7.5390546e-06
+      },
+      {
+        "name": "STRESS",
+        "result_type": 3,
+        "step": 1.0,
+        "components": [
+          "SIGXX",
+          "SIGYY",
+          "SIGXY",
+          "SIGZZ"
+        ],
+        "ncomp": 4,
+        "nodes": 81,
+        "max_abs": 146790.23
+      }
+    ]
+  },
+  "results_json_sha256": "f369a5650755a8684bd1ad56c23e12168f06d05074b2539403f937dc394a09b0"
+}

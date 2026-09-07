@@ -1,0 +1,68 @@
+{
+  "case_id": "static_2d.cooks_membrane",
+  "test_id": "B02",
+  "frozen_at": "2026-09-07T05:25:49+00:00",
+  "binary_sha256": "6df6ea8d18c9fa5d4a5c8a74268ad0105bb78c48fc93a5ed666cf328dffcc98a",
+  "build_profile": "release",
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "runs": [
+    {
+      "label": "ref1",
+      "status": "COMPLETED",
+      "wall_seconds": 0.032,
+      "max_rss_kib": 27436,
+      "flavia_res_sha256": "5b92878e6a331e4e8b4118f60919781a48404942db5cfc699be1d01f7db18961"
+    },
+    {
+      "label": "ref2",
+      "status": "COMPLETED",
+      "wall_seconds": 0.032,
+      "max_rss_kib": 27464,
+      "flavia_res_sha256": "5b92878e6a331e4e8b4118f60919781a48404942db5cfc699be1d01f7db18961"
+    },
+    {
+      "label": "ref3",
+      "status": "COMPLETED",
+      "wall_seconds": 0.032,
+      "max_rss_kib": 27468,
+      "flavia_res_sha256": "5b92878e6a331e4e8b4118f60919781a48404942db5cfc699be1d01f7db18961"
+    }
+  ],
+  "all_completed": true,
+  "output_sha_identical": true,
+  "compare_1v2_passed": true,
+  "compare_1v3_passed": true,
+  "max_abs_diff_across_repeats": 0.0,
+  "verdict": "PASS",
+  "observables_summary": {
+    "blocks": [
+      {
+        "name": "DISPLACEMENT",
+        "result_type": 2,
+        "step": 1.0,
+        "components": [],
+        "ncomp": 2,
+        "nodes": 289,
+        "max_abs": 0.0075684219
+      },
+      {
+        "name": "STRESS",
+        "result_type": 3,
+        "step": 1.0,
+        "components": [
+          "SIGXX",
+          "SIGYY",
+          "SIGXY",
+          "SIGZZ"
+        ],
+        "ncomp": 4,
+        "nodes": 289,
+        "max_abs": 4001703.6
+      }
+    ]
+  },
+  "results_json_sha256": "abc6f5555941331f8fcc53ed7e7ed719afceb1a767f12a335632bb7f5a19657d"
+}

@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hstar.local/schemas/run-manifest.schema.json",
+  "title": "HSTAR Evolution run manifest (tools/yl_run.py)",
+  "type": "object",
+  "required": ["manifest_version", "case_id", "status", "binary", "timeout_seconds", "input_check_before", "run_dir", "finished_at"],
+  "properties": {
+    "manifest_version": { "const": 1 },
+    "case_id": { "type": "string" },
+    "case_dir": { "type": "string" },
+    "label": { "type": ["string", "null"] },
+    "status": { "enum": ["INPUT_HASH_MISMATCH", "TIMEOUT", "CRASHED", "FAILED", "MISSING_OUTPUT", "GOLDEN_MODIFIED", "COMPLETED"] },
+    "binary": { "type": "object", "required": ["path", "sha256"] },
+    "build_manifest": { "type": ["object", "null"] },
+    "platform": { "type": "object" },
+    "threads": { "type": "object" },
+    "timeout_seconds": { "type": "number" },
+    "input_check_before": { "$ref": "#/$defs/check" },
+    "input_check_after": { "oneOf": [{ "$ref": "#/$defs/check" }, { "type": "null" }] },
+    "process": {
+      "type": ["object", "null"],
+      "required": ["returncode", "timed_out", "wall_seconds", "max_rss_kib", "stderr_bytes", "stderr_unexpected_lines", "stderr_crash_pattern"],
+      "properties": {
+        "returncode": { "type": ["integer", "null"] },
+        "signal": { "type": ["integer", "null"] },
+        "timed_out": { "type": "boolean" },
+        "wall_seconds": { "type": "number" },
+        "max_rss_kib": { "type": "integer" }
+      }
+    },
+    "required_output": {
+      "type": "object",
+      "required": ["file", "present", "parse"],
+      "properties": {
+        "file": { "type": "string" },
+        "present": { "type": "boolean" },
+        "parse": { "type": ["object", "null"] }
+      }
+    },
+    "outputs": { "type": "array" },
+    "run_dir": { "type": "string" },
+    "finished_at": { "type": "string" }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "required": ["ok", "problems"],
+      "properties": { "ok": { "type": "boolean" }, "problems": { "type": "array", "items": { "type": "string" } } }
+    }
+  }
+}

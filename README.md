@@ -39,11 +39,12 @@ docs/                    架构、计划、质量门和决策记录
 
 ## 当前状态
 
-当前为 `M0 — 基线建仓`：
+当前为 `M0 — 可重复基线`（IN_REVIEW，等待独立复核）：
 
 - 已导入 YL 基线源码；
 - 已加入 `cooks_membrane` 与 `lame_cylinder` 两个二维静力回归例（已核实均为重力体力模型，非经典解析基准）；
 - 已冻结总体架构和迁移禁区；
+- Linux 固定工具链构建、隔离运行器、参考结果（两例各 3 次逐值相等）已建立，见 `docs/m0/M0-report.md`；
 - 尚未声明任何现代输入能力可用。
 
 详细执行顺序见 [docs/02-migration-plan.md](docs/02-migration-plan.md)。

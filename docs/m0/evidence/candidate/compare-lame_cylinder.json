@@ -1,0 +1,32 @@
+{
+  "structure_ok": true,
+  "problems": [],
+  "blocks": [
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 162,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 324,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0
+    }
+  ],
+  "passed": true,
+  "reference": "cases/golden/static_2d/lame_cylinder/reference/results.json",
+  "actual": "runs/static_2d.lame_cylinder/20260907T052827Z_19a77894_candidate/results.json",
+  "tolerance_section": "exact"
+}
