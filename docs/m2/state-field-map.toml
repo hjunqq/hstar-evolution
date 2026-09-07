@@ -1,0 +1,4600 @@
+# HSTAR Evolution — M2-01 checkpoint × state field map (authoritative, hand-maintained)
+# Generated 2026-09-07 from .ccg/tasks/m2-01-state-field-map/analysis-legacy.md §1-§4 against legacy/yl (static_2d path);
+# edit by hand afterwards.
+# Validate with: python3 tools/yl_state_map.py check
+# ID rule: object path `<top>[<step>].<attribute chain>`, regex ^[a-z][a-z0-9]*(\.[A-Za-z0-9_]+)+$ (steps[0] is written `steps0`);
+#          RuntimeState ids start with `runtime.`, derived counts/maps with `derived.`, non-migrated switches with `control.` / `output.`.
+# legacy_symbol rule: <module>.<variable>[%component...] as declared in legacy/yl (module global_var / materials / prescribed /
+#          applied_load / temperature / solver / meshfine); `element%...` components are declared in module elements (Elements.f90).
+# source rule: exact reader ids from docs/m1/reader-inventory.toml, or exactly one `derived:<count|index_map|renumber|legacy_default|dof_expand>`.
+# checkpoint.site / anchor: the statement BEFORE which the snapshot is taken; anchor = yl_io_inventory.anchor_hash(full_statement(site)).
+# Same legacy symbol at two checkpoints is two rows (e.g. tcurves%dfact, fixed).
+
+version = 1
+path = "static_2d: 2D Q4 plane-strain linear-elastic, PROFILE, gravity, single increment"
+cases = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+reader_inventory = "docs/m1/reader-inventory.toml"
+float_format = "hex"
+
+[shape_symbols]
+ndimn = "mesh.dimension (2 on both cases)"
+npoin = "count(mesh.nodes)"
+nelem = "count(mesh.elements)"
+nnode = "nodes per element from sections[].element_kind (4 for Q4)"
+ngroup = "count(sections) = count(mesh.sets[elset])"
+nmats = "count(materials)"
+nrfields = "count(sections[].formulation.fields) per group (1 on both cases)"
+nfdof = "count(sections[].formulation.dofs) per field (2 on both cases)"
+mdofn = "sum over distinct global dofs of sections[].formulation.dofs (2 on both cases)"
+cdofn = "count(lmdofn /= 0) after Global.f90:1119-1125 (= mdofn on both cases)"
+ntotv = "count of numbered (dof,node) pairs = max(nodfn) (Global.f90:2147-2156)"
+neq = "count(totveq /= 0) after totv_to_eq (Solver.f90:9027)"
+nevab = "nfdof * nnode (8 for Q4 with 2 dofs)"
+ngaus = "Gauss points per element from elkn(index)%ggaus(order_int)%ngaus (4 for Q4)"
+ntcurve = "count(amplitudes)"
+ntime = "count(amplitudes[].points) per curve (ragged)"
+nfixsets = "count(steps[0].boundary)"
+ndofix = "count of prescrib records = sum over sets of listed nodes with nodfn /= 0 (Prescrib.f90:257)"
+nblks = "count(steps) (1 on both cases)"
+nblks1 = "nblks+1: block columns 0..nblks of appear_process (Global.f90:964); column 0 = initial state, zeroed at :968"
+np_unode = "per group: count of nodes attached to elements of that group (Global.f90:1383-1392, allocate at :1392); ragged over groups"
+ngaus_mass = "Gauss points of the second integration rule elkn(index)%ggaus(2)%ngaus (16 for Q4, Elements.f90:383); never consumed on static_2d (q4 order_intrules=(/1,1/), :377)"
+Stiff_length = "iseq(neq) after PROFILE SET (Solver.f90:7229) = size(global_stiff1)"
+
+[[checkpoint]]
+id = "model_ready"
+order = 1
+covered = true
+site = "Fem.f90:1908"
+anchor = "4f74a710eb3a"
+anchor_stmt = "operation='SET'"
+after = ["Fem.f90:1899", "Fem.f90:1903", "Fem.f90:1904"]
+first_consumer = "SOLVE"
+snapshot_files = ["control.json", "mesh.sha256", "dof.sha256", "groups.json", "materials.json", "constraints.sha256", "loads.sha256", "steps.json", "numerics.json"]
+note = "Inside block loop 1 of process_analysis, after the last executed reader (TEM.boundt.pipe_count via `call boundt` at :1899) and the cursor bookkeeping at :1903-1904, before `operation='SET'; call solve` (:1908-1909). PROFILE SET (Solver.f90:6820-7248) is the first consumer: it reads .sol and builds totveq/neq/iseq from iffix, trans%nintf, nodfn, appear, group%list and element%ldofs. Requirements wording 'before the first global_stif_profile/stiff_u' is not taken literally (first stiff_u is :3733, after the .man readers); the consistent reading is 'before the solver structure is built'. Valid only under the guard set restart=0, nblks=1, type_problem='Q', type_solver='PROFILE', relis=0, block_stab=0, ADINA=0, ngaps=nrcsteel=0. .pre/.loa/.tem are tagged phase=startup in M1 but execute inside block 1 (:1873-1899); for nblks>1 they are per block and this anchor moves with iblks."
+
+[[checkpoint]]
+id = "phase_ready(1)"
+order = 2
+covered = true
+site = "Fem.f90:3601"
+anchor = "d61e64d3a931"
+anchor_stmt = "if(ngaps/=0.or.nrcsteel/=0)allocate(tofor0(ntotv))"
+after = ["Fem.f90:3594", "Fem.f90:3597"]
+first_consumer = "STATIC_U"
+snapshot_files = ["steps.json", "numerics.json"]
+note = "Inside STATIC_U after the .man title + nincs records (:3592-3594) and diag_flush_stage (:3597). The first consumer of nincs is STATIC_U's own increment loop `do iincs=lincs+1,nincs` (:3622); :3601 (ngaps=nrcsteel=0) and :3603-3617 (lincs=0) are dead on this path. Holds the ProblemState.solver.profile fields read by PROFILE SET (solver_lazy) and the RuntimeState equation structure (totveq, neq, iseq, Stiff_length) which do not exist before Fem.f90:1909."
+
+[[checkpoint]]
+id = "increment_ready(1,1)"
+order = 3
+covered = true
+site = "Fem.f90:3654"
+anchor = "83ef072c130e"
+anchor_stmt = "ttime0=ttime"
+after = ["Fem.f90:3625", "Fem.f90:3631", "Fem.f90:3652"]
+first_consumer = "dfact_time_curve"
+snapshot_files = ["steps.json", "control.json", "constraints.sha256", "loads.sha256"]
+note = "Inside the iincs=1 iteration of STATIC_U after the two .man increment records (:3625 increment_control, :3631 tolerances) and the print at :3652; :3633-3650 are dead (cwater=0, Qstatic=0). First consumers: :3654-3667 (ttime, dfact_time_curve, modf_var_prescribed -> fixed), :3672 gravity -> element%field(1)%rload, :3678 force_external -> tofor, :3711 algort, :3733 stiff_u, :3749 estif_assemble/global_stif_profile. fixed and tcurves%dfact are still zero here (R24)."
+
+[[checkpoint]]
+id = "restart_ready"
+order = 4
+covered = false
+reason = "restart=0 on both golden cases; resta_read_write(1) (Fem.f90:283) and the .rtt/.stf units are not on the static_2d path. Registered with zero fields so the vocabulary is complete."
+
+# ---------------------------------------------------------------- fields @ model_ready
+
+[[field]]
+id = "case.name"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.probn"
+source = ["INP.FEM90.problem_name"]
+consumers = ["FEM90", "global_data"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "ProblemState.case.name"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "char(200); compare trim()ed. Base name of every legacy unit opened by global_data."
+
+[[field]]
+id = "control.run.restart"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.restart"
+source = ["INP.FEM90.run_control"]
+consumers = ["FEM90", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. restart=0 on both cases; restart=1 leaves the static_2d path (resta_read_write(1), Fem.f90:283)"
+
+[[field]]
+id = "control.run.relis"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.relis"
+source = ["INP.FEM90.run_control"]
+consumers = ["FEM90", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. reliability analysis switch; 0 on both cases (STATIC_U_reli branch Fem.f90:1921 not taken)"
+
+[[field]]
+id = "control.run.sysrelis"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.sysrelis"
+source = ["INP.FEM90.run_control"]
+consumers = ["FEM90", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "guard switch outside the static_2d slice; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
+note = "system reliability switch; 0 on both cases"
+
+[[field]]
+id = "control.run.adina"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ADINA"
+source = ["INP.FEM90.run_control"]
+consumers = ["FEM90", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. ADINA export switch; 0 on both cases (Fem.f90:1900-1902 branches not taken)"
+
+[[field]]
+id = "control.run.uopt_r"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.Uopt_R"
+source = ["INP.FEM90.run_control"]
+consumers = ["FEM90", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "guard switch outside the static_2d slice; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
+note = "optimisation switch; 0 on both cases"
+
+[[field]]
+id = "control.run.gamamax"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gamamax"
+source = ["INP.FEM90.run_control"]
+consumers = ["FEM90", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "guard switch outside the static_2d slice; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
+note = "max shear strain history switch; 0 on both cases"
+
+[[field]]
+id = "derived.counts.runblks"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.runblks"
+source = ["INP.FEM90.runblks"]
+consumers = ["process_analysis", "FEM90"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= len(steps) executed; equals nblks=1 on both cases. Block loop bound in process_analysis."
+
+[[field]]
+id = "derived.counts.npoin"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.npoin"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["global_data", "set_elem_dofs", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= count(mesh.nodes); sizes coord/nodfn."
+
+[[field]]
+id = "derived.counts.npoinb"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.npoinb"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["global_data"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "boundary-node count read with npoin; unused on the path, pinned by the deck."
+
+[[field]]
+id = "derived.counts.nelem"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nelem"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["global_data", "read_element", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= count(mesh.elements); sizes element(:) and ice0."
+
+[[field]]
+id = "mesh.dimension"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ndimn"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["global_data", "read_element", "STIFF_U", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.mesh.dimension"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "2 on both cases; selects nstre=4 (Global.f90:1287) and the Q4 shape tables."
+
+[[field]]
+id = "derived.counts.nmats"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nmats"
+source = ["GLB.global_data.sizes_and_switches", "MAT.material_set.nmats"]
+consumers = ["global_data", "material_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= count(materials). .glb nmats sizes props(:); .mat mmats (material_set local) must equal it (diag_range Material.f90:274)."
+
+[[field]]
+id = "derived.counts.ngroup"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ngroup"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["global_data", "process_analysis", "gravity", "STIFF_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= count(sections); 1 on both cases."
+
+[[field]]
+id = "steps0.output.format"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.outplot"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["output", "OUT_GID_WRITE"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "ProblemState.steps[0].output.format"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "'GIDR' on both cases: selects the text flavia writer. Remaining sizes_and_switches items (ntlink,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde) are unused_switch and pinned 0."
+
+[[field]]
+id = "mesh.nodes.id"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.i0"
+source = ["COR.global_data.node_coordinates"]
+consumers = ["global_data"]
+shape = ["npoin"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.nodes[].id"
+index_by = "mesh.nodes[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "i0 is read into the global scratch, checked against ipoin (M1-03 diag_dup/diag_range) and not stored; the id is the row index."
+
+[[field]]
+id = "mesh.nodes.xyz"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.coord"
+source = ["COR.global_data.node_coordinates"]
+consumers = ["read_element", "STIFF_U", "gravity", "prescrib_set"]
+shape = ["ndimn", "npoin"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.mesh.nodes[].xyz"
+index_by = "mesh.nodes[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "coord(ndimn,npoin), Fortran order; hash over canonical bytes must use the same order in both processes."
+
+[[field]]
+id = "mesh.elements.id"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.i0"
+source = ["ELE.read_element.element_connectivity"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.elements[].id"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "i0 is read, checked equal to ielem (Elements.f90:1093) and not stored; the id is the record order across groups."
+
+[[field]]
+id = "mesh.elements.nodes"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%field%lnods_f"
+source = ["ELE.read_element.element_connectivity"]
+consumers = ["read_element", "set_elem_dofs", "STIFF_U", "prescrib_set"]
+shape = ["nnode", "nelem"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.elements[].nodes"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "element(ielem)%field(1)%lnods_f(1:nnode); nnode=4 for Q4. The trailing group column of .ele is never read (Elements.f90:1087)."
+
+[[field]]
+id = "mesh.elements.kind"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%index"
+source = ["derived:index_map"]
+derived_from = ["sections.element_kind", "sections.elset_size"]
+consumers = ["STIFF_U", "gravity", "read_element"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.mesh.elements[].kind"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "= group(igroup)%index of the owning group (Elements.f90:1112); 5 = Q4."
+
+[[field]]
+id = "mesh.elements.group"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%group"
+source = ["derived:index_map"]
+derived_from = ["sections.elset_size"]
+consumers = ["read_element", "OUT_GID_WRITE"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.elements[].elset"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "= igroup of the group loop that read the element (Elements.f90:1082)."
+
+[[field]]
+id = "mesh.elements.material"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%matno"
+source = ["GLB.global_data.group_header"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.elements[].material"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "= header matno at read time (Elements.f90:1083, the only assignment to element%matno in legacy/yl); NOT overwritten at Fem.f90:1717 (only group%matno is). Not consumed on the path; stiff_u/gravity use group%matno. This is the observable copy of the .glb group-header matno (source cited directly; sections.material_header is reconstructed from it)."
+
+[[field]]
+id = "mesh.sets.elset"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%list"
+source = ["derived:index_map"]
+derived_from = ["sections.elset_size", "mesh.elements.id"]
+consumers = ["gravity", "STIFF_U", "PROFILE", "prescrib_set"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.sets[].elset"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "group(igroup)%list(1:nelgroup): ragged, one ordered list per group in record order (Global.f90:1292). Serializer writes one list per elset."
+
+[[field]]
+id = "mesh.sets.nset"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%nodfix"
+source = ["derived:index_map"]
+derived_from = ["steps0.boundary.nodes", "steps0.boundary.set"]
+consumers = ["prescrib_set", "modf_var_prescribed"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.mesh.sets[].nset"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "nset per constraint set = distinct nodfix with the same ifixset, in record order; list_fix is a prescrib_set local deallocated at Prescrib.f90:386."
+
+[[field]]
+id = "materials.id"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props"
+source = ["MAT.material_set.material_header"]
+consumers = ["material_set", "STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.materials[].id"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "imat (material_set local) is the props(:) index; duplicates and out-of-range are rejected by M1-03 diag_dup/diag_range."
+
+[[field]]
+id = "materials.kind"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical"
+source = ["MAT.material_set.material_header"]
+consumers = ["material_set", "STIFF_U"]
+shape = ["nmats"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.materials[].kind"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "property (material_set local) == 'MECHANICAL' <=> associated(props(imat)%mechanical). Serializer emits the enum, never the pointer."
+
+[[field]]
+id = "materials.name"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%name"
+source = ["MAT.material_set.material_header"]
+consumers = ["gravity", "STIFF_U", "FEM90"]
+shape = ["nmats"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.materials[].name"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "char(20), compare trim()ed. 'NSTOKS' test at Fem.f90:258."
+
+[[field]]
+id = "derived.counts.nphase"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid"
+source = ["MAT.material_set.material_nphase"]
+consumers = ["material_set"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "nphase (material_set local) = 1 on both cases; serializer derives it as the number of associated phase pointers (solid only)."
+
+[[field]]
+id = "materials.phase"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid"
+source = ["MAT.material_set.material_phase"]
+consumers = ["material_set", "STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.materials[].phase"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "phase (material_set local) == 'SOLID' <=> associated(props(imat)%mechanical%solid). Only SOLID is on the path."
+
+[[field]]
+id = "materials.model"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%material"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.materials[].model"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "'ELASTIC_ISOTROPIC' on both cases; char(30), compare trim()ed."
+
+[[field]]
+id = "materials.density"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%density"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["gravity"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "kg/m3"
+owner = "ProblemState.materials[].density"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Load.f90:1218; 2.4e3 on cooks_membrane."
+
+[[field]]
+id = "materials.ratio"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ratio"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["gravity"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].solid_ratio"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Load.f90:1241: tdensity = density*ratio; 1.0 on both cases."
+
+[[field]]
+id = "sections.thickness"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%thickness"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.sections[].thickness"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Stiff.f90:116 / Load.f90:1229 (ndimn==2). Owner is the section per ADR-0003 although YL stores it on the material; 1.0 plane-strain placeholder."
+
+[[field]]
+id = "materials.E"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%e"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["STIFF_U"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].E"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Stiff.f90:102; 2.5e10 on both golden cases; S03 target P-E."
+
+[[field]]
+id = "materials.nu"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%nu"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["STIFF_U"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].nu"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Stiff.f90:107; 0.2 on cooks_membrane."
+
+[[field]]
+id = "materials.thermal_expansion"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%alfa"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["load_of_creep_and_temperature"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1/K"
+owner = "ProblemState.materials[].thermal_expansion"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Thermal path only; not consumed on static_2d."
+
+[[field]]
+id = "materials.icreep"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%icreep"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["STIFF_U"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.materials[].creep_model"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Guard at Stiff.f90:109 (icreep/=0 swaps E for group%educ); 0 on both cases."
+
+[[field]]
+id = "materials.kind_wt"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%kind_wt"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["gravity"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.materials[].wetting_kind"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "Guard at Load.f90:1246; 0 on both cases."
+
+[[field]]
+id = "materials.jliqu"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%jliqu"
+source = ["MAT.material_set.elastic_isotropic"]
+consumers = ["liquifaction_judge"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.materials[].liquefaction"
+index_by = "materials[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+note = "0 on both cases."
+
+[[field]]
+id = "materials.ie"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%iE"
+source = ["MAT.material_set.elastic_extra"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "elastic_extra record is an unused switch on static_2d (Bparameter=0, uplift_ic=0)" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "unused_switch record: Bparameter=0 and uplift_ic=0 on both golden cases"
+note = "back-analysis parameter index; consumed only when Bparameter/=0 (Stiff.f90:98); registered so the reader MAT.material_set.elastic_extra is covered"
+
+[[field]]
+id = "materials.inu"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%iNu"
+source = ["MAT.material_set.elastic_extra"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "elastic_extra record is an unused switch on static_2d (Bparameter=0, uplift_ic=0)" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "unused_switch record: Bparameter=0 and uplift_ic=0 on both golden cases"
+note = "back-analysis parameter index; consumed only when Bparameter/=0 (Stiff.f90:103); registered so the reader MAT.material_set.elastic_extra is covered"
+
+[[field]]
+id = "materials.density_w"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%density_w"
+source = ["MAT.material_set.elastic_extra"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "kg/m3"
+owner = "not_migrated"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "elastic_extra record is an unused switch on static_2d (Bparameter=0, uplift_ic=0)" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "unused_switch record: Bparameter=0 and uplift_ic=0 on both golden cases"
+note = "wetting density; consumed only when uplift_ic/=0 and kind_wt/=0 (Load.f90:1247); registered so the reader MAT.material_set.elastic_extra is covered"
+
+[[field]]
+id = "materials.fluid"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%fluid"
+source = ["derived:legacy_default"]
+derived_from = ["materials.phase"]
+consumers = ["gravity", "STIFF_U"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "unassociated pointer; serializer must test associated() and emit null" }
+determinism = "pointer"
+snapshot_file = "materials.json"
+reason = "unassociated on the Q4 solid path; dumping it is a fault (R23)"
+note = "fluid phase pointer, unassociated for a SOLID-only material"
+
+[[field]]
+id = "materials.heat"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%heat"
+source = ["derived:legacy_default"]
+derived_from = ["materials.phase"]
+consumers = ["gravity", "STIFF_U"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "unassociated pointer; serializer must test associated() and emit null" }
+determinism = "pointer"
+snapshot_file = "materials.json"
+reason = "unassociated on the Q4 solid path; dumping it is a fault (R23)"
+note = "heat property pointer, unassociated (no THERMAL record)"
+
+[[field]]
+id = "materials.geometry"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%geometry"
+source = ["derived:legacy_default"]
+derived_from = ["materials.phase"]
+consumers = ["gravity", "STIFF_U"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "unassociated pointer; serializer must test associated() and emit null" }
+determinism = "pointer"
+snapshot_file = "materials.json"
+reason = "unassociated on the Q4 solid path; dumping it is a fault (R23)"
+note = "beam/bar geometry pointer, unassociated for Q4"
+
+[[field]]
+id = "sections.element"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%name"
+source = ["GLB.global_data.group_header"]
+consumers = ["global_data", "read_element", "STIFF_U"]
+shape = ["ngroup"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.sections[].element"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "char(10) element-kind name, compare trim()ed."
+
+[[field]]
+id = "sections.name"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%kname"
+source = ["GLB.global_data.group_header"]
+consumers = ["global_data", "OUT_GID_WRITE"]
+shape = ["ngroup"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.sections[].name"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "char(20) user group name; the elset/section key."
+
+[[field]]
+id = "sections.element_kind"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%index"
+source = ["GLB.global_data.group_header"]
+consumers = ["read_element", "STIFF_U", "gravity", "set_elem_dofs"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].element_kind"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "elkn index; 5 = Q4 on both cases (diag_unsupported guards 1..ekind)."
+
+[[field]]
+id = "sections.class"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%class"
+source = ["GLB.global_data.group_header"]
+consumers = ["global_data", "STIFF_U"]
+shape = ["ngroup"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.sections[].class"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "char(2); 'BM' selects nstre=1 (Global.f90:1288)."
+
+[[field]]
+id = "derived.counts.nrfields"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%nrfields"
+source = ["GLB.global_data.group_header"]
+consumers = ["set_elem_dofs", "STIFF_U", "gravity", "prescrib_set"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "= count(sections[].formulation.fields); 1 (U) on both cases."
+
+[[field]]
+id = "sections.fields"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%fieldid"
+source = ["GLB.global_data.group_header"]
+consumers = ["gravity", "set_elem_dofs", "OUT_FULL_WRITE"]
+shape = ["ngroup"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.sections[].fields"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "char(5); fieldid(1:1)=='U' enables gravity (Load.f90:1198)."
+
+[[field]]
+id = "sections.special"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%special"
+source = ["GLB.global_data.group_header"]
+consumers = ["read_element", "STIFF_U"]
+shape = ["ngroup"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.sections[].special"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "char(10) special-formulation switch; blank on both cases."
+
+[[field]]
+id = "sections.formulation"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%sptype"
+source = ["GLB.global_data.group_header"]
+consumers = ["STIFF_U"]
+shape = ["ngroup"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.sections[].formulation"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "char(10) SPtype (Stiff.f90:88): plane strain on both cases."
+
+[[field]]
+id = "sections.elset_size"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%nelgroup"
+source = ["GLB.global_data.group_header"]
+consumers = ["global_data", "read_element", "gravity", "STIFF_U"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "= count(mesh.sets[elset]); sum over groups must equal nelem (diag_range Global.f90:1227)."
+
+[[field]]
+id = "sections.material_header"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%matno"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.material", "sections.elset_size"]
+consumers = ["read_element"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.sections[].material"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+reconstruct = "material_header(igroup) = element(group(igroup)%list(1))%matno (Elements.f90:1083 copies the header matno into every element of the group; element%matno is never written again)"
+note = "Value as read from the .glb group header into group%matno; that slot is OVERWRITTEN in place at Fem.f90:1717 (see sections.material) and is not observable at model_ready. Serialised via `reconstruct` from element%matno. Both values are identical on the golden decks. Dependency direction: reader -> mesh.elements.material -> this row -> sections.material (acyclic)."
+
+[[field]]
+id = "sections.material"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%matno"
+source = ["derived:index_map"]
+derived_from = ["steps0.activation.material", "sections.material_header"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.sections[].material"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "In-memory value at model_ready = matno_process(igroup,1) (Fem.f90:1717), not the header value; this is what stiff_u/gravity consume."
+
+[[field]]
+id = "sections.type_nalgo"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%type_nalgo"
+source = ["GLB.global_data.group_header"]
+consumers = ["global_data"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].algorithm"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Read only; no consumer on the path (Global.f90:1219). 0 on both cases."
+
+[[field]]
+id = "sections.type_stiff"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%type_stiff"
+source = ["GLB.global_data.group_header"]
+consumers = ["STIFF_U"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].stiffness_kind"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Stiff.f90:89; 0 on both cases."
+
+[[field]]
+id = "sections.type_ecoint"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%type_ecoint"
+source = ["GLB.global_data.group_header"]
+consumers = ["RESIDU_F"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].stress_recovery"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Residu.f90:92/1464; 0 on both cases."
+
+[[field]]
+id = "sections.ilayer"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%ilayer"
+source = ["GLB.global_data.group_header"]
+consumers = ["set_dofs_layer"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].layer"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Global.f90:2218; 0 on both cases."
+
+[[field]]
+id = "sections.elcod_local"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%elcod_local"
+source = ["GLB.global_data.group_header"]
+consumers = ["read_element"]
+shape = ["ngroup"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.sections[].local_axes"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "0. = off (Elements.f90:1105 `if (elcod_local/=0.) call normal_local_inc` not taken)."
+
+[[field]]
+id = "control.glb.group_inf"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group_inf"
+source = ["GLB.global_data.group_header"]
+consumers = ["read_element"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "infinite-element switch; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+reason = "infinite-element switch outside static_2d; 0 on both cases"
+note = "Elements.f90:1269 guard; last value of the header loop wins (scalar shared by all groups)."
+
+[[field]]
+id = "sections.uplift_ic"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%uplift_ic"
+source = ["GLB.global_data.group_header"]
+consumers = ["gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].uplift"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Load.f90:1212/1246 guard; 0 on both cases."
+
+[[field]]
+id = "sections.liquj"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%liquj"
+source = ["GLB.global_data.group_header"]
+consumers = ["OUT_FULL_WRITE"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.sections[].liquefaction"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "Output.f90:245 guard; 0 on both cases."
+
+[[field]]
+id = "sections.dof_count"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%dof%nfdof"
+source = ["GLB.global_data.group_nfdof"]
+consumers = ["set_elem_dofs", "STIFF_U", "gravity", "prescrib_set"]
+shape = ["nrfields", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "group(igroup)%dof(ifield)%nfdof = count(formulation.dofs) = 2 on both cases; nevab = nfdof*nnode."
+
+[[field]]
+id = "sections.dof_list"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%dof%listdof_f"
+source = ["GLB.global_data.group_listdof"]
+consumers = ["set_elem_dofs", "prescrib_set"]
+shape = ["nfdof", "nrfields", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "global dof numbers per field (1,2 on both cases); ragged over fields."
+
+[[field]]
+id = "derived.counts.nstre"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%nstre"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.dimension", "sections.class"]
+consumers = ["STIFF_U", "RESIDU_F", "read_element"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+note = "4 when ndimn==2 (Global.f90:1287); 1 for class 'BM'."
+
+[[field]]
+id = "sections.type_mass"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%type_mass"
+source = ["GLB.global_data.group_mass_damping"]
+consumers = ["load_of_mass"]
+shape = ["nrfields", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "dynamic-only mass/damping record; unused on static_2d" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+reason = "dynamic-only; unused_switch reader"
+note = "group%alfa/%beta (Rayleigh damping) are read by the same record and equally unused."
+
+[[field]]
+id = "sections.order_time"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%order_time"
+source = ["GLB.global_data.group_order_time"]
+consumers = ["modf_time_order"]
+shape = ["2", "nrfields", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "time-derivative order per field; static path uses order 0" }
+determinism = "deterministic"
+snapshot_file = "groups.json"
+reason = "dynamic-only; unused_switch reader"
+note = "modf_time_order is a no-op for order_time_mdofn=0 (Fem.f90:1917)."
+
+[[field]]
+id = "sections.btime"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%btime"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.educ"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%educ"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.ditime_1"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%ditime_1"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.ivcoh"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%ivcoh"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.ivfri"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%ivfri"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.ngvar"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%ngvar"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.cgroup"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%cgroup"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "sections.point_direct"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%point_direct"
+source = ["derived:legacy_default"]
+derived_from = ["sections.element"]
+consumers = ["STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "never assigned on the path; uninitialised derived-type component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "groups.json"
+reason = "uninitialised component; never read on static_2d"
+note = "group_of_elements component never written by global_data for Q4 groups; must not be dumped wholesale."
+
+[[field]]
+id = "derived.counts.ntcurve"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.ntcurve"
+source = ["LOA.external_load_1.curve_count"]
+consumers = ["external_load_1", "dfact_time_curve", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "= count(amplitudes); 1 on both cases; upper bound for itcurve/tcurvegravity references."
+
+[[field]]
+id = "amplitudes.points.count"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%ntime"
+source = ["LOA.external_load_1.curve_header"]
+consumers = ["dfact_time_curve", "external_load_1"]
+shape = ["ntcurve"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "amplitudes[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "= count(amplitudes[].points); 2 on both cases."
+
+[[field]]
+id = "amplitudes.type"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%type_curve"
+source = ["LOA.external_load_1.curve_header"]
+consumers = ["external_load_1", "dfact_time_curve"]
+shape = ["ntcurve"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.amplitudes[].type"
+index_by = "amplitudes[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "'LINEAR' on both cases (select case default branch Load.f90:222). char(20), compare trim()ed."
+
+[[field]]
+id = "amplitudes.nstoch_curve"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%nstoch_curve"
+source = ["LOA.external_load_1.curve_header"]
+consumers = ["external_load_1"]
+shape = ["ntcurve"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "amplitudes[].name"
+compare = { rule = "ignore", reason = "stochastic curve parameter count; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "stochastic analysis outside static_2d; 0 on both cases"
+note = "nonzero would read order_stoch_parameter (Load.f90:169); nline (4th item) only feeds lineload."
+
+[[field]]
+id = "amplitudes.points.time"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%ttime_curve"
+source = ["LOA.external_load_1.curve_points"]
+consumers = ["dfact_time_curve"]
+shape = ["ntime", "ntcurve"]
+dtype = "f64"
+unit = "s"
+owner = "ProblemState.amplitudes[].points[].time"
+index_by = "amplitudes[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "Load.f90:222 default branch; ragged per curve."
+
+[[field]]
+id = "amplitudes.points.value"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%dfact_curve"
+source = ["LOA.external_load_1.curve_points"]
+consumers = ["dfact_time_curve"]
+shape = ["ntime", "ntcurve"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.amplitudes[].points[].value"
+index_by = "amplitudes[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "Read by the untracked statement Load.f90:231 (same record group as curve_points; not a separate M1 reader). Ragged per curve."
+
+[[field]]
+id = "amplitudes.harmonic"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%a0sin"
+source = ["derived:legacy_default"]
+derived_from = ["amplitudes.type"]
+consumers = ["dfact_time_curve"]
+shape = ["ntcurve"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "amplitudes[].name"
+compare = { rule = "ignore", reason = "kind-specific pointer components (a0sin,asin,wsin,w0sin,dtrec,dtbegin,dtend,ample,time_begin,detal,fact_inc,dx,Ca,AI,omega,nalgo,ncdis,piter,giter,Nextr,NFS,order_stoch_parameter) unassociated for LINEAR" }
+determinism = "pointer"
+snapshot_file = "loads.sha256"
+reason = "unassociated for LINEAR curves (R23)"
+note = "Serializer must test associated(); representative symbol for all kind-specific pointers of time_curve."
+
+[[field]]
+id = "runtime.amplitudes.dfact"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurves%dfact"
+source = ["derived:legacy_default"]
+derived_from = ["amplitudes.type"]
+consumers = ["modf_var_prescribed", "FORCE_EXTERNAL"]
+shape = ["ntcurve"]
+dtype = "f64"
+unit = "1"
+owner = "RuntimeState.amplitudes[].factor"
+index_by = "amplitudes[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "Zeroed at Load.f90:166; first evaluated by dfact_time_curve at Fem.f90:3666, i.e. AFTER increment_ready(1,1). Exact 0 at model_ready (R24)."
+
+[[field]]
+id = "steps0.procedure"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.type_problem"
+source = ["GLB.global_data.problem_type"]
+consumers = ["process_analysis", "FEM90", "global_data"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "ProblemState.steps[0].procedure"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "'Q' (static) on both cases; dispatch at Fem.f90:1918."
+
+[[field]]
+id = "solver.linear"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.type_solver"
+source = ["GLB.global_data.problem_type"]
+consumers = ["SOLVE", "process_analysis"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "ProblemState.solver.linear"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "'PROFILE' on both cases; selects PROFILE inside solve."
+
+[[field]]
+id = "steps0.load_mode"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.type_load"
+source = ["GLB.global_data.problem_type"]
+consumers = ["RESIDU_F"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "ProblemState.steps[0].load_mode"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Residu.f90:281 guard ('LOAD2' with type_nl 4); char(50)."
+
+[[field]]
+id = "steps0.controls.nonlinear_type"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.type_nl"
+source = ["GLB.global_data.problem_type"]
+consumers = ["ALGORT"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].controls.nonlinear_type"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "5 on both cases: ALGORT sets kresl=1 at iiter 1 (Fem.f90:15451)."
+
+[[field]]
+id = "control.glb.stabpw"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.stabpw"
+source = ["GLB.global_data.problem_type"]
+consumers = ["PROFILE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "stabilised-pw switch; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "unused switch on static_2d; 0 on both cases"
+note = "problem_type items stabpw,nlayer,kglb,state_change,Bparameter,balgor,upliftin are unused switches; stabpw/nlayer registered because PROFILE SET branches on them; state_change/Bparameter registered as pinned guards (control.glb.state_change, control.glb.bparameter)."
+
+[[field]]
+id = "control.glb.nlayer"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nlayer"
+source = ["GLB.global_data.problem_type"]
+consumers = ["PROFILE", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "unused switch on static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Fem.f90:1913 and Solver.f90:7239 guards."
+
+# ---------------------------------------------------------------- pinned path guards (review M1): consumed but previously unregistered
+
+[[field]]
+id = "control.glb.block_stab"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.block_stab"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["process_analysis", "prescrib_set", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "rigid-block stability switch outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Consumed before the anchor at Fem.f90:1897 (`if(block_stab==0) call contact_pair_process`) and Prescrib.f90:161, after it at Fem.f90:1920-1924 (STATIC_U_reli / static_rigid_reli / static_rigid_1 selection) and Solver.f90 kdimn guards."
+
+[[field]]
+id = "control.glb.nbackf"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nbackf"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["process_analysis", "global_data"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "back-analysis dof count outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Fem.f90:223 (result_zero_g/e not allocated), :1877 loop bound (inside nbackdT==1, not taken), :1931 (`else if(nbackf/=0)` -> back_analysis not taken); Global.f90:1864 backf block not read."
+
+[[field]]
+id = "control.glb.ebody"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ebody"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["process_analysis", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "elastic-body flag of the rigid-block variant; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Only decides together with block_stab>=1: Fem.f90:1924 (`block_stab>=1.and.ebody==0` -> static_rigid_1), Prescrib.f90:161 (`block_stab==1.and.ebody==1`); both false because block_stab=0."
+
+[[field]]
+id = "control.glb.ninit"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ninit"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["process_analysis", "stab_initialize"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "initial-state read switch outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Fem.f90:1705 (`if(ninit/=0.and.iblks==1.and.restart==0)call read_initial` not taken, before the anchor), :245 (torel not allocated), and stab_initialize :2347 (`if(ninit/=0)stop`), which IS called at :3658 because stab_matde=0."
+
+[[field]]
+id = "control.glb.uinitial"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.uinitial"
+source = ["GLB.global_data.uinitial"]
+consumers = ["process_analysis"]
+shape = ["nblks"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "per-block result reset switch outside static_2d; uinitial(1)=0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. uinitial(iblks) consumed at Fem.f90:1707 before the anchor (`if (uinitial(iblks)==1) result_zero=0.0`; not taken). Allocated (nblks) at Global.f90:965, read at :1093 (whole block vector)."
+
+[[field]]
+id = "control.glb.state_change"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.state_change"
+source = ["GLB.global_data.problem_type"]
+consumers = ["global_data", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "phase-change (state_change_process) variant outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Prescrib.f90:64 (`if(state_change==0)` -> appear-based iffix branch; :78 elseif not taken), Global.f90:966-967/:1003 (state_change_process not allocated/read)."
+
+[[field]]
+id = "control.glb.bparameter"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.Bparameter"
+source = ["GLB.global_data.problem_type"]
+consumers = ["process_analysis", "STATIC_U", "STIFF_U", "prescrib_set", "PROFILE", "global_data"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "parameter back-analysis (xvalue) switch outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Fem.f90:1650 (before the anchor), :3588-3589 (mainunit/upliftunit not rewound), Stiff.f90:99/:104 (e, Nu taken from props, not xvalue), Prescrib.f90:181, Load.f90:141, Solver.f90:6828 (units not rewound), Global.f90:792-795/:1908 (back_ctl_unit not opened/read)."
+
+[[field]]
+id = "control.glb.stab_matde"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.stab_matde"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["STATIC_U", "stab_initialize"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "pseudo-nonlinear stability start block; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Fem.f90:3658 `if(iblks>=stab_matde)call stab_initialize`: with stab_matde=0 and iblks=1 the condition is TRUE, so stab_initialize (:2342-2376) runs every step: result_zero=0, element%field(1)%gpvar0/gpvar=0 for appearing U groups, stop if ninit/=0. A different value changes whether that reset happens."
+
+[[field]]
+id = "derived.counts.nblks"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nblks"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["process_analysis", "global_data"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= len(steps); sizes appear_process/matno_process second dimension; 1 on both cases."
+
+[[field]]
+id = "control.glb.nlinks"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nlinks"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["totv_to_eq"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "dof links outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Solver.f90 totv_to_eq link loop bound."
+
+[[field]]
+id = "solver.symmetric"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nonsym"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["PROFILE", "ESTIF_ASSEMBLE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.symmetric"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "nonsym=0 on both cases (symmetric profile, Solver.f90:7240)."
+
+[[field]]
+id = "output.control.outinp"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.outinp"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["FEM90", "STATIC_U", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "input echo switch; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control switch; 0 on both cases"
+note = "input echo switch"
+
+[[field]]
+id = "output.control.outintr"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.outintr"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["FEM90", "STATIC_U", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "restart-output block switch (Fem.f90:3660); pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control switch; 0 on both cases"
+note = "restart-output block switch (Fem.f90:3660)"
+
+[[field]]
+id = "output.control.outintw"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.outintw"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["FEM90", "STATIC_U", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "output write switch; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control switch; 0 on both cases"
+note = "output write switch"
+
+[[field]]
+id = "output.control.outind"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.outind"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["FEM90", "STATIC_U", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "displacement/acceleration output switch (Load.f90:1224, -1 enables gcomQ); pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control switch; 0 on both cases"
+note = "displacement/acceleration output switch (Load.f90:1224, -1 enables gcomQ)"
+
+[[field]]
+id = "interactions.absorbing.type"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.type_ABC"
+source = ["GLB.global_data.init_and_blocks"]
+consumers = ["prescrib_set"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "ProblemState.interactions.absorbing.type"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "'FIX' on both cases; 'MIF' would change the .pre set_header record shape (Prescrib.f90:216)."
+
+[[field]]
+id = "derived.counts.nsmat"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nsmat"
+source = ["GLB.global_data.material_class_counts"]
+consumers = ["ALGORT"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "Fem.f90:15497 stiffness-reform cadence; 0 on both cases. Other material_class_counts items are unused switches."
+
+[[field]]
+id = "steps0.load.gravity.enabled"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.NGRAV"
+source = ["GLB.global_data.material_class_counts"]
+consumers = ["external_load_2", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].load.gravity.enabled"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "1 on both cases: enables the .loa gravity records."
+
+[[field]]
+id = "derived.counts.mdofn"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.mdofn"
+source = ["GLB.global_data.mdofn"]
+consumers = ["global_data", "set_elem_dofs", "STATIC_U", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "= sum(sections[].formulation.dofs) = 2 on both cases; sizes lmdofn and toler_var."
+
+[[field]]
+id = "derived.dof.active_flags"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.lmdofn"
+source = ["GLB.global_data.lmdofn"]
+consumers = ["global_data"]
+shape = ["mdofn"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+reconstruct = "active_flags(idofn) = merge(1, 0, lmdofn(idofn) /= 0) from the condensed in-memory lmdofn (Global.f90:1119-1125 only rewrites non-zero entries, so zero/non-zero is preserved)"
+note = "Deck value: 0/1 activation flag per global dof. Overwritten in place at Global.f90:1123 (loop :1119-1125) with the condensed index (see runtime.dof.lmdofn); the flag itself is not observable at model_ready. M2-02 serialises the value given by `reconstruct`, not lmdofn itself."
+
+[[field]]
+id = "runtime.dof.lmdofn"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.lmdofn"
+source = ["derived:renumber"]
+derived_from = ["derived.dof.active_flags"]
+consumers = ["set_elem_dofs", "prescrib_set", "process_analysis"]
+shape = ["mdofn"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.lmdofn"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "In-memory value = condensed dof index (1,2 on both cases), identity because all flags are 1. Registered exact so the identity assumption behind iffix re-keying is asserted."
+
+[[field]]
+id = "derived.dof.cdofn"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.cdofn"
+source = ["derived:count"]
+derived_from = ["derived.dof.active_flags"]
+consumers = ["set_elem_dofs", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "= count(lmdofn/=0) (Global.f90:1119-1125) = 2."
+
+[[field]]
+id = "derived.dof.lcdofn"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.lcdofn"
+source = ["derived:index_map"]
+derived_from = ["derived.dof.active_flags"]
+consumers = ["set_elem_dofs"]
+shape = ["mdofn"]
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "condensed -> global dof map. Allocated lcdofn(mdofn) at Global.f90:954 and only entries 1:cdofn are assigned (:1124); entries cdofn+1:mdofn are UNINITIALISED. Compare exact over lcdofn(1:cdofn) only (serializer truncates to cdofn); chosen over ignore because the map is what set_elem_dofs consumes and cdofn=mdofn on both cases makes the truncation empty."
+
+[[field]]
+id = "runtime.increment.iblks_at_model"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.iblks"
+source = ["derived:count"]
+derived_from = ["derived.counts.nblks", "control.run.restart"]
+consumers = ["process_analysis", "prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.increment.iblks"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "current block = 1 inside the block loop `do iblks=lblks+1,runblks` (Fem.f90:1683); consumed before the anchor at :1705-1707 and :1716-1720 (appear/matno columns) and by prescrib_set. Same symbol re-registered at increment_ready(1,1) as runtime.increment.iblks."
+
+[[field]]
+id = "runtime.increment.lblks_at_model"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.lblks"
+source = ["derived:count"]
+derived_from = ["derived.counts.nblks", "control.run.restart"]
+consumers = ["process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.increment.lblks"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "blocks completed before restart = 0 (Fem.f90:278-280, restart=0); loop lower bound at :1683. Same symbol re-registered at increment_ready(1,1) as runtime.increment.lblks."
+
+[[field]]
+id = "steps0.activation.active"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.appear_process"
+source = ["GLB.global_data.appear_process"]
+consumers = ["process_analysis"]
+shape = ["ngroup", "nblks1"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].activation[].active"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "appear_process(1:ngroup,0:nblks) (Global.f90:964); shape nblks1 covers columns 0..nblks. Column 0 is the initial state, zeroed at Global.f90:968 and CONSUMED at Fem.f90:1719-1720 (`appear_process(igroup,iblks-1)==1` with iblks=1 -> a group disappearing in block 1 gets appear=-1); it is therefore part of the compared value. YL iblks=1 maps to steps[0]."
+
+[[field]]
+id = "steps0.activation.material"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.matno_process"
+source = ["GLB.global_data.matno_process"]
+consumers = ["process_analysis"]
+shape = ["ngroup", "nblks"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].activation[].material"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Per-block material override; copied into group%matno at Fem.f90:1717. Reader targets sections[].material; owner kept under steps[0] because it is per block."
+
+[[field]]
+id = "runtime.activation.appear"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.appear"
+source = ["derived:index_map"]
+derived_from = ["steps0.activation.active"]
+consumers = ["prescrib_set", "PROFILE", "STIFF_U", "gravity"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.activation.appear"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "= appear_process(igroup,1), or -1 when a group disappears in this block (Fem.f90:1714-1721)."
+
+[[field]]
+id = "steps0.output.stress_averaging"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.average_appear"
+source = ["GLB.global_data.average_appear"]
+consumers = ["average_aera"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.stress_averaging"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Output.f90:5099; 0 on both cases."
+
+[[field]]
+id = "steps0.output.field.gid_u"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_u"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.u"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_s"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_s"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.s"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_ms"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_ms"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.ms"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_f"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_f"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.f"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_rot"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_rot"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.rot"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_v"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_v"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.v"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_a"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_a"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.a"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_T"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_T"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.T"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_P"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_P"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.P"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_Pv"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_Pv"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.Pv"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_ep"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_ep"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.ep"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_Y"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_Y"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.Y"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_FC"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_FC"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.FC"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_Ns"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_Ns"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.Ns"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_Ss"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_Ss"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.Ss"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_Mxy"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_Mxy"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.Mxy"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_bem"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_bem"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.bem"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_wh"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_wh"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.wh"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_wv"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_wv"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.wv"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "steps0.output.field.gid_bcs"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.gid_bcs"
+source = ["GLB.global_data.gid_flags"]
+consumers = ["OUT_GID_WRITE", "gid_output_parameter"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.field.bcs"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "GiD result-write flag (one .glb record of 20 ints, Global.f90:1027)."
+
+[[field]]
+id = "output.res.res_u"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_u"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_s"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_s"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_ms"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_ms"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_f"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_f"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_rot"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_rot"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_v"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_v"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_a"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_a"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_T"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_T"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_P"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_P"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_Pv"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_Pv"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_ep"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_ep"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_Y"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_Y"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_FC"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_FC"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_Ns"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_Ns"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_Ss"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_Ss"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_Tv"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_Tv"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.res.res_Pa"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.res_Pa"
+source = ["GLB.global_data.res_flags"]
+consumers = ["OUT_record_WRITE", "OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "record-output flag; all 0 on both cases" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flags; 0 on both cases"
+note = "One .glb record of 17 ints (Global.f90:1032); output_control target."
+
+[[field]]
+id = "output.recover.irecover"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.irecover"
+source = ["OPR.output_read.output_control"]
+consumers = ["OUT_FULL_WRITE", "RECOVER"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "recovery/output-mode flag; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flag; 0 on both cases"
+note = "Output.f90:138 branch. Same record reads wpgroup (global_var) and wegroup/wggroup/wjgroup (output_read locals, never stored)."
+
+[[field]]
+id = "output.recover.wpgroup"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.wpgroup"
+source = ["OPR.output_read.output_control"]
+consumers = ["OUT_FULL_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "water-pipe output group; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "output_control flag; 0 on both cases"
+note = "OPR record item 2; 0 on both cases."
+
+[[field]]
+id = "control.mat.comment_lines"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.text"
+source = ["MAT.material_set.comment_line_count"]
+consumers = ["material_set"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "nline comment records are read into the shared text scratch and discarded" }
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "comment block; no state"
+note = "nline is a material_set local read at Material.f90:261; the following nline records are read into global_var.text at :264 (loop :263) and carry no state."
+
+[[field]]
+id = "derived.counts.nfixsets"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.nfixsets"
+source = ["PRE.prescrib_set.set_count"]
+consumers = ["prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "= count(steps[0].boundary); 2 on both cases. nline (2nd item) feeds lineload only."
+
+[[field]]
+id = "derived.counts.ndofix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.ndofix"
+source = ["derived:count"]
+derived_from = ["steps0.boundary.nodes", "steps0.boundary.dof", "runtime.dof.nodfn"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "Prescrib.f90:257: one prescrib record per (set,node) whose nodfn(lmdofn(ifixvar),node)/=0; nodes with nodfn==0 are skipped (:256). 34 / 18 on cooks_membrane / lame_cylinder."
+
+[[field]]
+id = "steps0.boundary.set"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%ifixset"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["prescrib_set", "modf_var_prescribed"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].boundary[].name"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "Set ordinal (1..nfixsets) of each prescrib record; records are ordered set x node (Prescrib.f90:216,253) and must be compared keyed by (ifixset,nodfix,ifixvar)."
+
+[[field]]
+id = "steps0.boundary.dof"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%ifixvar"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["prescrib_set", "modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].boundary[].dof"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "Global dof 1..mdofn constrained by the set (diag_range). set_header also reads tfixvar (-> iffix code), gamawx and nextr (locals; 0 on both cases)."
+
+[[field]]
+id = "steps0.boundary.amplitude"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%itcurve"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["modf_var_prescribed", "dfact_time_curve"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].boundary[].amplitude"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "0 = constant (no curve) on both cases; otherwise 1..ntcurve (diag_ref)."
+
+[[field]]
+id = "steps0.boundary.nodes"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%nodfix"
+source = ["PRE.prescrib_set.set_header", "PRE.prescrib_set.set_nodes"]
+consumers = ["prescrib_set", "modf_var_prescribed"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].boundary[].nset"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "Node of each prescrib record (= list_fix(ifixnods), Prescrib.f90:275); ragged per set, serializer writes one ordered list per set. nfixnods comes from set_header. S03 alternative target P-BC."
+
+[[field]]
+id = "steps0.boundary.value"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%vdofix"
+source = ["PRE.prescrib_set.set_values"]
+consumers = ["modf_var_prescribed"]
+shape = ["ndofix"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.steps[0].boundary[].value"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "= val_fix(ifixnods); the effective prescribed displacement (fixed = dfact*vdofix at Fem.f90:12350 only after increment_ready). All 0 on both cases. S03 target P-BC."
+
+[[field]]
+id = "steps0.boundary.time_order"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib_set.tfixvar"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["prescrib_set"]
+shape = ["nfixsets"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+reason = "time order of the prescribed value (0=u, 1=v, 2=a); 0 on every set of both cases, so the iffix code is always 1"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Routine-local of prescrib_set (Prescrib.f90:44), item 4 of the set header (:220); it is not stored in any module array but lands in runtime.dof.iffix as `iffix(idofn)=tfixvar+1` (:258). Serialise as one value per set (nfixsets) captured from the header records; gamawx (real, :48) and outfix/jfixvar are the other header locals."
+
+[[field]]
+id = "steps0.boundary.nextr"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib_set.nextr"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["prescrib_set"]
+shape = ["nfixsets"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+reason = "extrapolation-record count outside static_2d; 0 on every set of both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Item 8 of the set header (Prescrib.f90:220); nextr/=0 would read one extra record per constrained dof (:261-268) and allocate prescrib%listep/value_ext (left unassociated, M2-01 §6)."
+
+[[field]]
+id = "steps0.boundary.record_reaction"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%outfix"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].boundary[].record_reaction"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "1 on both cases (reaction output requested)."
+
+[[field]]
+id = "steps0.boundary.jfixvar"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%jfixvar"
+source = ["PRE.prescrib_set.set_header"]
+consumers = ["modf_var_prescribed"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "ignore", reason = "water-head / temperature-zone selector; pinned 0" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+reason = "thermal/water-head variant outside static_2d; 0 on both cases"
+note = "Fem.f90:12343 branch (jfixvar/=0 uses temp_surface)."
+
+[[field]]
+id = "steps0.boundary.ifixvar0"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%ifixvar0"
+source = ["derived:legacy_default"]
+derived_from = ["steps0.boundary.dof"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "ignore", reason = "uninitialised freedom_prescribe component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "constraints.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "copied from a prescrib_set local that is only assigned for type_abc=='MIF' (Prescrib.f90:274); must not be dumped wholesale."
+
+[[field]]
+id = "steps0.boundary.rdofix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%rdofix"
+source = ["derived:legacy_default"]
+derived_from = ["steps0.boundary.dof"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "f64"
+unit = "N"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "ignore", reason = "uninitialised freedom_prescribe component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "constraints.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "reaction slot, never assigned before output; must not be dumped wholesale."
+
+[[field]]
+id = "steps0.boundary.bfrecoord"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%bfrecoord"
+source = ["derived:legacy_default"]
+derived_from = ["steps0.boundary.dof"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "f64"
+unit = "m"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "ignore", reason = "uninitialised freedom_prescribe component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "constraints.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "MIF free-surface coordinate, assigned only when ntrans>0; must not be dumped wholesale."
+
+[[field]]
+id = "steps0.boundary.gamaw"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%gamaw"
+source = ["derived:legacy_default"]
+derived_from = ["steps0.boundary.dof"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "ignore", reason = "uninitialised freedom_prescribe component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "constraints.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "water unit weight for head sets, never assigned on this path; must not be dumped wholesale."
+
+[[field]]
+id = "steps0.boundary.mfixset"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%mfixset"
+source = ["derived:legacy_default"]
+derived_from = ["steps0.boundary.dof"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "ignore", reason = "uninitialised freedom_prescribe component (R23)" }
+determinism = "uninitialized"
+snapshot_file = "constraints.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "temperature interpolation set, never assigned; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.boundary.ldofix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%ldofix"
+source = ["derived:dof_expand"]
+derived_from = ["steps0.boundary.nodes", "steps0.boundary.dof", "runtime.dof.nodfn"]
+consumers = ["modf_var_prescribed", "REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.boundary.dof_index"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "= nodfn(lmdofn(ifixvar),nodfix) (Prescrib.f90:255); index into fixed/iffix. Compare by re-keying through nodfn (Q1)."
+
+[[field]]
+id = "runtime.boundary.lnefix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%lnefix"
+source = ["derived:dof_expand"]
+derived_from = ["steps0.boundary.nodes", "mesh.elements.nodes", "sections.dof_list"]
+consumers = ["REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.boundary.element_count"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Elements attached to the constrained node carrying that dof (Prescrib.f90:310-322)."
+
+[[field]]
+id = "runtime.boundary.leldofix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%leldofix"
+source = ["derived:dof_expand"]
+derived_from = ["runtime.boundary.lnefix", "mesh.elements.nodes"]
+consumers = ["REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.boundary.leldofix"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "dof.sha256"
+note = "element number per attached element (Prescrib.f90:360); ragged (lnefix per record), order = group x unode list order."
+
+[[field]]
+id = "runtime.boundary.levdofix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%levdofix"
+source = ["derived:dof_expand"]
+derived_from = ["runtime.boundary.lnefix", "mesh.elements.nodes"]
+consumers = ["REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.boundary.levdofix"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "dof.sha256"
+note = "local dof position (inode-1)*ndofn+idofn per attached element (:361); ragged (lnefix per record), order = group x unode list order."
+
+[[field]]
+id = "runtime.boundary.lefdofix"
+checkpoint = "model_ready"
+legacy_symbol = "prescribed.prescrib%lefdofix"
+source = ["derived:dof_expand"]
+derived_from = ["runtime.boundary.lnefix", "mesh.elements.nodes"]
+consumers = ["REACTION_PRESCRIBED"]
+shape = ["ndofix"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.boundary.lefdofix"
+index_by = "steps[0].boundary[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "dof.sha256"
+note = "field index per attached element (:362); ragged (lnefix per record), order = group x unode list order."
+
+[[field]]
+id = "runtime.dof.iffix"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.iffix"
+source = ["derived:dof_expand"]
+derived_from = ["steps0.boundary.nodes", "steps0.boundary.dof", "runtime.dof.nodfn", "runtime.activation.appear"]
+consumers = ["totv_to_eq", "PREDICT", "prescrib_set"]
+shape = ["ntotv"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.fixed_mask"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "0 free / 1 prescribed (tfixvar+1, Prescrib.f90:258) / 5 inactive (:62-72). Serialised re-keyed as (node_id,dof_id)->value through nodfn so the comparison is numbering-independent (Q1)."
+
+[[field]]
+id = "runtime.dof.fixed"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.fixed"
+source = ["derived:dof_expand"]
+derived_from = ["steps0.boundary.value", "runtime.amplitudes.dfact", "runtime.boundary.ldofix"]
+consumers = ["ESTIF_ASSEMBLE", "PREDICT", "modf_var_prescribed"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.dof.prescribed_value"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Allocated and zeroed at Prescrib.f90:63; filled with dfact*vdofix only by modf_var_prescribed at Fem.f90:3667. Exact all-zero at model_ready; re-keyed like iffix."
+
+[[field]]
+id = "control.glb.ntrans"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ntrans"
+source = ["GLB.global_data.transform_and_mif"]
+consumers = ["prescrib_set"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+reason = "MIF outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. ntrans>0 would add a frecoord record to each .pre set (Prescrib.f90:243)."
+
+[[field]]
+id = "steps0.load.gravity.magnitude"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.gravy"
+source = ["LOA.external_load_2.gravity"]
+consumers = ["gravity"]
+shape = []
+dtype = "f64"
+unit = "m/s2"
+owner = "ProblemState.steps[0].load.gravity.magnitude"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "Load.f90:1268 gcom=factg*gravy*tdensity*thick; 9.81 on both cases. S03 target P-G."
+
+[[field]]
+id = "steps0.load.gravity.direction"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.factg"
+source = ["LOA.external_load_2.gravity"]
+consumers = ["gravity"]
+shape = ["ndimn"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.steps[0].load.gravity.direction"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "(0,-1) on both cases; dimensionless direction factors."
+
+[[field]]
+id = "steps0.load.gravity.fluid_direction"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.factf"
+source = ["LOA.external_load_2.gravity"]
+consumers = ["LOADFL"]
+shape = ["ndimn"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "consumed only by the fluid load path (Load.f90:1708 LOADFL); not on static_2d" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "fluid-phase gravity factor; no consumer on static_2d"
+note = "Read in the same record as gravy/factg; (0,-1) on both cases. consumed=false on the path."
+
+[[field]]
+id = "steps0.load.gravity.amplitude"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.tcurvegravity"
+source = ["LOA.external_load_2.gravity_curves"]
+consumers = ["gravity", "FORCE_EXTERNAL"]
+shape = ["ngroup"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.gravity.amplitude"
+index_by = "sections[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "Curve id per group (0 = no gravity in that group, Load.f90:1196); 1 on both cases. The preceding gravity_curve_title record's nline only feeds lineload."
+
+[[field]]
+id = "derived.counts.nplgroup"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.nplgroup"
+source = ["LOA.external_load_1.point_load_count"]
+consumers = ["external_load_1", "external_load_2", "FORCE_EXTERNAL", "STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of point-load groups; pinned 0 on both cases (empty_section reader)."
+
+[[field]]
+id = "derived.counts.nedge"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.nedge"
+source = ["LOA.external_load_1.edge_count"]
+consumers = ["external_load_1", "external_load_2", "FORCE_EXTERNAL", "STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of loaded edges; pinned 0 on both cases (empty_section reader)."
+
+[[field]]
+id = "derived.counts.edge_load_group"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edge_load_group"
+source = ["LOA.external_load_2.edge_load_groups"]
+consumers = ["external_load_1", "external_load_2", "FORCE_EXTERNAL", "STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of edge-load groups; pinned 0 on both cases (empty_section reader)."
+
+[[field]]
+id = "derived.counts.delgroup"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.delgroup"
+source = ["LOA.external_load_2.edge_load_groups"]
+consumers = ["external_load_1", "external_load_2", "FORCE_EXTERNAL", "STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of water-pressure groups (STATIC_U cwater guard); pinned 0 on both cases (empty_section reader)."
+
+[[field]]
+id = "derived.counts.nbeamload"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.nbeamload"
+source = ["LOA.external_load_2.beam_load_count"]
+consumers = ["external_load_1", "external_load_2", "FORCE_EXTERNAL", "STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of beam-load groups; pinned 0 on both cases (empty_section reader)."
+
+[[field]]
+id = "derived.counts.nplateload"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.nplateload"
+source = ["LOA.external_load_2.plate_load_count"]
+consumers = ["external_load_1", "external_load_2", "FORCE_EXTERNAL", "STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of plate-load groups; pinned 0 on both cases (empty_section reader)."
+
+[[field]]
+id = "derived.counts.ntemp_surface"
+checkpoint = "model_ready"
+legacy_symbol = "temperature.ntemp_surface"
+source = ["TEM.boundt.temp_surface_count"]
+consumers = ["boundt"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of temperature surfaces; pinned 0 on both cases (empty_section reader; .tem is read inside block 1, Fem.f90:1899)."
+
+[[field]]
+id = "derived.counts.ntedge"
+checkpoint = "model_ready"
+legacy_symbol = "temperature.ntedge"
+source = ["TEM.boundt.temp_edge_count"]
+consumers = ["boundt"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of temperature edges; pinned 0 on both cases (empty_section reader; .tem is read inside block 1, Fem.f90:1899)."
+
+[[field]]
+id = "derived.counts.ntelgroup"
+checkpoint = "model_ready"
+legacy_symbol = "temperature.ntelgroup"
+source = ["TEM.boundt.temp_elgroup_count"]
+consumers = ["boundt"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of temperature element groups; pinned 0 on both cases (empty_section reader; .tem is read inside block 1, Fem.f90:1899)."
+
+[[field]]
+id = "derived.counts.npipe"
+checkpoint = "model_ready"
+legacy_symbol = "temperature.npipe"
+source = ["TEM.boundt.pipe_count"]
+consumers = ["boundt"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "derived"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "count of cooling pipes (algo_pipe read with it); pinned 0 on both cases (empty_section reader; .tem is read inside block 1, Fem.f90:1899)."
+
+[[field]]
+id = "runtime.dof.nodfn"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.nodfn"
+source = ["derived:renumber"]
+derived_from = ["mesh.elements.nodes", "sections.dof_list", "runtime.dof.lmdofn"]
+consumers = ["set_elem_dofs", "prescrib_set", "totv_to_eq", "STIFF_U"]
+shape = ["cdofn", "npoin"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.nodfn"
+index_by = "component"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Global.f90:2096-2156: first marked 1 per (dof,node) touched by an element field, then renumbered in place to the running totv number (node-major). dof.sha256 of docs/01 section 5."
+
+[[field]]
+id = "runtime.dof.ntotv"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.ntotv"
+source = ["derived:count"]
+derived_from = ["runtime.dof.nodfn"]
+consumers = ["set_elem_dofs", "prescrib_set", "totv_to_eq", "FEM90"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.ntotv"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "= max(nodfn) (Global.f90:2147-2156); sizes every totv-indexed vector."
+
+[[field]]
+id = "runtime.dof.ldofs"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%ldofs"
+source = ["derived:dof_expand"]
+derived_from = ["runtime.dof.nodfn", "mesh.elements.nodes", "sections.dof_list"]
+consumers = ["STIFF_U", "ESTIF_ASSEMBLE", "PROFILE"]
+shape = ["nevab", "nelem"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.ldofs"
+index_by = "mesh.elements[].id"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Global.f90:2161-2199 element dof list (nevab=8 for Q4)."
+
+[[field]]
+id = "runtime.dof.ldofs_f"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%field%ldofs_f"
+source = ["derived:dof_expand"]
+derived_from = ["runtime.dof.ldofs"]
+consumers = ["STIFF_U", "gravity", "FORCE_INTERNAL"]
+shape = ["nevab", "nelem"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.ldofs_f"
+index_by = "mesh.elements[].id"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Per-field copy of ldofs (single field on the path)."
+
+[[field]]
+id = "runtime.dof.trans_nintf"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.trans%nintf"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["totv_to_eq"]
+shape = ["ntotv"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.dof.interpolation_count"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Allocated Global.f90:1488 and zeroed (:1489); no .nrt interpolation on the path. trans%listf/%rintf stay unassociated (pointer; not registered, R23)."
+
+[[field]]
+id = "runtime.topology.listp_group_mgroup"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.listp_group%mgroup"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["npoin"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.listp_group.mgroup"
+index_by = "mesh.nodes[].id"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "number of groups touching each node (Global.f90:1370-1475); pure function of mesh and group order."
+
+[[field]]
+id = "runtime.topology.listp_group_listg"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.listp_group%listg"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["npoin"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.listp_group.listg"
+index_by = "mesh.nodes[].id"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "group ids per node (ragged) (Global.f90:1370-1475); pure function of mesh and group order."
+
+[[field]]
+id = "runtime.topology.listp_group_listp"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.listp_group%listp"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["npoin"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.listp_group.listp"
+index_by = "mesh.nodes[].id"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "node position inside group%unode per group (ragged) (Global.f90:1370-1475); pure function of mesh and group order."
+
+[[field]]
+id = "runtime.topology.unode_ipoin"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%unode%ipoin"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["np_unode", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.unode.ipoin"
+index_by = "sections[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "global node id of the group-local node (Global.f90:1370-1475); order = group x node loop."
+
+[[field]]
+id = "runtime.topology.unode_ne_unode"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%unode%ne_unode"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["np_unode", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.unode.ne_unode"
+index_by = "sections[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "number of group elements attached to the node (Global.f90:1370-1475); order = group x node loop."
+
+[[field]]
+id = "runtime.topology.unode_list"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%unode%list"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["np_unode", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.unode.list"
+index_by = "sections[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "attached element ids (ragged) (Global.f90:1370-1475); order = group x node loop."
+
+[[field]]
+id = "runtime.topology.unode_np_unode"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%unode%np_unode"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["np_unode", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.unode.np_unode"
+index_by = "sections[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "patch node count (Global.f90:1370-1475); order = group x node loop."
+
+[[field]]
+id = "runtime.topology.unode_patch_nod"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.group%unode%patch_nod"
+source = ["derived:index_map"]
+derived_from = ["mesh.elements.nodes", "sections.elset_size"]
+consumers = ["prescrib_set", "average_aera"]
+shape = ["np_unode", "ngroup"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.topology.unode.patch_nod"
+index_by = "sections[].name"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "order_dependent"
+snapshot_file = "mesh.sha256"
+note = "patch node ids (ragged) (Global.f90:1370-1475); order = group x node loop."
+
+[[field]]
+id = "runtime.gauss.djacb"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%egaus%djacb"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
+consumers = ["STIFF_U", "gravity", "RESIDU_F"]
+shape = ["ngaus", "nelem"]
+dtype = "f64"
+unit = "1"
+owner = "RuntimeState.gauss.djacb"
+index_by = "mesh.elements[].id"
+compare = { rule = "abs_tol", atol = 1e-14, rtol = 1e-12, basis = "same coordinates and the same Q4 Gauss tables; bitwise exact on a repeat run of the legacy binary, tolerance only against the modern evaluation" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "egaus(1) only (ikg=1 'stiff' rule, 4 points; Elements.f90:379-380). Stored value is djacb*weigp (Elements.f90:1363: `element(ielem)%egaus(ikg)%djacb(ig)=djacb*weigp`), i.e. the weighted Jacobian determinant, not the bare determinant; the AX branch :1361 is not taken (name='Q4'). egaus(2) is the separate row runtime.gauss.djacb_mass. Physical dimension m^2 is outside the closed unit set; recorded dimensionless."
+
+[[field]]
+id = "runtime.gauss.gpcod"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%egaus%gpcod"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
+consumers = ["gravity", "OUT_GID_WRITE"]
+shape = ["ndimn", "ngaus", "nelem"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.gauss.gpcod"
+index_by = "mesh.elements[].id"
+compare = { rule = "abs_tol", atol = 1e-14, rtol = 1e-12, basis = "same coordinates and shape functions; bitwise exact on a repeat run" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "egaus(1) only (ikg=1 'stiff' rule, 4 points). Gauss-point coordinates (Elements.f90:1229-1230 allocation, filled in the ig loop ending :1365). egaus(2) is the separate row runtime.gauss.gpcod_mass."
+
+[[field]]
+id = "runtime.gauss.cartd"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%egaus%cartd"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["ndimn", "nnode", "ngaus", "nelem"]
+dtype = "f64"
+unit = "1"
+owner = "RuntimeState.gauss.cartd"
+index_by = "mesh.elements[].id"
+compare = { rule = "abs_tol", atol = 1e-14, rtol = 1e-12, basis = "same coordinates and shape-function derivatives; bitwise exact on a repeat run" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "egaus(1) only: cartd is allocated only for rules whose name is not 'mass' (Elements.f90:1232) and stored at :1359, so egaus(2)%cartd is UNALLOCATED and must not be dereferenced (associated() guard, see M2-01 §6). Physical dimension 1/m outside the closed unit set, recorded dimensionless."
+
+[[field]]
+id = "runtime.gauss.djacb_mass"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%egaus%djacb"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
+consumers = ["read_element"]
+shape = ["ngaus_mass", "nelem"]
+dtype = "f64"
+unit = "1"
+owner = "RuntimeState.gauss.djacb_mass"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "egaus(2) 'mass' rule (16 points) is computed by read_element but never consumed on static_2d: q4 order_intrules=(/1,1/) (Elements.f90:377) routes every consumer to egaus(1)" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "Weighted determinant djacb*weigp of the ikg=2 rule (Elements.f90:1363). Deterministic (same coordinates and Gauss tables as ikg=1) but unobserved; ignored rather than compared so the modern side need not evaluate a rule it does not use."
+
+[[field]]
+id = "runtime.gauss.gpcod_mass"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%egaus%gpcod"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
+consumers = ["read_element"]
+shape = ["ndimn", "ngaus_mass", "nelem"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.gauss.gpcod_mass"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "egaus(2) 'mass' rule (16 points) is computed by read_element but never consumed on static_2d: q4 order_intrules=(/1,1/) (Elements.f90:377) routes every consumer to egaus(1)" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "Gauss-point coordinates of the ikg=2 rule. egaus(2)%cartd is not allocated (Elements.f90:1232), so no cartd_mass row exists."
+
+[[field]]
+id = "runtime.element.elcod_f"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%field%elcod_f"
+source = ["derived:index_map"]
+derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes"]
+consumers = ["STIFF_U"]
+shape = ["ndimn", "nnode", "nelem"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.element.elcod_f"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "redundant copy of coord(:,lnods) made at Elements.f90:1212; mesh.nodes.xyz already compared" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "Element-local coordinate copy."
+
+[[field]]
+id = "runtime.element.tload"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%field%tload"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ldofs"]
+consumers = ["gravity", "FORCE_EXTERNAL", "ESTIF_ASSEMBLE"]
+shape = ["nevab", "nelem"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.element.tload"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)" }
+determinism = "uninitialized"
+snapshot_file = "dof.sha256"
+note = "total element load; not initialised at any covered checkpoint."
+
+[[field]]
+id = "runtime.element.eload"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%field%eload"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ldofs"]
+consumers = ["gravity", "FORCE_EXTERNAL", "ESTIF_ASSEMBLE"]
+shape = ["nevab", "nelem"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.element.eload"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)" }
+determinism = "uninitialized"
+snapshot_file = "dof.sha256"
+note = "external element load; not initialised at any covered checkpoint."
+
+[[field]]
+id = "runtime.element.rload"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%field%rload"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ldofs"]
+consumers = ["gravity", "FORCE_EXTERNAL", "ESTIF_ASSEMBLE"]
+shape = ["nevab", "nelem"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.element.rload"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)" }
+determinism = "uninitialized"
+snapshot_file = "dof.sha256"
+note = "body-force load; zeroed only inside gravity at Load.f90:1237, i.e. after increment_ready(1,1); not initialised at any covered checkpoint."
+
+[[field]]
+id = "runtime.element.jblks"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%jblks"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "uninitialised element_lib component (Elements.f90:94-119); never assigned on the path (R23)" }
+determinism = "uninitialized"
+snapshot_file = "mesh.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "Level-set / contact bookkeeping component; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.element.ktotg"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%ktotg"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "uninitialised element_lib component (Elements.f90:94-119); never assigned on the path (R23)" }
+determinism = "uninitialized"
+snapshot_file = "mesh.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "Level-set / contact bookkeeping component; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.element.icbound"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%icbound"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "uninitialised element_lib component (Elements.f90:94-119); never assigned on the path (R23)" }
+determinism = "uninitialized"
+snapshot_file = "mesh.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "Level-set / contact bookkeeping component; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.element.neqcy"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%neqcy"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "uninitialised element_lib component (Elements.f90:94-119); never assigned on the path (R23)" }
+determinism = "uninitialized"
+snapshot_file = "mesh.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "Level-set / contact bookkeeping component; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.element.area"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%area"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "uninitialised element_lib component (Elements.f90:94-119); never assigned on the path (R23)" }
+determinism = "uninitialized"
+snapshot_file = "mesh.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "Level-set / contact bookkeeping component; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.element.minedge"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%minedge"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["read_element"]
+shape = ["nelem"]
+dtype = "f64"
+unit = "m"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "uninitialised element_lib component (Elements.f90:94-119); never assigned on the path (R23)" }
+determinism = "uninitialized"
+snapshot_file = "mesh.sha256"
+reason = "uninitialised component; not consumed on static_2d"
+note = "Level-set / contact bookkeeping component; must not be dumped wholesale."
+
+[[field]]
+id = "runtime.element.estif"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.element%estif"
+source = ["derived:legacy_default"]
+derived_from = ["mesh.elements.id"]
+consumers = ["ESTIF_ASSEMBLE"]
+shape = ["nevab", "nevab", "nelem"]
+dtype = "f64"
+unit = "N"
+owner = "not_migrated"
+index_by = "mesh.elements[].id"
+compare = { rule = "ignore", reason = "unassociated pointer at model_ready (element stiffness is allocated at assembly); alfa/stres0/gmatx likewise" }
+determinism = "pointer"
+snapshot_file = "mesh.sha256"
+reason = "unassociated at every covered checkpoint (R23)"
+note = "Representative for element%estif/%alfa/%stres0/%gmatx: serializer must test associated()."
+
+[[field]]
+id = "runtime.vectors.result_zero"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.result_zero"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["PREDICT", "STIFF_U", "OUT_GID_WRITE"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.vectors.result_zero"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "Allocated and zeroed at Fem.f90:219 (total displacement). Exact all-zero at every covered checkpoint; re-keyed through nodfn."
+
+[[field]]
+id = "runtime.vectors.tofor"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.tofor"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["FORCE_EXTERNAL", "FORCE_INTERNAL", "conver_load"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.vectors.tofor"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "total external force (Fem.f90:243); exact all-zero at every covered checkpoint."
+
+[[field]]
+id = "runtime.vectors.stfor"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.stfor"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["FORCE_EXTERNAL", "FORCE_INTERNAL", "conver_load"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.vectors.stfor"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "internal force (Fem.f90:243); exact all-zero at every covered checkpoint."
+
+[[field]]
+id = "runtime.vectors.toforl"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.toforl"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["FORCE_EXTERNAL", "FORCE_INTERNAL", "conver_load"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.vectors.toforl"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "load-only external force (:243); exact all-zero at every covered checkpoint."
+
+[[field]]
+id = "runtime.vectors.toform"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.toform"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["FORCE_EXTERNAL", "FORCE_INTERNAL", "conver_load"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.vectors.toform"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "dof.sha256"
+note = "mass-related external force (:243); exact all-zero at every covered checkpoint."
+
+[[field]]
+id = "runtime.vectors.delitfi"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.delitfi"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["PREDICT", "conver_load"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.vectors.delitfi"
+index_by = "component"
+compare = { rule = "ignore", reason = "allocated at Fem.f90:246 without initialisation; first assigned at Fem.f90:3693/3716 (R23)" }
+determinism = "uninitialized"
+snapshot_file = "dof.sha256"
+note = "Iteration / increment displacement work vector."
+
+[[field]]
+id = "runtime.vectors.deltafi"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.deltafi"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.dof.ntotv"]
+consumers = ["PREDICT", "conver_load"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.vectors.deltafi"
+index_by = "component"
+compare = { rule = "ignore", reason = "allocated at Fem.f90:246 without initialisation; first assigned at Fem.f90:3693/3716 (R23)" }
+determinism = "uninitialized"
+snapshot_file = "dof.sha256"
+note = "Iteration / increment displacement work vector."
+
+[[field]]
+id = "runtime.element.ice0"
+checkpoint = "model_ready"
+legacy_symbol = "meshfine.ice0"
+source = ["derived:legacy_default"]
+derived_from = ["derived.counts.nelem"]
+consumers = ["gravity", "STIFF_U"]
+shape = ["nelem"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.element.ice0"
+index_by = "mesh.elements[].id"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "mesh.sha256"
+note = "Refined-element skip flag, allocated and zeroed at Fem.f90:260; Load.f90:1235 guard. Exact all-zero."
+
+[[field]]
+id = "runtime.cursor.lineload"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.lineload"
+source = ["PRE.prescrib_set.set_count", "LOA.external_load_1.curve_header"]
+derived_from = ["derived.counts.nfixsets", "derived.counts.ntcurve"]
+consumers = ["external_load_1", "external_load_2", "prescrib_set", "RESTA_READ_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.cursor.lineload"
+index_by = "component"
+compare = { rule = "ignore", reason = "restart cursor bookkeeping (runtime_only): counts .loa lines consumed, fed by the nline items of set_count / curve_header / gravity_curve_title" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "Stored per block as line_load_block(iblks) at Fem.f90:1903."
+
+[[field]]
+id = "runtime.cursor.line_load_block"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.line_load_block"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.cursor.lineload"]
+consumers = ["RESTA_READ_WRITE"]
+shape = ["nblks"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.cursor.line_load_block"
+index_by = "component"
+compare = { rule = "ignore", reason = "runtime_only cursor bookkeeping (Fem.f90:1903)" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "Per-block .loa line cursor for restart re-reads."
+
+[[field]]
+id = "runtime.cursor.linet"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.linet"
+source = ["derived:legacy_default"]
+derived_from = ["derived.counts.ntemp_surface"]
+consumers = ["boundt", "RESTA_READ_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.cursor.linet"
+index_by = "component"
+compare = { rule = "ignore", reason = "runtime_only .tem line cursor" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "Stored per block as line_temp_block(iblks) at Fem.f90:1904."
+
+[[field]]
+id = "runtime.cursor.line_temp_block"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.line_temp_block"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.cursor.linet"]
+consumers = ["RESTA_READ_WRITE"]
+shape = ["nblks"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.cursor.line_temp_block"
+index_by = "component"
+compare = { rule = "ignore", reason = "runtime_only cursor bookkeeping (Fem.f90:1904)" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "Per-block .tem line cursor."
+
+
+# ---------------------------------------------------------------- fields @ phase_ready(1)
+
+[[field]]
+id = "steps0.controls.increments"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "global_var.nincs"
+source = ["MAN.STATIC_U.nincs"]
+consumers = ["STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].controls.increments"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Fem.f90:3594; increment loop bound (do iincs=lincs+1,nincs at :3622). 1 on both cases. Extra items cdtest/earthquake_curve on the record are dropped by the list-directed read."
+
+[[field]]
+id = "runtime.increment.lincs"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "global_var.lincs"
+source = ["derived:legacy_default"]
+derived_from = ["control.run.restart"]
+consumers = ["STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.increment.lincs"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Increments already done before restart; 0 (Fem.f90:280) so the dead loop at :3603-3617 does not execute."
+
+[[field]]
+id = "solver.profile.iafile"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.iafile"
+source = ["SOL.PROFILE.profile_control"]
+consumers = ["PROFILE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.profile.pivot_file"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "Solver.f90:6833: nonzero opens 'forpivots'; 0 on both cases."
+
+[[field]]
+id = "solver.profile.icond"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.icond"
+source = ["SOL.PROFILE.profile_control"]
+consumers = ["PROFILE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.profile.condition_check"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "FACTORIZE branch (Solver.f90:7253); 0 on both cases."
+
+[[field]]
+id = "solver.profile.ipdchk"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.ipdchk"
+source = ["SOL.PROFILE.profile_control"]
+consumers = ["PROFILE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.profile.positive_definite_check"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "FACTORIZE branch; 0 on both cases."
+
+[[field]]
+id = "solver.profile.ising"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.ising"
+source = ["SOL.PROFILE.profile_control"]
+consumers = ["PROFILE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.profile.singularity_check"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "FACTORIZE branch; 0 on both cases."
+
+[[field]]
+id = "runtime.solver.operation"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.operation"
+source = ["derived:legacy_default"]
+derived_from = ["solver.linear"]
+consumers = ["SOLVE", "PROFILE"]
+shape = []
+dtype = "str"
+unit = "1"
+owner = "RuntimeState.solver.operation"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "'SET' after Fem.f90:1908; char(32), compare trim()ed."
+
+[[field]]
+id = "runtime.eq.totveq"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.totveq"
+source = ["derived:renumber"]
+derived_from = ["runtime.dof.iffix", "runtime.dof.trans_nintf", "runtime.dof.nodfn", "control.glb.nlinks"]
+consumers = ["PROFILE", "global_stif_profile", "ESTIF_ASSEMBLE"]
+shape = ["ntotv"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.eq.totveq"
+index_by = "component"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "totv -> equation number, 0 for prescribed/inactive (totv_to_eq, Solver.f90:9033-9145). Built by PROFILE SET; does not exist before Fem.f90:1909 (Q1)."
+
+[[field]]
+id = "runtime.eq.neq"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.neq"
+source = ["derived:count"]
+derived_from = ["runtime.eq.totveq"]
+consumers = ["PROFILE", "global_stif_profile", "sksols"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.eq.neq"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "= count(totveq/=0)."
+
+[[field]]
+id = "runtime.eq.iseq"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.iseq"
+source = ["derived:index_map"]
+derived_from = ["runtime.eq.totveq", "runtime.dof.ldofs", "runtime.activation.appear", "mesh.sets.elset"]
+consumers = ["PROFILE", "global_stif_profile", "sksols"]
+shape = ["neq"]
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.eq.iseq"
+index_by = "component"
+compare = { rule = "hash", algo = "sha256" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "Profile (skyline) column pointers, cumulative after Solver.f90:7226; depends on appear, group%list, element%ldofs, totveq."
+
+[[field]]
+id = "runtime.solver.stiff_length"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.global_stiff1"
+source = ["derived:count"]
+derived_from = ["runtime.eq.iseq"]
+consumers = ["PROFILE", "global_stif_profile"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.solver.stiff_length"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "= iseq(neq) (PROFILE local Stiff_length, Solver.f90:7229) = size(global_stiff1)."
+
+[[field]]
+id = "runtime.solver.global_stiff1"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.global_stiff1"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.solver.stiff_length"]
+consumers = ["global_stif_profile", "sksols"]
+shape = ["Stiff_length"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.solver.global_stiff1"
+index_by = "component"
+compare = { rule = "ignore", reason = "zero-filled at Solver.f90:7236; content is not state before assembly, length is compared via runtime.solver.stiff_length" }
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+note = "Skyline stiffness storage."
+
+[[field]]
+id = "runtime.solver.rvector"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.rvector"
+source = ["derived:legacy_default"]
+derived_from = ["runtime.eq.neq"]
+consumers = ["sksols", "PROFILE"]
+shape = ["neq"]
+dtype = "f64"
+unit = "N"
+owner = "RuntimeState.solver.rvector"
+index_by = "component"
+compare = { rule = "ignore", reason = "allocated at Solver.f90:7237 without initialisation (R23)" }
+determinism = "uninitialized"
+snapshot_file = "numerics.json"
+note = "Right-hand-side work vector."
+
+
+# ---------------------------------------------------------------- fields @ increment_ready(1,1)
+
+[[field]]
+id = "steps0.controls.max_iterations"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.miter"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U", "ALGORT"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].controls.max_iterations"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Fem.f90:3625 record item 1. cwater (item 8) is a STATIC_U local pinned 0 (Fem.f90:3583), so :3633-3637 is dead."
+
+[[field]]
+id = "steps0.controls.time_increment"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.ditime"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U", "PREDICT"]
+shape = []
+dtype = "f64"
+unit = "s"
+owner = "ProblemState.steps[0].controls.time_increment"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "xtime/ttime = ditime*istep at Fem.f90:3663-3664."
+
+[[field]]
+id = "steps0.output.frequency_nodes"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.noutn"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.frequency"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Nodal output cadence (Fem.f90:4176)."
+
+[[field]]
+id = "steps0.output.frequency_fields"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.noutf"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].output.frequency"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Field output cadence (Fem.f90:4188)."
+
+[[field]]
+id = "steps0.controls.steps"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.nstep"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U", "ALGORT"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].controls.steps"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Step loop bound do istep=inc_step,nstep,inc_step (Fem.f90:3656); 1 on both cases."
+
+[[field]]
+id = "steps0.controls.step_increment"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.inc_step"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U", "ALGORT"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].controls.step_increment"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "1 on both cases."
+
+[[field]]
+id = "steps0.controls.restart_frequency"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.nresta"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U", "RESTA_READ_WRITE"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].controls.restart_frequency"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Fem.f90:4197; 0 on both cases."
+
+[[field]]
+id = "steps0.controls.qstatic"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.Qstatic"
+source = ["MAN.STATIC_U.increment_control"]
+consumers = ["STATIC_U", "gravity"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+reason = "quasi-static seismic variant outside static_2d; 0 on both cases"
+note = "pinned guard: value 0 keeps control flow on static_2d path. Record item 9."
+
+[[field]]
+id = "steps0.controls.tolerance_force"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.toler_force"
+source = ["MAN.STATIC_U.tolerances"]
+consumers = ["conver_load"]
+shape = []
+dtype = "f64"
+unit = "N"
+owner = "ProblemState.steps[0].controls.tolerance_force"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "Fem.f90:3631 item 1; residual-force convergence tolerance."
+
+[[field]]
+id = "steps0.controls.tolerance_dof"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.toler_var"
+source = ["MAN.STATIC_U.tolerances"]
+consumers = ["conver_load"]
+shape = ["mdofn"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.steps[0].controls.tolerance_dof"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "steps.json"
+note = "toler_var(1:mdofn); allocated at startup and UNINITIALISED until this read (not registered at earlier checkpoints)."
+
+[[field]]
+id = "runtime.time.ttime"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.ttime"
+source = ["derived:legacy_default"]
+derived_from = ["control.run.restart"]
+consumers = ["STATIC_U", "dfact_time_curve"]
+shape = []
+dtype = "f64"
+unit = "s"
+owner = "RuntimeState.time.ttime"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "= lttime = 0 at process_analysis entry (Fem.f90:1648 `ttime=lttime`); ttime0 (STATIC_U local) copies it at the anchor :3654."
+
+[[field]]
+id = "runtime.time.trstep"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.trstep"
+source = ["derived:legacy_default"]
+derived_from = ["control.run.restart"]
+consumers = ["STATIC_U"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.time.trstep"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "Restart step counter, 0 (Fem.f90:217); trstep0 local copies it at :3655."
+
+[[field]]
+id = "runtime.increment.iincs"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.iincs"
+source = ["derived:count"]
+derived_from = ["derived.counts.nblks", "steps0.controls.increments"]
+consumers = ["STATIC_U", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.increment.iincs"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "current increment = 1 (loop at Fem.f90:3622)."
+
+[[field]]
+id = "runtime.increment.iblks"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.iblks"
+source = ["derived:count"]
+derived_from = ["derived.counts.nblks", "steps0.controls.increments"]
+consumers = ["STATIC_U", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.increment.iblks"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "current block = 1 (process_analysis block loop, Fem.f90:1683); also registered at model_ready as runtime.increment.iblks_at_model."
+
+[[field]]
+id = "runtime.increment.lblks"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.lblks"
+source = ["derived:count"]
+derived_from = ["derived.counts.nblks", "steps0.controls.increments"]
+consumers = ["STATIC_U", "process_analysis"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "RuntimeState.increment.lblks"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "control.json"
+note = "blocks completed before restart = 0; also registered at model_ready as runtime.increment.lblks_at_model."
+
+[[field]]
+id = "runtime.amplitudes.dfact_at_increment"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "applied_load.tcurves%dfact"
+source = ["derived:legacy_default"]
+derived_from = ["amplitudes.type"]
+consumers = ["modf_var_prescribed", "FORCE_EXTERNAL"]
+shape = ["ntcurve"]
+dtype = "f64"
+unit = "1"
+owner = "RuntimeState.amplitudes[].factor"
+index_by = "amplitudes[].name"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+note = "Still exact 0: dfact_time_curve runs at Fem.f90:3666, after this anchor (R24). The evaluated factor is not a checkpoint field."
+
+[[field]]
+id = "runtime.dof.fixed_at_increment"
+checkpoint = "increment_ready(1,1)"
+legacy_symbol = "global_var.fixed"
+source = ["derived:dof_expand"]
+derived_from = ["steps0.boundary.value", "runtime.amplitudes.dfact_at_increment"]
+consumers = ["ESTIF_ASSEMBLE", "PREDICT"]
+shape = ["ntotv"]
+dtype = "f64"
+unit = "m"
+owner = "RuntimeState.dof.prescribed_value"
+index_by = "component"
+compare = { rule = "exact" }
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+note = "Still exact all-zero: modf_var_prescribed runs at Fem.f90:3667, after this anchor (R24). A perturbation of the constraint must therefore be observed on steps0.boundary.value."
+
+# ---------------------------------------------------------------- S03 perturbations
+
+[[perturbation]]
+id = "P-E"
+case = "static_2d.cooks_membrane"
+field = "materials.E"
+index = "[1]"
+legacy_edit = ".mat ELASTIC_ISOTROPIC record, E 2.5e10 -> 2.6e10 (Material.f90:310 item 5)"
+expected_only = true
+
+[[perturbation]]
+id = "P-BC"
+case = "static_2d.cooks_membrane"
+field = "steps0.boundary.value"
+index = "[set=1]"
+legacy_edit = ".pre set 1 value record, val_fix(1) 0.0 -> 1.0e-3 (Prescrib.f90:242; 17*0. record of set 1)"
+expected_only = true
+note = "index is set-name based (steps[0].boundary[].name, consistent with index_by): the first node of set 1. prescrib records are ordered set x node (Prescrib.f90:216,253), but on lame_cylinder the record order differs from the set order in the deck, so a positional [1] would not name the same record on both cases."
+
+[[perturbation]]
+id = "P-G"
+case = "static_2d.cooks_membrane"
+field = "steps0.load.gravity.magnitude"
+index = "[]"
+legacy_edit = ".loa body-force record, gravy 9.81 -> 9.80 (Load.f90:912 item 1)"
+expected_only = true

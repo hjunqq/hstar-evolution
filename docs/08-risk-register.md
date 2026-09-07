@@ -26,6 +26,8 @@
 | R20 | 旧程序约 90 处裸 `stop`/`stop '文本'` 退出码为 0，未纳入退出协议 | 求解失败或内部错误仍可能以 rc=0 结束 | M1-03 已替换 static_2d 路径上的 38 处、39 条语句（审计表见 `docs/m1/M1-03-semantic-guards.md`：正常结束→exit 0，输入错→2，能力不支持→3，内部表→6）；路径上另有 3 处行内 `if(...) stop`（`Fem.f90:1902`、`Fem.f90:9336`、`Load.f90:1073`，复核发现，两例不触发）与路径外约 50 处保持 OPEN，运行器以组合判据兜底 |
 | R22 | M1-03 起 `.cor`/`.ele` 的 id 必须等于行序、`.glb` Σnelgroup 必须等于 nelem、未知命令行参数报错（旧代码忽略 id、多余单元静默不读、只看首个参数） | 乱序 id 或多余单元的历史 deck 会被拒绝（RANGE/DUPLICATE），而旧程序能跑 | 契约变更登记于 `docs/m1/M1-03-semantic-guards.md`；两例 golden 满足；乱序 id 若有真实需求由 M4 Adapter 支持 |
 | R21 | ifx list-directed 整数项接受实数形式并截断（`5.5`→5，`iostat=0`） | 输入错误被静默吞掉 | M4 记录级解析按字段类型严格判定；探针 F27 改用非数字 token |
+| R23 | 派生类型含未初始化分量与未关联指针（`prescrib%ifixvar0` Prescrib.f90:274、`deltafi/delitfi` Fem.f90:246、`rvector` Solver.f90:7237、`element%field%rload/tload/eload`）；整体 dump 会把随机字节写进摘要 | 重复运行摘要不稳定，S01 假失败 | M2-01 在 `docs/m2/state-field-map.toml` 逐分量登记 determinism，未初始化/指针一律 `ignore`；M2-02 序列化器只按白名单分量输出，指针先 `associated()` |
+| R24 | `fixed` 与 `tcurves%dfact` 在 `increment_ready(1,1)` 仍为 0（Fem.f90:3666-3667 才赋值） | 对 `fixed` 做 S03 约束扰动检不出差异 | M2-01 `[[perturbation]]` 把 S03 目标钉在 `props%…%e`、`prescrib%vdofix/nodfix`、`gravy/factg/tcurvegravity`；M2-03 按此执行 |
 | R16 | 初稿 ProblemState 自创分类，与 CAE 惯例和 YL 对象都不对应 | 三套词汇并存，输入更混乱 | ADR-0003 采用 CAE 对象模型；docs/01、03 与 schema 已改，M3/M5 按其实施 |
 
 每次新增风险补充责任人、发现提交、最小复现、预定处置阶段和关闭证据路径。

@@ -18,6 +18,7 @@
 | M1-01 reader 清单 | IN_REVIEW | 静态全集 1022 处；两例 gdb 实证命中 211 位点（read 152）；`docs/m1/reader-inventory.toml` 经 `check` 通过 |
 | M1-02 checked I/O | IN_REVIEW | `src/diagnostics/yl_diag*`；152 个 reader 与 14 个 open 已包装；两例结果逐字节不变；探针 29/29；`--check-legacy` 可用；新盲区 R19/R21 |
 | M1-03 语义守卫 | DONE | 数量/引用/分配守卫（RANGE/REF/DUPLICATE/UNSUPPORTED，`--max-entities`）；R17/R18 关闭；路径上 38 处裸 `stop`（39 条替换，`Temper.f90:455` 一处两条）纳入退出协议；release/debug/strict × 两例精确相同；探针 47/47；注册表 `check` PASS；新契约 R22 |
+| M2-01 状态字段映射表 | IN_REVIEW | `docs/m2/state-field-map.toml` 269 字段 / 4 检查点（restart_ready 未覆盖）；`yl_state_map.py check` PASS，39/39 非 skip reader 被引用；锚点 `Fem.f90:1908/3601/3654`；S03 目标钉在 E / 约束值 / 重力；新风险 R23、R24 |
 | M1～M5 实现及验收 | TODO | 尚无 checked I/O、状态比较器、现代初始化或可运行 TOML |
 | M6～M9 | BACKLOG | 按真实需求逐能力启动 |
 
@@ -25,4 +26,4 @@
 本轮核实了环境（ifx 2025.3、MKL 2026.1、无 gfortran）、原仓库脏树差异、两例 deck 内容与输出路径，
 并据此修正文档；没有更改求解器或算例输入。
 
-下一步：M1-03 已复核，进入 M2（状态比较器）。
+下一步：M2-01 复核后进入 M2-02（状态序列化与比较器）。
