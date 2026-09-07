@@ -14,7 +14,8 @@ case.toml ─> Modern Reader ──┘
 
 - 新输入路径不得生成旧 deck 再交给原始 `READ`。
 - 旧输入长期保留，但只作为一种 Legacy Adapter。
-- 所有输入先进入临时 `ProblemState`，完整校验后才提交运行时。
+- 所有输入先进入临时 `ProblemState`，完整校验后才提交运行时；`ProblemState` 采用通用 CAE 的
+  模型/历史对象模型（mesh、sets、materials、sections、amplitudes、steps、solver），单位固定 SI（ADR-0003）。
 - 不支持的能力必须拒绝，禁止静默默认和自动回退。
 - 迁移单位是“可独立验证的分析能力”，不是单个文件后缀。
 
@@ -41,7 +42,7 @@ docs/                    架构、计划、质量门和决策记录
 当前为 `M0 — 基线建仓`：
 
 - 已导入 YL 基线源码；
-- 已加入 `cooks_membrane` 与 `lame_cylinder` 两个二维静力金标准；
+- 已加入 `cooks_membrane` 与 `lame_cylinder` 两个二维静力回归例（已核实均为重力体力模型，非经典解析基准）；
 - 已冻结总体架构和迁移禁区；
 - 尚未声明任何现代输入能力可用。
 

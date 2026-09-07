@@ -28,11 +28,30 @@ cases/
 ```text
 case-name/
 ├── legacy/             已冻结旧输入
-├── modern/case.toml    新输入
+├── modern/case.toml    新输入（CAE 对象模型，SI 单位，见 ADR-0003）
 ├── expected.json       数值与物理判据
-├── state-map.json      新旧字段映射和已知差异
+├── state-map.json      旧文件字段 → ProblemState 对象的映射和已知差异
 └── README.md           目的、能力和限制
 ```
+
+`state-map.json` 按下表的方向记录；首批静力切片的映射如下：
+
+| ProblemState 对象 | YL 旧输入来源 |
+|---|---|
+| mesh.nodes / mesh.elements | `.cor` 坐标；`.ele` 连接表及组号 |
+| mesh.sets（elset） | `.ele` 末列组号；`.glb` NGROUP 记录的 NAME |
+| mesh.sets（nset） | `.pre` NFIXSETS 的节点列表（导入时生成命名集合） |
+| materials | `.mat` 的 ELASTIC_ISOTROPIC 等记录 |
+| sections | `.glb` 组记录的 NAME、MATNO、TYPE_STIFF、elcod_local、CLASS、FIELDID |
+| amplitudes | `.loa` 开头的 tcurves |
+| steps[].boundary | `.pre` 约束集的自由度码与给定值 |
+| steps[].load | `.loa` 的点荷载、边荷载、体力（按 BLKS 分块） |
+| steps[].controls | `.man` 的 nincs 与每增量的 miter、toler、nstep |
+| steps[].output | `.opr` 输出标志；`.glb` 的 gid_* / res_* |
+| solver | `.sol`；`.glb` 的 TYPE_SOLVER（PROFILE / PARDISO） |
+
+YL 的"组"同时承担 elset、section 和材料引用，映射时必须拆开；`.glb` 中的
+`npoin/nelem/ngroup/nmats/mdofn` 在 ProblemState 中为派生量，不作为输入字段。
 
 迁移完成后可保留于 migration 作为审计材料，或提炼为 golden + probe；不得覆盖原 golden。
 
@@ -51,8 +70,9 @@ case-name/
 
 | 梯队 | 算例 | 用途 |
 |---|---|---|
-| A | cooks_membrane | 2D Q4 静力、网格与位移/应力基线 |
-| A | lame_cylinder | 弹性解析解和边界条件 |
+| A | cooks_membrane | 2D Q4 静力回归例：Cook 形网格 + 重力体力（非经典剪切荷载基准） |
+| A | lame_cylinder | 2D Q4 静力回归例：环形网格 + 重力体力（非 Lamé 内压模型） |
+| A′ | patch_2d、lame_probe | M5 新建：常应变 patch test 与符合解析假设的 Lamé 探针 |
 | B | mini_3d | 3D 基础路径 |
 | B | mini_modal | 模态与质量矩阵 |
 | B | mini_dynamic | 固定边界动力 |
@@ -62,6 +82,9 @@ case-name/
 | D | train11_staged_foundation | 施工阶段 |
 | D | train10_dynamic_vie | VIE 与复杂动力 |
 | D | train12_seepage_steady | 渗流及物理门 |
+
+已核实两个 A 梯队算例的 `.loa`、`.mat`、`.man`、`.opr`、`.sol` 字节相同，荷载仅有重力体力，
+材料 E=2.5e10 Pa、ν=0.2、ρ=2400 kg/m³。它们只能作状态与数值回归例；解析解判据由 A′ 探针承担。
 
 A 梯队进入 M0；其余在对应阶段开始前才导入，避免仓库过早积累无法判定的算例。
 

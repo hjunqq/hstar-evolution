@@ -2,38 +2,145 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hstar.local/schemas/case.schema.json",
   "title": "HSTAR Evolution authoring input",
-  "description": "Bootstrap schema. No solver capability is implied until M5.",
+  "description": "Bootstrap schema following the common CAE model/history object model (ADR-0003). Units are SI only. No solver capability is implied until M5; M5 replaces this file with the full v1 contract.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["version", "case", "model", "analysis"],
+  "required": ["version", "case", "mesh", "material", "section", "step", "solver"],
   "properties": {
-    "version": {
-      "const": 1
-    },
+    "version": { "const": 1 },
     "case": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name"],
+      "required": ["name", "units"],
       "properties": {
         "name": { "type": "string", "minLength": 1 },
-        "description": { "type": "string" }
+        "description": { "type": "string" },
+        "units": { "const": "SI" }
       }
     },
-    "model": {
+    "mesh": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["mesh", "units"],
+      "required": ["file"],
       "properties": {
-        "mesh": { "type": "string", "minLength": 1 },
-        "units": { "enum": ["SI"] }
+        "file": { "type": "string", "minLength": 1 },
+        "format": { "enum": ["hstar-legacy-cor-ele", "gmsh"] }
       }
     },
-    "analysis": {
+    "material": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["model"],
+        "properties": {
+          "model": { "enum": ["elastic_isotropic"] },
+          "E": { "type": "number", "exclusiveMinimum": 0 },
+          "nu": { "type": "number", "minimum": 0, "exclusiveMaximum": 0.5 },
+          "density": { "type": "number", "minimum": 0 }
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["elset", "element", "formulation", "material"],
+        "properties": {
+          "elset": { "type": "string", "minLength": 1 },
+          "element": { "enum": ["Q4"] },
+          "formulation": { "enum": ["plane_strain", "plane_stress"] },
+          "thickness": { "type": "number", "exclusiveMinimum": 0 },
+          "material": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "amplitude": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "points"],
+        "properties": {
+          "type": { "enum": ["linear"] },
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } }
+          }
+        }
+      }
+    },
+    "step": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "procedure"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "procedure": { "enum": ["static"] },
+          "controls": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "increments": { "type": "integer", "minimum": 1 },
+              "max_iterations": { "type": "integer", "minimum": 1 },
+              "tolerance_force": { "type": "number", "exclusiveMinimum": 0 }
+            }
+          },
+          "boundary": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["nset", "dof", "value"],
+              "properties": {
+                "nset": { "type": "string", "minLength": 1 },
+                "dof": { "type": "array", "minItems": 1, "items": { "enum": ["ux", "uy"] } },
+                "value": { "type": "number" },
+                "amplitude": { "type": "string" }
+              }
+            }
+          },
+          "load": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["type"],
+              "properties": {
+                "type": { "enum": ["gravity", "cload", "pressure"] },
+                "nset": { "type": "string" },
+                "surface": { "type": "string" },
+                "direction": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number" } },
+                "magnitude": { "type": "number" },
+                "amplitude": { "type": "string" }
+              }
+            }
+          },
+          "output": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "field": { "type": "array", "items": { "enum": ["displacement", "stress", "reaction"] } }
+            }
+          }
+        }
+      }
+    },
+    "solver": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind"],
+      "required": ["linear"],
       "properties": {
-        "kind": { "enum": ["static"] }
+        "linear": { "enum": ["profile"] },
+        "threads": { "type": "integer", "minimum": 1 }
       }
     }
   }

@@ -4,20 +4,27 @@
 
 ### ProblemState
 
-描述用户想计算什么，初始化完成后只读：
+描述用户想计算什么，初始化完成后只读。结构采用通用 CAE 软件共有的“模型层 / 历史层 /
+求解层”对象模型（见 ADR-0003），不自创分类：
 
 ```text
 ProblemState
-├── model            网格、单位、坐标系
-├── formulations     单元类型、场与自由度
-├── materials        材料模型和有量纲参数
-├── regions          节点/边/面/体集合
-├── interfaces       接触、粘结、FSI、吸收边界
-├── phases           静力、动力、施工、重启及依赖
-├── actions          约束、重力、压力、温度、地震输入
-├── numerics         迭代、积分、线性求解器和容差
-└── outputs          场输出、历史量和审计量
+├── case          名称、描述、单位制（固定 SI）
+├── mesh          节点、单元、来源文件、命名集合 nset / elset / surface
+├── materials     按名字定义的本构模型与有量纲参数
+├── sections      elset → 单元类型 + 公式（平面应变/应力、厚度、积分）+ 材料
+├── amplitudes    按名字定义的时间/荷载曲线
+├── interactions  接触对、Goodman、粘结、吸收边界（后续阶段）
+├── steps[]       有序分析步：procedure、controls、boundary、load、activation、output
+└── solver        线性求解器、线程数、全局容差
 ```
+
+规则：
+
+- 所有对象只通过名字互相引用；`npoin/nelem/ngroup/nmats/mdofn` 等数量全部派生；
+- 场与自由度由 section 的 formulation 派生，用户不填 MDOFN；
+- YL 的“组”拆为 elset、section、material 三个对象，提交时再合并；
+- 模型层与时间无关；随阶段变化的条件一律放在 step 内。
 
 ### RuntimeState
 
@@ -92,7 +99,7 @@ groups.json
 materials.json
 constraints.sha256
 loads.sha256
-phases.json
+steps.json
 numerics.json
 ```
 
@@ -107,11 +114,13 @@ numerics.json
 
 ## 6. 现代输入原则
 
-- 使用物理名称，不暴露 Fortran 槽位名称；
-- 分析类型和边界类型使用 tagged union；
+- 使用通用 CAE 词汇（mesh、nset、elset、material、section、amplitude、step、boundary、
+  load、output、solver），不暴露 Fortran 槽位名称；
+- 单位制固定为 SI（m、N、Pa、kg、s、K），`case.units = "SI"` 必须显式声明，不做换算；
+- 分析类型和边界类型使用 tagged union（`procedure = "static"`、`type = "gravity"`）；
 - 数量由对象派生，不让用户重复填写；
 - 默认值来自有版本的 profile，并写入清单；
 - 未知字段报错；
 - 非法组合报错；
 - 未验证组合由 capability gate 拒绝；
-- 几何集合优先使用命名实体和拓扑选择，避免节点号长表。
+- 命名集合先由网格文件提供；几何拓扑选择留待后续能力。

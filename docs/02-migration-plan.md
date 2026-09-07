@@ -23,10 +23,11 @@
 
 出口条件：
 
-- 干净克隆可以构建；
-- 两个基准连续运行三次结果稳定；
+- 干净克隆在 `env -i` 下可以构建，外部依赖（ifx、MKL、gidpost 桩）在 build manifest 中有路径、版本和哈希；
+- 两个基准在单线程下各运行三次，解析后的 `1.flavia.res` 逐值精确相等，最大差记录为后续 atol 下限；
 - 基线输入和二进制来源有哈希；
-- 构建产物不会污染算例输入。
+- 运行前后对 golden 目录重哈希无变化（不能依赖 `git status`，因为 `.gitignore` 屏蔽了运行产物）；
+- CI 在无 ifx 许可的环境记 NOT_RUN，以本地一键脚本代替，不宣称 CI 已通过。
 
 ## M1：Crash Firewall——旧输入可控失败
 
@@ -73,8 +74,8 @@
 
 任务：
 
-- 定义最小 `ProblemState`，先覆盖二维线弹性静力；
-- 将 dimension/count、mesh、groups、materials、constraints、loads、numerics 分成有所有权的类型；
+- 定义最小 `ProblemState`，先覆盖二维线弹性静力，顶层结构按 ADR-0003 的 CAE 对象模型（case、mesh、materials、sections、amplitudes、steps、solver）；
+- 将 mesh、sets、materials、sections、amplitudes、steps（boundary/load/controls/output）、solver 分成有所有权的类型；YL 的“组”拆为 elset、section、material；
 - 明确 unset、zero、empty 三者语义，避免使用模糊哨兵值；
 - 实现 normalize、validate、finalize 和 manifest；
 - 实现唯一 `commit_legacy_globals`；
@@ -124,13 +125,14 @@
 
 任务：
 
-- 定义 `case.toml` v1 authoring schema；
+- 定义 `case.toml` v1 authoring schema（CAE 对象模型，SI 单位，见 ADR-0003）；
 - 实现 TOML → Authoring AST → ProblemState；
-- 增加单位、名称引用和未知字段检查；
+- 增加 SI 单位声明、材料参数合理范围警告、名称引用和未知字段检查；
 - 让 `npoin/nelem/ngroup/nmats/mdofn` 等数量全部派生；
 - 增加 `check`、`dump-state`、`dry-assemble`、`run` 四个命令；
 - 为两个金标准编写现代输入；
-- 增加 patch test 和解析解判据；
+- 新建 patch test 探针和符合解析假设的 Lamé 探针（种子算例只作回归例，不承担解析判据）；
+- 新建输出反力的探针，补齐外力与反力平衡判据（种子算例关闭了反力输出）；
 - 用户输入目标控制在 30～50 行，不以隐藏物理选择为代价。
 
 出口条件：
