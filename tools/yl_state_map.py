@@ -80,6 +80,15 @@ Check rules (numbered as in .ccg/tasks/m2-01-state-field-map/analysis-schema.md 
      routine-local symbols (<module>.<routine>.<var>) are never generated, and an entity that
      any `allocate` gives a lower bound other than 1 is rejected (a 1-based loop would drop
      elements: global_var.appear_process(1:ngroup,0:nblks) is why that row needs an adapter)
+  20 legacy_only (M3-01): optional boolean, defaults to false; must be a boolean and, when true,
+     is allowed only on a `ProblemState.*` owner -- `derived`, `RuntimeState.*` and `not_migrated`
+     already say the row is outside the authoring contract, so the mark would be noise there.
+     The criterion for setting it is documented in the map header
+  21 owner uniqueness (M3-01, fail-closed): among non-ignore rows, (owner, checkpoint) is unique
+     for every owner that is a real path, i.e. everything except the `derived` / `not_migrated`
+     buckets. Two rows sharing one owner path at one checkpoint cannot both map to one field of
+     the M3 ProblemState type, so the map may not express it; the same path at two different
+     checkpoints stays legal (runtime.dof.fixed / runtime.dof.fixed_at_increment)
 
 gen-fortran contract
   Follows tools/yl_io_inventory.py gen-fortran: banner + source path + 12-hex source hash +
@@ -128,6 +137,7 @@ DTYPES = {"i32", "i64", "f64", "str", "bool"}
 UNITS = {"1", "id", "m", "N", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K"}
 DETERMINISM = {"deterministic", "uninitialized", "pointer", "order_dependent"}
 COMPARE_RULES = {"exact", "abs_tol", "rel_tol", "hash", "ignore"}
+OWNER_BUCKETS = {"derived", "not_migrated"}   # owners that are labels, not paths (rule 21)
 OWNER_GROUPS = ["case", "mesh", "materials", "sections", "amplitudes", "interactions", "steps[0]", "solver",
                 "RuntimeState", "derived", "not_migrated"]
 DECL = re.compile(r"^\s*(integer|real|character|logical|complex|double\s+precision|type\s*\()", re.I)
@@ -506,6 +516,7 @@ class Checker:
                 self.fail(f"duplicate field id {k}")
         for f in self.fields:
             self.check_field(f)
+        self.check_owner_unique()
         self.check_reverse_coverage()
         self.check_perturbations()
         return self.problems
@@ -743,6 +754,26 @@ class Checker:
             self.fail(f"field {fid}: owner not_migrated requires reason")
         if owner.startswith("RuntimeState"):
             self.check_derived_from(f, "owner RuntimeState.*")
+        lo = f.get("legacy_only")
+        if lo is not None:
+            if not isinstance(lo, bool):
+                self.fail(f"field {fid}: legacy_only must be a boolean (got {lo!r})")
+            elif lo and not owner.startswith("ProblemState."):
+                self.fail(f"field {fid}: legacy_only is only allowed on ProblemState.* rows (owner {owner})")
+
+    # rule 21
+    def check_owner_unique(self) -> None:
+        seen: dict[tuple[str, str], str] = {}
+        for f in self.fields:
+            owner = str(f.get("owner", ""))
+            if owner in OWNER_BUCKETS or (f.get("compare") or {}).get("rule") == "ignore":
+                continue
+            key = (owner, str(f.get("checkpoint")))
+            if key in seen:
+                self.fail(f"field {f.get('id')}: owner {owner} at checkpoint {key[1]} is already owned by "
+                          f"field {seen[key]}; one owner path per checkpoint (two rows cannot map to one type field)")
+            else:
+                seen[key] = str(f.get("id"))
 
     # rule 12
     def check_compare(self, f: dict) -> None:
@@ -982,6 +1013,8 @@ def render_header(doc: dict, ck: Checker) -> list[str]:
            f"reader 覆盖 {s.get('readers_covered', 0)}/{s.get('readers_required', 0)}（非 skip 类，已执行 {executed}）；"
            f"skip 类 {s.get('skip_class', 0)}",
            "- 各检查点字段数：" + "；".join(f"`{c['id']}` {per_cp.get(c['id'], 0)}" for c in ck.checkpoints),
+           f"- `legacy_only` 字段 {sum(1 for f in ck.fields if f.get('legacy_only'))}"
+           "（只为 bridge 重建 legacy 记录而存在，无 ADR-0003 对应物；判据见 TOML 头部）",
            "- 校验结果：" + ("PASS" if not ck.problems else f"FAIL（{len(ck.problems)} 个问题，见 check 输出）"), ""]
     syms = doc.get("shape_symbols", {})
     if syms:
@@ -1024,11 +1057,12 @@ def render_fields(ck: Checker) -> list[str]:
                 if f.get("derived_from"):
                     src += " ← " + ", ".join(f"`{d}`" for d in f["derived_from"])
                 shape = "[" + ", ".join(str(s) for s in f.get("shape", [])) + "]"
+                owner = f"`{f.get('owner', '')}`" + (" **legacy_only**" if f.get("legacy_only") else "")
                 note = md_cell(f.get("note"))
                 if f.get("reason"):
                     note = (note + " " if note else "") + f"reason: {md_cell(f['reason'])}"
                 out.append(f"| `{f.get('id')}` | `{f.get('legacy_symbol', '')}` | {src} | {md_cell(f.get('consumers'))} | "
-                           f"`{shape}` | {f.get('dtype', '')} | {f.get('unit', '')} | `{f.get('owner', '')}` | "
+                           f"`{shape}` | {f.get('dtype', '')} | {f.get('unit', '')} | {owner} | "
                            f"{md_cell(render_compare(f))} | {f.get('determinism', '')} | `{f.get('snapshot_file', '')}` | {note} |")
             out.append("")
     return out
@@ -1535,6 +1569,11 @@ def self_cases() -> list[tuple[str, str, callable]]:
     def synth_local(d): d["field"][2]["emit"] = "generated"
     def synth_chain_rank(d): d["field"][3]["shape"] = ["nnode"]
     def synth_zero_based(d): d["field"][0]["legacy_symbol"] = "global_var.appear_process"; d["field"][0]["dtype"] = "i32"
+    # rules 20-21 (legacy_only, owner uniqueness)
+    def dup_owner(d): d["field"][3]["owner"] = d["field"][0]["owner"]
+    def legacy_only_type(d): d["field"][0]["legacy_only"] = "yes"
+    def legacy_only_runtime(d): d["field"][2]["legacy_only"] = True
+    def legacy_only_not_migrated(d): d["field"][6]["legacy_only"] = True
     return [("duplicate field id", "duplicate field id", dup), ("unknown reader", "unknown reader", unknown_reader),
             ("reached_only reader", "reached_only", reached), ("dtype vocab", "dtype", bad_dtype),
             ("unit incompatible", "incompatible", bad_unit), ("shape symbol", "shape symbol", bad_shape),
@@ -1576,7 +1615,35 @@ def self_cases() -> list[tuple[str, str, callable]]:
             ("generated dtype mismatch", "does not match the declared `integer`", synth_dtype),
             ("generated routine-local symbol", "is routine-local", synth_local),
             ("generated chain rank mismatch", "rank 1 on element + rank 1 on %lnods_f", synth_chain_rank),
-            ("generated 0-based array", "lower bound other than 1 at Global.f90:", synth_zero_based)]
+            ("generated 0-based array", "lower bound other than 1 at Global.f90:", synth_zero_based),
+            ("two rows share one owner path", "is already owned by", dup_owner),
+            ("legacy_only not a boolean", "legacy_only must be a boolean", legacy_only_type),
+            ("legacy_only on a RuntimeState owner", "only allowed on ProblemState.* rows", legacy_only_runtime),
+            ("legacy_only on a not_migrated owner", "only allowed on ProblemState.* rows", legacy_only_not_migrated)]
+
+
+def self_good_cases() -> list[tuple[str, callable]]:
+    """(name, mutator) for variations that must stay clean -- the accept side of rules 20-21."""
+    def owner_across_checkpoints(d):
+        fem = split_lines(SELF_FEM.encode("latin-1"))
+        d["checkpoint"].append({"id": "phase_ready(1)", "order": 3, "covered": True, "site": "Fem.f90:8",
+                                "anchor": anchor_hash(full_statement(fem, 7)), "after": [],
+                                "first_consumer": "solve", "snapshot_files": ["dof.sha256"]})
+        f = copy.deepcopy(d["field"][2])                       # runtime.dof.count, owner RuntimeState.dof.count
+        f.update(id="runtime.dof.count_at_phase", checkpoint="phase_ready(1)",
+                 emit="adapter:runtime_dof_count_at_phase")
+        d["field"].append(f)                                   # same owner path, different checkpoint: legal
+    def owner_shared_with_ignore(d):
+        f = copy.deepcopy(d["field"][0])                       # same owner as mesh.nodes.xyz, but an ignore row
+        f.update(id="mesh.nodes.xyz_scratch", emit="none", determinism="uninitialized",
+                 compare={"rule": "ignore", "reason": "scratch copy, never initialized"})
+        d["field"].append(f)
+    def legacy_only_true(d): d["field"][0]["legacy_only"] = True
+    def legacy_only_false_on_bucket(d): d["field"][6]["legacy_only"] = False
+    return [("owner path reused at another checkpoint", owner_across_checkpoints),
+            ("owner path shared with an ignore row", owner_shared_with_ignore),
+            ("legacy_only true on a ProblemState row", legacy_only_true),
+            ("legacy_only false on a bucket owner", legacy_only_false_on_bucket)]
 
 
 def selftest() -> int:
@@ -1598,12 +1665,22 @@ def selftest() -> int:
             print(f"ok   {name}: {hit}")
         else:
             print(f"BAD  {name}: expected {expect!r}, got {problems}")
+    good = self_good_cases()
+    for name, mutate in good:
+        doc = self_map()
+        mutate(doc)
+        problems = Checker(doc, inv, src).run()
+        if problems:
+            print(f"BAD  accepts {name}: {problems}")
+        else:
+            n_ok += 1
+            print(f"ok   accepts {name}")
     text1, text2 = render(self_map(), inv, src), render(self_map(), inv, src)
     idem = text1 == text2 and "## 未覆盖 / 排除" in text1
     n_ok += int(idem)
     print(("ok   " if idem else "BAD  ") + "render idempotent + excluded section present")
     n_ok += selftest_gen(base, src)
-    total = len(cases) + 2 + len(GEN_EXPECT) + 2
+    total = len(cases) + len(good) + 2 + len(GEN_EXPECT) + 2
     print(f"SELFTEST {'PASS' if n_ok == total else 'FAIL'}: {n_ok}/{total} expectations")
     return 0 if n_ok == total else 1
 

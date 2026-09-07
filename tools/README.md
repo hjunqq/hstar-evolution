@@ -30,6 +30,7 @@ yl-import-case        从登记来源导入算例，不导入运行垃圾
 | （状态快照） | `tools/yl_state.py` | `normalize` 把 `<work>/state/<checkpoint>/state.txt` 规范化为 `docs/01 §5` 九文件与 `fingerprint.json`（ntotv 数组经 `nodfn` 重键为 (node,dof)，`reconstruct` 配方校验）；`fingerprint` 复核已规范化的树（M2-02） |
 | （状态比较） | `tools/yl_state_diff.py` | 比较两棵规范化快照：结构优先（缺字段/截断/NaN/重复 ID/错 shape/错检查点/错 dtype/陈旧摘要），再按映射表 `compare` 规则比值；报文定位到 `object.path[i].attr`；`--selftest`、`--snapshot` 产出 S02 证据（M2-02） |
 | （状态探针） | `tools/yl_state_probe.py` | M2-03：`freeze`/`verify` 冻结与校验 `cases/golden/*/reference/state`（写一次、无 `--force`）；`repeat` 产出 S01 重复证据；`run` 执行 `cases/probes/state/*` 的单字段扰动并按 `[expect_state]` 断言（读比较器 JSON，不解析文本）；`--selftest` 含“空扰动必须判失败” |
+| （ProblemState 核对） | `tools/yl_problem_check.py` | M3-01：`check` 在 `docs/m2/state-field-map.toml` 的 98 个已导出 `ProblemState.*` 行与 `src/problem/` 的 Fortran 派生类型之间做双向 fail-closed 核对（字段名由 `owner` 路径机械推导，不由 `id` 推导）；含 12 条规则：封闭声明文法、可选字段禁用裸数值（ADR-0002 哨兵禁令）、由映射表机械生成的 legacy 槽位名黑名单、`@m5-only` / `@repr` 标注文法；`render` 生成 `docs/m3/M3-01-problemstate.md`；`--selftest` 37 项 |
 
 工具实现必须 fail-closed：无法判断时返回未验证，不得返回通过。
 

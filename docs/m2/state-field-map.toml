@@ -9,6 +9,25 @@
 # source rule: exact reader ids from docs/m1/reader-inventory.toml, or exactly one `derived:<count|index_map|renumber|legacy_default|dof_expand>`.
 # checkpoint.site / anchor: the statement BEFORE which the snapshot is taken; anchor = yl_io_inventory.anchor_hash(full_statement(site)).
 # Same legacy symbol at two checkpoints is two rows (e.g. tcurves%dfact, fixed).
+# owner rule: one owner path per row. `derived` and `not_migrated` are buckets and repeat; every other owner is a real object
+#          path and (owner, checkpoint) must be UNIQUE (checked). Two rows may share an owner path only across checkpoints,
+#          which is the "same symbol at two checkpoints" case above (runtime.dof.fixed / fixed_at_increment).
+# legacy_only rule: optional boolean, default false, allowed only on `ProblemState.*` rows. true marks a field that exists ONLY
+#          so the bridge can rebuild a legacy record: it has NO counterpart in the ADR-0003 authoring contract, yet the bridge
+#          must still produce a value to write the .glb / .pre / .loa / .man / .sol record. Two evidence classes, both readable
+#          from the row itself:
+#            A positional slot -- one slot of a fixed-width legacy record whose modern counterpart is a named object or list, so
+#              the slot position carries the meaning. The 20 GiD write flags (one .glb record of 20 ints), the four PROFILE
+#              control ints, and the classification/switch chars of the .glb group header and the MAT elastic_isotropic record.
+#              The note of such a row records a guard with a value that is constant on this path, or no consumer at all.
+#            B legacy handle -- an internal legacy index, array position, or in-place-overwritten duplicate that the contract
+#              addresses by name instead: materials[].id (the props(:) index), sections[].element_kind (the elkn table index),
+#              sections[].material_header (the .glb header value overwritten at Fem.f90:1717), and the per-element
+#              denormalisations mesh.elements[].kind / .material, which restate what the element's section already says.
+#          legacy_only is NOT "unused on static_2d": materials[].thermal_expansion is a physical property with a contract
+#          counterpart that this path happens not to consume, so it is false. It is also NOT set on `derived`, `RuntimeState.*`
+#          or `not_migrated` rows -- their owner already says they are outside the authoring contract (checked).
+#          Current set: 47 of the 98 ProblemState rows. M5 may retire exactly these instead of promoting Fortran slots into v1.
 
 version = 1
 path = "static_2d: 2D Q4 plane-strain linear-elastic, PROFILE, gravity, single increment"
@@ -16,13 +35,19 @@ cases = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
 reader_inventory = "docs/m1/reader-inventory.toml"
 float_format = "hex"
 
+# WARNING: these descriptions are NOT free prose. tools/yl_state.py (MapIndex, ~line 165) derives the set of
+# ragged shape symbols by searching each description for the word "ragged", and that set changes how a field is
+# normalised. Dropping or rewording that word therefore alters the normalized snapshot and breaks the frozen
+# baselines in cases/golden/*/reference/state (M2-03). A ragged symbol's description MUST contain "ragged".
+# Snapshot-affecting keys overall: dtype, index_by, shape, the exported field set, and these descriptions.
+# Annotation-only keys, free to correct: owner, note, legacy_only.
 [shape_symbols]
 ndimn = "mesh.dimension (2 on both cases)"
 npoin = "count(mesh.nodes)"
 nelem = "count(mesh.elements)"
 nnode = "nodes per element from sections[].element_kind (4 for Q4)"
-ngroup = "count(sections) = count(mesh.sets[elset])"
-nelgroup = "count(mesh.sets[elset].elements) per group = group(ig)%nelgroup (ragged; 256 on both cases with ngroup=1)"
+ngroup = "count(sections) = count(mesh.elsets)"
+nelgroup = "count(mesh.elsets[].elements) per group = group(ig)%nelgroup (ragged; 256 on both cases with ngroup=1)"
 nmats = "count(materials)"
 nrfields = "count(sections[].formulation.fields) per group (1 on both cases)"
 nfdof = "count(sections[].formulation.dofs) per field (2 on both cases)"
@@ -340,6 +365,7 @@ shape = []
 dtype = "str"
 unit = "1"
 owner = "ProblemState.steps[0].output.format"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -426,6 +452,7 @@ shape = ["nelem"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.mesh.elements[].kind"
+legacy_only = true
 index_by = "mesh.elements[].id"
 compare = { rule = "exact" }
 emit = "generated"
@@ -461,6 +488,7 @@ shape = ["nelem"]
 dtype = "i32"
 unit = "id"
 owner = "ProblemState.mesh.elements[].material"
+legacy_only = true
 index_by = "mesh.elements[].id"
 compare = { rule = "exact" }
 emit = "generated"
@@ -478,13 +506,13 @@ consumers = ["gravity", "STIFF_U", "PROFILE", "prescrib_set"]
 shape = ["nelgroup", "ngroup"]
 dtype = "i32"
 unit = "id"
-owner = "ProblemState.mesh.sets[].elset"
+owner = "ProblemState.mesh.elsets[].elements"
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "adapter:mesh_sets_elset"
 determinism = "deterministic"
 snapshot_file = "groups.json"
-note = "group(igroup)%list(1:nelgroup): ragged, one ordered list per group in record order (Global.f90:1292). Serializer writes one list per elset. Adapter emits one group(igroup)%list(1:nelgroup) list per elset, one line per group key, so the record is keyed by the elset (section name), not by element id; the VALUES are element ids."
+note = "group(igroup)%list(1:nelgroup): ragged, one ordered list per group in record order (Global.f90:1292). Serializer writes one list per elset. Adapter emits one group(igroup)%list(1:nelgroup) list per elset, one line per group key, so the record is keyed by the elset (section name), not by element id; the VALUES are element ids. Owner collection is ProblemState.mesh.elsets[] (not the former shared mesh.sets[]): elsets are keyed by the section/group name and are ragged [nelgroup,ngroup], node sets are keyed by the boundary name and are flat [ndofix], so the two never shared a shape or a key. YL has no separate elset name; the group name is both the section name and the elset name on this path, which is why index_by is sections[].name."
 
 [[field]]
 id = "mesh.sets.nset"
@@ -496,13 +524,13 @@ consumers = ["prescrib_set", "modf_var_prescribed"]
 shape = ["ndofix"]
 dtype = "i32"
 unit = "id"
-owner = "ProblemState.mesh.sets[].nset"
+owner = "ProblemState.mesh.nsets[].nodes"
 index_by = "steps[0].boundary[].name"
 compare = { rule = "exact" }
 emit = "adapter:mesh_sets_nset"
 determinism = "deterministic"
 snapshot_file = "constraints.sha256"
-note = "nset per constraint set = distinct nodfix with the same ifixset, in record order; list_fix is a prescrib_set local deallocated at Prescrib.f90:386. Adapter emits the distinct nodfix per ifixset in first-occurrence order, one line per set key."
+note = "nset per constraint set = distinct nodfix with the same ifixset, in record order; list_fix is a prescrib_set local deallocated at Prescrib.f90:386. Adapter emits the distinct nodfix per ifixset in first-occurrence order, one line per set key. Owner collection is ProblemState.mesh.nsets[] (not the former shared mesh.sets[]); see mesh.sets.elset for why element sets and node sets are two collections."
 
 [[field]]
 id = "materials.id"
@@ -514,6 +542,7 @@ shape = ["nmats"]
 dtype = "i32"
 unit = "id"
 owner = "ProblemState.materials[].id"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "adapter:materials_id"
@@ -531,6 +560,7 @@ shape = ["nmats"]
 dtype = "str"
 unit = "1"
 owner = "ProblemState.materials[].kind"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "adapter:materials_kind"
@@ -582,6 +612,7 @@ shape = ["nmats"]
 dtype = "str"
 unit = "1"
 owner = "ProblemState.materials[].phase"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "adapter:materials_phase"
@@ -633,6 +664,7 @@ shape = ["nmats"]
 dtype = "f64"
 unit = "1"
 owner = "ProblemState.materials[].solid_ratio"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "generated"
@@ -655,7 +687,7 @@ compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "groups.json"
-note = "Stiff.f90:116 / Load.f90:1229 (ndimn==2). Owner is the section per ADR-0003 although YL stores it on the material; 1.0 plane-strain placeholder."
+note = "Stiff.f90:116 / Load.f90:1229 (ndimn==2). Owner is the section per ADR-0003 although YL stores it PER MATERIAL (props(imat)%mechanical%solid%thickness, Material.f90:319), which is why shape is nmats and index_by is materials[].name: the row is indexed the way the legacy array is indexed. This is the one row whose owner collection and index collection differ; resolving section -> material -> thickness (and rejecting a deck where two sections share a material but disagree on thickness) is the bridge's job, not this map's. Both golden cases hide the difference (nmats = ngroup = 1). 1.0 plane-strain placeholder. index_by stays sections[].name and must NOT become materials[].name: index_by is recorded in the normalized snapshot, so changing it makes every fresh run mismatch the frozen evidence in cases/golden/*/reference/state (M2-03). The shape/index mismatch on this single row is documented, not fixed; resolving section -> material -> thickness is the bridge's job."
 
 [[field]]
 id = "materials.E"
@@ -718,6 +750,7 @@ shape = ["nmats"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.materials[].creep_model"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "generated"
@@ -735,6 +768,7 @@ shape = ["nmats"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.materials[].wetting_kind"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "generated"
@@ -752,6 +786,7 @@ shape = ["nmats"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.materials[].liquefaction"
+legacy_only = true
 index_by = "materials[].id"
 compare = { rule = "exact" }
 emit = "generated"
@@ -914,6 +949,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].element_kind"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -931,6 +967,7 @@ shape = ["ngroup"]
 dtype = "str"
 unit = "1"
 owner = "ProblemState.sections[].class"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -965,6 +1002,7 @@ shape = ["ngroup"]
 dtype = "str"
 unit = "1"
 owner = "ProblemState.sections[].fields"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -982,6 +1020,7 @@ shape = ["ngroup"]
 dtype = "str"
 unit = "1"
 owner = "ProblemState.sections[].special"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1021,7 +1060,7 @@ compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "groups.json"
-note = "= count(mesh.sets[elset]); sum over groups must equal nelem (diag_range Global.f90:1227)."
+note = "= count(mesh.elsets); sum over groups must equal nelem (diag_range Global.f90:1227)."
 
 [[field]]
 id = "sections.material_header"
@@ -1033,14 +1072,15 @@ consumers = ["read_element"]
 shape = ["ngroup"]
 dtype = "i32"
 unit = "id"
-owner = "ProblemState.sections[].material"
+owner = "ProblemState.sections[].material_header"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "adapter:sections_material_header"
 determinism = "deterministic"
 snapshot_file = "groups.json"
 reconstruct = "material_header(igroup) = element(group(igroup)%list(1))%matno (Elements.f90:1083 copies the header matno into every element of the group; element%matno is never written again)"
-note = "Value as read from the .glb group header into group%matno; that slot is OVERWRITTEN in place at Fem.f90:1717 (see sections.material) and is not observable at model_ready. Serialised via `reconstruct` from element%matno. Both values are identical on the golden decks. Dependency direction: reader -> mesh.elements.material -> this row -> sections.material (acyclic). Adapter emits element(group(g)%list(1))%matno after allocation, association, non-empty-list and index checks."
+note = "Value as read from the .glb group header into group%matno; that slot is OVERWRITTEN in place at Fem.f90:1717 (see sections.material) and is not observable at model_ready. Serialised via `reconstruct` from element%matno. Both values are identical on the golden decks. Dependency direction: reader -> mesh.elements.material -> this row -> sections.material (acyclic). Owner is ProblemState.sections[].material_header, the value AS READ from the .glb group header; the effective value after matno_process (Fem.f90:1717) is ProblemState.sections[].material (row sections.material). The two were one owner path and could not both map to a single type field. legacy_only: the header slot exists only so the bridge can re-emit the .glb group header; the authoring contract names one material per section and lets the step override it. Adapter emits element(group(g)%list(1))%matno after allocation, association, non-empty-list and index checks."
 
 [[field]]
 id = "sections.material"
@@ -1058,7 +1098,7 @@ compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "groups.json"
-note = "In-memory value at model_ready = matno_process(igroup,1) (Fem.f90:1717), not the header value; this is what stiff_u/gravity consume."
+note = "In-memory value at model_ready = matno_process(igroup,1) (Fem.f90:1717), not the header value; this is what stiff_u/gravity consume. Owner ProblemState.sections[].material is the EFFECTIVE material of the section; the as-read header value is ProblemState.sections[].material_header (row sections.material_header), which this row derives from. Chain stays acyclic: mesh.elements.material -> sections.material_header -> sections.material."
 
 [[field]]
 id = "sections.type_nalgo"
@@ -1070,6 +1110,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].algorithm"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1087,6 +1128,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].stiffness_kind"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1104,6 +1146,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].stress_recovery"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1121,6 +1164,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].layer"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1138,6 +1182,7 @@ shape = ["ngroup"]
 dtype = "f64"
 unit = "1"
 owner = "ProblemState.sections[].local_axes"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1173,6 +1218,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].uplift"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1190,6 +1236,7 @@ shape = ["ngroup"]
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.sections[].liquefaction"
+legacy_only = true
 index_by = "sections[].name"
 compare = { rule = "exact" }
 emit = "generated"
@@ -1621,6 +1668,7 @@ shape = []
 dtype = "str"
 unit = "1"
 owner = "ProblemState.steps[0].load_mode"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2206,6 +2254,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.u"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2223,6 +2272,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.s"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2240,6 +2290,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.ms"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2257,6 +2308,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.f"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2274,6 +2326,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.rot"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2291,6 +2344,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.v"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2308,6 +2362,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.a"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2325,6 +2380,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.T"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2342,6 +2398,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.P"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2359,6 +2416,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.Pv"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2376,6 +2434,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.ep"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2393,6 +2452,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.Y"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2410,6 +2470,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.FC"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2427,6 +2488,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.Ns"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2444,6 +2506,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.Ss"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2461,6 +2524,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.Mxy"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2478,6 +2542,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.bem"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2495,6 +2560,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.wh"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2512,6 +2578,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.wv"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -2529,6 +2596,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.steps[0].output.field.bcs"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -4358,6 +4426,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.solver.profile.pivot_file"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -4375,6 +4444,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.solver.profile.condition_check"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -4392,6 +4462,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.solver.profile.positive_definite_check"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -4409,6 +4480,7 @@ shape = []
 dtype = "i32"
 unit = "1"
 owner = "ProblemState.solver.profile.singularity_check"
+legacy_only = true
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
@@ -4588,13 +4660,13 @@ consumers = ["STATIC_U"]
 shape = []
 dtype = "i32"
 unit = "1"
-owner = "ProblemState.steps[0].output.frequency"
+owner = "ProblemState.steps[0].output.frequency.nodes"
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "steps.json"
-note = "Nodal output cadence (Fem.f90:4176)."
+note = "Nodal output cadence (Fem.f90:4176). Own owner path: noutn and noutf are two independent cadences read from the same .man record, so they cannot share ProblemState.steps[0].output.frequency."
 
 [[field]]
 id = "steps0.output.frequency_fields"
@@ -4605,13 +4677,13 @@ consumers = ["STATIC_U"]
 shape = []
 dtype = "i32"
 unit = "1"
-owner = "ProblemState.steps[0].output.frequency"
+owner = "ProblemState.steps[0].output.frequency.fields"
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "steps.json"
-note = "Field output cadence (Fem.f90:4188)."
+note = "Field output cadence (Fem.f90:4188). Own owner path; see steps0.output.frequency_nodes."
 
 [[field]]
 id = "steps0.controls.steps"

@@ -2,6 +2,8 @@
 # HSTAR Evolution — reproducible Linux build of the legacy YL solver (M0-02).
 #
 #   tools/build.sh [release|debug] [--src DIR] [--out DIR] [--label NAME]
+#   tools/build.sh problem-types [--profile release|strict] [--out DIR] [--label NAME]
+#                                [--allow-external-out]
 #
 # Profiles:
 #   release  -O2                                  (reference numerics)
@@ -22,6 +24,31 @@
 #   OUT/obj/*.o *.mod        OUT/hstar          OUT/build.log
 #   OUT/build-manifest.json  compiler/flags/deps/hashes/ldd; fail-closed
 #
+# Target `problem-types` (M3-01) is a SEPARATE target, not a solver profile.
+# It compiles src/problem/{yl_problem_optional,yl_problem_types}.f90 and links
+# the type-level self-test program src/problem/yl_problem_selftest.f90 into
+# OUT/yl_problem_selftest, using its own output and module directory
+# (default OUT=build/problem-types/<profile>[-<label>]) and its own manifest
+# OUT/problem-types-manifest.json. src/problem/* MUST NOT appear in the solver
+# source list, object list, link command or SRC_ENTRIES: per
+# .ccg/tasks/m3-01-problemstate-types/analysis-codex.md S5 the new objects stay
+# out of the solver link chain, so the solver binary cannot drift. The
+# non-drift criterion is GNU build-id equality (readelf -n), not whole-file
+# SHA-256: two builds from identical sources into the same path differ in a
+# few bytes of a random temp-file token embedded by the compiler, while the
+# build-id is constant. legacy/source-manifest.json is not touched by this
+# target; these sources were never solver inputs.
+#
+# The target erases --out before building, so --out is write-guarded in the
+# style of the --runs-root guard in tools/yl_probe.py: a destination that is,
+# contains, or is contained by the repository root, a solver output root
+# (build/{release,debug,strict,trace,sanitize}) or a source tree
+# (cases/ legacy/ src/ tools/ docs/ schemas/) is refused before anything is
+# deleted. A destination outside the repository needs --allow-external-out,
+# so that a mistyped path cannot silently erase something elsewhere.
+# --src selects the legacy solver tree and has no meaning here; passing it
+# with problem-types is an error rather than a silently ignored flag.
+#
 # Compile order: src/diagnostics/{yl_diag_registry,yl_diag}.f90 (repository
 # side, M1-02) first, then the legacy modules through Level.f90, then
 # src/state/*.f90 (repository side, M2-02), then the main program Fem.f90.
@@ -37,19 +64,32 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=tools/env.sh
 source "$ROOT/tools/env.sh"
 
-PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""
+PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""; TARGET=solver
+SRC_GIVEN=0; ALLOW_EXTERNAL_OUT=0
 while [ $# -gt 0 ]; do
     case "$1" in
         release|trace|debug|strict|sanitize) PROFILE="$1";;
-        --src) SRC="$(cd "$2" && pwd)"; shift;;
+        problem-types) TARGET=problem-types;;
+        --profile)
+            case "$2" in
+                release|trace|debug|strict|sanitize) PROFILE="$2";;
+                *) echo "build.sh: unknown profile: $2" >&2; exit 2;;
+            esac
+            shift;;
+        --src) SRC="$(cd "$2" && pwd)"; SRC_GIVEN=1; shift;;
+        --allow-external-out) ALLOW_EXTERNAL_OUT=1;;
         --out) OUT="$2"; shift;;
         --label) LABEL="$2"; shift;;
-        -h|--help) sed -n '2,20p' "$0"; exit 0;;
+        -h|--help) sed -n '2,50p' "$0"; exit 0;;
         *) echo "unknown argument: $1" >&2; exit 2;;
     esac
     shift
 done
-[ -z "$OUT" ] && OUT="$ROOT/build/$PROFILE${LABEL:+-$LABEL}"
+if [ "$TARGET" = problem-types ]; then
+    [ -z "$OUT" ] && OUT="$ROOT/build/problem-types/$PROFILE${LABEL:+-$LABEL}"
+else
+    [ -z "$OUT" ] && OUT="$ROOT/build/$PROFILE${LABEL:+-$LABEL}"
+fi
 
 hstar_env_check || { echo "build.sh: toolchain check failed" >&2; exit 3; }
 
@@ -70,6 +110,155 @@ LDFLAGS=(-qopenmp "-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
 # --disable-new-dtags emits RPATH instead of RUNPATH: RPATH also resolves the
 # transitive Intel runtime libraries (libintlc, libimf) that MKL itself needs,
 # so the binary runs without LD_LIBRARY_PATH.
+
+# --- target: problem-types (M3-01) --------------------------------------------
+# Deliberately placed BEFORE any solver source list, object list or link
+# command. It reuses the profile FFLAGS and the runtime-path link flags defined
+# above and then exits, so nothing below this block ever sees src/problem/*.
+if [ "$TARGET" = problem-types ]; then
+    # --src selects the legacy solver tree; this target always builds the
+    # repository's own src/problem. Refuse rather than ignore it silently.
+    if [ "$SRC_GIVEN" = 1 ]; then
+        echo "build.sh: problem-types does not accept --src: it always builds $ROOT/src/problem" >&2
+        echo "          (--src selects the legacy solver tree and applies to the solver target only)" >&2
+        exit 2
+    fi
+
+    # Write guard, in the style of check_runs_root/check_inside in
+    # tools/yl_probe.py. $OUT is erased a few lines below, so every refusal
+    # below happens before anything is deleted. `realpath -m` resolves a path
+    # that does not exist yet.
+    PT_OUT_ABS="$(realpath -m "$OUT")"
+    PT_ROOT_ABS="$(realpath -m "$ROOT")"
+    # pt_covers A B: true when B is A or lies under A.
+    pt_covers() { [ "$2" = "$1" ] || case "$2" in "$1"/*) return 0;; *) return 1;; esac; }
+    pt_refuse() { echo "build.sh: problem-types: --out $OUT $1: refusing to erase it" >&2; exit 2; }
+    pt_covers "$PT_OUT_ABS" "$PT_ROOT_ABS" && pt_refuse "is the repository root $PT_ROOT_ABS, or contains it"
+    for pt_p in "$PT_ROOT_ABS/build/release" "$PT_ROOT_ABS/build/debug" \
+                "$PT_ROOT_ABS/build/strict" "$PT_ROOT_ABS/build/trace" \
+                "$PT_ROOT_ABS/build/sanitize" "$PT_ROOT_ABS/cases" \
+                "$PT_ROOT_ABS/legacy" "$PT_ROOT_ABS/src" "$PT_ROOT_ABS/tools" \
+                "$PT_ROOT_ABS/docs" "$PT_ROOT_ABS/schemas"; do
+        pt_covers "$pt_p" "$PT_OUT_ABS" && pt_refuse "is $pt_p, or lies inside it"
+        pt_covers "$PT_OUT_ABS" "$pt_p" && pt_refuse "contains $pt_p"
+    done
+    if ! pt_covers "$PT_ROOT_ABS" "$PT_OUT_ABS" && [ "$ALLOW_EXTERNAL_OUT" != 1 ]; then
+        echo "build.sh: problem-types: --out $OUT lies outside the repository $PT_ROOT_ABS." >&2
+        echo "          Pass --allow-external-out if that is intended; it is erased before the build." >&2
+        exit 2
+    fi
+
+    # Compile order: optional wrappers -> aggregate types -> self-test program.
+    PT_SRCS=(src/problem/yl_problem_optional.f90 src/problem/yl_problem_types.f90)
+    PT_MAIN=src/problem/yl_problem_selftest.f90
+    PT_EXE="$OUT/yl_problem_selftest"
+    for f in "${PT_SRCS[@]}" "$PT_MAIN"; do
+        [ -f "$ROOT/$f" ] || {
+            echo "build.sh: problem-types: missing source $ROOT/$f" >&2
+            echo "build.sh: this target needs src/problem/yl_problem_optional.f90," >&2
+            echo "          src/problem/yl_problem_types.f90 and" >&2
+            echo "          src/problem/yl_problem_selftest.f90 (M3-01 deliverables 2-4)." >&2
+            exit 4
+        }
+    done
+    # Only the runtime-path part of the solver link line is needed: the problem
+    # types call no MKL. -L/-rpath on HSTAR_IOMP_LIBDIR together with
+    # --disable-new-dtags is required, otherwise the binary cannot find
+    # libintlc at run time.
+    PT_LDFLAGS=("-L$HSTAR_IOMP_LIBDIR" -lpthread -lm -ldl
+                "-Wl,--disable-new-dtags" "-Wl,-rpath,$HSTAR_IOMP_LIBDIR")
+    # Repository-side code is held to a stricter diagnostic level than the
+    # legacy tree; warnings are recorded in the manifest, they do not fail here.
+    PT_FFLAGS=("${FFLAGS[@]}" -warn all -stand f18)
+
+    rm -rf "$OUT"; mkdir -p "$OUT/obj"
+    LOG="$OUT/build.log"; : > "$LOG"
+    T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    log() { echo "$*" | tee -a "$LOG"; }
+    run() { log "\$ $*"; "$@" >>"$LOG" 2>&1; }
+
+    log "=== HSTAR Evolution build: target=problem-types profile=$PROFILE out=$OUT"
+    log "FC: $HSTAR_FC ($("$HSTAR_FC" --version | head -1))"
+    log "FFLAGS: ${PT_FFLAGS[*]}"
+    log "note: no solver object is built here and no object here enters the solver."
+
+    PT_OBJS=()
+    for f in "${PT_SRCS[@]}" "$PT_MAIN"; do
+        b="$(basename "$f")"; obj="$OUT/obj/${b%.*}.o"
+        run "$HSTAR_FC" -c "${PT_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" "$ROOT/$f" -o "$obj"
+        PT_OBJS+=("$obj")
+    done
+    run "$HSTAR_FC" "${FFLAGS[@]}" "${PT_OBJS[@]}" -o "$PT_EXE" "${PT_LDFLAGS[@]}"
+    T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    PT_WARNINGS=$(grep -c -iE "warning #|remark #" "$LOG" || true)
+    log "warnings/remarks in log: $PT_WARNINGS"
+
+    PT_ENTRIES=()
+    for f in "${PT_SRCS[@]}" "$PT_MAIN"; do PT_ENTRIES+=("$f|$ROOT/$f"); done
+    python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$PT_WARNINGS" \
+        "${PT_FFLAGS[*]}" "${PT_LDFLAGS[*]}" "$PT_EXE" "${PT_ENTRIES[@]}" <<'PT_PY'
+import hashlib, json, os, platform, re, subprocess, sys
+out, profile, root, t0, t1, warnings, fflags, ldflags, exe, *entries = sys.argv[1:]
+srcs = [e.split('|', 1) for e in entries]
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, 'rb') as f:
+        for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
+    return h.hexdigest()
+def ver(cmd):
+    try: return subprocess.run([cmd, '--version'], capture_output=True, text=True).stdout.splitlines()[0]
+    except Exception as e: return f'unavailable: {e}'
+def build_id(p):
+    txt = subprocess.run(['readelf', '-n', p], capture_output=True, text=True).stdout
+    m = re.search(r'Build ID:\s*([0-9a-f]+)', txt)
+    return m.group(1) if m else None
+ldd = subprocess.run(['ldd', exe], capture_output=True, text=True).stdout
+deps = []
+for line in ldd.splitlines():
+    m = re.match(r'\s*(\S+)\s*=>\s*(\S+)', line)
+    if m and os.path.isfile(m.group(2)):
+        deps.append({'soname': m.group(1), 'path': m.group(2), 'sha256': sha(m.group(2))})
+    elif 'not found' in line:
+        deps.append({'soname': line.split()[0], 'path': None, 'sha256': None})
+env = {k: os.environ[k] for k in ('HSTAR_FC','HSTAR_MKLROOT','HSTAR_IOMP_LIBDIR','HSTAR_UNIT_PROFILE')}
+manifest = {
+    'manifest_version': 1,
+    'target': 'problem-types',
+    'profile': profile,
+    'started_at': t0, 'finished_at': t1,
+    'solver_linkage': ('none: these objects are not linked into build/<profile>/hstar, '
+                       'and these sources are absent from legacy/source-manifest.json '
+                       'because they were never solver inputs'),
+    'platform': {'os': platform.platform(), 'machine': platform.machine(), 'python': platform.python_version()},
+    'toolchain': {**env, 'fc_version': ver(env['HSTAR_FC'])},
+    'flags': {'fflags': fflags.split(), 'ldflags': ldflags.split()},
+    'sources': {'dir': root, 'identity': 'repository:src/problem',
+                'files': [{'path': rel, 'sha256': sha(abs_)} for rel, abs_ in srcs]},
+    'binary': {'path': exe, 'bytes': os.path.getsize(exe), 'sha256': sha(exe),
+               'gnu_build_id': build_id(exe)},
+    'runtime_dependencies': deps,
+    'warnings_or_remarks': int(warnings),
+    'unresolved_runtime_deps': [d['soname'] for d in deps if d['path'] is None],
+}
+json.dump(manifest, open(os.path.join(out, 'problem-types-manifest.json'), 'w'), indent=2)
+if manifest['unresolved_runtime_deps']:
+    print('build.sh: unresolved runtime dependencies:', manifest['unresolved_runtime_deps'], file=sys.stderr)
+    sys.exit(5)
+print(f"binary {exe} sha256={manifest['binary']['sha256'][:16]} build-id={manifest['binary']['gnu_build_id']} "
+      f"deps={len(deps)} warnings={warnings}")
+PT_PY
+
+    log "--- running self-test: $PT_EXE"
+    "$PT_EXE" 2>&1 | tee -a "$LOG"
+    PT_RC=${PIPESTATUS[0]}
+    if [ "$PT_RC" -ne 0 ]; then
+        log "=== SELF-TEST FAILED (problem-types/$PROFILE) rc=$PT_RC"
+        exit 6
+    fi
+    log "=== BUILD OK (problem-types/$PROFILE) $T0 -> $T1"
+    exit 0
+fi
 
 # Repository-side Fortran compiled before the legacy tree (M1-02 diagnostics:
 # registry generated by tools/yl_io_inventory.py gen-fortran, then yl_diag).
