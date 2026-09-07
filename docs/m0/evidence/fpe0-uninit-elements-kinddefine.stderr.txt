@@ -1,0 +1,13 @@
+ time: 13:16:28
+forrtl: error (182): floating invalid - possible uninitialized real/complex variable.
+Image              PC                Routine            Line        Source             
+libc.so.6          00007DD128045330  Unknown               Unknown  Unknown
+hstar              00000000004E7E3F  shfunc                   2588  Elements.f90
+hstar              000000000043A2DD  kinddefine                197  Elements.f90
+hstar              0000000000574CCA  global_data              1094  Global.f90
+hstar              000000000168180E  fem90                     109  Fem.f90
+hstar              0000000000407AAD  Unknown               Unknown  Unknown
+libc.so.6          00007DD12802A1CA  Unknown               Unknown  Unknown
+libc.so.6          00007DD12802A28B  __libc_start_main     Unknown  Unknown
+hstar              00000000004079C5  Unknown               Unknown  Unknown
+timeout: 被监视的命令已核心转储

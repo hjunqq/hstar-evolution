@@ -1,0 +1,25 @@
+ time: 13:15:20
+Uninitialized bytes in fopen at offset 0 inside [0x7ffd2b388f60, 39)
+==2911691==WARNING: MemorySanitizer: use-of-uninitialized-value
+    #0 0x795ae9f5031e in __kmp_affinity_insert_numa_nodes(kmp_topology_t*) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/z_Linux_util.cpp:364:16
+    #1 0x795ae9e5872a in __kmp_affinity_create_x2apicid_map(kmp_i18n_id*) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_affinity.cpp:3026:3
+    #2 0x795ae9e5135a in __kmp_aux_affinity_initialize_topology(kmp_affinity_t&) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_affinity.cpp:4770:17
+    #3 0x795ae9e5135a in __kmp_aux_affinity_initialize(kmp_affinity_t&) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_affinity.cpp:4915:20
+    #4 0x795ae9ed950a in __kmp_env_affinity_init(__kmp_env_blk*) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_settings.cpp:6921:3
+    #5 0x795ae9ed9d40 in __kmp_env_initialize(char const*) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_settings.cpp:7009:3
+    #6 0x795ae9ec452e in __kmp_do_serial_initialize(char const*) /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_runtime.cpp:7947:3
+    #7 0x795ae9ec40f8 in __kmp_get_global_thread_id_reg /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_runtime.cpp:307:7
+    #8 0x795ae9e5e612 in kmpc_aligned_malloc /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/kmp_alloc.cpp:1173:3
+    #9 0x000008d9c366 in for_allocate_handle (/home/huijun/HSTAR_Next/hstar-evolution/build/debug/hstar+0x8d9c366) (BuildId: d6352e0120f0a28f730fdc52501d21a633db92bf)
+    #10 0x000000c89e73 in global_var::global_data_ /home/huijun/HSTAR_Next/hstar-evolution/legacy/yl/Global.f90:679:5
+    #11 0x000006d2d622 in MAIN /home/huijun/HSTAR_Next/hstar-evolution/legacy/yl/Fem.f90:109:10
+    #12 0x00000040e9a8 in main (/home/huijun/HSTAR_Next/hstar-evolution/build/debug/hstar+0x40e9a8) (BuildId: d6352e0120f0a28f730fdc52501d21a633db92bf)
+    #13 0x795ae9a2a1c9 in __libc_start_call_main csu/../sysdeps/nptl/libc_start_call_main.h:58:16
+    #14 0x795ae9a2a28a in __libc_start_main csu/../csu/libc-start.c:360:3
+    #15 0x00000040e874 in _start (/home/huijun/HSTAR_Next/hstar-evolution/build/debug/hstar+0x40e874) (BuildId: d6352e0120f0a28f730fdc52501d21a633db92bf)
+
+  Uninitialized value was created by an allocation of 'mech_info' in the stack frame
+    #0 0x000008de085d in for_write_seq_lis_xmit (/home/huijun/HSTAR_Next/hstar-evolution/build/debug/hstar+0x8de085d) (BuildId: d6352e0120f0a28f730fdc52501d21a633db92bf)
+
+SUMMARY: MemorySanitizer: use-of-uninitialized-value /localdisk/promo-build/20250910/tmp/lin_32e-rtl_int_5_nor_dyn.rel.c0.s0.tcm1.t1..h1.u1-anompclxlin01/../../src/z_Linux_util.cpp:364:16 in __kmp_affinity_insert_numa_nodes(kmp_topology_t*)
+Exiting

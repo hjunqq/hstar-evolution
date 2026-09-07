@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# HSTAR Evolution — reproducible Linux build of the legacy YL solver (M0-02).
+#
+#   tools/build.sh [release|debug] [--src DIR] [--out DIR] [--label NAME]
+#
+# Profiles:
+#   release  -O2                                  (reference numerics)
+#   debug    -O0 -g -traceback -check bounds,pointers
+#            On the pure snapshot this aborts at Fem.f90:12288 (tcurves(0)
+#            read when a prescribed set has itcurve=0) -> M1 firewall target.
+#   strict   debug + -init=snan,arrays -fpe0 (ifx traps on the signalling NaN
+#            even without -fpe0). Aborts earlier at Elements.f90:2588
+#            (uninitialised t/u for 1-D element kinds) -> M1 firewall target.
+#   sanitize strict + -check uninit (MemorySanitizer). BLOCKED on this
+#            toolchain: the uninstrumented OpenMP runtime trips MSan before main.
+#   Only `release` is the M0 reference build; the checking profiles are kept
+#   so that the recorded evidence can be reproduced (docs/build-linux.md).
+#
+# Outputs (default OUT=build/<profile>[-<label>]):
+#   OUT/obj/*.o *.mod        OUT/hstar          OUT/build.log
+#   OUT/build-manifest.json  compiler/flags/deps/hashes/ldd; fail-closed
+#
+# The build refuses to start if legacy/source-manifest.json does not verify
+# against --src when --src is the in-repo snapshot, so that every binary is
+# tied to hashed sources. For an external tree (e.g. the dirty candidate
+# worktree, M0-04c) pass --src and --label; the manifest records the tree's
+# own hash list instead.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=tools/env.sh
+source "$ROOT/tools/env.sh"
+
+PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        release|debug|strict|sanitize) PROFILE="$1";;
+        --src) SRC="$(cd "$2" && pwd)"; shift;;
+        --out) OUT="$2"; shift;;
+        --label) LABEL="$2"; shift;;
+        -h|--help) sed -n '2,20p' "$0"; exit 0;;
+        *) echo "unknown argument: $1" >&2; exit 2;;
+    esac
+    shift
+done
+[ -z "$OUT" ] && OUT="$ROOT/build/$PROFILE${LABEL:+-$LABEL}"
+
+hstar_env_check || { echo "build.sh: toolchain check failed" >&2; exit 3; }
+
+STUB="$ROOT/legacy/stubs/gidpost_stub.c"
+MKL_INC="$HSTAR_MKLROOT/include"
+MKL_LIB="$HSTAR_MKLROOT/lib"
+
+case "$PROFILE" in
+    release)  FFLAGS=(-O2);;
+    debug)    FFLAGS=(-O0 -g -traceback -check bounds,pointers);;
+    strict)   FFLAGS=(-O0 -g -traceback -check bounds,pointers -init=snan,arrays -fpe0);;
+    sanitize) FFLAGS=(-O0 -g -traceback -check bounds,pointers,uninit -init=snan,arrays -fpe0);;
+esac
+LDFLAGS=(-qopenmp "-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
+         "-L$HSTAR_IOMP_LIBDIR" -liomp5 -lpthread -lm -ldl
+         "-Wl,--disable-new-dtags" "-Wl,-rpath,$MKL_LIB" "-Wl,-rpath,$HSTAR_IOMP_LIBDIR")
+# --disable-new-dtags emits RPATH instead of RUNPATH: RPATH also resolves the
+# transitive Intel runtime libraries (libintlc, libimf) that MKL itself needs,
+# so the binary runs without LD_LIBRARY_PATH.
+
+# Module dependency order (same as the original Windows project / build_linux.sh).
+SRCS=(Vartype.f90 Array.f90 Elements.f90 gidpost.F90 vsl_gauss_module.f90
+      Global.f90 Material.f90 meshfine.f90 Load.f90 Prescrib.f90 Solver.f90
+      Output.f90 Temper.f90 Stiff.f90 Residu.f90 Level.f90 Fem.f90)
+
+# --- source integrity ---------------------------------------------------------
+if [ "$SRC" = "$ROOT/legacy/yl" ]; then
+    python3 "$ROOT/tools/yl_manifest.py" check "$ROOT/legacy/source-manifest.json" >/dev/null \
+        || { echo "build.sh: legacy/source-manifest.json does not verify; refusing to build" >&2; exit 4; }
+    SRC_IDENTITY="legacy/source-manifest.json"
+else
+    SRC_IDENTITY="external:$SRC"
+fi
+for f in "${SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing source $SRC/$f" >&2; exit 4; }; done
+[ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }
+
+rm -rf "$OUT"; mkdir -p "$OUT/obj"
+LOG="$OUT/build.log"; : > "$LOG"
+T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+log() { echo "$*" | tee -a "$LOG"; }
+run() { log "\$ $*"; "$@" >>"$LOG" 2>&1; }
+
+log "=== HSTAR Evolution build: profile=$PROFILE src=$SRC out=$OUT"
+log "FC: $HSTAR_FC ($("$HSTAR_FC" --version | head -1))"
+log "CC: $HSTAR_CC ($("$HSTAR_CC" --version | head -1))"
+log "MKLROOT: $HSTAR_MKLROOT   IOMP: $HSTAR_IOMP_LIBDIR"
+log "FFLAGS: ${FFLAGS[*]}"
+
+run "$HSTAR_CC" -c "$STUB" -o "$OUT/obj/gidpost_stub.o"
+OBJS=("$OUT/obj/gidpost_stub.o")
+for f in "${SRCS[@]}"; do
+    obj="$OUT/obj/${f%.*}.o"
+    run "$HSTAR_FC" -c "${FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" -I "$MKL_INC" "$SRC/$f" -o "$obj"
+    OBJS+=("$obj")
+done
+run "$HSTAR_FC" "${FFLAGS[@]}" "${OBJS[@]}" -o "$OUT/hstar" "${LDFLAGS[@]}"
+T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+WARNINGS=$(grep -c -iE "warning #|remark #" "$LOG" || true)
+log "warnings/remarks in log: $WARNINGS"
+
+# --- manifest -----------------------------------------------------------------
+python3 - "$OUT" "$PROFILE" "$SRC" "$SRC_IDENTITY" "$T0" "$T1" "$WARNINGS" \
+    "${FFLAGS[*]}" "${LDFLAGS[*]}" "${SRCS[@]}" <<'PY'
+import hashlib, json, os, platform, re, subprocess, sys
+out, profile, src, src_identity, t0, t1, warnings, fflags, ldflags, *srcs = sys.argv[1:]
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, 'rb') as f:
+        for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
+    return h.hexdigest()
+def ver(cmd):
+    try: return subprocess.run([cmd, '--version'], capture_output=True, text=True).stdout.splitlines()[0]
+    except Exception as e: return f'unavailable: {e}'
+exe = os.path.join(out, 'hstar')
+ldd = subprocess.run(['ldd', exe], capture_output=True, text=True).stdout
+deps = []
+for line in ldd.splitlines():
+    m = re.match(r'\s*(\S+)\s*=>\s*(\S+)', line)
+    if m and os.path.isfile(m.group(2)):
+        deps.append({'soname': m.group(1), 'path': m.group(2), 'sha256': sha(m.group(2))})
+    elif 'not found' in line:
+        deps.append({'soname': line.split()[0], 'path': None, 'sha256': None})
+env = {k: os.environ[k] for k in ('HSTAR_FC','HSTAR_CC','HSTAR_MKLROOT','HSTAR_IOMP_LIBDIR','HSTAR_UNIT_PROFILE')}
+manifest = {
+    'manifest_version': 1,
+    'profile': profile,
+    'started_at': t0, 'finished_at': t1,
+    'platform': {'os': platform.platform(), 'machine': platform.machine(), 'python': platform.python_version()},
+    'toolchain': {**env, 'fc_version': ver(env['HSTAR_FC']), 'cc_version': ver(env['HSTAR_CC'])},
+    'flags': {'fflags': fflags.split(), 'ldflags': ldflags.split()},
+    'sources': {'dir': src, 'identity': src_identity,
+                'files': [{'path': f, 'sha256': sha(os.path.join(src, f))} for f in srcs]},
+    'gidpost': 'stub (link-only, no GiD binary output)',
+    'binary': {'path': exe, 'bytes': os.path.getsize(exe), 'sha256': sha(exe)},
+    'runtime_dependencies': deps,
+    'warnings_or_remarks': int(warnings),
+    'unresolved_runtime_deps': [d['soname'] for d in deps if d['path'] is None],
+}
+json.dump(manifest, open(os.path.join(out, 'build-manifest.json'), 'w'), indent=2)
+if manifest['unresolved_runtime_deps']:
+    print('build.sh: unresolved runtime dependencies:', manifest['unresolved_runtime_deps'], file=sys.stderr)
+    sys.exit(5)
+print(f"binary {exe} sha256={manifest['binary']['sha256'][:16]}… deps={len(deps)} warnings={warnings}")
+PY
+log "=== BUILD OK ($PROFILE) $T0 → $T1"

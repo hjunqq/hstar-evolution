@@ -1,0 +1,33 @@
+# 观察量登记（M0-05a）。在任何结果被查看之前登记；字段结构在 M0-04a 首跑后核对。
+version = 1
+case_id = "static_2d.cooks_membrane"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 289
+expected_element_count = 256
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较；.rtt/.stf/.res 为二进制，M0 不解析"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+scale = 2.2e-3
+required = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+scale = 1.1e6
+required = true
+note = "average_appear=2 表示节点应力由高斯点直接平均；分量顺序已在 2026-09-07 冒烟运行的 flavia.res 头中核实（STRESS 块，type 3，4 个命名分量）"
+
+[[derived_check]]
+id = "fixed_nodes_zero"
+description = "约束集节点在被约束自由度上的位移精确为 0"

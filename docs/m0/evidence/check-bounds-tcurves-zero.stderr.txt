@@ -1,0 +1,12 @@
+ time: 13:19:13
+forrtl: severe (408): fort: (3): Subscript #1 of the array TCURVES has value 0 which is less than the lower bound of 1
+
+Image              PC                Routine            Line        Source             
+hstar              00000000019DF86F  modf_var_prescrib       12288  Fem.f90
+hstar              0000000001743C71  static_u                 3647  Fem.f90
+hstar              00000000016DCF72  process_analysis         1928  Fem.f90
+hstar              0000000001673D75  fem90                     362  Fem.f90
+hstar              0000000000407ACD  Unknown               Unknown  Unknown
+libc.so.6          00007B733CC2A1CA  Unknown               Unknown  Unknown
+libc.so.6          00007B733CC2A28B  __libc_start_main     Unknown  Unknown
+hstar              00000000004079E5  Unknown               Unknown  Unknown

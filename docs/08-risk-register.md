@@ -20,6 +20,8 @@
 | R13 | 原仓库脏树《修改报告.md》与实际 diff 不符；Stiff.f90 含密度循环前 `factw` 未初始化修复 | 按报告归类补丁会漏掉影响重力路径的修复 | M0-04c 用脏树 candidate 二进制对照运行；差异逐 hunk 独立提交 |
 | R14 | 旧程序多处 `stop '文本'` 退出码为 0；`.chk` 与 stdout 含时间戳 | 仅凭退出码或字节比较误判成功 | M0-03 组合判据；比较只用解析后的 `1.flavia.res` |
 | R15 | 种子算例关闭反力输出，且静力单增量流程是否调用 GiD 写出未经运行确认 | 首跑可能无可解析结果；反力平衡判据不可用 | M0-04a 首跑确认写出；M5 新建反力输出探针 |
+| R17 | `Elements.f90:197` `kinddefine` 对一维单元类型不赋值 `t/u` 即调用 `shfunc`（`Elements.f90:2588`），使用未初始化实数 | 任何 `-init=snan`/`-fpe0` 运行在启动即中止；结果不受影响（相关项未用于线单元） | M1-03 初始化 `t=u=0`，用 strict profile 两例完整运行作关闭证据 |
+| R18 | `Fem.f90:12288` `modf_var_prescribed` 在约束集 `itcurve=0` 时读 `tcurves(0)%dfact/type_curve`，越界 | `-check bounds` 中止；release 下读到相邻内存，两例结果未受影响但不可保证 | M1-03 增加 `itcurve==0` 分支（因子 1，无曲线），用 debug profile 两例完整运行作关闭证据 |
 | R16 | 初稿 ProblemState 自创分类，与 CAE 惯例和 YL 对象都不对应 | 三套词汇并存，输入更混乱 | ADR-0003 采用 CAE 对象模型；docs/01、03 与 schema 已改，M3/M5 按其实施 |
 
 每次新增风险补充责任人、发现提交、最小复现、预定处置阶段和关闭证据路径。

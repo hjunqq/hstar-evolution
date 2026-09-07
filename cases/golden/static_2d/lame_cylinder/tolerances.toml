@@ -1,0 +1,22 @@
+# 容差登记（M0-05a）。B02 重复运行要求精确相等；跨路径容差为临时值，
+# 须在 M0-04b 得到重复噪声后以独立任务定稿，不得看到差异后放宽。
+version = 1
+case_id = "static_2d.lame_cylinder"
+comparison_rule = "abs(actual - reference) <= atol + rtol * abs(reference), per component, after shape/ID/finite checks"
+
+[repeat]           # B02：同二进制、单线程、三次运行
+atol = 0.0
+rtol = 0.0
+
+[cross_path]       # N01（M4）：新旧入口路径；临时值
+status = "provisional"
+[cross_path.displacement]
+unit = "m"
+atol = 3.8e-15
+rtol = 1e-9
+basis = "atol = 1e-9 × 位移尺度；rtol 取双精度求解 1e-9；待 M0-04b 噪声数据复核"
+[cross_path.stress]
+unit = "Pa"
+atol = 4.7e-5
+rtol = 1e-9
+basis = "atol = 1e-9 × 应力尺度；待 M0-04b 噪声数据复核"
