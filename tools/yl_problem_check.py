@@ -80,11 +80,14 @@ Check rules
      names differ only by case are a FAIL (they would be the same component)
   12 doc agreement (only when --doc is given): the file must exist and must equal exactly
      what `render` produces from the same map and types
-  13 wrapper integrity: the `opt_*` bodies are not put through the component grammar, so
-     their one load-bearing property is checked directly -- every declared wrapper makes
-     its components `private` and declares `logical :: has = .false.`, and a wrapper that
-     is used but never declared under --src is a FAIL. Without the default initializer
-     every instance would start undefined and the unset discipline would be void
+  13 wrapper integrity: the `opt_*` bodies are not put through the component grammar and
+     are never walked as nested types, so their load-bearing structure is checked directly
+     instead. For every DECLARED wrapper, four assertions: the component block is
+     `private`; a component named `has` exists; it is `logical`; and it carries the default
+     initializer `= .false.`. A wrapper that is used but never declared under --src is also
+     a FAIL. Without that initializer every instance starts undefined and the unset
+     discipline the whole type layer rests on is void, which neither the gate nor the
+     Fortran self-test would otherwise notice. Procedure bodies are still not parsed
 
 Declaration grammar (closed inside a type block)
 
@@ -1311,6 +1314,16 @@ def self_cases() -> list:
             "    logical :: has = .false.\n    real(real64) :: value",
             "    logical :: has\n    real(real64) :: value")})
 
+    def wrapper_has_kind():
+        return build(extra={"yl_problem_optional.f90": GOOD_OPTIONAL.replace(
+            "  type, public :: opt_int\n    private\n    logical :: has",
+            "  type, public :: opt_int\n    private\n    integer :: has")})
+
+    def wrapper_no_has():
+        return build(extra={"yl_problem_optional.f90": GOOD_OPTIONAL.replace(
+            "    logical :: has = .false.\n    character(len=:), allocatable :: value",
+            "    character(len=:), allocatable :: value")})
+
     def wrapper_not_private():
         return build(extra={"yl_problem_optional.f90": GOOD_OPTIONAL.replace(
             "  type, public :: opt_text\n    private\n",
@@ -1380,7 +1393,9 @@ def self_cases() -> list:
         ("rule 9  bare, unmarked",     "which cannot express unset",         bare_unmarked),
         ("rule 9  wrappers stripped",  "which cannot express unset",         wrappers_stripped),
         ("rule 9  stale wrapper",      "optionality wrapper is stale",       stale_optional),
-        ("rule 13 wrapper no default", "needs `logical :: has = .false.`",   wrapper_no_default),
+        ("rule 13 no `.false.` default", "without the default initializer",  wrapper_no_default),
+        ("rule 13 `has` not logical",  "declares `has` as",                  wrapper_has_kind),
+        ("rule 13 no `has` component", "declares no `has` component",        wrapper_no_has),
         ("rule 13 wrapper not private", "does not make its components",      wrapper_not_private),
         ("rule 13 wrapper undeclared",  "uses undeclared type `opt_logical`", wrapper_missing),
         ("rule 10 legacy slot name",   "is a legacy slot name",              slot_name),
