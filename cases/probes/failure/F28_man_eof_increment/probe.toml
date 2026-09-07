@@ -1,0 +1,19 @@
+schema = 1
+id = "F28_man_eof_increment"
+base_case = "static_2d.cooks_membrane"
+description = "Keep only the first 2 lines of 1.man (title + nincs): the increment control record hits EOF inside STATIC_U."
+
+[[derive]]
+op = "truncate_lines"
+file = "1.man"
+keep = 2
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "increment_lazy(1,1)"
+file_suffix = ".man"
+reader = "MAN.STATIC_U.increment_control"
+no_core = true
+max_wall_seconds = 10

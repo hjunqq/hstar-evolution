@@ -1,0 +1,18 @@
+schema = 1
+id = "F31_sol_empty"
+base_case = "static_2d.cooks_membrane"
+description = "Empty 1.sol: the open succeeds and PROFILE's title record hits EOF on the first linear solve."
+
+[[derive]]
+op = "empty_file"
+file = "1.sol"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "solver_lazy"
+file_suffix = ".sol"
+reader = "SOL.PROFILE.title#1"
+no_core = true
+max_wall_seconds = 10

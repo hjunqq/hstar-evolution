@@ -1,0 +1,24 @@
+schema = 1
+id = "F25_ele_node_parse"
+base_case = "static_2d.cooks_membrane"
+description = "Line 1 of 1.ele: the second item (first connectivity node id '1') becomes 'x'; element record 1 fails with a type error."
+
+[[derive]]
+op = "replace_token"
+file = "1.ele"
+line = 1
+old = "1"
+new = "x"
+count = 1
+occurrence = 2
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "PARSE"
+stage = "startup"
+file_suffix = ".ele"
+reader = "ELE.read_element.element_connectivity"
+index = 1
+no_core = true
+max_wall_seconds = 10

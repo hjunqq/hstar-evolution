@@ -1,0 +1,19 @@
+schema = 1
+id = "F30_sol_eof_control"
+base_case = "static_2d.cooks_membrane"
+description = "Keep only the first line of 1.sol: PROFILE's control record (read on the first linear solve) hits EOF."
+
+[[derive]]
+op = "truncate_lines"
+file = "1.sol"
+keep = 1
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "solver_lazy"
+file_suffix = ".sol"
+reader = "SOL.PROFILE.profile_control"
+no_core = true
+max_wall_seconds = 10

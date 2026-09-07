@@ -1,0 +1,20 @@
+schema = 1
+id = "F20_cor_eof"
+base_case = "static_2d.cooks_membrane"
+description = "Truncate 1.cor to 200 of 289 node records: the coordinate loop hits EOF on record 201."
+
+[[derive]]
+op = "truncate_lines"
+file = "1.cor"
+keep = 200
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "startup"
+file_suffix = ".cor"
+reader = "COR.global_data.node_coordinates"
+index = 201
+no_core = true
+max_wall_seconds = 10

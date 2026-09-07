@@ -1,5 +1,7 @@
     module output
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use global_var
     use prescribed
@@ -4149,14 +4151,19 @@
     integer(ink),allocatable::temp(:,:),icpx(:)
 
 
-    read(outpread,*)text
-    read(outpread,*)text
+    read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_title_1,0)
+    read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_title_2,0)
     !print *,text
-    read(outpread,*)irecover,wpgroup,wegroup,wggroup,wjgroup
+    read(outpread,*,iostat=yl_ios,iomsg=yl_msg)irecover,wpgroup,wegroup,wggroup,wjgroup
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_output_control,0)
     !print *,'irecover,wpgroup,wegroup,wggroup,wjgroup=',irecover,wpgroup,wegroup,wggroup,wjgroup
     !stop
-    read(outpread,*)text
-    read(outpread,*)text
+    read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_title_3,0)
+    read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_title_4,0)
     if (wpgroup==0)goto 1  !20210803
     if(Bparameter==-3)then
         rewind(back_ctl_unit)

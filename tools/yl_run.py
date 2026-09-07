@@ -7,16 +7,28 @@ Every run:
   3. runs the binary there with stdin=/dev/null in its own process group,
      single-threaded, without LD_LIBRARY_PATH, under a wall-clock timeout
      (SIGTERM to the group, then SIGKILL after a grace period);
-  4. classifies the outcome (see STATUS_ORDER) and parses the required output;
-  5. re-verifies the golden inputs (GOLDEN_MODIFIED otherwise);
-  6. writes run-manifest.json (+ results.json when the output parsed).
+  4. parses the binary's structured diagnostics (stderr `HSTAR_DIAG ...` lines,
+     M1-02 exit protocol; every integer key must be an integer) and check-mode
+     summary (stdout `HSTAR_CHECK*` lines: schema=1, mode=check-legacy, integer
+     errors, readers_executed == number of HSTAR_CHECK_READER lines);
+  5. parses the required output and re-verifies the golden inputs;
+  6. classifies the outcome (first match in STATUS_ORDER wins): INPUT_ERROR /
+     UNSUPPORTED / INIT_ERROR / SOLVE_ERROR / INTERNAL_ERROR require rc == the
+     diagnostic's exit= (2..6); a malformed HSTAR_DIAG line, an exit= outside
+     2..6 or rc != exit= is a protocol violation -> FAILED; a check summary that
+     is malformed or not (status=OK, errors=0) with rc 0 is FAILED too;
+     GOLDEN_MODIFIED is decided before CHECKED / MISSING_OUTPUT / COMPLETED;
+  7. writes run-manifest.json (+ results.json when the output parsed).
 
-Only COMPLETED may feed a comparison. Exit code is 0 only for COMPLETED.
+Only COMPLETED may feed a comparison. The process exit code is 0 iff the final
+status equals --expect-status (default COMPLETED); the manifest records both
+`expected_status` and `expectation_met`.
 
 Usage:
   yl_run.py --case-id static_2d.cooks_membrane --binary build/release/hstar
             [--timeout 600] [--runs-root runs] [--label NAME]
-            [--case-dir DIR]   # override the case directory (self-tests)
+            [--expect-status COMPLETED] [--binary-args "--check-legacy"]
+            [--case-dir DIR]   # override the case directory (self-tests / probes)
 """
 from __future__ import annotations
 
@@ -27,6 +39,7 @@ import os
 import platform
 import re
 import resource
+import shlex
 import shutil
 import signal
 import subprocess
@@ -41,11 +54,25 @@ import yl_manifest  # noqa: E402
 import yl_parse_flavia  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-STATUS_ORDER = ["INPUT_HASH_MISMATCH", "TIMEOUT", "CRASHED", "FAILED", "MISSING_OUTPUT", "GOLDEN_MODIFIED", "COMPLETED"]
+STATUS_ORDER = [
+    "INPUT_HASH_MISMATCH", "TIMEOUT", "CRASHED",
+    "INPUT_ERROR", "UNSUPPORTED", "INIT_ERROR", "SOLVE_ERROR", "INTERNAL_ERROR", "FAILED",
+    "GOLDEN_MODIFIED", "CHECKED", "MISSING_OUTPUT", "COMPLETED",
+]
 CRASH_PATTERNS = re.compile(r"forrtl:|severe \(|Segmentation fault|MemorySanitizer|core dumped", re.I)
 # The legacy program writes its wall-clock stamps to stderr; nothing else is expected there.
 BENIGN_STDERR = re.compile(r"^\s*time(?:\(\w+\))?:\s*\d\d:\d\d:\d\d\s*$")
 GRACE_SECONDS = 5.0
+# M1-02 exit protocol: one structured line per diagnostic on stderr, summary lines on stdout.
+DIAG_PREFIX = "HSTAR_DIAG "
+CHECK_PREFIX = "HSTAR_CHECK"
+DIAG_INT_KEYS = {"exit", "seq", "index", "iostat", "schema"}
+CHECK_INT_KEYS = {"errors", "readers_executed", "readers_registered", "schema", "n"}
+CHECK_MODE = "check-legacy"
+CORE_FILE = re.compile(r"^core(?:\..*)?$")
+DIAG_SCHEMA = 1
+# exit code -> status, for a run whose rc equals the exit= of a well-formed HSTAR_DIAG line
+EXIT_STATUS = {2: "INPUT_ERROR", 3: "UNSUPPORTED", 4: "INIT_ERROR", 5: "SOLVE_ERROR", 6: "INTERNAL_ERROR"}
 
 
 def sha256(path: Path) -> str:
@@ -62,6 +89,163 @@ def find_case(case_id: str) -> Path:
         if c["id"] == case_id:
             return REPO_ROOT / "cases" / c["path"]
     raise SystemExit(f"case id not registered in cases/manifest.toml: {case_id}")
+
+
+def parse_kv_line(line: str, int_keys: set[str], strict: bool = False) -> dict:
+    """Parse `key=value key="quoted value"` (shlex rules) into a dict; listed keys become int when possible.
+    strict: raise ValueError on unbalanced quotes instead of falling back to whitespace splitting."""
+    out: dict = {}
+    try:
+        tokens = shlex.split(line)
+    except ValueError:
+        if strict:
+            raise
+        tokens = line.split()
+    for tok in tokens:
+        if "=" not in tok:
+            continue
+        k, v = tok.split("=", 1)
+        if k in int_keys:
+            try:
+                v = int(v)
+            except ValueError:
+                pass
+        out[k] = v
+    return out
+
+
+def parse_diag_line(body: str) -> dict:
+    """Strict HSTAR_DIAG record: shlex-parsable, schema=1, a code, an integer exit, and every
+    present integer key (exit/seq/index/iostat/schema) an integer. ValueError otherwise."""
+    kv = parse_kv_line(body, DIAG_INT_KEYS, strict=True)
+    if kv.get("schema") != DIAG_SCHEMA:
+        raise ValueError(f"schema {kv.get('schema')!r} != {DIAG_SCHEMA}")
+    if not kv.get("code"):
+        raise ValueError("missing code")
+    if not isinstance(kv.get("exit"), int):
+        raise ValueError(f"exit {kv.get('exit')!r} is not an integer")
+    bad = [f"{k}={kv[k]!r}" for k in sorted(DIAG_INT_KEYS) if k in kv and not isinstance(kv[k], int)]
+    if bad:
+        raise ValueError(f"non-integer {', '.join(bad)}")
+    return kv
+
+
+def parse_diagnostics(stderr_text: str) -> tuple[list[dict], list[str], list[str]]:
+    """Split stderr into well-formed HSTAR_DIAG records, malformed HSTAR_DIAG lines and the
+    remaining non-benign lines."""
+    diags, malformed, other = [], [], []
+    for ln in stderr_text.splitlines():
+        if ln.startswith(DIAG_PREFIX):
+            try:
+                diags.append(parse_diag_line(ln[len(DIAG_PREFIX):]))
+            except ValueError as exc:
+                malformed.append(f"{ln[:300]}  [{exc}]")
+        elif ln.strip() and not BENIGN_STDERR.match(ln):
+            other.append(ln)
+    return diags, malformed, other
+
+
+def parse_check_summary(stdout_text: str) -> tuple[dict | None, list[str]]:
+    """Collect stdout HSTAR_CHECK / HSTAR_CHECK_READER lines -> (summary, problems).
+    summary is None when the binary emitted none. problems lists every deviation from the
+    check-mode contract: exactly one HSTAR_CHECK line with schema=1, mode=check-legacy, a
+    status, integer errors and readers_executed; readers_executed equal to the number of
+    HSTAR_CHECK_READER lines (when any); every HSTAR_CHECK_READER with an id and integer n."""
+    summary: dict | None = None
+    readers: dict[str, int] = {}
+    problems: list[str] = []
+    reader_lines = 0
+    for ln in stdout_text.splitlines():
+        if not ln.startswith(CHECK_PREFIX):
+            continue
+        tag, _, rest = ln.partition(" ")
+        kv = parse_kv_line(rest, CHECK_INT_KEYS)
+        if tag == "HSTAR_CHECK_READER":
+            reader_lines += 1
+            rid, n = kv.get("id"), kv.get("n")
+            if not rid or not isinstance(n, int):
+                problems.append(f"malformed HSTAR_CHECK_READER line: {ln[:200]}")
+                continue
+            readers[str(rid)] = readers.get(str(rid), 0) + n
+        elif tag == "HSTAR_CHECK":
+            if summary is not None:
+                problems.append(f"duplicate HSTAR_CHECK line: {ln[:200]}")
+                continue
+            summary = {"status": kv.get("status"), "readers_executed": kv.get("readers_executed"),
+                       **{k: v for k, v in kv.items() if k not in ("status", "readers_executed")}}
+        else:
+            problems.append(f"unknown HSTAR_CHECK* tag: {ln[:200]}")
+    if summary is None and not readers and not problems:
+        return None, []
+    if summary is None:
+        summary = {"status": None, "readers_executed": None}
+        problems.append("HSTAR_CHECK summary line missing")
+    else:
+        if summary.get("schema") != DIAG_SCHEMA:
+            problems.append(f"schema {summary.get('schema')!r} != {DIAG_SCHEMA}")
+        if summary.get("mode") != CHECK_MODE:
+            problems.append(f"mode {summary.get('mode')!r} != {CHECK_MODE!r}")
+        if not summary.get("status"):
+            problems.append("missing status")
+        if not isinstance(summary.get("errors"), int):
+            problems.append(f"errors {summary.get('errors')!r} is not an integer")
+        if not isinstance(summary.get("readers_executed"), int):
+            problems.append(f"readers_executed {summary.get('readers_executed')!r} is not an integer")
+        elif reader_lines and summary["readers_executed"] != reader_lines:
+            problems.append(f"readers_executed={summary['readers_executed']} but {reader_lines} HSTAR_CHECK_READER lines")
+    summary["readers"] = readers
+    return summary, problems
+
+
+def check_ok(check: dict | None, check_malformed: list[str]) -> bool:
+    """True when the check summary satisfies the contract: well-formed, status=OK, errors=0."""
+    return check is not None and not check_malformed and check.get("status") == "OK" and check.get("errors") == 0
+
+
+def classify(p: dict, ro: dict, after: list[str], diags: list[dict], malformed: list[str], check: dict | None,
+             check_malformed: list[str], core_dump: bool) -> str:
+    """First matching status in STATUS_ORDER wins (INPUT_HASH_MISMATCH is decided before the run)."""
+    rc = p["returncode"]
+    exits = {d.get("exit") for d in diags}
+    if p["timed_out"]:
+        return "TIMEOUT"
+    if p["signal"] is not None or p["stderr_crash_pattern"] or core_dump:
+        return "CRASHED"
+    protocol_ok = not malformed and exits <= set(EXIT_STATUS) and (not diags or rc in exits)
+    if protocol_ok and rc in EXIT_STATUS and rc in exits:
+        return EXIT_STATUS[rc]
+    if rc != 0 or p["stderr_unexpected_lines"] or not protocol_ok:
+        return "FAILED"  # includes protocol violations: malformed lines, exit= outside the protocol, rc != exit=
+    if check is not None and not check_ok(check, check_malformed):
+        return "FAILED"  # check summary emitted but malformed, or status != OK / errors != 0 with rc 0
+    if after:
+        return "GOLDEN_MODIFIED"  # decided before CHECKED/COMPLETED: a run that touched the golden inputs is never accepted
+    if check is not None:
+        return "CHECKED"  # check mode stops before the solve: no required output expected
+    if not ro.get("not_applicable") and not (ro["present"] and ro["parse"] and ro["parse"]["ok"]):
+        return "MISSING_OUTPUT"
+    return "COMPLETED"
+
+
+def failure_reason(p: dict, diags: list[dict], malformed: list[str], check: dict | None, check_malformed: list[str]) -> str | None:
+    """Why classify() returned FAILED (None for any other status)."""
+    rc = p["returncode"]
+    exits = {d.get("exit") for d in diags}
+    if malformed:
+        return f"malformed HSTAR_DIAG line(s): {len(malformed)}"
+    if not exits <= set(EXIT_STATUS):
+        return f"HSTAR_DIAG exit= outside 2..6: {sorted(exits - set(EXIT_STATUS))}"
+    if diags and rc not in exits:
+        return f"rc={rc} does not equal any HSTAR_DIAG exit= {sorted(exits)}"
+    if rc != 0:
+        return f"rc={rc} without a matching HSTAR_DIAG line"
+    if p["stderr_unexpected_lines"]:
+        return f"unexpected stderr line(s): {len(p['stderr_unexpected_lines'])}"
+    if check_malformed:
+        return f"malformed HSTAR_CHECK summary: {check_malformed[0]}"
+    if check is not None and not check_ok(check, check_malformed):
+        return f"HSTAR_CHECK status={check.get('status')!r} errors={check.get('errors')!r} with rc 0"
+    return None
 
 
 def check_manifest(manifest_path: Path, root: Path) -> list[str]:
@@ -84,12 +268,23 @@ def run(args: argparse.Namespace) -> int:
     case_dir = Path(args.case_dir).resolve() if args.case_dir else find_case(args.case_id)
     legacy_dir = case_dir / "legacy"
     input_manifest = case_dir / "input-manifest.json"
-    observables = tomllib.loads((case_dir / "observables.toml").read_text(encoding="utf-8"))
-    required_output = observables["source"]["file"]
-    expect_nodes = int(observables["source"]["expected_node_count"])
+    observables_path = case_dir / "observables.toml"
+    if observables_path.is_file():
+        observables = tomllib.loads(observables_path.read_text(encoding="utf-8"))
+        required_output = observables["source"]["file"]
+        expect_nodes = int(observables["source"]["expected_node_count"])
+        ro_init = {"file": required_output, "present": False, "bytes": None, "sha256": None, "parse": None}
+    elif args.case_dir:  # derived probe cases may carry no observables: output parsing is not applicable
+        required_output, expect_nodes = None, None
+        ro_init = {"file": None, "present": None, "parse": None, "not_applicable": True}
+    else:
+        raise SystemExit(f"observables.toml missing in registered case: {case_dir}")
     binary = Path(args.binary).resolve()
     if not binary.is_file():
         raise SystemExit(f"binary not found: {binary}")
+    binary_args = shlex.split(args.binary_args) if args.binary_args else []
+    if args.expect_status not in STATUS_ORDER:
+        raise SystemExit(f"--expect-status must be one of {STATUS_ORDER}, got {args.expect_status!r}")
 
     record: dict = {
         "manifest_version": 1,
@@ -97,6 +292,8 @@ def run(args: argparse.Namespace) -> int:
         "case_dir": str(case_dir),
         "label": args.label,
         "status": None,
+        "expected_status": args.expect_status,
+        "expectation_met": None,
         "binary": {"path": str(binary), "sha256": sha256(binary)},
         "build_manifest": None,
         "platform": {"os": platform.platform(), "machine": platform.machine(), "hostname": platform.node()},
@@ -105,8 +302,14 @@ def run(args: argparse.Namespace) -> int:
         "input_check_before": None,
         "input_check_after": None,
         "process": None,
-        "required_output": {"file": required_output, "present": False, "bytes": None, "sha256": None, "parse": None},
+        "required_output": ro_init,
         "outputs": [],
+        "diagnostics": [],
+        "diagnostics_malformed": [],
+        "check_summary": None,
+        "check_malformed": [],
+        "protocol_violation": None,
+        "core_dump": False,
     }
     bm = binary.parent / "build-manifest.json"
     if bm.is_file():
@@ -143,7 +346,8 @@ def run(args: argparse.Namespace) -> int:
     stderr_f = open(run_dir / "stderr.txt", "wb")
     t0 = time.monotonic()
     started = utc_now()
-    proc = subprocess.Popen([str(binary)], cwd=work, stdin=subprocess.DEVNULL, stdout=stdout_f, stderr=stderr_f, env=env, start_new_session=True)
+    command = [str(binary), *binary_args]
+    proc = subprocess.Popen(command, cwd=work, stdin=subprocess.DEVNULL, stdout=stdout_f, stderr=stderr_f, env=env, start_new_session=True)
     timed_out = False
     try:
         proc.wait(timeout=args.timeout)
@@ -162,9 +366,13 @@ def run(args: argparse.Namespace) -> int:
     ru = resource.getrusage(resource.RUSAGE_CHILDREN)
     rc = proc.returncode
     stderr_text = (run_dir / "stderr.txt").read_text(encoding="latin-1", errors="replace")
-    stderr_unexpected = [ln for ln in stderr_text.splitlines() if ln.strip() and not BENIGN_STDERR.match(ln)]
+    stdout_text = (run_dir / "stdout.txt").read_text(encoding="latin-1", errors="replace")
+    diags, malformed, stderr_unexpected = parse_diagnostics(stderr_text)
+    record["diagnostics"] = diags
+    record["diagnostics_malformed"] = malformed
+    record["check_summary"], record["check_malformed"] = parse_check_summary(stdout_text)
     record["process"] = {
-        "command": [str(binary)],
+        "command": command,
         "cwd": str(work),
         "started_at": started,
         "wall_seconds": round(wall, 3),
@@ -184,9 +392,13 @@ def run(args: argparse.Namespace) -> int:
     for p in sorted(work.iterdir()):
         if p.is_file() and p.name not in inputs_copied:
             record["outputs"].append({"name": p.name, "bytes": p.stat().st_size, "sha256": sha256(p) if p.stat().st_size else None})
-    req = work / required_output
+            if CORE_FILE.match(p.name):
+                record["core_dump"] = True
     ro = record["required_output"]
-    if req.is_file() and req.stat().st_size > 0:
+    req = work / required_output if required_output else None
+    if req is None:
+        pass
+    elif req.is_file() and req.stat().st_size > 0:
         ro.update(present=True, bytes=req.stat().st_size, sha256=sha256(req))
         try:
             parsed = yl_parse_flavia.parse(req)
@@ -205,30 +417,27 @@ def run(args: argparse.Namespace) -> int:
     record["input_check_after"] = {"ok": not after, "problems": after}
 
     # 6. classify (first matching status wins)
-    p = record["process"]
-    if p["timed_out"]:
-        status = "TIMEOUT"
-    elif p["signal"] is not None or p["stderr_crash_pattern"]:
-        status = "CRASHED"
-    elif rc != 0 or p["stderr_unexpected_lines"]:
-        status = "FAILED"
-    elif not (ro["present"] and ro["parse"] and ro["parse"]["ok"]):
-        status = "MISSING_OUTPUT"
-    elif after:
-        status = "GOLDEN_MODIFIED"
-    else:
-        status = "COMPLETED"
-    record["status"] = status
+    record["status"] = classify(record["process"], ro, after, diags, malformed, record["check_summary"], record["check_malformed"], record["core_dump"])
+    if record["status"] == "FAILED":
+        record["protocol_violation"] = failure_reason(record["process"], diags, malformed, record["check_summary"], record["check_malformed"])
     return finish(record, run_dir)
 
 
 def finish(record: dict, run_dir: Path) -> int:
     record["finished_at"] = utc_now()
     record["run_dir"] = str(run_dir)
+    expected = record.get("expected_status") or "COMPLETED"
+    record["expectation_met"] = record["status"] == expected
     (run_dir / "run-manifest.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
     p = record.get("process") or {}
-    print(f"{record['status']:20s} {record['case_id']}  rc={p.get('returncode')}  wall={p.get('wall_seconds')}s  rss={p.get('max_rss_kib')}KiB  -> {run_dir}")
-    return 0 if record["status"] == "COMPLETED" else 1
+    extra = f"  expected={expected}" if expected != "COMPLETED" else ""
+    if record.get("diagnostics"):
+        d = record["diagnostics"][0]
+        extra += f"  diag={d.get('code')}@{d.get('reader') or d.get('file')}"
+    if record.get("protocol_violation"):
+        extra += f"  reason={record['protocol_violation']}"
+    print(f"{record['status']:20s} {record['case_id']}  rc={p.get('returncode')}  wall={p.get('wall_seconds')}s  rss={p.get('max_rss_kib')}KiB{extra}  -> {run_dir}")
+    return 0 if record["expectation_met"] else 1
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -238,7 +447,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--runs-root", default=str(REPO_ROOT / "runs"))
     ap.add_argument("--label")
-    ap.add_argument("--case-dir", help="override case directory (self-tests only)")
+    ap.add_argument("--case-dir", help="override case directory (self-tests / derived probe cases)")
+    ap.add_argument("--expect-status", default="COMPLETED", metavar="STATUS", help="exit 0 iff the final status equals this (default COMPLETED)")
+    ap.add_argument("--binary-args", default="", metavar="ARGS", help="extra arguments appended to the binary command line (shlex-split)")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # `--binary-args "--check-legacy"`: join so argparse does not mistake the value for an option
+    for i, tok in enumerate(argv[:-1]):
+        if tok in ("--binary-args", "--expect-status") and argv[i + 1].startswith("-"):
+            argv[i:i + 2] = [f"{tok}={argv[i + 1]}"]
+            break
     return run(ap.parse_args(argv))
 
 

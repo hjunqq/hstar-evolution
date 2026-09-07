@@ -1,5 +1,7 @@
 module   elements
 
+	use yl_diag
+	use yl_diag_registry
 	use variable_types 
 	use arrayutil
 	implicit none
@@ -1080,7 +1082,8 @@ contains
 
     allocate(lnods(nnode),elcod(ndimn,nnode))
     !read(iunit,*)i0,ii,lnods(1:nnode)
-   read(iunit,*)i0,lnods(1:nnode)
+   read(iunit,*,iostat=yl_ios,iomsg=yl_msg)i0,lnods(1:nnode)
+   call diag_check_read(yl_ios,yl_msg,RD_ELE_read_element_element_connectivity,ielem)
     do in=1,nnode
        elcod(:,in)=coord(:,lnods(in))
     end do

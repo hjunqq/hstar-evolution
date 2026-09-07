@@ -1,0 +1,17 @@
+schema = 1
+id = "F13_missing_nrt"
+base_case = "static_2d.cooks_membrane"
+description = "Delete 1.nrt from the deck: the checked open (status='old') must report FILE_MISSING at startup, before any read of that unit."
+
+[[derive]]
+op = "delete_file"
+file = "1.nrt"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "FILE_MISSING"
+stage = "startup"
+file_suffix = "1.nrt"
+no_core = true
+max_wall_seconds = 10

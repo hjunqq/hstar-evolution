@@ -1,0 +1,22 @@
+schema = 1
+id = "F24_glb_npoin_parse"
+base_case = "static_2d.cooks_membrane"
+description = "Line 2 of 1.glb: npoin '289' becomes 'abc'; the sizes_and_switches record fails with a type error."
+
+[[derive]]
+op = "replace_token"
+file = "1.glb"
+line = 2
+old = "289"
+new = "abc"
+count = 1
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "PARSE"
+stage = "startup"
+file_suffix = ".glb"
+reader = "GLB.global_data.sizes_and_switches"
+no_core = true
+max_wall_seconds = 10

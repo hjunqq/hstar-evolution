@@ -1,0 +1,18 @@
+schema = 1
+id = "F34_ifs_empty"
+base_case = "static_2d.cooks_membrane"
+description = "Empty 1.ifs: the open succeeds and the first .ifs record (stiff_interface_fluid_solid title, seq 1) hits EOF. Note: the registry's first .ifs reader is stiff_interface_fluid_solid, not stiff_ifs2006 (seq 7)."
+
+[[derive]]
+op = "empty_file"
+file = "1.ifs"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "startup"
+file_suffix = ".ifs"
+reader = "IFS.stiff_interface_fluid_solid.title#1"
+no_core = true
+max_wall_seconds = 10

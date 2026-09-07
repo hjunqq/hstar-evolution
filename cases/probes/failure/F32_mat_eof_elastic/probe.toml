@@ -1,0 +1,19 @@
+schema = 1
+id = "F32_mat_eof_elastic"
+base_case = "static_2d.cooks_membrane"
+description = "Delete the last two lines of 1.mat (ELASTIC_ISOTROPIC record and its extra line): the elastic_isotropic record hits EOF."
+
+[[derive]]
+op = "truncate_lines"
+file = "1.mat"
+keep = 19
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "startup"
+file_suffix = ".mat"
+reader = "MAT.material_set.elastic_isotropic"
+no_core = true
+max_wall_seconds = 10

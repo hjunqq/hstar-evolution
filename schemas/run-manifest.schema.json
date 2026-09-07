@@ -9,7 +9,9 @@
     "case_id": { "type": "string" },
     "case_dir": { "type": "string" },
     "label": { "type": ["string", "null"] },
-    "status": { "enum": ["INPUT_HASH_MISMATCH", "TIMEOUT", "CRASHED", "FAILED", "MISSING_OUTPUT", "GOLDEN_MODIFIED", "COMPLETED"] },
+    "status": { "$ref": "#/$defs/status" },
+    "expected_status": { "$ref": "#/$defs/status", "description": "value of --expect-status; process exit code is 0 iff status == expected_status" },
+    "expectation_met": { "type": ["boolean", "null"] },
     "binary": { "type": "object", "required": ["path", "sha256"] },
     "build_manifest": { "type": ["object", "null"] },
     "platform": { "type": "object" },
@@ -32,16 +34,75 @@
       "type": "object",
       "required": ["file", "present", "parse"],
       "properties": {
-        "file": { "type": "string" },
-        "present": { "type": "boolean" },
-        "parse": { "type": ["object", "null"] }
+        "file": { "type": ["string", "null"] },
+        "present": { "type": ["boolean", "null"] },
+        "parse": { "type": ["object", "null"] },
+        "not_applicable": { "type": "boolean", "description": "true when the case dir has no observables.toml (derived probe cases); MISSING_OUTPUT is then never assigned" }
       }
     },
     "outputs": { "type": "array" },
+    "core_dump": { "type": "boolean", "description": "a file named core or core.* appeared in the work dir; status is at least CRASHED" },
+    "diagnostics": {
+      "type": "array",
+      "description": "well-formed stderr lines starting with `HSTAR_DIAG ` (M1-02 exit protocol: shlex-parsable, schema=1, code, integer exit), parsed as key=value; order preserved",
+      "items": {
+        "type": "object",
+        "properties": {
+          "schema": { "type": "integer" },
+          "code": { "type": "string" },
+          "exit": { "type": "integer" },
+          "severity": { "type": "string" },
+          "stage": { "type": "string" },
+          "file": { "type": "string" },
+          "unit": { "type": "string" },
+          "reader": { "type": "string" },
+          "site": { "type": "string" },
+          "seq": { "type": "integer" },
+          "index": { "type": "integer" },
+          "iostat": { "type": "integer" },
+          "field": { "type": "string" },
+          "message": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "diagnostics_malformed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "HSTAR_DIAG lines that failed strict parsing (unbalanced quotes, schema != 1, missing code, non-integer exit/seq/index/iostat/schema), each followed by the reason; non-empty forces status FAILED"
+    },
+    "check_summary": {
+      "type": ["object", "null"],
+      "description": "stdout HSTAR_CHECK / HSTAR_CHECK_READER lines (--check-legacy); null when none were emitted. CHECKED requires check_malformed empty, status OK and errors 0",
+      "required": ["status", "readers_executed", "readers"],
+      "properties": {
+        "schema": { "type": ["integer", "string", "null"] },
+        "mode": { "type": ["string", "null"] },
+        "status": { "type": ["string", "null"] },
+        "errors": { "type": ["integer", "string", "null"] },
+        "readers_executed": { "type": ["integer", "string", "null"] },
+        "readers_registered": { "type": ["integer", "string", "null"] },
+        "readers": { "type": "object", "additionalProperties": { "type": "integer" } }
+      },
+      "additionalProperties": true
+    },
+    "check_malformed": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "deviations of the HSTAR_CHECK* lines from the check-mode contract (missing/duplicate HSTAR_CHECK, schema != 1, mode != check-legacy, non-integer errors/readers_executed/n, readers_executed != number of HSTAR_CHECK_READER lines); non-empty forces status FAILED"
+    },
+    "protocol_violation": {
+      "type": ["string", "null"],
+      "description": "why the status is FAILED (malformed HSTAR_DIAG, exit= outside 2..6, rc != exit=, rc != 0 without diagnostic, unexpected stderr, malformed HSTAR_CHECK, check status != OK or errors != 0 with rc 0); null otherwise"
+    },
     "run_dir": { "type": "string" },
     "finished_at": { "type": "string" }
   },
   "$defs": {
+    "status": {
+      "enum": ["INPUT_HASH_MISMATCH", "TIMEOUT", "CRASHED", "INPUT_ERROR", "UNSUPPORTED", "INIT_ERROR", "SOLVE_ERROR", "INTERNAL_ERROR", "FAILED", "GOLDEN_MODIFIED", "CHECKED", "MISSING_OUTPUT", "COMPLETED"],
+      "description": "classification order (first match wins). INPUT_ERROR/UNSUPPORTED/INIT_ERROR/SOLVE_ERROR/INTERNAL_ERROR: rc 2/3/4/5/6 equal to the exit= of a well-formed HSTAR_DIAG line; FAILED also covers protocol violations (malformed HSTAR_DIAG, exit= outside 2..6, rc != exit=) and a check summary that is malformed or not status=OK/errors=0; GOLDEN_MODIFIED outranks CHECKED and COMPLETED"
+    },
     "check": {
       "type": "object",
       "required": ["ok", "problems"],

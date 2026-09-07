@@ -1,5 +1,7 @@
     module applied_load
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use global_var
     use materials
@@ -138,8 +140,10 @@
     if (meshc==1.or.rmesh/=0)rewind(loadunit)
      if(Bparameter/=0)rewind(loadunit)  !20190810
 
-    read(loadunit,*)text
-    read(loadunit,*)ntcurve
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_title_1,0)
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)ntcurve
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_curve_count,0)
     if (allocated(tcurves)) deallocate(tcurves)
     if (ntcurve.ne.0)allocate(tcurves(ntcurve))
     lineload=lineload+2
@@ -147,7 +151,8 @@
     do itcurve=1,ntcurve
         !print *,'itcurve=',itcurve
 
-       read(loadunit,*)ntime,type_curve,nstoch_curve,nline
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)ntime,type_curve,nstoch_curve,nline
+       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_curve_header,0)
        tcurves(itcurve)%nstoch_curve=nstoch_curve
        print *,'ntime=',ntime,type_curve,nstoch_curve,nline
        lineload=lineload+1
@@ -207,7 +212,8 @@
        endif
        case default
        allocate(tcurves(itcurve)%ttime_curve(ntime))
-       read(loadunit,*)tcurves(itcurve)%ttime_curve(1:ntime)
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)tcurves(itcurve)%ttime_curve(1:ntime)
+       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_curve_points,0)
        end select
        if (type_curve=='SEISMIC') then
         read(loadunit,*)tcurves(itcurve)%dfact_curve
@@ -225,8 +231,10 @@ print *,'ok waterlevel'
     !! set of point_load structure in the iblks-th BLOCK
 
     if (allocated(pload)) deallocate(pload)
-    read(loadunit,*)text
-    read(loadunit,*)nplgroup,kpload
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_title_2,0)
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)nplgroup,kpload
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_point_load_count,0)
     lineload=lineload+2
     print *,'nplgroup=',nplgroup
     if (nplgroup==0) goto 11
@@ -347,8 +355,10 @@ endif  !kpload=1  20210502
     !! set of edge_define structure
 
     if (allocated(edges)) deallocate(edges)
-    read(loadunit,*)text
-    read(loadunit,*)nedge
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_title_3,0)
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)nedge
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_edge_count,0)
     print *,'nedge=',nedge
     lineload=lineload+2
     if (nedge==0) goto 22
@@ -731,10 +741,13 @@ end subroutine element_in_out
 
    
 
-    read(loadunit,*)text
-    read(loadunit,*)text
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_title_1,0)
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_title_2,0)
     print *,text
-    read(loadunit,*)edge_load_group,delgroup
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)edge_load_group,delgroup
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_edge_load_groups,0)
     
     print *,'edge_load_group=',edge_load_group,'delgroup=',delgroup
     lineload=lineload+3
@@ -889,21 +902,27 @@ end subroutine element_in_out
     !                                 no gravity in igroup
 33  if(.not.allocated(factg))allocate(factg(ndimn))
     if (.not.allocated(factf))allocate(factf(ndimn))
-    read (loadunit,*) text
-    read (loadunit,*) gravy,factg(1:ndimn),factf(1:ndimn)
+    read (loadunit,*,iostat=yl_ios,iomsg=yl_msg) text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_title_3,0)
+    read (loadunit,*,iostat=yl_ios,iomsg=yl_msg) gravy,factg(1:ndimn),factf(1:ndimn)
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_gravity,0)
     print *,'gray=',gravy,factg(1:ndimn),factf(1:ndimn)
     lineload=lineload+2
 
 
     if (.not.allocated(tcurvegravity))allocate(tcurvegravity(ngroup))
-    read(loadunit,*)text,nline
-    read(loadunit,*)tcurvegravity(1:ngroup)
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text,nline
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_gravity_curve_title,0)
+    read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)tcurvegravity(1:ngroup)
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_gravity_curves,0)
 print *,'tcurv=',tcurvegravity(1:ngroup)
 
     lineload=lineload+nline+1
 
-    read (loadunit,*) text
-    read (loadunit,*) nbeamload
+    read (loadunit,*,iostat=yl_ios,iomsg=yl_msg) text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_title_4,0)
+    read (loadunit,*,iostat=yl_ios,iomsg=yl_msg) nbeamload
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_beam_load_count,0)
 	
     lineload=lineload+2
     if (nbeamload/=0) then
@@ -981,8 +1000,10 @@ print *,'tcurv=',tcurvegravity(1:ngroup)
        end do
        deallocate(trot,elcod,rload,rload1,gloc,trotx)
     endif
-    read (loadunit,*) text
-    read (loadunit,*) nplateload
+    read (loadunit,*,iostat=yl_ios,iomsg=yl_msg) text
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_title_5,0)
+    read (loadunit,*,iostat=yl_ios,iomsg=yl_msg) nplateload
+    call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_plate_load_count,0)
     
     if(nplateload==0)return
     nevab=24    !20200113

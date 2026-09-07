@@ -1,0 +1,20 @@
+schema = 1
+id = "F22_ele_eof"
+base_case = "static_2d.cooks_membrane"
+description = "Truncate 1.ele to 100 of 256 element records: the connectivity loop hits EOF on record 101."
+
+[[derive]]
+op = "truncate_lines"
+file = "1.ele"
+keep = 100
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "startup"
+file_suffix = ".ele"
+reader = "ELE.read_element.element_connectivity"
+index = 101
+no_core = true
+max_wall_seconds = 10

@@ -1,0 +1,22 @@
+schema = 1
+id = "F27_man_miter_parse"
+base_case = "static_2d.cooks_membrane"
+description = "Corrupt miter (first item of the .man increment record) with a non-numeric token 5x: PARSE inside STATIC_U at increment_lazy(1,1). A real-looking token such as 5.5 would be silently truncated to 5 by ifx (blind spot R21), so the probe uses a letter."
+
+[[derive]]
+op = "replace_token"
+file = "1.man"
+line = 3
+old = "5"
+new = "5x"
+count = 1
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "PARSE"
+stage = "increment_lazy(1,1)"
+file_suffix = ".man"
+reader = "MAN.STATIC_U.increment_control"
+no_core = true
+max_wall_seconds = 10

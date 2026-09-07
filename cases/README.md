@@ -9,3 +9,9 @@
 
 算例来源和计划见 `manifest.toml`；完整策略见 `docs/03-case-strategy.md`。
 
+
+## probes/failure
+
+`probes/failure/<id>/probe.toml` 是 M1-02 的故障注入探针：从 golden 算例派生一个坏输入（删文件、截断、清空、改字段），
+并写明期望的退出状态与 `HSTAR_DIAG` 诊断。探针目录只存 `probe.toml`，坏输入在运行时由 `tools/yl_probe.py`
+物化到 `runs/probes/<id>/case/`。矩阵与格式见 `probes/failure/README.md`。

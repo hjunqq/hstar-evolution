@@ -1,0 +1,22 @@
+schema = 1
+id = "F33_loa_curve_count_parse"
+base_case = "static_2d.cooks_membrane"
+description = "Line 2 of 1.loa: ntcurve '1' becomes 'one'; the curve_count record fails with a type error."
+
+[[derive]]
+op = "replace_token"
+file = "1.loa"
+line = 2
+old = "1"
+new = "one"
+count = 1
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "PARSE"
+stage = "startup"
+file_suffix = ".loa"
+reader = "LOA.external_load_1.curve_count"
+no_core = true
+max_wall_seconds = 10

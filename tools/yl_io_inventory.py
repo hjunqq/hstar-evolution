@@ -8,8 +8,12 @@ Sub-commands
               "HIT <file>:<line>" and continues (used by yl_io_trace.sh)
   hits        parse one or more gdb hit logs -> hits.json {site: count}
   check       validate docs/m1/reader-inventory.toml against the census, the
-              source text (anchors) and the evidence (hits); fail-closed
+              source text (anchors), the evidence (hits), the diag_check_read
+              references in the sources and the generated Fortran registry
+              (RD_ constants, YL_READER_ID / YL_READER_SITE tables); fail-closed
   render      reader-inventory.toml -> Markdown tables (stdout or -o)
+  gen-fortran reader-inventory.toml -> src/diagnostics/yl_diag_registry.f90
+              (Fortran constant tables + RD_<id> index constants, M1-02)
 
 Only the Python standard library is used. Sources are ISO-8859 encoded and are
 decoded as latin-1 so byte offsets and line numbers are exact.
@@ -248,13 +252,239 @@ def cmd_check(a):
     for unit, n in Counter(c["unit"] for c in census.values()).items():
         if unit not in executed_units and unit not in explained:
             problems.append(f"unit {unit} ({n} sites) neither executed nor listed in not_on_path")
+    # M1-02: the generated Fortran registry (if present) must match the inventory entry by entry
+    registry_path = Path(a.registry)
+    if registry_path.is_file():
+        problems += registry_file_problems(registry_path, readers)
+    else:
+        problems.append(f"registry {registry_path} missing (run gen-fortran)")
+    # M1-02: every diag_check_read(..., RD_x, ...) in the sources must name a registry constant
+    constants = {c.upper(): c for c in registry_constants(readers)}
+    refs = source_check_read_refs()
+    wrapped = set()
+    for fname, line, arg in refs:
+        found = constants.get(arg.upper())
+        if found is None:
+            problems.append(f"{fname}:{line}: diag_check_read idx {arg!r} is not a registry constant")
+        else:
+            wrapped.add(found)
     if problems:
         print(f"FAIL: {len(problems)} problems")
         for p in problems[:200]:
             print("  " + p)
         return 1
     print(f"PASS: {len(readers)} readers, {len(cursor_ops)} cursor ops, {len(inv.get('not_on_path', []))} not_on_path groups, evidence {sorted(evidence)}")
+    print(f"wrapped readers: {len(wrapped)}/{len(readers)} ({len(refs)} diag_check_read call sites)")
     return 0
+
+# --- M1-02: Fortran registry generation -----------------------------------------
+REGISTRY_DEFAULT = REPO_ROOT / "src" / "diagnostics" / "yl_diag_registry.f90"
+LEN_ID, LEN_SITE, LEN_FILE, LEN_UNIT, LEN_STAGE, LEN_FIELD = 96, 32, 16, 24, 24, 256
+CHECK_READ_CALL = re.compile(r"\bdiag_check_read\s*\(", re.I)
+
+
+def sanitize_id(rid: str, idx: int) -> str:
+    """RD_<id> constant name: non-alphanumerics -> '_', runs collapsed, <= 63 chars."""
+    name = "RD_" + re.sub(r"[^A-Za-z0-9]+", "_", rid).strip("_")
+    if len(name) > 63:
+        name = name[:55].rstrip("_") + f"_{idx}"
+    return name
+
+
+def registry_constants(readers: list[dict]) -> dict[str, int]:
+    """{RD_<name>: idx} for every reader, in inventory order (idx from 1). Fails on collisions."""
+    names: dict[str, int] = {}
+    for idx, r in enumerate(readers, 1):
+        name = sanitize_id(r["id"], idx)
+        if name in names:
+            raise SystemExit(f"gen-fortran: constant name collision {name}: {readers[names[name] - 1]['id']} vs {r['id']}")
+        names[name] = idx
+    return names
+
+
+def f_value(value: str, width: int) -> str:
+    """Raw text stored by f_str: CR/LF blanked, truncated so the doubled-quote literal fits `width`."""
+    value = value.replace("\r", " ").replace("\n", " ")[:width]
+    while len(value.replace("'", "''")) > width:
+        value = value[:-1]
+    return value
+
+
+def f_str(value: str, width: int) -> str:
+    """Fortran single-quoted literal whose *stored* length (quotes doubled) fits in `width`.
+    Truncation happens on the raw value so a cut never leaves an unbalanced quote."""
+    return "'" + f_value(value, width).replace("'", "''") + "'"
+
+
+def parse_registry_table(text: str, name: str) -> list[str] | None:
+    """Values of `character(len=N), parameter :: <name>(YL_NREADERS) = [... ]` in a generated
+    registry; continuation (`&` / `&`) joined, doubled quotes undone. None when absent."""
+    m = re.search(rf"::\s*{name}\s*\(YL_NREADERS\)\s*=\s*\[character\(len=\d+\)\s*::\s*&\s*\n(.*?)\n\s*\]", text, re.S)
+    if not m:
+        return None
+    joined = ""
+    for raw in m.group(1).split("\n"):
+        ln = raw.strip()
+        if ln.endswith("&"):
+            ln = ln[:-1].rstrip()
+        if ln.startswith("&"):
+            ln = ln[1:]
+        joined += ln
+    return [v.replace("''", "'") for v in re.findall(r"'((?:[^']|'')*)'", joined)]
+
+
+def registry_file_problems(path: Path, readers: list[dict]) -> list[str]:
+    """Compare src/diagnostics/yl_diag_registry.f90 with the inventory: reader count, RD_ constants,
+    YL_READER_ID and YL_READER_SITE entry by entry. Any difference means gen-fortran must be re-run."""
+    text = path.read_text(encoding="utf-8")
+    hint = "(regenerate: python3 tools/yl_io_inventory.py gen-fortran)"
+    problems = []
+    m = re.search(r"YL_NREADERS\s*=\s*(\d+)", text)
+    if not m or int(m.group(1)) != len(readers):
+        problems.append(f"registry YL_NREADERS {m.group(1) if m else '?'} != inventory {len(readers)} {hint}")
+    consts = {mm.group(1): int(mm.group(2)) for mm in re.finditer(r"integer,\s*parameter\s*::\s*(RD_\w+)\s*=\s*(\d+)", text)}
+    expected = registry_constants(readers)
+    if consts != expected:
+        diff = sorted(set(consts.items()) ^ set(expected.items()))[:5]
+        problems.append(f"registry RD_ constants differ from inventory: {diff} {hint}")
+    for table, key, width in (("YL_READER_ID", "id", LEN_ID), ("YL_READER_SITE", "site", LEN_SITE)):
+        got = parse_registry_table(text, table)
+        if got is None:
+            problems.append(f"registry table {table} not found {hint}")
+            continue
+        want = [f_value(str(r.get(key, "")), width) for r in readers]
+        if len(got) != len(want):
+            problems.append(f"registry {table} has {len(got)} entries, inventory {len(want)} {hint}")
+        for i, (g, w) in enumerate(zip(got, want), 1):
+            if g != w:
+                problems.append(f"registry {table}({i}) = {g!r} but inventory {readers[i - 1]['id']} has {key}={w!r} {hint}")
+    return problems
+
+
+def gen_fortran(inv: dict, inventory_path: Path) -> str:
+    readers = inv.get("reader", [])
+    names = registry_constants(readers)
+    n = len(readers)
+    try:
+        src = inventory_path.resolve().relative_to(REPO_ROOT)
+    except ValueError:
+        src = inventory_path
+    out = [
+        "! yl_diag_registry -- reader registry constants for the legacy YL solver (M1-02).",
+        "!",
+        "! GENERATED FILE -- DO NOT EDIT BY HAND.",
+        f"! Source : {src}",
+        "! Command: python3 tools/yl_io_inventory.py gen-fortran",
+        "!",
+        "! One entry per [[reader]] in inventory order (idx from 1). Source code refers",
+        "! to a reader only through its RD_<id> integer constant; `check` verifies that",
+        "! every constant referenced from legacy/yl exists here. STAGE is the inventory",
+        "! `phase` text; reached_only entries carry stage 'reached_only' and seq 0.",
+        "module yl_diag_registry",
+        "  implicit none",
+        "  public",
+        "",
+        f"  integer, parameter :: YL_NREADERS = {n}",
+        f"  integer, parameter :: YL_LEN_READER_ID = {LEN_ID}",
+        f"  integer, parameter :: YL_LEN_READER_SITE = {LEN_SITE}",
+        f"  integer, parameter :: YL_LEN_READER_FILE = {LEN_FILE}",
+        f"  integer, parameter :: YL_LEN_READER_UNIT = {LEN_UNIT}",
+        f"  integer, parameter :: YL_LEN_READER_STAGE = {LEN_STAGE}",
+        f"  integer, parameter :: YL_LEN_READER_FIELD = {LEN_FIELD}",
+        "",
+        "  ! --- per-reader index constants ---------------------------------------------",
+    ]
+    for name, idx in names.items():
+        out.append(f"  integer, parameter :: {name} = {idx}")
+
+    def table(fname: str, width: int, values: list[str]) -> None:
+        out.append("")
+        out.append(f"  character(len={width}), parameter :: {fname}(YL_NREADERS) = [character(len={width}) :: &")
+        for i, v in enumerate(values, 1):
+            lit = f_str(v, width)
+            # keep every line <= 132 columns: continue long literals with '&' / '&' (free form);
+            # a doubled quote is never split because chunks are cut on the raw text
+            body, tail = lit[1:-1], ("," if i < len(values) else "") + " &"
+            if len(body) <= 100:
+                out.append(f"    '{body}'{tail}")
+                continue
+            chunks, cur = [], ""
+            for ch in body:
+                cur += ch
+                if len(cur) >= 96 and not cur.endswith("'"):
+                    chunks.append(cur); cur = ""
+            if cur:
+                chunks.append(cur)
+            out.append(f"    '{chunks[0]}&")
+            for c in chunks[1:-1]:
+                out.append(f"    &{c}&")
+            out.append(f"    &{chunks[-1]}'{tail}")
+        out.append("    ]")
+
+    table("YL_READER_ID", LEN_ID, [r["id"] for r in readers])
+    table("YL_READER_SITE", LEN_SITE, [r.get("site", "") for r in readers])
+    table("YL_READER_FILE", LEN_FILE, [r.get("file", "") for r in readers])
+    table("YL_READER_UNIT", LEN_UNIT, [r.get("unit_var", "") for r in readers])
+    table("YL_READER_STAGE", LEN_STAGE, [r.get("phase", "reached_only" if r.get("reached_only") else "") for r in readers])
+    table("YL_READER_FIELD", LEN_FIELD, [",".join(r.get("fields", [])) for r in readers])
+    out.append("")
+    out.append("  integer, parameter :: YL_READER_SEQ(YL_NREADERS) = [integer :: &")
+    seqs = [int(r.get("seq", 0) or 0) for r in readers]
+    for i in range(0, n, 12):
+        chunk = seqs[i:i + 12]
+        out.append("    " + ", ".join(str(x) for x in chunk) + ("," if i + 12 < n else "") + " &")
+    out.append("    ]")
+    out.append("")
+    out.append("end module yl_diag_registry")
+    text = "\n".join(out) + "\n"
+    for line in text.splitlines():
+        if len(line) > 132:
+            raise SystemExit(f"gen-fortran: line exceeds 132 characters: {line[:60]}...")
+    return text
+
+
+def cmd_gen_fortran(a):
+    inv_path = Path(a.inventory)
+    inv = load_inventory(inv_path)
+    out = Path(a.output)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(gen_fortran(inv, inv_path), encoding="utf-8")
+    print(f"wrote {out} ({len(inv.get('reader', []))} readers)")
+    return 0
+
+
+def source_check_read_refs() -> list[tuple[str, int, str]]:
+    """(file, line, third_argument) for every diag_check_read( call in legacy/yl
+    (comments stripped, continuation lines joined)."""
+    refs = []
+    for name in SOURCES:
+        path = SRC_DIR / name
+        if not path.exists():
+            continue
+        lines = split_lines(path.read_bytes())
+        for i, raw in enumerate(lines):
+            code = strip_comment(raw)
+            if not CHECK_READ_CALL.search(code):
+                continue
+            if i > 0 and strip_comment(lines[i - 1]).rstrip().endswith("&"):
+                continue  # continuation of a statement already handled
+            stmt = full_statement(lines, i)
+            m = CHECK_READ_CALL.search(stmt)
+            args, depth, cur = [], 0, []
+            for ch in stmt[m.end():]:
+                if ch == "(":
+                    depth += 1
+                elif ch == ")":
+                    if depth == 0:
+                        break
+                    depth -= 1
+                if ch == "," and depth == 0:
+                    args.append("".join(cur).strip()); cur = []
+                else:
+                    cur.append(ch)
+            args.append("".join(cur).strip())
+            refs.append((name, i + 1, args[2] if len(args) > 2 else ""))
+    return refs
 
 
 def cmd_render(a):
@@ -303,7 +533,8 @@ def main(argv=None):
     s = sub.add_parser("scan"); s.add_argument("-o", "--output", default=str(REPO_ROOT / "docs/m1/io-sites.json")); s.set_defaults(func=cmd_scan)
     g = sub.add_parser("gdb-script"); g.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); g.add_argument("--log", required=True); g.add_argument("-o", "--output", required=True); g.set_defaults(func=cmd_gdb_script)
     h = sub.add_parser("hits"); h.add_argument("--log", required=True); h.add_argument("--case-id", required=True); h.add_argument("-o", "--output", required=True); h.set_defaults(func=cmd_hits)
-    c = sub.add_parser("check"); c.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); c.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); c.add_argument("--evidence", nargs="+", required=True); c.set_defaults(func=cmd_check)
+    c = sub.add_parser("check"); c.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); c.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); c.add_argument("--evidence", nargs="+", required=True); c.add_argument("--registry", default=str(REGISTRY_DEFAULT), help="generated Fortran registry to compare with the inventory"); c.set_defaults(func=cmd_check)
+    f = sub.add_parser("gen-fortran"); f.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); f.add_argument("-o", "--output", default=str(REGISTRY_DEFAULT)); f.set_defaults(func=cmd_gen_fortran)
     r = sub.add_parser("render"); r.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); r.add_argument("-o", "--output"); r.set_defaults(func=cmd_render)
     a = ap.parse_args(argv)
     return a.func(a)

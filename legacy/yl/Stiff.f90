@@ -1,5 +1,7 @@
     module stiffness_matrix
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use arrayutil
     use global_var
@@ -9576,8 +9578,10 @@
 
     endif !20220330
 
-    read(ifsunit,*)text
-    read(ifsunit,*)ifsnedge
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_ifs2006_title_1,0)
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)ifsnedge
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_ifs2006_ifs_edge_count,0)
     print *,text
     print *,'ifsnedge=',ifsnedge
 
@@ -10209,8 +10213,10 @@
         deriv(:,:),elcod0(:,:),cartd(:,:),xjaci(:,:), &
         s(:,:),rr(:,:)
 
-    read(ifsunit,*)text
-    read(ifsunit,*)nifsgroup
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_interface_fluid_solid_title_1,0)
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)nifsgroup
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_interface_fluid_solid_ifs_group_count,0)
     print *,text
     print *,'nifsgroup=',nifsgroup
     if (nifsgroup==0) return
@@ -10311,8 +10317,10 @@
         deriv(:,:),elcod0(:,:),cartd(:,:),xjaci(:,:), &
         s(:,:),rr(:,:)
 
-    read(ifsunit,*)text
-    read(ifsunit,*)nabsfgroup
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_absorb_fluid_title_1,0)
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)nabsfgroup
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_absorb_fluid_absorb_fluid_count,0)
     print *,text
     print *,'nabsfgroup=',nabsfgroup
     if (nabsfgroup==0) return
@@ -10408,8 +10416,10 @@
         s(:,:),rr(:,:),speed(:),shapes(:,:),shapet(:,:),estif(:,:), &
         shapeb(:,:),speedb(:,:),rrb(:,:),estif_mid1(:,:),estif_mid2(:,:),estif_mid3(:,:)
 
-    read(ifsunit,*)text
-    read(ifsunit,*)nabssgroup   !,exx,uxx,densxx
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_absorb_solid_title_1,0)
+    read(ifsunit,*,iostat=yl_ios,iomsg=yl_msg)nabssgroup   !,exx,uxx,densxx
+    call diag_check_read(yl_ios,yl_msg,RD_IFS_stiff_absorb_solid_absorb_solid_count,0)
     print *,text
     print *,'nabssgroup=',nabssgroup
     if (nabssgroup==0) return

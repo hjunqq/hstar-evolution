@@ -1,0 +1,19 @@
+schema = 1
+id = "F23_glb_eof"
+base_case = "static_2d.cooks_membrane"
+description = "Truncate 1.glb to its first 12 lines: global_data hits EOF at the 9th title record (reader identified on the first wrapped run, 2026-09-07)."
+
+[[derive]]
+op = "truncate_lines"
+file = "1.glb"
+keep = 12
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+reader = "GLB.global_data.title#9"
+stage = "startup"
+file_suffix = ".glb"
+no_core = true
+max_wall_seconds = 10

@@ -1,5 +1,7 @@
     module materials
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use global_var
 
@@ -237,8 +239,10 @@
 
     allocate(props(nmats))
 
-    read(munit,*)text
-    read(munit,*)nscurve
+    read(munit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_title_1,0)
+    read(munit,*,iostat=yl_ios,iomsg=yl_msg)nscurve
+    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_curve_count,0)
     if (nscurve.ne.0)allocate(scurves(nscurve))
     do iscurve=1,nscurve
 
@@ -253,21 +257,27 @@
 
     end do
 
-    read(munit,*)nline
+    read(munit,*,iostat=yl_ios,iomsg=yl_msg)nline
+    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_comment_line_count,0)
     do iline=1,nline
-        read(munit,*) text
+        read(munit,*,iostat=yl_ios,iomsg=yl_msg) text
+        call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_comment_line_1,iline)
         print *, text
     end do
 
 
-    read(munit,*)text
-    read(munit,*)mmats  ! !20200617
+    read(munit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_title_2,0)
+    read(munit,*,iostat=yl_ios,iomsg=yl_msg)mmats  ! !20200617
+    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_nmats,0)
 
     do jmat=1,mmats
 
         print *,'jmat=',jmat
-        read(munit,*)text
-        read(munit,*)property,name,imat
+        read(munit,*,iostat=yl_ios,iomsg=yl_msg)text
+        call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_title_3,0)
+        read(munit,*,iostat=yl_ios,iomsg=yl_msg)property,name,imat
+        call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_material_header,0)
 
         print *,property,name,imat
 
@@ -276,19 +286,23 @@
 
         case('MECHANICAL')
             allocate(props(imat)%mechanical)
-            read(munit,*)nphase
+            read(munit,*,iostat=yl_ios,iomsg=yl_msg)nphase
+            call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_material_nphase,0)
             do iphase=1,nphase      !! loop for nphase
 
-                read(munit,*)phase
+                read(munit,*,iostat=yl_ios,iomsg=yl_msg)phase
+                call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_material_phase,0)
 
                 phase_select: select case(trim(phase))
                     ! select 2
 
                 case('SOLID')
                     allocate(props(imat)%mechanical%solid)
-                    read(munit,*)material,density,ratio,thickness,e,nu,alfa,icreep,kind_wt,jliqu  !20220713
+                    read(munit,*,iostat=yl_ios,iomsg=yl_msg)material,density,ratio,thickness,e,nu,alfa,icreep,kind_wt,jliqu  !20220713
+                    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_elastic_isotropic,0)
                     print *,material,density,ratio,thickness,e,nu,alfa,icreep,kind_wt,jliqu
-                    read(munit,*)iE,iNu,density_w   !20190810
+                    read(munit,*,iostat=yl_ios,iomsg=yl_msg)iE,iNu,density_w   !20190810
+                    call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_elastic_extra,0)
                     props(imat)%mechanical%solid%material =trim(material)
                     props(imat)%mechanical%solid%density  =density
                     props(imat)%mechanical%solid%density_w  =density_w

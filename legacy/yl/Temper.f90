@@ -1,5 +1,7 @@
     module temperature
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use arrayutil
     use global_var
@@ -119,8 +121,10 @@
     !! set of edge_define structure
 
     if(iblks==1) then  !20230829
-    read(tunit,*)text
-    read(tunit,*)ntemp_surface  !20230402
+    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_title_1,0)
+    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)ntemp_surface  !20230402
+    call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_temp_surface_count,0)
     if(ntemp_surface/=0)then
     !read(tunit,*)text
     allocate(temp_surface(ntemp_surface))
@@ -145,8 +149,10 @@
     endif !20230402
     endif  !20230829
     
-        read(tunit,*)text
-    read(tunit,*)ntedge  !20230402
+        read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
+        call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_title_2,0)
+    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)ntedge  !20230402
+    call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_temp_edge_count,0)
 
     print *,text
     print *,'ntedge=',ntedge
@@ -235,8 +241,10 @@
 
 
     11    read(tunit,*)text
-    read(tunit,*)text
-    read(tunit,*)ntelgroup
+    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_title_3,0)
+    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)ntelgroup
+    call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_temp_elgroup_count,0)
     linet=linet+3
     if (ntelgroup==0) goto 22
     if (allocated(tedgeload)) deallocate(tedgeload)
@@ -294,10 +302,13 @@
        end do
        deallocate(listdge)
     end do  ! do while
-22    read(tunit,*)text
-      read(tunit,*)text
+22    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
+      call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_title_4,0)
+      read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
+      call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_title_5,0)
       print *, text
-	  read(tunit,*)npipe,algo_pipe
+	  read(tunit,*,iostat=yl_ios,iomsg=yl_msg)npipe,algo_pipe
+   call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_pipe_count,0)
       
       print *,'npipe,algo_pipe=',npipe,algo_pipe
 linet=linet+3

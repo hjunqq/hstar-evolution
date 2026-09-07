@@ -1,5 +1,7 @@
     module prescribed
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use global_var
     use meshfine
@@ -205,20 +207,26 @@
         end do
        
     else  !20231130 
-       read(punit,*)text
-       read(punit,*)nfixsets,nline
+       read(punit,*,iostat=yl_ios,iomsg=yl_msg)text
+       call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_title_1,0)
+       read(punit,*,iostat=yl_ios,iomsg=yl_msg)nfixsets,nline
+       call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_count,0)
        ndofix=0
        do ifixset=1,nfixsets
           print *,'ifixset=',ifixset,'type_abc=',type_abc
-          if (type_abc=='MIF')read(punit,*)ifixvar,ifixvar0,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr  !20230402
-          if (type_abc/='MIF')read(punit,*)ifixvar,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr ! 20230402
+          if (type_abc=='MIF')read(punit,*,iostat=yl_ios,iomsg=yl_msg)ifixvar,ifixvar0,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr  !20230402
+          if (type_abc=='MIF')call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_reached_only_Prescrib_213,ifixset)
+          if (type_abc/='MIF')read(punit,*,iostat=yl_ios,iomsg=yl_msg)ifixvar,nfixnods,itcurve,tfixvar,outfix,jfixvar,gamawx,nextr ! 20230402
+          if (type_abc/='MIF')call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_header,ifixset)
 
           ! tfixvar =0, u(or p, Pw); tfixvar=1, V or DP/Dt; tfixvar=2, a;; tfixvar=3, ÐéÄâÔ¼Êøµã
           ! tfixvar indicates the time  order of the input fixed value
           allocate(list_fix(nfixnods))
-          read(punit,*)list_fix(1:nfixnods)
+          read(punit,*,iostat=yl_ios,iomsg=yl_msg)list_fix(1:nfixnods)
+          call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_nodes,ifixset)
           allocate(val_fix(nfixnods))
-          read(punit,*)val_fix(1:nfixnods)
+          read(punit,*,iostat=yl_ios,iomsg=yl_msg)val_fix(1:nfixnods)
+          call diag_check_read(yl_ios,yl_msg,RD_PRE_prescrib_set_set_values,ifixset)
           
           !write(7,*)'ifixsets=',ifixset,'ifixvar=',ifixvar,'jfixvar=',jfixvar,'gamaw=',gamaw
           !write(7,*)'listfix=',list_fix

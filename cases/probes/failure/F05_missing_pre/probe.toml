@@ -1,0 +1,17 @@
+schema = 1
+id = "F05_missing_pre"
+base_case = "static_2d.cooks_membrane"
+description = "Delete 1.pre from the deck: the checked open (status='old') must report FILE_MISSING at startup, before any read of that unit."
+
+[[derive]]
+op = "delete_file"
+file = "1.pre"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "FILE_MISSING"
+stage = "startup"
+file_suffix = "1.pre"
+no_core = true
+max_wall_seconds = 10

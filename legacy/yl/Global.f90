@@ -22,6 +22,8 @@
     !!DEC$ OBJCOMMENT LIB:"libguide.lib"
     !include 'mkl_vsl.fi'
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     use arrayutil
     use elements
@@ -625,16 +627,25 @@
     print *,'Input the problem name?'
     !   read *,probn
     len1=len_trim(probn)
-    open(gunit,     file=probn(1:len1)//'.glb')
-    open(cunit,     file=probn(1:len1)//'.cor')
-    open(eunit,     file=probn(1:len1)//'.ele')
-    open(punit,     file=probn(1:len1)//'.pre')
-    open(munit,     file=probn(1:len1)//'.mat')
-    open(loadunit,  file=probn(1:len1)//'.loa')
+    open(gunit,     file=probn(1:len1)//'.glb',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.glb','gunit','Global.f90:630')
+    open(cunit,     file=probn(1:len1)//'.cor',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.cor','cunit','Global.f90:632')
+    open(eunit,     file=probn(1:len1)//'.ele',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ele','eunit','Global.f90:634')
+    open(punit,     file=probn(1:len1)//'.pre',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.pre','punit','Global.f90:636')
+    open(munit,     file=probn(1:len1)//'.mat',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.mat','munit','Global.f90:638')
+    open(loadunit,  file=probn(1:len1)//'.loa',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.loa','loadunit','Global.f90:640')
     open(chkunit,   file=probn(1:len1)//'.chk')
-    open(solveunit, file=probn(1:len1)//'.sol')
-    open(mainunit,  file=probn(1:len1)//'.man')
-    open(outpread,  file=probn(1:len1)//'.opr')
+    open(solveunit, file=probn(1:len1)//'.sol',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.sol','solveunit','Global.f90:643')
+    open(mainunit,  file=probn(1:len1)//'.man',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.man','mainunit','Global.f90:645')
+    open(outpread,  file=probn(1:len1)//'.opr',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.opr','outpread','Global.f90:647')
     open(outpwrite, file=probn(1:len1)//'.opw')
     open(outewrite, file=probn(1:len1)//'.oew')
     open(outgwrite, file=probn(1:len1)//'.ogw')
@@ -646,12 +657,16 @@
     open(initwunit,  file=probn(1:len1)//'.inw')  !20210207
     if(Uopt_R==1) &
         open(vcor_unit,  file=probn(1:len1)//'.vcor')  !20210502
-    open(tunit,     file=probn(1:len1)//'.tem')
+    open(tunit,     file=probn(1:len1)//'.tem',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.tem','tunit','Global.f90:660')
     open(ftfunit,   file=probn(1:len1)//'.ftf')
-    open(ftfread,   file=probn(1:len1)//'.ftr')
-    open(ifsunit,   file=probn(1:len1)//'.ifs')
+    open(ftfread,   file=probn(1:len1)//'.ftr',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ftr','ftfread','Global.f90:663')
+    open(ifsunit,   file=probn(1:len1)//'.ifs',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ifs','ifsunit','Global.f90:665')
     open(mwaqu_unit,file=probn(1:len1)//'.aqu')  !20220330
-    open(nrtunit,   file=probn(1:len1)//'.nrt')
+    open(nrtunit,   file=probn(1:len1)//'.nrt',status='old',iostat=yl_ios,iomsg=yl_msg)
+    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.nrt','nrtunit','Global.f90:668')
     open(outbar,    file=probn(1:len1)//'.bar')
     open(outbeam,   file=probn(1:len1)//'.bem')
     open(outcontact,file=probn(1:len1)//'.ctr')
@@ -672,9 +687,11 @@
     recttunit=35
     open(recttunit,file=probn(1:len1)//'.ctt',FORM='UNFORMATTED') !ctt2005
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_1,0)
     print *,text
-    read(gunit,*)npoin,npoinb,nelem,ndimn,nmats,ngroup,ntlink,outplot,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)npoin,npoinb,nelem,ndimn,nmats,ngroup,ntlink,outplot,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_sizes_and_switches,0)
     print *, npoin,npoinb,nelem,ndimn,nmats,ngroup,ntlink,outplot,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,stab_matde
     allocate(pnorm(ndimn,npoin),prot(ndimn,ndimn,npoin),icpnorm(npoin),lelenrt(nelem),icpspring(npoin)) !steel 2006
     pnorm=0. ; prot=0. ; icpnorm=0 ; lelenrt=0 ; icpspring=0
@@ -687,10 +704,13 @@
         prot(idimn,idimn,:)=1.0
     enddo
 
-    read(gunit,*)text  !2004/7/12
-    if(rmesh/=0)read(gunit,*)valv1,valv2 !2004/7/12
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text  !2004/7/12
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_2,0)
+    if(rmesh/=0)read(gunit,*,iostat=yl_ios,iomsg=yl_msg)valv1,valv2 !2004/7/12
+    if(rmesh/=0)call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_reached_only_Global_691,0)
 
-    read(gunit,*)text  !2004/7/12
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text  !2004/7/12
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_3,0)
     if (rmesh/=0)then
         allocate(ndefault(abs(rmesh)))
         read(gunit,*)ndefault
@@ -723,9 +743,11 @@
     endif
 
     allocate(tlink(2,ntlink))
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_4,0)
     print *,text
-    read(gunit,*)ninit,kinit,winit,nblks,nlinks,nonsym,outinp,outintr,outintw,neuman,equvs,type_ABC,block_stab,nbackf,nbspring,ebody,outind,nbackdT,ninistn  !20231215YL
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ninit,kinit,winit,nblks,nlinks,nonsym,outinp,outintr,outintw,neuman,equvs,type_ABC,block_stab,nbackf,nbspring,ebody,outind,nbackdT,ninistn  !20231215YL
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_init_and_blocks,0)
     print *,ninit,kinit,winit,nblks,nlinks,nonsym,outinp,outintr,outintw,neuman,equvs,type_ABC,block_stab,nbackf,nbspring,ebody,outind,nbackdT,ninistn !20231215YL
     outinpunit=37  !20220626
     outindunit=54  !20220626
@@ -748,9 +770,11 @@
     !   else if(outintw.gt.0) then
     !      open(outint,file=probn(1:len1)//'.oit',FORM='BINARY',ACCESS='append')
     !   endif
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_5,0)
     print *,text
-    read(gunit,*)type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb,state_change,Bparameter,balgor,upliftin   !20220409
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb,state_change,Bparameter,balgor,upliftin   !20220409
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_problem_type,0)
 
     if(Bparameter==-3.or.Bparameter>0.or.nbackf>0.or.nbackdT==2) &  !20231030
         open(back_ctl_unit,file=probn(1:len1)//'.btl')
@@ -767,14 +791,19 @@
         pause
     endif
     print *,type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_6,0)
     print *,text
-    if(nlayer==2)read(gunit,*) type_nl_layer1,type_nl_layer2,solver_iter
-    read(gunit,*)text
+    if(nlayer==2)read(gunit,*,iostat=yl_ios,iomsg=yl_msg) type_nl_layer1,type_nl_layer2,solver_iter
+    if(nlayer==2)call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_reached_only_Global_772,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_7,0)
     print *,text
-    read(gunit,*)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE  !20200220
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE  !20200220
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_material_class_counts,0)
     print *,nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,ngrav,nflow,ECWPIPE  !20200220
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_8,0)
     print *,text
     if (nflow/=0)then
         read(gunit,*)nfreeflownode
@@ -785,9 +814,11 @@
     endif
 
     ! temperature
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_9,0)
     print *,text
-    read(gunit,*)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel  !20210320
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel  !20210320
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_special_counts,0)
 
     if(submodel==-1)open(sub_msh_unit,file=probn(1:len1)//'.msh')  !20230407
 
@@ -831,8 +862,10 @@
     !   k=1,plate,2 Simo-Rifai
     print *,ntsmat,nthmat,kstat,ground_inf,nextrf  !2004/9/11
     !new
-    read(ftfread,*)text
-    read(ftfread,*)nforce,ngaps,nforce_gaps,nsafety_gaps
+    read(ftfread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_FTR_global_data_title_1,0)
+    read(ftfread,*,iostat=yl_ios,iomsg=yl_msg)nforce,ngaps,nforce_gaps,nsafety_gaps
+    call diag_check_read(yl_ios,yl_msg,RD_FTR_global_data_force_counts,0)
     if(nforce/=0)allocate(surface_force(nforce),nforce_appear(nforce))    !nforce_appear !1-- for saftyfactor 2-- for internal force 3-- for both
     if(nforce_gaps/=0)allocate(nforce_gaps_appear(ngaps))    !nforce_gaps_appear !1-- for saftyfactor 2-- for internal force 3-- for both
     if(nforce/=0)then
@@ -899,13 +932,19 @@
     endif
 
     !  end new
-    read(gunit,*)text
-    read(gunit,*)mdofn
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_10,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)mdofn
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_mdofn,0)
     allocate(lmdofn(mdofn),lcdofn(mdofn),order_time_mdofn(mdofn))
-    read(gunit,*)lmdofn(1:mdofn) !0,no the freedom;1,the freedom occur
-    read(gunit,*)order_time_mdofn(1:mdofn) !0,no the freedom;1,sppead;2,acceleration
-    read(gunit,*)text
-    read(gunit,*)beeta1,beeta2,theta1
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)lmdofn(1:mdofn) !0,no the freedom;1,the freedom occur
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_lmdofn,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)order_time_mdofn(1:mdofn) !0,no the freedom;1,sppead;2,acceleration
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_order_time_mdofn,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_11,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)beeta1,beeta2,theta1
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_newmark,0)
     print *,'beeta1,beeta2,theta1=',beeta1,beeta2,theta1
     allocate(appear_process(1:ngroup,0:nblks),appear(ngroup),water_level(nblks), &
         hdam(nblks),uinitial(nblks),matno_process(ngroup,nblks),modf_dis_blocks(nblks))
@@ -916,25 +955,33 @@
 
     allocate(equvs_process(ngroup),average_appear(ngroup)) !zhao 05/07/30
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_12,0)
     print *,text
-    read(gunit,*)equvs_process(1:ngroup)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)equvs_process(1:ngroup)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_equvs_process,0)
     !levelset
     allocate(appear_level(ngroup))
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_13,0)
     print *,text
-    read(gunit,*)appear_level(1:ngroup)
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)appear_level(1:ngroup)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_appear_level,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_14,0)
     print *,text
     do iblk=1,nblks
-        read(gunit,*)appear_process(1:ngroup,iblk)
+        read(gunit,*,iostat=yl_ios,iomsg=yl_msg)appear_process(1:ngroup,iblk)
+        call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_appear_process,iblk)
         print *,'appear_process=',appear_process(1:ngroup,iblk)
     end do
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_15,0)
     print *,text
     do iblk=1,nblks
-        read(gunit,*)matno_process(1:ngroup,iblk)
+        read(gunit,*,iostat=yl_ios,iomsg=yl_msg)matno_process(1:ngroup,iblk)
+        call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_matno_process,iblk)
         print *,'iblks=',iblks,'ngroup=',ngroup,'matno=',matno_process(1:ngroup,iblk)
     end do
 
@@ -947,21 +994,29 @@
         end do
     endif
 
-    read(gunit,*)text               !zhao 05/08/05
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text               !zhao 05/08/05
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_16,0)
     allocate(force_process(ngroup))
-    read(gunit,*)force_process(1:ngroup)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)force_process(1:ngroup)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_force_process,0)
 
     print *,'force_process=',force_process
 
     average_appear=0 !for stress average
-    read(gunit,*)text
-    read(gunit,*)average_appear(1:ngroup) !=0 不参与应力平均，=1应力外推 =2 应力直接平均 =-1按原来方式外推 =-2按原来方式直接平均
-    read(gunit,*)text
-    read(gunit,*)gid_u,gid_s,gid_ms,gid_f,gid_rot,gid_v,gid_a,gid_T,gid_P,  &
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_17,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)average_appear(1:ngroup) !=0 不参与应力平均，=1应力外推 =2 应力直接平均 =-1按原来方式外推 =-2按原来方式直接平均
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_average_appear,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_18,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)gid_u,gid_s,gid_ms,gid_f,gid_rot,gid_v,gid_a,gid_T,gid_P,  &
         gid_Pv,gid_ep,gid_Y,gid_FC,gid_Ns,gid_Ss,gid_Mxy,gid_bem,gid_wh,gid_wv,gid_bcs  !20210328
-    read(gunit,*)text
-    read(gunit,*)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_gid_flags,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_19,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &
         res_Pv,res_ep,res_Y,res_FC,res_Ns,res_Ss,res_Tv,res_Pa   !20210324
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_res_flags,0)
 
     if (gid_bem==1)then  !20200311
         open(bem_msh_unit,file=probn(1:len1)//'bem.flavia.msh',buffered='YES',blocksize=1048576)
@@ -983,10 +1038,14 @@
 
     allocate(listglocbeam(ngroup))
     listglocbeam=0
-    read(gunit,*)text       !ifs2006 zhao, 06/03/29
-    read(gunit,*)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4
-    read(gunit,*)text   !steel 2006
-    read(gunit,*)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nlocalbeam),lelenrt(1:ndimnrt)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text       !ifs2006 zhao, 06/03/29
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_20,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_fsi_params,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text   !steel 2006
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_21,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nlocalbeam),lelenrt(1:ndimnrt)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_crack_and_beam,0)
     !ftcrack-脆性开裂时用，抗拉强度
     !coefMpa-粘结滑移时的系数，10^6/E的单位，比如:弹模采用Pa,coefMpa=10^6,弹模采用kPa,coefMpa=10^3
     !ikindks-粘结滑移曲线类型
@@ -996,23 +1055,34 @@
     !ndimnrt=有多少个粘结单元切向固结
     !listglocbeam=局部坐标系求解的组列表
     !lelenrt=切向固结单元列表
-    read(gunit,*)text !hxl2006 MIF
-    read(gunit,*)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif
-    read(gunit,*)text
-    read(gunit,*)hdam(1:nblks)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text !hxl2006 MIF
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_22,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_transform_and_mif,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_23,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)hdam(1:nblks)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_hdam,0)
 
-    read(gunit,*)text
-    read(gunit,*)water_level(1:nblks)  !20220409
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_24,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)water_level(1:nblks)  !20220409
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_water_level,0)
 
-    read(gunit,*)text
-    read(gunit,*)modf_dis_blocks(1:nblks)
-    read(gunit,*)text
-    read(gunit,*)uinitial(1:nblks)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_25,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)modf_dis_blocks(1:nblks)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_modf_dis_blocks,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_26,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)uinitial(1:nblks)
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_uinitial,0)
 
 
     print *,'uinitial=',uinitial(1:nblks)
 
-    read(gunit,*)text  !输入与nbackf/=0时的相关内容
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text  !输入与nbackf/=0时的相关内容
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_27,0)
 
 
 
@@ -1052,7 +1122,8 @@
     if(Blarge==1)allocate(coord0(ndimn,npoin))  !20221102
     allocate(links(nlinks),group(ngroup)) !,gaps(ngaps)) !contact
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_28,0)
     print *,text
     do ilink=1,nlinks
 
@@ -1066,7 +1137,8 @@
 
     end do
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_29,0)
     print *,text
     do ilink=1,ntlink
         read(gunit,*)i0,tlink(1:2,ilink)
@@ -1086,19 +1158,25 @@
     !! end contact
 
     do ipoin=1,npoin   !!!read coordinate
-        read(cunit,*)i0,coord(1:ndimn,ipoin)
+        read(cunit,*,iostat=yl_ios,iomsg=yl_msg)i0,coord(1:ndimn,ipoin)
+        call diag_check_read(yl_ios,yl_msg,RD_COR_global_data_node_coordinates,ipoin)
     end do
 
     if(Blarge==1)coord0=coord   !20221102
 
     call kinddefine
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_30,0)
     print *,'text1=',text
-    read(gunit,*)text
-    read(gunit,*)text
-    read(gunit,*)text
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_31,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_32,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_33,0)
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_34,0)
     print *,text
 
 
@@ -1111,12 +1189,13 @@
     do igroup=1,ngroup    !!igroup  for elements
 
         print *,'igroup=',igroup
-        read(gunit,*)group(igroup)%name,       group(igroup)%kname,      group(igroup)%index,      &
+        read(gunit,*,iostat=yl_ios,iomsg=yl_msg)group(igroup)%name,       group(igroup)%kname,      group(igroup)%index,      &
             group(igroup)%class,      group(igroup)%nrfields,   group(igroup)%fieldid,    &
             group(igroup)%special,    group(igroup)%sptype,     group(igroup)%nelgroup,   &
             group(igroup)%matno,      group(igroup)%type_nalgo, group(igroup)%type_stiff, &
             group(igroup)%type_ecoint,group(igroup)%ilayer,     elcod_local,group_inf,  &
             group(igroup)%uplift_ic,group(igroup)%liquj  !20220409
+        call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_header,igroup)
         print *,'name=',group(igroup)%name
 
         nrfields=group(igroup)%nrfields
@@ -1126,9 +1205,11 @@
         allocate(group(igroup)%type_mass(nrfields),group(igroup)%order_time(2,nrfields))
         allocate(group(igroup)%list(group(igroup)%nelgroup))
         allocate(group(igroup)%dof(nrfields))
-        read(gunit,*)group(igroup)%type_mass(1:nrfields),group(igroup)%alfa,group(igroup)%beta
+        read(gunit,*,iostat=yl_ios,iomsg=yl_msg)group(igroup)%type_mass(1:nrfields),group(igroup)%alfa,group(igroup)%beta
+        call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_mass_damping,igroup)
         !write(7,*)'group(igroup)%type_mass(1:nrfields),group(igroup)%alfa,group(igroup)%beta=',group(igroup)%type_mass(1:nrfields),group(igroup)%alfa,group(igroup)%beta
-        read(gunit,*)(group(igroup)%order_time(:,ifield),ifield=1,group(igroup)%nrfields)  !907
+        read(gunit,*,iostat=yl_ios,iomsg=yl_msg)(group(igroup)%order_time(:,ifield),ifield=1,group(igroup)%nrfields)  !907
+        call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_order_time,igroup)
         !write(7,*)'order-Time=', (group(igroup)%order_time(:,ifield),ifield=1,group(igroup)%nrfields)
 
         if(group(igroup)%index==20.or.group(igroup)%index==21.or.group(igroup)%index==22.or.group(igroup)%index==26) &
@@ -1137,12 +1218,14 @@
 
         allocate(mdof(nrfields))
         do ifield=1,nrfields
-            read(gunit,*)nfdof
+            read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nfdof
+            call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_nfdof,igroup)
             !print *,'ifield=',ifield,'nfdof=',nfdof
             group(igroup)%dof(ifield)%nfdof=nfdof
             mdof(ifield)=nfdof
             allocate(group(igroup)%dof(ifield)%listdof_f(nfdof))
-            read(gunit,*)group(igroup)%dof(ifield)%listdof_f(1:nfdof)
+            read(gunit,*,iostat=yl_ios,iomsg=yl_msg)group(igroup)%dof(ifield)%listdof_f(1:nfdof)
+            call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_group_listdof,igroup)
         end do
 
         index=group(igroup)%index
@@ -1358,9 +1441,12 @@
     trans(1:ntotv)%nintf=0
     if(meshc/=0) goto 111
     if(rmesh/=0) goto 222
-    read(nrtunit,*)text
-    read(nrtunit,*)text
-    read(nrtunit,*)transgroup
+    read(nrtunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_NRT_global_data_title_1,0)
+    read(nrtunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_NRT_global_data_title_2,0)
+    read(nrtunit,*,iostat=yl_ios,iomsg=yl_msg)transgroup
+    call diag_check_read(yl_ios,yl_msg,RD_NRT_global_data_transgroup,0)
     do itransgroup=1,transgroup
         read(nrtunit,*)ntransnode,translg
         print *, 'ntransnode,translg=',ntransnode,translg
@@ -1672,9 +1758,11 @@
     !special for hjd
     allocate (tension_joint(nelem))
     tension_joint=0
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_35,0)
     print*,'text_tension_joint=',text
-    read(gunit,*)tsel
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)tsel
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_tension_joint_count,0)
     if (tsel/=0) then
         allocate(icxx(tsel))
         icxx=0
@@ -1687,9 +1775,11 @@
     ! contact  !zhao 05/07/22
     allocate (tension_contact(nelem))
     tension_contact=0
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_36,0)
     print*,'text_tension_contact=',text
-    read(gunit,*)tsel
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)tsel
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_contact_joint_count,0)
     if (tsel/=0) then
         allocate(icxx(tsel))
         icxx=0
@@ -3325,9 +3415,11 @@
     real(irk),   allocatable::aera(:),rot(:,:,:),frict(:),cohes(:),ft(:),Gf(:),center1(:),center2(:),disbotom(:),  &
         distop(:),ictp_aera(:),jctp_aera(:)
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_contact_point_to_point_title_1,0)
     print *,text
-    read(gunit,*)ngaps,ngapb,contactpe,miter_bt,tor_bt,iblks_bt,nonsbt,xlwsol,method_gapi,miter_state,type_solver_ctt,restart_ctt,damp_ctt,istatec  !tcl1124
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ngaps,ngapb,contactpe,miter_bt,tor_bt,iblks_bt,nonsbt,xlwsol,method_gapi,miter_state,type_solver_ctt,restart_ctt,damp_ctt,istatec  !tcl1124
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_contact_point_to_point_contact_control,0)
     print *,'ngaps=',ngaps
 
     if (ngaps==0) return
@@ -4399,9 +4491,11 @@
     integer(ink),allocatable::nel_pipe(:),icpoin(:),jcpoin(:)
     real(irk)   alfa1,Qw,lamda_w,density_w,Cw,begin_time,end_time,dtime_change,k2(2,2)
 
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_link_concrete_and_water_pipe_title_1,0)
     print *,text
-    read(gunit,*)nwcpipe
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nwcpipe
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_link_concrete_and_water_pipe_water_pipe_count,0)
     print *,'nwcpipe=',nwcpipe
 
 
@@ -4533,9 +4627,11 @@
     real(irk)   dl,diameter_s,aera_s,e,k0(2,2),  &
         k1(2,2),k2(2,2),tt(2,2),ft,err_ctl
     real(irk) ,allocatable::roti(:),rotj(:),rote(:)
-    read(gunit,*)text
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_link_concrete_and_steel_title_1,0)
     print *,text
-    read(gunit,*)nrcsteel
+    read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nrcsteel
+    call diag_check_read(yl_ios,yl_msg,RD_GLB_link_concrete_and_steel_rc_steel_count,0)
     print *,'nrcsteel=',nrcsteel
 
     if (nrcsteel==0) return

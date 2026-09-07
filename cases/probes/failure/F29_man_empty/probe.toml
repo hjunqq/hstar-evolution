@@ -1,0 +1,18 @@
+schema = 1
+id = "F29_man_empty"
+base_case = "static_2d.cooks_membrane"
+description = "Empty 1.man: the open succeeds (file exists) and the first lazily-read record, the STATIC_U title, hits EOF."
+
+[[derive]]
+op = "empty_file"
+file = "1.man"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "phase_lazy(1)"
+file_suffix = ".man"
+reader = "MAN.STATIC_U.title#1"
+no_core = true
+max_wall_seconds = 10

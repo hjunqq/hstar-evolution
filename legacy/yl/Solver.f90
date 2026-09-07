@@ -1,6 +1,8 @@
     MODULE SOLVER
 
 
+    use yl_diag
+    use yl_diag_registry
     use variable_types
     USE GLOBAL_VAR
     USE PRESCRIBED
@@ -6824,8 +6826,10 @@
         end if
         if(meshc==1.or.rmesh/=0)rewind(solveunit)
         if(Bparameter/=0)rewind(solveunit)  !20190810
-        Read (solveunit,*) text
-        Read (solveunit,*) iafile,icond,ipdchk,ising
+        Read (solveunit,*,iostat=yl_ios,iomsg=yl_msg) text
+        call diag_check_read(yl_ios,yl_msg,RD_SOL_PROFILE_title_1,0)
+        Read (solveunit,*,iostat=yl_ios,iomsg=yl_msg) iafile,icond,ipdchk,ising
+        call diag_check_read(yl_ios,yl_msg,RD_SOL_PROFILE_profile_control,0)
         if(iafile/=0)open(iafile,file='forpivots',form='unformatted')
         call totv_to_eq
         if(neq==0) return   !2017/11/19

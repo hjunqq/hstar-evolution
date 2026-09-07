@@ -1,0 +1,22 @@
+schema = 1
+id = "F26_pre_header_parse"
+base_case = "static_2d.cooks_membrane"
+description = "Line 3 of 1.pre: nfixnods '17' becomes '17x' in the first prescribed-set header; set_header fails with a type error."
+
+[[derive]]
+op = "replace_token"
+file = "1.pre"
+line = 3
+old = "17"
+new = "17x"
+count = 1
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "PARSE"
+stage = "startup"
+file_suffix = ".pre"
+reader = "PRE.prescrib_set.set_header"
+no_core = true
+max_wall_seconds = 10

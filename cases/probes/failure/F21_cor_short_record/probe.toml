@@ -1,0 +1,21 @@
+schema = 1
+id = "F21_cor_short_record"
+base_case = "static_2d.cooks_membrane"
+description = "Delete the y coordinate of node 57: list-directed READ silently spans into the next record and, because ifx also accepts real-looking tokens for integer items (15.5156 -> 15), every later record shifts by one value until the loop hits EOF at the last node. Documents blind spots R19 (short record) and R21 (integer accepts real form)."
+
+[[derive]]
+op = "replace_line"
+file = "1.cor"
+line = 57
+text = "      57         15.0000000000"
+
+[expect]
+status = "INPUT_ERROR"
+exit_code = 2
+code = "EOF"
+stage = "startup"
+file_suffix = ".cor"
+reader = "COR.global_data.node_coordinates"
+index = 289
+no_core = true
+max_wall_seconds = 10
