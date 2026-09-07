@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://hstar.local/schemas/case.schema.json",
-  "title": "hstarYLNext authoring input",
+  "title": "HSTAR Evolution authoring input",
   "description": "Bootstrap schema. No solver capability is implied until M5.",
   "type": "object",
   "additionalProperties": false,
@@ -38,4 +38,3 @@
     }
   }
 }
-
