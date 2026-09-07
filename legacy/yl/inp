@@ -1,0 +1,13 @@
+input
+0 0 0 0 0 0  ! restart,relis,sysrelis,ADINA,Uopt_R,gamax
+input
+G:\BB\lyc\coarse_mesh\3cichuanzha\340(dizhen)\1
+1
+G:\BB\cube_contact\340(dizhen)\1
+1
+
+G:\BB\lyr\contact\fix\1
+1
+G:\BB\lyr\contact\safety\1
+2
+

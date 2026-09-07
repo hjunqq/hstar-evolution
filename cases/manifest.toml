@@ -1,0 +1,58 @@
+version = 1
+
+[[case]]
+id = "static_2d.cooks_membrane"
+path = "golden/static_2d/cooks_membrane"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/cooks_membrane"
+purpose = "2D Q4 linear-static state and numerical baseline"
+migration_phase = "M0-M5"
+status = "baseline-imported"
+verification = "pending-baseline-run"
+
+[[case]]
+id = "static_2d.lame_cylinder"
+path = "golden/static_2d/lame_cylinder"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/lame_cylinder"
+purpose = "2D elasticity analytical benchmark and boundary-condition baseline"
+migration_phase = "M0-M5"
+status = "baseline-imported"
+verification = "pending-baseline-run"
+
+[[planned_case]]
+id = "static_3d.mini_3d"
+migration_phase = "M6.1"
+
+[[planned_case]]
+id = "modal.mini_modal"
+migration_phase = "M7.1"
+
+[[planned_case]]
+id = "dynamic_fixed.mini_dynamic"
+migration_phase = "M7.2"
+
+[[planned_case]]
+id = "plasticity.mini_mc"
+migration_phase = "M6.4"
+
+[[planned_case]]
+id = "reinforcement.mini_rebar"
+migration_phase = "M6.8"
+
+[[planned_case]]
+id = "thermal.mini_thermal"
+migration_phase = "M8.1"
+
+[[planned_case]]
+id = "staged.train11_staged_foundation"
+migration_phase = "M6.7"
+
+[[planned_case]]
+id = "dynamic_vie.train10_dynamic_vie"
+migration_phase = "M7.5"
+
+[[planned_case]]
+id = "seepage.train12_seepage_steady"
+migration_phase = "M8.3"
+

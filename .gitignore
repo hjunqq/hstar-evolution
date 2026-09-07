@@ -1,0 +1,53 @@
+# Build products
+build/
+build-*/
+*.o
+*.obj
+*.mod
+*.exe
+*.dll
+*.so
+
+# Solver runtime products
+*.act
+*.bar
+*.bem
+*.chk
+*.ctr
+*.ctt
+*.dis
+*.fai
+*.flavia.msh
+*.flavia.res
+*.ftf
+*.gdm
+*.gpv
+*.ini
+*.inw
+*.log
+*.oew
+*.ogw
+*.ojw
+*.opw
+*.res
+*.resb
+*.rtt
+*.stf
+*.sto
+result_*.vtp
+
+# Local tooling
+.pytest_cache/
+__pycache__/
+*.pyc
+.venv/
+.vscode/
+.idea/
+
+# Keep intentional empty legacy input fixtures
+!cases/**/*.aqu
+!cases/**/*.ftr
+!cases/**/*.ifs
+!cases/**/*.nrt
+!cases/**/*.tem
+
