@@ -26,7 +26,9 @@ yl-import-case        从登记来源导入算例，不导入运行垃圾
 | （checked I/O 改写） | `tools/yl_wrap_reads.py` | 按注册表锚点给 read/open 加 iostat 与 `diag_check_*` 调用；幂等；`--dry-run`、`--line-map`（M1-02） |
 | `yl-check legacy`（雏形） | `build/release/hstar --check-legacy` | 只跑启动 reader 后退出 0 并输出 `HSTAR_CHECK*` 摘要 |
 | （故障探针） | `tools/yl_probe.py` | 从 golden 派生 `cases/probes/failure/*/probe.toml`，运行并断言结构化错误；M1-03 原语 `set_field`/`insert_line`/`duplicate_line`，断言 `value`/`field`/`diag_count`/`indices`，`binary_args`（如 `--max-entities=N`） |
-| （状态字段映射） | `tools/yl_state_map.py` | 校验/渲染 `docs/m2/state-field-map.toml`（M2-01）：`check` 复用 M1 anchor hash，验证检查点锚点位于首个消费者之前、非 skip reader 全部被字段引用、词表闭合、`legacy_symbol` 在源码中存在；`render` 生成 `docs/m2/state-field-map.md`；`--selftest` 内嵌 48 个样例 |
+| （状态字段映射） | `tools/yl_state_map.py` | 校验/渲染 `docs/m2/state-field-map.toml`（M2-01）：`check` 复用 M1 anchor hash，验证检查点锚点位于首个消费者之前、`emit` 词表与 adapter 配对、非 skip reader 全部被字段引用、词表闭合、`legacy_symbol` 在源码中存在；`render` 生成 `docs/m2/state-field-map.md`；`gen-fortran` 生成 `src/state/yl_state_dump.f90`；`--selftest` 内嵌 88 个样例 |
+| （状态快照） | `tools/yl_state.py` | `normalize` 把 `<work>/state/<checkpoint>/state.txt` 规范化为 `docs/01 §5` 九文件与 `fingerprint.json`（ntotv 数组经 `nodfn` 重键为 (node,dof)，`reconstruct` 配方校验）；`fingerprint` 复核已规范化的树（M2-02） |
+| （状态比较） | `tools/yl_state_diff.py` | 比较两棵规范化快照：结构优先（缺字段/截断/NaN/重复 ID/错 shape/错检查点/错 dtype/陈旧摘要），再按映射表 `compare` 规则比值；报文定位到 `object.path[i].attr`；`--selftest`、`--snapshot` 产出 S02 证据（M2-02） |
 
 工具实现必须 fail-closed：无法判断时返回未验证，不得返回通过。
 

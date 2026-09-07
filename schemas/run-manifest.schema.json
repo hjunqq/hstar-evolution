@@ -23,6 +23,7 @@
       "type": ["object", "null"],
       "required": ["returncode", "timed_out", "wall_seconds", "max_rss_kib", "stderr_bytes", "stderr_unexpected_lines", "stderr_crash_pattern"],
       "properties": {
+        "command": { "type": "array", "items": { "type": "string" }, "description": "argv of the binary; with --dump-state the relative `--dump-state=state` is appended (relative because cwd is the work dir, so the recorded command carries no host path)" },
         "returncode": { "type": ["integer", "null"] },
         "signal": { "type": ["integer", "null"] },
         "timed_out": { "type": "boolean" },
@@ -95,7 +96,48 @@
     },
     "protocol_violation": {
       "type": ["string", "null"],
-      "description": "why the status is FAILED (malformed HSTAR_DIAG, exit= outside 2..6, rc != exit=, rc != 0 without diagnostic, unexpected stderr, malformed HSTAR_CHECK, check status != OK or errors != 0 with rc 0); null otherwise"
+      "description": "why the status is FAILED (malformed HSTAR_DIAG, exit= outside 2..6, rc != exit=, rc != 0 without diagnostic, unexpected stderr, malformed HSTAR_CHECK, check status != OK or errors != 0 with rc 0, or a requested state dump that does not normalize); null otherwise"
+    },
+    "state": {
+      "type": ["object", "null"],
+      "description": "M2-02 state dump (tools/yl_state.py); null unless --dump-state was given. --dump-state is mutually exclusive with --check-legacy (refused by the runner, exit 3). A dump that does not normalize turns CHECKED / MISSING_OUTPUT / COMPLETED into FAILED with protocol_violation `state dump malformed: ...`",
+      "required": ["requested", "dump_dir", "normalized_dir", "checkpoints", "fingerprint", "normalize"],
+      "properties": {
+        "requested": { "type": "boolean" },
+        "dump_dir": { "type": ["string", "null"], "description": "<work>/state, where the binary wrote one state.txt per checkpoint directory" },
+        "normalized_dir": { "type": ["string", "null"], "description": "<run_dir>/state, the canonical tree; null when normalization failed, since nothing is then written" },
+        "map": {
+          "type": ["object", "null"],
+          "description": "the field map the dump was validated against",
+          "properties": {
+            "path": { "type": "string" },
+            "sha256": { "type": "string" }
+          }
+        },
+        "checkpoints": {
+          "type": "object",
+          "description": "per checkpoint id (model_ready, phase_ready(1), increment_ready(1,1)); a checkpoint whose state.txt is missing is absent here and reported in normalize.problems",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["raw_file", "raw_bytes", "raw_sha256", "fields"],
+            "properties": {
+              "raw_file": { "type": "string", "description": "path of the raw dump relative to dump_dir, e.g. phase_ready_1/state.txt" },
+              "raw_bytes": { "type": "integer" },
+              "raw_sha256": { "type": "string" },
+              "fields": { "type": "integer", "description": "normalized field entries of that checkpoint, reconstructed ones included" }
+            }
+          }
+        },
+        "fingerprint": { "type": ["string", "null"], "description": "sha256 over the sorted per-file digests of the canonical tree; null when normalization failed. Repeat runs of the same case must agree" },
+        "normalize": {
+          "type": "object",
+          "required": ["ok", "problems"],
+          "properties": {
+            "ok": { "type": "boolean" },
+            "problems": { "type": "array", "items": { "type": "string" }, "description": "STRUCT lines from yl_state (header/truncated/extra/missing/dtype/rank/length/token/nonfinite/key/index_map/reconstruct)" }
+          }
+        }
+      }
     },
     "run_dir": { "type": "string" },
     "finished_at": { "type": "string" }
@@ -103,7 +145,7 @@
   "$defs": {
     "status": {
       "enum": ["INPUT_HASH_MISMATCH", "TIMEOUT", "CRASHED", "INPUT_ERROR", "UNSUPPORTED", "INIT_ERROR", "SOLVE_ERROR", "INTERNAL_ERROR", "FAILED", "GOLDEN_MODIFIED", "CHECKED", "MISSING_OUTPUT", "COMPLETED"],
-      "description": "classification order (first match wins). INPUT_ERROR/UNSUPPORTED/INIT_ERROR/SOLVE_ERROR/INTERNAL_ERROR: rc 2/3/4/5/6 equal to the exit= of a well-formed HSTAR_DIAG line; FAILED also covers protocol violations (malformed HSTAR_DIAG, exit= outside 2..6, rc != exit=) and a check summary that is malformed or not status=OK/errors=0; GOLDEN_MODIFIED outranks CHECKED and COMPLETED"
+      "description": "classification order (first match wins). INPUT_ERROR/UNSUPPORTED/INIT_ERROR/SOLVE_ERROR/INTERNAL_ERROR: rc 2/3/4/5/6 equal to the exit= of a well-formed HSTAR_DIAG line; FAILED also covers protocol violations (malformed HSTAR_DIAG, exit= outside 2..6, rc != exit=) and a check summary that is malformed or not status=OK/errors=0, and a requested state dump that does not normalize (which demotes CHECKED / MISSING_OUTPUT / COMPLETED only); GOLDEN_MODIFIED outranks CHECKED and COMPLETED"
     },
     "check": {
       "type": "object",

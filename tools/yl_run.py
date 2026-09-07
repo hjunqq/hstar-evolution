@@ -13,13 +13,18 @@ Every run:
      summary (stdout `HSTAR_CHECK*` lines, same strict shlex rules as HSTAR_DIAG:
      schema=1, mode=check-legacy, integer errors, readers_executed == number of
      HSTAR_CHECK_READER lines, zero included);
-  5. parses the required output and re-verifies the golden inputs;
+  5. parses the required output and re-verifies the golden inputs; with
+     --dump-state, normalizes the M2-02 state dump the binary wrote under
+     <work>/state into <run_dir>/state via yl_state.normalize;
   6. classifies the outcome (first match in STATUS_ORDER wins): INPUT_ERROR /
      UNSUPPORTED / INIT_ERROR / SOLVE_ERROR / INTERNAL_ERROR require rc == the
      diagnostic's exit= (2..6); a malformed HSTAR_DIAG line, an exit= outside
      2..6 or rc != exit= is a protocol violation -> FAILED; a check summary that
      is malformed or not (status=OK, errors=0) with rc 0 is FAILED too;
      GOLDEN_MODIFIED is decided before CHECKED / MISSING_OUTPUT / COMPLETED;
+     a requested state dump that does not normalize turns CHECKED /
+     MISSING_OUTPUT / COMPLETED into FAILED (GOLDEN_MODIFIED and every status
+     more specific than FAILED are left alone);
   7. writes run-manifest.json (+ results.json when the output parsed).
 
 Only COMPLETED may feed a comparison. The process exit code is 0 iff the final
@@ -31,6 +36,16 @@ Usage:
             [--timeout 600] [--runs-root runs] [--label NAME]
             [--expect-status COMPLETED] [--binary-args "--check-legacy"]
             [--case-dir DIR]   # override the case directory (self-tests / probes)
+            [--dump-state] [--state-map docs/m2/state-field-map.toml]
+
+--dump-state pre-creates <work>/state/<sanitized checkpoint>/ for every covered
+checkpoint of the field map (the Fortran writer opens into those directories and
+never creates them), appends the relative `--dump-state=state` to the binary
+command line (relative because the process runs with cwd=<work>, so the recorded
+command stays host independent) and normalizes the result afterwards.  It is
+mutually exclusive with `--binary-args "--check-legacy"`: check mode exits before
+the first checkpoint, so the combination is refused here (exit 3) rather than left
+to the binary, whose PARSE exit 2 would be misread as INPUT_ERROR.
 """
 from __future__ import annotations
 
@@ -75,6 +90,14 @@ CORE_FILE = re.compile(r"^core(?:\..*)?$")
 DIAG_SCHEMA = 1
 # exit code -> status, for a run whose rc equals the exit= of a well-formed HSTAR_DIAG line
 EXIT_STATUS = {2: "INPUT_ERROR", 3: "UNSUPPORTED", 4: "INIT_ERROR", 5: "SOLVE_ERROR", 6: "INTERNAL_ERROR"}
+# M2-02 state dump: subdirectory of <work> written by the binary, mirrored normalized under <run_dir>
+STATE_SUBDIR = "state"
+STATE_FLAG = f"--dump-state={STATE_SUBDIR}"
+CHECK_FLAG = "--check-legacy"
+USAGE_EXIT = 3
+# a requested dump that does not normalize demotes these statuses to FAILED; every status ahead of
+# FAILED in STATUS_ORDER is more specific, and GOLDEN_MODIFIED must never be masked by a dump problem
+STATE_DEMOTES = {"FAILED", "CHECKED", "MISSING_OUTPUT", "COMPLETED"}
 
 
 def sha256(path: Path) -> str:
@@ -279,6 +302,52 @@ def check_manifest(manifest_path: Path, root: Path) -> list[str]:
     return problems
 
 
+def usage_error(msg: str):
+    """Reject an unusable flag combination before anything is created (exit 3, never a run status)."""
+    print(f"usage error: {msg}", file=sys.stderr)
+    raise SystemExit(USAGE_EXIT)
+
+
+def load_state_map(map_path: str | None):
+    """(yl_state module, MapIndex) for the M2-02 field map; usage error when it cannot be loaded."""
+    import yl_state  # local: a plain run must not depend on the M2-02 tooling being importable
+    path = Path(map_path).resolve() if map_path else yl_state.MAP_DEFAULT
+    try:
+        return yl_state, yl_state.MapIndex.load(path)
+    except Exception as exc:  # OSError / TOMLDecodeError / KeyError / ...
+        return usage_error(f"cannot load the state field map {path}: {type(exc).__name__}: {exc}")
+
+
+def prepare_state_dirs(yl_state, mp, work: Path) -> Path:
+    """Pre-create <work>/state/<sanitized checkpoint>/ for every covered checkpoint of the map.
+
+    The Fortran writer opens `state/<dir>/state.txt` and has no portable mkdir, so a missing
+    directory is a structural failure of the dump rather than a recoverable condition."""
+    raw = work / STATE_SUBDIR
+    for cp in mp.order:
+        (raw / yl_state.sanitize(cp)).mkdir(parents=True, exist_ok=True)
+    return raw
+
+
+def normalize_state(yl_state, mp, raw: Path, out: Path) -> dict:
+    """Normalize the raw dump into `out` and return the manifest `state` block (fail-closed)."""
+    try:
+        res = yl_state.normalize(raw, out, mp)
+    except Exception as exc:  # a normalizer crash is a dump problem, never a runner crash
+        res = {"ok": False, "problems": [f"yl_state.normalize raised {type(exc).__name__}: {exc}"],
+               "map": mp.map_ref(), "checkpoints": {}, "fingerprint": None}
+    ok = bool(res.get("ok"))
+    return {
+        "requested": True,
+        "dump_dir": str(raw),
+        "normalized_dir": str(out) if ok else None,  # nothing is written unless the dump is clean
+        "map": res.get("map") or mp.map_ref(),
+        "checkpoints": res.get("checkpoints") or {},
+        "fingerprint": res.get("fingerprint"),
+        "normalize": {"ok": ok, "problems": list(res.get("problems") or [])},
+    }
+
+
 def run(args: argparse.Namespace) -> int:
     case_dir = Path(args.case_dir).resolve() if args.case_dir else find_case(args.case_id)
     legacy_dir = case_dir / "legacy"
@@ -300,6 +369,13 @@ def run(args: argparse.Namespace) -> int:
     binary_args = shlex.split(args.binary_args) if args.binary_args else []
     if args.expect_status not in STATUS_ORDER:
         raise SystemExit(f"--expect-status must be one of {STATUS_ORDER}, got {args.expect_status!r}")
+    # check mode exits before the first checkpoint: refuse the combination here, so the binary's
+    # PARSE exit 2 is never classified as INPUT_ERROR
+    if args.dump_state and any(a == CHECK_FLAG or a.startswith(CHECK_FLAG + "=") for a in binary_args):
+        usage_error(f"--dump-state and {CHECK_FLAG} are mutually exclusive")
+    state_mod, state_map = load_state_map(args.state_map) if args.dump_state else (None, None)
+    if args.dump_state:
+        binary_args = [*binary_args, STATE_FLAG]
 
     record: dict = {
         "manifest_version": 1,
@@ -325,6 +401,7 @@ def run(args: argparse.Namespace) -> int:
         "check_malformed": [],
         "protocol_violation": None,
         "core_dump": False,
+        "state": None,  # M2-02 dump; stays null unless --dump-state was given
     }
     bm = binary.parent / "build-manifest.json"
     if bm.is_file():
@@ -351,6 +428,9 @@ def run(args: argparse.Namespace) -> int:
         if p.is_file():
             shutil.copy2(p, work / p.name)
     inputs_copied = sorted(p.name for p in work.iterdir())
+    # the checkpoint directories are created after inputs_copied, so `state` is never counted as
+    # an input, and before the launch, because the Fortran writer cannot create them
+    state_raw = prepare_state_dirs(state_mod, state_map, work) if args.dump_state else None
 
     # 3. run
     env = {k: v for k, v in os.environ.items() if k not in ("LD_LIBRARY_PATH", "LD_PRELOAD")}
@@ -431,10 +511,20 @@ def run(args: argparse.Namespace) -> int:
     after = check_manifest(input_manifest, legacy_dir)
     record["input_check_after"] = {"ok": not after, "problems": after}
 
+    # 5b. the requested state dump, normalized next to the run
+    if args.dump_state:
+        record["state"] = normalize_state(state_mod, state_map, state_raw, run_dir / STATE_SUBDIR)
+
     # 6. classify (first matching status wins)
     record["status"] = classify(record["process"], ro, after, diags, malformed, record["check_summary"], record["check_malformed"], record["core_dump"])
     if record["status"] == "FAILED":
         record["protocol_violation"] = failure_reason(record["process"], diags, malformed, record["check_summary"], record["check_malformed"])
+    state = record["state"]
+    if state and not state["normalize"]["ok"] and record["status"] in STATE_DEMOTES:
+        # an accepted run must never carry an invalid snapshot; a pre-existing reason keeps priority
+        first = (state["normalize"]["problems"] or ["no problem reported"])[0]
+        record["status"] = "FAILED"
+        record["protocol_violation"] = record["protocol_violation"] or f"state dump malformed: {first}"
     return finish(record, run_dir)
 
 
@@ -449,6 +539,10 @@ def finish(record: dict, run_dir: Path) -> int:
     if record.get("diagnostics"):
         d = record["diagnostics"][0]
         extra += f"  diag={d.get('code')}@{d.get('reader') or d.get('file')}"
+    state = record.get("state")
+    if state:
+        extra += (f"  state={state['fingerprint'][:12]}" if state["normalize"]["ok"]
+                  else f"  state=FAIL({len(state['normalize']['problems'])})")
     if record.get("protocol_violation"):
         extra += f"  reason={record['protocol_violation']}"
     print(f"{record['status']:20s} {record['case_id']}  rc={p.get('returncode')}  wall={p.get('wall_seconds')}s  rss={p.get('max_rss_kib')}KiB{extra}  -> {run_dir}")
@@ -465,6 +559,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--case-dir", help="override case directory (self-tests / derived probe cases)")
     ap.add_argument("--expect-status", default="COMPLETED", metavar="STATUS", help="exit 0 iff the final status equals this (default COMPLETED)")
     ap.add_argument("--binary-args", default="", metavar="ARGS", help="extra arguments appended to the binary command line (shlex-split)")
+    ap.add_argument("--dump-state", action="store_true",
+                    help=f"pre-create <work>/{STATE_SUBDIR}/<checkpoint>/, append `{STATE_FLAG}` to the binary "
+                         f"and normalize the dump into <run_dir>/{STATE_SUBDIR}/ (excludes {CHECK_FLAG})")
+    ap.add_argument("--state-map", metavar="TOML", help="M2-02 field map (default docs/m2/state-field-map.toml)")
     argv = list(sys.argv[1:] if argv is None else argv)
     # `--binary-args "--check-legacy"`: join so argparse does not mistake the value for an option
     for i, tok in enumerate(argv[:-1]):

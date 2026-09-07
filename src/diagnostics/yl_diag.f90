@@ -48,6 +48,11 @@ module yl_diag
   integer, save, public :: yl_st = 0
   integer, save, public :: yl_idx = 0
 
+  ! M2-02 state observer configuration, set once by diag_set_mode_from_argv from
+  ! --dump-state=DIR and read (never written) by yl_state_serializer / Fem.f90.
+  logical, save, protected, public :: yl_dump_enabled = .false.
+  character(len=256), save, protected, public :: yl_dump_dir = ''
+
   integer, parameter :: LEN_CODE = 16, LEN_MSG = 512
   integer, parameter :: LEN_SITE = 64, LEN_FIELD = 256
   ! file names reported by diag_check_open are actual paths (probn//'.ext'), not
@@ -107,10 +112,16 @@ contains
   ! Scan every command-line argument. Accepted, in any order:
   !   --check-legacy       check mode
   !   --max-entities=N     N decimal, 1..huge(0_ink); overrides diag_max_entities
-  ! Anything else (unknown option, bad or out-of-range N, over-long argument)
-  ! emits code=PARSE stage="argv" and exits 2.
+  !   --dump-state=DIR     M2-02 state observer; DIR is copied byte-exactly into
+  !                        yl_dump_dir (no shell expansion) and yl_dump_enabled
+  !                        is set. May appear at most once and is mutually
+  !                        exclusive with --check-legacy in either order.
+  ! Anything else (unknown option, bad or out-of-range N, empty or repeated or
+  ! control-character DIR, both modes at once, over-long argument) emits
+  ! code=PARSE stage="argv" and exits 2.
   subroutine diag_set_mode_from_argv()
     character(len=*), parameter :: OPT_ME = '--max-entities='
+    character(len=*), parameter :: OPT_DS = '--dump-state='
     character(len=LEN_VALUE) :: arg
     integer :: i, l, st, k
     integer(i8) :: n
@@ -122,7 +133,30 @@ contains
         call argv_error(i, arg(1:min(l, len(arg))), 'argument too long or unreadable')
       end if
       if (arg(1:l) == '--check-legacy') then
+        if (yl_dump_enabled) then
+          call argv_error(i, arg(1:l), '--check-legacy and --dump-state=DIR are mutually exclusive')
+        end if
         check_mode = .true.
+      else if (arg(1:len(OPT_DS)) == OPT_DS) then
+        if (check_mode) then
+          call argv_error(i, arg(1:l), '--check-legacy and --dump-state=DIR are mutually exclusive')
+        end if
+        if (yl_dump_enabled) then
+          call argv_error(i, arg(1:l), 'repeated --dump-state=DIR option')
+        end if
+        if (l <= len(OPT_DS)) then
+          call argv_error(i, arg(1:l), 'expected --dump-state=DIR with a non-empty directory path')
+        end if
+        if (l - len(OPT_DS) > len(yl_dump_dir)) then
+          call argv_error(i, arg(1:l), 'directory path of --dump-state=DIR is too long')
+        end if
+        do k = len(OPT_DS) + 1, l
+          if (iachar(arg(k:k)) < 32 .or. iachar(arg(k:k)) == 127) then
+            call argv_error(i, arg(1:l), 'directory path of --dump-state=DIR contains a control character')
+          end if
+        end do
+        yl_dump_dir = arg(len(OPT_DS) + 1:l)
+        yl_dump_enabled = .true.
       else if (l > len(OPT_ME) .and. arg(1:len(OPT_ME)) == OPT_ME) then
         ok = .true.
         n = 0
@@ -158,7 +192,7 @@ contains
     d%index = i
     d%field = 'argv'
     d%value = arg
-    d%allowed = '--check-legacy | --max-entities=N'
+    d%allowed = '--check-legacy | --max-entities=N | --dump-state=DIR'
     d%message = message
     call diag_emit(d)
     call diag_exit(d%exit_code)

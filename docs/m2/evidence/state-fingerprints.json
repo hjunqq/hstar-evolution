@@ -1,0 +1,20 @@
+{
+  "cooks_membrane": {
+    "checkpoints": {
+      "increment_ready(1,1)": 17,
+      "model_ready": 162,
+      "phase_ready(1)": 11
+    },
+    "fingerprint": "547e53a8fc6c348d49bb3608c4223911f1636c9e0d8dfbb3d2e36a3e22da2dfc",
+    "map_sha256": "232f6bbae7abc4352e5a1ea835f11997d5b94736abbaa67925f55aa8863ffa32"
+  },
+  "lame_cylinder": {
+    "checkpoints": {
+      "increment_ready(1,1)": 17,
+      "model_ready": 162,
+      "phase_ready(1)": 11
+    },
+    "fingerprint": "7c2edf39a3425fb6a6b0afe736f5b345ef15ae7f3ac5beec08755f549d73f2f8",
+    "map_sha256": "232f6bbae7abc4352e5a1ea835f11997d5b94736abbaa67925f55aa8863ffa32"
+  }
+}

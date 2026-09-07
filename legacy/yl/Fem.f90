@@ -7,7 +7,7 @@
     !                          May, 1997
     !                      All rights reserved.
 
-
+    use yl_state_serializer, only: yl_state_dump
 
     use yl_diag
     use yl_diag_registry
@@ -1905,6 +1905,7 @@
         call TIME(char_time)
         print *, 'time: ', char_time
         write(chkunit,*)'time(solve): ', char_time
+        if (yl_dump_enabled) call yl_state_dump('model_ready')
         operation='SET'
         call solve
         call TIME(char_time)
@@ -3598,6 +3599,7 @@
 
     print *,' in static_U**'
 
+    if (yl_dump_enabled) call yl_state_dump('phase_ready(1)')
     if(ngaps/=0.or.nrcsteel/=0)allocate(tofor0(ntotv)) !!ctt2005
 
     do iincs=1,lincs
@@ -3651,6 +3653,7 @@
 
         print *,'cwater,Qstatic=',cwater,Qstatic
 
+        if (yl_dump_enabled) call yl_state_dump('increment_ready(1,1)')
         ttime0=ttime
         trstep0=trstep
         do istep=inc_step,nstep,inc_step

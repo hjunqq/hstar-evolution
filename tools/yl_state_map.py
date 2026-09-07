@@ -10,6 +10,10 @@ Sub-commands
   render    state-field-map.toml -> deterministic Markdown (stdout or -o); fail-closed: the
             full check runs first and on FAIL nothing is written (exit 1) unless --force
             (writes, still exits 1)
+  gen-fortran  state-field-map.toml -> src/state/yl_state_dump.f90 (module yl_state_serializer,
+            M2-02): one dispatcher + one private routine per covered checkpoint, emitting every
+            non-ignore field in TOML order; same fail-closed contract as render (--force writes
+            anyway and still exits 1)
   --selftest  run the built-in bad/good samples through every check rule
 
 Usage
@@ -17,6 +21,7 @@ Usage
                                       [--inventory docs/m1/reader-inventory.toml]
                                       [--src legacy/yl]
   python3 tools/yl_state_map.py render [--map ...] [-o docs/m2/state-field-map.md] [--force]
+  python3 tools/yl_state_map.py gen-fortran [--map ...] [-o src/state/yl_state_dump.f90] [--force]
   python3 tools/yl_state_map.py --selftest
 
 Check rules (numbered as in .ccg/tasks/m2-01-state-field-map/analysis-schema.md §5)
@@ -59,6 +64,31 @@ Check rules (numbered as in .ccg/tasks/m2-01-state-field-map/analysis-schema.md 
   15 placement: no `call <first_consumer>` between the start of the enclosing routine and
      the anchor line
   16 fail-closed output: FAIL: n problems (<= 200 lines, exit 1) else PASS line (exit 0)
+  17 emit (M2-02): optional, defaults to "generated"; vocabulary generated | adapter:<name>
+     (name matches ^[a-z][a-z0-9_]*$) | none
+  18 emit pairing, all fail-closed:
+     a) a field whose compare.rule is not `ignore` must not have determinism uninitialized or
+        pointer -- an unobservable value may not be dumped, not even under `hash`
+     b) emit = "none" is allowed only on `ignore` rows
+     c) `ignore` rows must be emit = "none" (they are never dumped)
+     d) adapter names are unique and equal the field id with dots replaced by underscores
+  19 every non-ignore row has a resolvable emit: `adapter:*` names a handwritten emit_<name>
+     in src/state/yl_state_adapters.f90, `generated` must synthesize a declaration-aware
+     traversal from legacy_symbol + shape + dtype -- the base entity and, for a %component
+     chain, the leaf component carry the shape dimensions (leaf dims first, Fortran order),
+     intermediate array components are indexed at 1, the leaf intrinsic type must match dtype,
+     routine-local symbols (<module>.<routine>.<var>) are never generated, and an entity that
+     any `allocate` gives a lower bound other than 1 is rejected (a 1-based loop would drop
+     elements: global_var.appear_process(1:ngroup,0:nblks) is why that row needs an adapter)
+
+gen-fortran contract
+  Follows tools/yl_io_inventory.py gen-fortran: banner + source path + 12-hex source hash +
+  reproducible command, stable TOML ordering, no timestamp, ASCII, <= 132 columns. The writer
+  primitives (state_writer_t, state_open, state_close, state_fail, begin_field, end_field,
+  put_i32/put_f64/put_str, and the zero-sized NO_KEY / SCALAR_SHAPE constants) live in the
+  handwritten src/state/yl_state_io.f90; one emit_<name> per adapter row lives in
+  src/state/yl_state_adapters.f90. state_open takes the RAW checkpoint id and sanitizes it into
+  the snapshot directory itself, so the generated dispatcher never spells the directory out.
 
 Only the Python standard library is used. Sources are decoded as latin-1 via the M1
 helpers imported from tools/yl_io_inventory.py.
@@ -67,11 +97,13 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import re
 import sys
 import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
+from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from yl_io_inventory import (END_ROUTINE, ROUTINE, SOURCES, anchor_hash, full_statement,  # noqa: E402
@@ -79,6 +111,7 @@ from yl_io_inventory import (END_ROUTINE, ROUTINE, SOURCES, anchor_hash, full_st
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAP_DEFAULT = REPO_ROOT / "docs" / "m2" / "state-field-map.toml"
+GEN_DEFAULT = REPO_ROOT / "src" / "state" / "yl_state_dump.f90"
 SRC_DEFAULT = REPO_ROOT / "legacy" / "yl"
 
 SNAPSHOT_FILES = ["control.json", "mesh.sha256", "dof.sha256", "groups.json", "materials.json",
@@ -104,6 +137,18 @@ TYPE_BEGIN = re.compile(r"^\s*type\s*(?:,[^:]*::|::)?\s*([A-Za-z_]\w*)\s*$", re.
 TYPE_END = re.compile(r"^\s*end\s+type\b", re.I)
 MODULE_BEGIN = re.compile(r"^\s*module\s+([A-Za-z_]\w*)\s*$", re.I)
 MODULE_END = re.compile(r"^\s*(contains|end\s+module)\b", re.I)
+KIND_WORD = re.compile(r"^\s*(integer|real|character|logical|complex|double\s+precision|type)", re.I)
+ATTR_DIM = re.compile(r"\bdimension\s*\(", re.I)
+
+# --- emit (M2-02) ------------------------------------------------------------------------
+EMIT_NAME = re.compile(r"^[a-z][a-z0-9_]*$")
+EMIT_DEFAULT = "generated"
+# dtype -> intrinsic type keyword accepted for a generated leaf, and the writer primitive
+DTYPE_KINDS = {"i32": {"integer"}, "i64": {"integer"}, "f64": {"real", "double precision"},
+               "str": {"character"}, "bool": {"logical"}}
+DTYPE_PUT = {"i32": "put_i32", "i64": "put_i32", "f64": "put_f64", "str": "put_str"}
+MAX_RANK = 4          # generated dense arrays: at most four loop nests
+FORTRAN_COLS = 132
 
 
 # --- source access -----------------------------------------------------------------------
@@ -115,8 +160,8 @@ class SourceTree:
         self._routines: set[str] | None = None
         self._module_spans: dict[str, tuple[str, int, int] | None] = {}
         self._routine_spans: dict[tuple[str, str], tuple[int, int] | None] = {}
-        self._vars: dict[tuple[str, int, int], dict[str, str | None]] = {}
-        self._type_index: dict[str, tuple[str, dict[str, str | None]]] | None = None
+        self._vars: dict[tuple[str, int, int], dict[str, Decl]] = {}
+        self._type_index: dict[str, tuple[str, dict[str, Decl]]] | None = None
 
     @classmethod
     def from_dir(cls, src: Path) -> "SourceTree":
@@ -198,18 +243,36 @@ class SourceTree:
             yield stmt
             i += n
 
-    def module_vars(self, fname: str, start: int, end: int) -> dict[str, str | None]:
-        """{entity name: derived type name | None (intrinsic)} declared in code[start:end] (cached)."""
+    def module_vars(self, fname: str, start: int, end: int) -> dict[str, Decl]:
+        """{entity name: Decl} declared in code[start:end] (cached)."""
         key = (fname, start, end)
         if key not in self._vars:
-            names: dict[str, str | None] = {}
+            names: dict[str, Decl] = {}
             for stmt in self.statements(fname, start, end):
                 names.update(decl_entries(stmt))
             self._vars[key] = names
         return self._vars[key]
 
-    def type_block(self, tname: str) -> tuple[str, dict[str, str | None]] | None:
-        """(file, {component: derived type | None}) of `type <tname> ... end type`, searched in all
+    def zero_based(self, name: str) -> str | None:
+        """`File.f90:line` of the first `allocate(... <name>(<lower>:<upper> ...))` that does not
+        start the dimension at 1 -- a generated `do d = 1, size(x)` loop would silently drop
+        elements there (global_var.appear_process(1:ngroup,0:nblks), Global.f90:964)."""
+        rx = re.compile(r"\b" + re.escape(name) + r"\s*\(", re.I)
+        for fname, code in self.code.items():
+            for i, ln in enumerate(code):
+                if "allocate" not in ln.lower():
+                    continue
+                m = rx.search(ln)
+                if not m:
+                    continue
+                for dim in split_top(paren_body(ln, m.end() - 1)):
+                    lo = dim.split(":", 1)[0].strip() if ":" in dim else "1"
+                    if lo and lo != "1":
+                        return f"{fname}:{i + 1}"
+        return None
+
+    def type_block(self, tname: str) -> tuple[str, dict[str, Decl]] | None:
+        """(file, {component: Decl}) of `type <tname> ... end type`, searched in all
         source files (first hit in SOURCES order wins)."""
         if self._type_index is None:
             self._type_index = {}
@@ -221,7 +284,7 @@ class SourceTree:
                         j = i + 1
                         while j < len(code) and not TYPE_END.match(code[j]):
                             j += 1
-                        comps: dict[str, str | None] = {}
+                        comps: dict[str, Decl] = {}
                         for stmt in self.statements(fname, i + 1, j):
                             comps.update(decl_entries(stmt))
                         self._type_index.setdefault(m.group(1).lower(), (fname, comps))
@@ -230,29 +293,190 @@ class SourceTree:
         return self._type_index.get(tname.lower())
 
 
-def decl_entries(stmt: str) -> dict[str, str | None]:
-    """{entity name (lower-case): derived type name (lower-case) or None for intrinsic types}
-    declared by one Fortran declaration statement."""
-    if not DECL.match(stmt):
-        return {}
-    tm = TYPE_OF.match(stmt)
-    tname = tm.group(1).lower() if tm else None
-    rhs = stmt.split("::", 1)[1] if "::" in stmt else DECL_PREFIX.sub("", stmt, count=1)
-    names: dict[str, str | None] = {}
-    depth, item = 0, []
-    for ch in rhs + ",":
+class Decl(NamedTuple):
+    """One declared entity: derived type name (or None for an intrinsic type), the intrinsic
+    type keyword, the declared rank and the allocatable/pointer attribute."""
+    type: str | None
+    kind: str
+    rank: int
+    attr: str          # "" | "allocatable" | "pointer"
+
+
+def split_top(text: str) -> list[str]:
+    """Split on commas that are not inside parentheses."""
+    out, depth, item = [], 0, []
+    for ch in text + ",":
         if ch == "(":
             depth += 1
         elif ch == ")":
             depth -= 1
         if ch == "," and depth == 0:
-            m = re.match(r"\s*([A-Za-z_]\w*)", "".join(item))
-            if m:
-                names[m.group(1).lower()] = tname
+            out.append("".join(item))
             item = []
         else:
             item.append(ch)
+    return out
+
+
+def paren_rank(text: str, open_at: int) -> int:
+    """Rank of the dimension list whose '(' sits at text[open_at] (top-level commas + 1)."""
+    depth, commas = 0, 0
+    for ch in text[open_at:]:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        elif ch == "," and depth == 1:
+            commas += 1
+    return commas + 1
+
+
+def paren_body(text: str, open_at: int) -> str:
+    """The text between text[open_at] == '(' and its matching ')'."""
+    depth = 0
+    for i in range(open_at, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return text[open_at + 1:i]
+    return text[open_at + 1:]
+
+
+def decl_entries(stmt: str) -> dict[str, Decl]:
+    """{entity name (lower-case): Decl} declared by one Fortran declaration statement.
+    The rank comes from the entity's own `name(...)` or from a `dimension(...)` attribute."""
+    if not DECL.match(stmt):
+        return {}
+    tm = TYPE_OF.match(stmt)
+    tname = tm.group(1).lower() if tm else None
+    km = KIND_WORD.match(stmt)
+    kind = re.sub(r"\s+", " ", km.group(1).lower()) if km else ""
+    if "::" in stmt:
+        attrs, rhs = stmt.split("::", 1)
+    else:
+        attrs, rhs = "", DECL_PREFIX.sub("", stmt, count=1)
+    attr = ("pointer" if re.search(r"\bpointer\b", attrs, re.I)
+            else "allocatable" if re.search(r"\ballocatable\b", attrs, re.I) else "")
+    dm = ATTR_DIM.search(attrs)
+    attr_rank = paren_rank(attrs, dm.end() - 1) if dm else 0
+    names: dict[str, Decl] = {}
+    for item in split_top(rhs):
+        m = re.match(r"\s*([A-Za-z_]\w*)\s*(\()?", item)
+        if not m:
+            continue
+        rank = paren_rank(item, m.end() - 1) if m.group(2) else attr_rank
+        names[m.group(1).lower()] = Decl(tname, kind, rank, attr)
     return names
+
+
+# --- emit + generated traversal (M2-02) ---------------------------------------------------
+def emit_of(f: dict) -> str:
+    """The row's `emit` value; absent means "generated"."""
+    e = f.get("emit", EMIT_DEFAULT)
+    return e if isinstance(e, str) else str(e)
+
+
+def adapter_name(fid: str) -> str:
+    """The only adapter name a field id may claim: the id with dots replaced by underscores."""
+    return str(fid).replace(".", "_")
+
+
+def is_ignored(f: dict) -> bool:
+    return (f.get("compare") or {}).get("rule") == "ignore"
+
+
+class Plan(NamedTuple):
+    """A synthesized traversal: `module`.`var` plus the %component chain, with `rb` shape
+    dimensions on the base entity and `rl` on the leaf component (leaf dims come first in
+    `shape`, Fortran order, innermost first)."""
+    module: str
+    var: str
+    levels: list[tuple[str, Decl]]      # [(base var, Decl), (component, Decl), ...]
+    rb: int
+    rl: int
+
+    @property
+    def chain(self) -> bool:
+        return len(self.levels) > 1
+
+
+def resolve_chain(src: SourceTree, sym: str) -> tuple[str, str, list[tuple[str, Decl]] | None, str]:
+    """(module, var, [(name, Decl), ...] | None, reason): walk <module>.<var>[%comp...] through the
+    declarations. Routine-local symbols and anything rule 8 already rejects give levels=None."""
+    m = re.match(r"^([A-Za-z_]\w*)\.([A-Za-z_]\w*)(?:\.([A-Za-z_]\w*))?((?:%[A-Za-z_]\w*)*)$", sym)
+    if not m:
+        return "", "", None, f"legacy_symbol {sym!r} is not <module>[.<routine>].<var>[%comp...]"
+    mod, routine, var = m.group(1), (m.group(2) if m.group(3) else None), (m.group(3) or m.group(2))
+    if routine is not None:
+        return mod, var, None, f"{sym} is routine-local ({routine}) and is not reachable from a module use"
+    span = src.module_span(mod)
+    if span is None:
+        return mod, var, None, f"module {mod!r} not found in the sources"
+    fname, start, end = span
+    declared = src.module_vars(fname, start, end)
+    if var.lower() not in declared:
+        return mod, var, None, f"{var!r} not declared in module {mod}"
+    levels = [(var, declared[var.lower()])]
+    tname = declared[var.lower()].type
+    for c in [c for c in m.group(4).split("%") if c]:
+        if tname is None:
+            return mod, var, None, f"component %{c} follows an intrinsic-typed entity"
+        block = src.type_block(tname)
+        if block is None:
+            return mod, var, None, f"type {tname!r} has no type block in the sources"
+        comps = block[1]
+        if c.lower() not in comps:
+            return mod, var, None, f"component %{c} not declared in type {tname}"
+        levels.append((c, comps[c.lower()]))
+        tname = comps[c.lower()].type
+    return mod, var, levels, ""
+
+
+def plan_field(src: SourceTree, f: dict) -> tuple[Plan | None, str]:
+    """(Plan, "") when a declaration-aware traversal exists for a `generated` row, else
+    (None, reason). Reasons are the fail-closed rule-19 messages."""
+    fid, dtype = str(f.get("id")), str(f.get("dtype"))
+    mod, var, levels, why = resolve_chain(src, str(f.get("legacy_symbol", "")))
+    if levels is None:
+        return None, why
+    shape = f.get("shape")
+    if not isinstance(shape, list):
+        return None, "shape is not a list"
+    leaf = levels[-1][1]
+    if dtype not in DTYPE_PUT:
+        return None, f"no writer primitive for dtype {dtype}"
+    if leaf.type is not None:
+        return None, f"leaf {levels[-1][0]!r} is derived type {leaf.type} (dump the components instead)"
+    if leaf.kind not in DTYPE_KINDS[dtype]:
+        return None, f"dtype {dtype} does not match the declared `{leaf.kind}` of {levels[-1][0]}"
+    for name, d in levels:
+        if d.rank:
+            where = src.zero_based(name)
+            if where is not None:
+                return None, (f"{name} is allocated with a lower bound other than 1 at {where}; "
+                              f"a generated 1-based loop would drop elements (use an adapter)")
+    base = levels[0][1]
+    if len(levels) == 1:
+        if base.rank != len(shape):
+            return None, f"shape {shape} has {len(shape)} dims but {var} is declared rank {base.rank}"
+        if base.rank > MAX_RANK:
+            return None, f"rank {base.rank} exceeds the generated maximum {MAX_RANK}"
+        return Plan(mod, var, levels, base.rank, 0), ""
+    if base.rank > 1:
+        return None, f"chain base {var} is rank {base.rank}; generated chains index one entity dimension"
+    if leaf.rank > MAX_RANK - 1:
+        return None, f"chain leaf {levels[-1][0]} is rank {leaf.rank}; generated chains allow at most {MAX_RANK - 1}"
+    for name, d in levels[1:-1]:
+        if d.rank > 1:
+            return None, f"intermediate component %{name} is rank {d.rank} (only rank 0/1 are indexed at 1)"
+    if base.rank + leaf.rank != len(shape):
+        return None, (f"shape {shape} has {len(shape)} dims but {fid} declares "
+                      f"rank {base.rank} on {var} + rank {leaf.rank} on %{levels[-1][0]}")
+    return Plan(mod, var, levels, base.rank, leaf.rank), ""
 
 
 # --- checks -------------------------------------------------------------------------------
@@ -267,6 +491,9 @@ class Checker:
         self.field_ids = {f.get("id") for f in self.fields}
         self.readers = {r["id"]: r for r in inv.get("reader", [])}
         self.stats: dict = {}
+        self.adapters: dict[str, str] = {}          # adapter name -> field id (rule 18d)
+        self.plans: dict[str, Plan] = {}            # field id -> synthesized traversal (rule 19)
+        self.emitted = Counter()                    # checkpoint id -> emitted (non-ignore) rows
 
     def fail(self, msg: str) -> None:
         self.problems.append(msg)
@@ -403,6 +630,7 @@ class Checker:
         self.check_vocab(f)
         self.check_owner(f)
         self.check_compare(f)
+        self.check_emit(f)
 
     def check_derived_from(self, f: dict, why: str) -> None:
         df = f.get("derived_from")
@@ -465,7 +693,7 @@ class Checker:
             self.fail(f"field {fid}: {var!r} not declared in {where}{mod} ({fname}:{start}-{end})")
             return
         # chain walk: <var> : type(T0) -> %c1 declared in `type T0` with type(T1) -> %c2 in `type T1` ...
-        tname, path = declared[var.lower()], var
+        tname, path = declared[var.lower()].type, var
         for c in comps:
             if tname is None:
                 self.fail(f"field {fid}: component %{c} follows intrinsic-typed {path} (no further components)")
@@ -478,7 +706,7 @@ class Checker:
             if c.lower() not in tcomps:
                 self.fail(f"field {fid}: component %{c} not declared in type {tname} ({tfile})")
                 return
-            tname, path = tcomps[c.lower()], f"{path}%{c}"
+            tname, path = tcomps[c.lower()].type, f"{path}%{c}"
 
     # rule 10
     def check_vocab(self, f: dict) -> None:
@@ -549,6 +777,45 @@ class Checker:
         if not (owner == "derived" or owner.startswith("RuntimeState")):
             self.fail(f"field {fid}: tolerance rule {rule} on owner {owner} (only derived / RuntimeState.*)")
 
+    # rules 17-19
+    def check_emit(self, f: dict) -> None:
+        fid, emit, ignored = str(f.get("id")), emit_of(f), is_ignored(f)
+        det = f.get("determinism")
+        if not ignored:
+            self.emitted[f.get("checkpoint")] += 1
+            if det in ("uninitialized", "pointer"):
+                self.fail(f"field {fid}: determinism {det} is not allowed on a non-ignore row "
+                          f"(compare {(f.get('compare') or {}).get('rule')}): an unobservable value must not be dumped")
+        if emit == "none":
+            if not ignored:
+                self.fail(f'field {fid}: emit "none" is only allowed on compare.rule = ignore rows')
+            return
+        if ignored:
+            self.fail(f'field {fid}: ignore rows must be emit = "none" (they are never dumped), got {emit!r}')
+            return
+        if emit == "generated":
+            plan, why = plan_field(self.src, f)
+            if plan is None:
+                self.fail(f"field {fid}: emit generated but no traversal can be synthesized: {why}")
+            else:
+                self.plans[fid] = plan
+            return
+        if not emit.startswith("adapter:"):
+            self.fail(f"field {fid}: emit {emit!r} is not generated | adapter:<name> | none")
+            return
+        name = emit.split(":", 1)[1]
+        if not EMIT_NAME.match(name):
+            self.fail(f"field {fid}: adapter name {name!r} does not match ^[a-z][a-z0-9_]*$")
+            return
+        want = adapter_name(fid)
+        if name != want:
+            self.fail(f"field {fid}: adapter name {name!r} must be the field id with dots "
+                      f"replaced by underscores ({want!r})")
+        if name in self.adapters:
+            self.fail(f"field {fid}: adapter name {name!r} is already used by field {self.adapters[name]}")
+        else:
+            self.adapters[name] = fid
+
     # rule 7
     def check_reverse_coverage(self) -> None:
         referenced = {s for f in self.fields for s in f.get("source", []) if isinstance(s, str)}
@@ -604,9 +871,11 @@ def reader_targets(r: dict) -> list[str]:
 
 
 def summarize(ck: Checker) -> str:
-    covered = sum(1 for c in ck.checkpoints if c.get("covered"))
+    covered = [c for c in ck.checkpoints if c.get("covered")]
     s = ck.stats
-    return (f"PASS: {len(ck.fields)} fields, {len(ck.checkpoints)} checkpoints ({covered} covered), "
+    per_cp = "/".join(str(ck.emitted.get(c.get("id"), 0)) for c in covered)
+    return (f"PASS: {len(ck.fields)} fields ({sum(ck.emitted.values())} emitted: {per_cp}), "
+            f"{len(ck.checkpoints)} checkpoints ({len(covered)} covered), "
             f"readers covered {s.get('readers_covered', 0)}/{s.get('readers_required', 0)}, "
             f"skip-class {s.get('skip_class', 0)}")
 
@@ -837,6 +1106,256 @@ def cmd_render(a) -> int:
     return rc
 
 
+# --- gen-fortran (M2-02) ------------------------------------------------------------------
+def cp_slug(cid: str) -> str:
+    """Checkpoint id -> ASCII identifier: `increment_ready(1,1)` -> `increment_ready_1_1`.
+    Also the snapshot directory name (<dump dir>/<slug>/state.txt)."""
+    return re.sub(r"[^A-Za-z0-9]+", "_", str(cid)).strip("_")
+
+
+def f_wrap(text: str, indent: int) -> list[str]:
+    """One Fortran statement as <= FORTRAN_COLS-column lines, continued after a top-level ", "."""
+    if len(text) <= FORTRAN_COLS:
+        return [text]
+    out, rest, pad = [], text, " " * (indent + 2)
+    while len(rest) > FORTRAN_COLS:
+        cuts, depth = [], 0
+        for i, ch in enumerate(rest[:FORTRAN_COLS - 2]):
+            if ch in "([":
+                depth += 1
+            elif ch in ")]":
+                depth -= 1
+            elif ch == "," and rest[i + 1:i + 2] == " ":
+                cuts.append((i, depth))
+        shallow = [i for i, d in cuts if d <= 2]
+        if not (cuts or shallow):
+            break
+        cut = shallow[-1] if shallow else cuts[-1][0]
+        out.append(rest[:cut + 1] + " &")
+        rest = pad + rest[cut + 2:]
+    out.append(rest)
+    return out
+
+
+def base_expr(p: Plan, idx: list[str]) -> str:
+    return p.var + (("(" + ", ".join(idx) + ")") if idx else "")
+
+
+def level_obj(p: Plan, idx: list[str], j: int) -> str:
+    """The object at chain level j (1-based), itself unindexed; parents keep their index."""
+    e = base_expr(p, idx)
+    for name, d in p.levels[1:j]:
+        e += "%" + name + ("(1)" if d.rank == 1 else "")
+    return e + "%" + p.levels[j][0]
+
+
+def size_expr(var: str, rank: int, dim: int) -> str:
+    return f"size({var})" if rank == 1 else f"size({var}, {dim})"
+
+
+def gen_field_code(f: dict, p: Plan) -> tuple[list[str], set[str]]:
+    """Fortran statements dumping one `generated` field, plus the locals they use.
+    Every parent is guarded by its own statement -- never a short-circuit `.and.`."""
+    fid, dtype = str(f["id"]), str(f["dtype"])
+    put, nlev = DTYPE_PUT[dtype], len(p.levels)
+
+    def fail(msg: str) -> str:
+        return f"call state_fail(w, '{fid}', '{msg}')"
+
+    leafv = [f"d{i + 1}" for i in range(p.rl)] if p.chain else []
+    basev = ([f"d{p.rl + i + 1}" for i in range(p.rb)] if p.chain else
+             [f"d{i + 1}" for i in range(p.rb)])
+    nvar = [f"n{i + 1}" for i in range(p.rl)] if p.chain else []
+    used: set[str] = set(leafv) | set(basev)
+    lines = [f"    ! {fid}  <- {p.module}.{'%'.join(n for n, _ in p.levels)}"]
+
+    def guard(obj: str, attr: str, ind: int) -> None:
+        if attr:
+            fn = "allocated" if attr == "allocatable" else "associated"
+            state = "not allocated" if attr == "allocatable" else "not associated"
+            lines.extend(f_wrap(f"{' ' * ind}if (.not. {fn}({obj})) {fail(obj + ' is ' + state)}", ind))
+
+    def chain_guards(idx: list[str], ind: int, extents: bool) -> None:
+        """Per-entity guards for every component below the base entity; `extents` adds the
+        leaf-extent equality checks that make a ragged leaf a dump failure."""
+        for j in range(1, nlev):
+            name, d = p.levels[j]
+            obj = level_obj(p, idx, j)
+            guard(obj, d.attr, ind)
+            if j < nlev - 1 and d.rank == 1:
+                lines.extend(f_wrap(f"{' ' * ind}if ({size_expr(obj, 1, 1)} < 1) {fail(obj + ' is empty')}", ind))
+            elif j == nlev - 1 and extents:
+                for k, nv in enumerate(nvar, 1):
+                    msg = f"{obj} extent {k} is ragged"
+                    lines.extend(f_wrap(f"{' ' * ind}if ({size_expr(obj, p.rl, k)} /= {nv}) {fail(msg)}", ind))
+
+    guard(base_expr(p, []), p.levels[0][1].attr, 4)
+    shape_items = []
+    if p.chain and p.rl:                          # cache the leaf extents of the first entity
+        used |= set(nvar)
+        leaf1 = level_obj(p, ["1"] if p.rb else [], nlev - 1)
+        sizes = [f"{nv} = {size_expr(leaf1, p.rl, k)}" for k, nv in enumerate(nvar, 1)]
+        if p.rb == 1:
+            lines += [f"    {nv} = 0" for nv in nvar]
+            lines.append(f"    if ({size_expr(p.var, 1, 1)} >= 1) then")
+            chain_guards(["1"], 6, False)
+            for s in sizes:
+                lines.extend(f_wrap(f"      {s}", 6))
+            lines.append("    end if")
+        else:
+            chain_guards([], 4, False)
+            for s in sizes:
+                lines.extend(f_wrap(f"    {s}", 4))
+        shape_items += [f"int({nv}, int64)" for nv in nvar]
+    for k in range(1, p.rb + 1):
+        shape_items.append(f"int({size_expr(base_expr(p, []), p.rb, k)}, int64)")
+    shape = ("[integer(int64) :: " + ", ".join(shape_items) + "]") if shape_items else "SCALAR_SHAPE"
+    lines.extend(f_wrap(f"    call begin_field(w, '{fid}', NO_KEY, {shape}, '{dtype}')", 4))
+
+    ndim = len(basev) + len(leafv)
+    ind = 4
+    for i in range(ndim, 0, -1):                  # outermost loop = last shape dimension
+        if p.chain and i <= p.rl:
+            bound = f"n{i}"
+        else:
+            k = i - (p.rl if p.chain else 0)
+            bound = size_expr(base_expr(p, []), p.rb, k)
+        lines.append(f"{' ' * ind}do d{i} = 1, {bound}")
+        ind += 2
+        if p.chain and i == p.rl + 1:             # entity loops are open: guard this entity
+            chain_guards(basev, ind, bool(p.rl))
+    if p.chain and p.rb == 0:
+        chain_guards([], ind, bool(p.rl))
+    value = (level_obj(p, basev, nlev - 1) if p.chain else base_expr(p, basev))
+    if p.chain and p.rl:
+        value += "(" + ", ".join(leafv) + ")"
+    lines.extend(f_wrap(f"{' ' * ind}call {put}(w, {value})", ind))
+    for i in range(1, ndim + 1):
+        ind -= 2
+        lines.append(f"{' ' * ind}end do")
+    lines.append("    call end_field(w)")
+    return lines, used
+
+
+def gen_fortran(ck: Checker, map_path: Path) -> str:
+    """The generated `yl_state_serializer` module. Deterministic: TOML order, no timestamp."""
+    covered = [c for c in ck.checkpoints if c.get("covered")]
+    uses: dict[str, set[str]] = defaultdict(set)
+    routines = []
+    for c in covered:
+        rows = [f for f in ck.fields if f.get("checkpoint") == c.get("id") and not is_ignored(f)]
+        body: list[str] = []
+        used: set[str] = set()
+        for f in rows:
+            fid, emit = str(f.get("id")), emit_of(f)
+            if emit.startswith("adapter:"):
+                body += [f"    ! {fid}  <- emit_{emit.split(':', 1)[1]} (handwritten adapter)",
+                         f"    call emit_{emit.split(':', 1)[1]}(w)"]
+                continue
+            plan = ck.plans.get(fid)
+            if plan is None:
+                raise SystemExit(f"gen-fortran: no synthesized traversal for field {fid}")
+            ls, u = gen_field_code(f, plan)
+            body += ls
+            used |= u
+            uses[plan.module].add(plan.var)
+        routines.append((str(c.get("id")), len(rows), body, used))
+
+    try:
+        src = map_path.resolve().relative_to(REPO_ROOT)
+    except ValueError:
+        src = map_path
+    digest = hashlib.sha256(map_path.read_bytes()).hexdigest()[:12]
+    out = [
+        "! yl_state_serializer -- checkpoint state dump for the legacy YL solver (M2-02).",
+        "!",
+        "! GENERATED FILE -- DO NOT EDIT BY HAND.",
+        f"! Source : {src} (sha256 {digest})",
+        "! Command: python3 tools/yl_state_map.py gen-fortran -o src/state/yl_state_dump.f90",
+        "!",
+        "! One private routine per covered checkpoint; every non-ignore field of that checkpoint is",
+        "! emitted once, in state-field-map.toml order. `emit = \"generated\"` rows traverse their",
+        "! legacy symbol directly (dense, Fortran order, one guard statement per parent);",
+        "! `emit = \"adapter:<name>\"` rows delegate to emit_<name> in yl_state_adapters.",
+        "! Writing nothing and changing nothing when yl_dump_enabled is .false. is part of the",
+        "! contract: the dispatcher returns before any unit is opened. state_open sanitizes the",
+        "! checkpoint id into the snapshot directory name; the header keeps the raw id.",
+        "module yl_state_serializer",
+        "  use, intrinsic :: iso_fortran_env, only: int64",
+        "  use yl_diag, only: yl_dump_enabled, yl_dump_dir",
+        "  use yl_state_io",
+        "  use yl_state_adapters",
+    ]
+    seen: dict[str, str] = {}
+    for mod in sorted(uses):
+        for v in uses[mod]:
+            if v.lower() in seen:
+                raise SystemExit(f"gen-fortran: {v} is imported from both {seen[v.lower()]} and {mod}")
+            seen[v.lower()] = mod
+        out += f_wrap(f"  use {mod}, only: " + ", ".join(sorted(uses[mod], key=str.lower)), 2)
+    out += ["  implicit none", "  private", "  public :: yl_state_dump", "", "contains", "",
+            "  subroutine yl_state_dump(checkpoint)",
+            "    character(len=*), intent(in) :: checkpoint",
+            "    type(state_writer_t) :: w",
+            "",
+            "    if (.not. yl_dump_enabled) return",
+            "    select case (trim(checkpoint))"]
+    for cid, n, _, _ in routines:
+        slug = cp_slug(cid)
+        out += [f"    case ('{cid}')",
+                f"      call state_open(w, yl_dump_dir, '{cid}', {n})",
+                f"      call dump_{slug}(w)",
+                f"      call state_close(w, {n})"]
+    out += ["    case default",
+            "      call state_fail(w, '', 'yl_state_dump called with an unregistered checkpoint: '//trim(checkpoint))",
+            "    end select",
+            "  end subroutine yl_state_dump", ""]
+    for cid, n, body, used in routines:
+        slug = cp_slug(cid)
+        out += [f"  ! {cid}: {n} fields", f"  subroutine dump_{slug}(w)",
+                "    type(state_writer_t), intent(inout) :: w"]
+        loops = sorted(x for x in used if x.startswith("d"))
+        extents = sorted(x for x in used if x.startswith("n"))
+        if loops:
+            out.append("    integer :: " + ", ".join(loops))
+        if extents:
+            out.append("    integer :: " + ", ".join(extents))
+        out.append("")
+        out += body
+        out += [f"  end subroutine dump_{slug}", ""]
+    out += ["end module yl_state_serializer"]
+    text = "\n".join(out) + "\n"
+    for ln in text.splitlines():
+        if len(ln) > FORTRAN_COLS:
+            raise SystemExit(f"gen-fortran: line exceeds {FORTRAN_COLS} characters: {ln[:60]}...")
+        if not ln.isascii():
+            raise SystemExit(f"gen-fortran: non-ASCII line: {ln[:60]}...")
+    return text
+
+
+def cmd_gen_fortran(a) -> int:
+    """Fail-closed like render: the full check runs first and nothing is written on FAIL
+    unless --force (writes, still exits 1)."""
+    ck = load_checker(a)
+    if ck is None:
+        return 1
+    rc = 0
+    if ck.problems:
+        rc = report(ck)
+        if not a.force:
+            print("gen-fortran: refusing to write (use --force to write anyway)")
+            return rc
+    text = gen_fortran(ck, Path(a.map))
+    if a.output:
+        Path(a.output).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.output).write_text(text, encoding="ascii")
+        print(f"wrote {a.output} ({sum(ck.emitted.values())} fields, "
+              f"{len(ck.adapters)} adapters, {len(ck.plans)} generated)")
+    else:
+        sys.stdout.write(text)
+    return rc
+
+
 # --- selftest -----------------------------------------------------------------------------
 SELF_FEM = """    subroutine process_analysis
     call prescrib_set
@@ -855,15 +1374,26 @@ SELF_FEM = """    subroutine process_analysis
 """
 SELF_GLOBAL = """    Module global_var
     integer(ink) npoin,ndimn   ! sizes
+    integer(ink),allocatable::appear_process(:,:)
     real    (irk),allocatable::coord(:,:),deltafi(:),     &
                                delitfi(:)
     type solid_skeleton
        character(20)material
        real(irk) e,nu
     end type solid_skeleton
+    type elem_field
+       integer(ink),pointer::lnods_f(:)
+       real(irk),pointer::gpcod(:,:)
+    end type elem_field
+    type element_lib
+       type(elem_field),pointer::field(:)
+       integer(ink) matno
+    end type element_lib
+    type(element_lib),allocatable::element(:)
     contains
     subroutine stiff_u
     integer(ink) local_k
+    allocate(appear_process(1:ndimn,0:npoin))
     end subroutine stiff_u
     end module global_var
 """
@@ -899,7 +1429,8 @@ def self_inventory() -> dict:
 def self_map() -> dict:
     fem = split_lines(SELF_FEM.encode("latin-1"))
     return {"version": 1, "cases": SELF_CASES, "path": "selftest", "reader_inventory": "(in-memory)",
-            "float_format": "hex", "shape_symbols": {"ndimn": "mesh.dimension", "npoin": "count(mesh.nodes)"},
+            "float_format": "hex", "shape_symbols": {"ndimn": "mesh.dimension", "npoin": "count(mesh.nodes)",
+                                              "nnode": "nodes per element", "nelem": "count(mesh.elements)"},
             "checkpoint": [
                 {"id": "model_ready", "order": 1, "covered": True, "site": "Fem.f90:4",
                  "anchor": anchor_hash(full_statement(fem, 3)), "after": ["Fem.f90:3"], "first_consumer": "solve",
@@ -918,6 +1449,26 @@ def self_map() -> dict:
                  "source": ["derived:count"], "derived_from": ["mesh.nodes.xyz"], "consumers": ["stiff_u"],
                  "shape": [], "dtype": "i32", "unit": "1", "owner": "RuntimeState.dof.count",
                  "compare": {"rule": "abs_tol", "atol": 1, "basis": "count"}, "determinism": "deterministic",
+                 "emit": "adapter:runtime_dof_count", "snapshot_file": "dof.sha256"},
+                {"id": "mesh.elements.nodes", "checkpoint": "model_ready",
+                 "legacy_symbol": "global_var.element%field%lnods_f", "source": ["COR.node_coordinates"],
+                 "consumers": ["stiff_u"], "shape": ["nnode", "nelem"], "dtype": "i32", "unit": "1",
+                 "owner": "ProblemState.mesh.elements[].nodes", "index_by": "mesh.elements[].id",
+                 "compare": {"rule": "exact"}, "determinism": "deterministic", "snapshot_file": "mesh.sha256"},
+                {"id": "runtime.gauss.gpcod", "checkpoint": "model_ready",
+                 "legacy_symbol": "global_var.element%field%gpcod", "source": ["COR.node_coordinates"],
+                 "consumers": ["stiff_u"], "shape": ["ndimn", "nnode", "nelem"], "dtype": "f64", "unit": "m",
+                 "owner": "RuntimeState.gauss.gpcod", "derived_from": ["mesh.nodes.xyz"], "index_by": "mesh.elements[].id",
+                 "compare": {"rule": "exact"}, "determinism": "deterministic", "snapshot_file": "mesh.sha256"},
+                {"id": "mesh.dimension", "checkpoint": "model_ready", "legacy_symbol": "global_var.ndimn",
+                 "source": ["COR.node_coordinates"], "consumers": ["stiff_u"], "shape": [], "dtype": "i32",
+                 "unit": "1", "owner": "ProblemState.mesh.dimension", "index_by": "component",
+                 "compare": {"rule": "exact"}, "determinism": "deterministic", "snapshot_file": "mesh.sha256"},
+                {"id": "control.run.scratch", "checkpoint": "model_ready", "legacy_symbol": "global_var.deltafi",
+                 "source": ["COR.node_coordinates"], "consumers": ["stiff_u"], "shape": ["npoin"], "dtype": "f64",
+                 "unit": "1", "owner": "not_migrated", "index_by": "component", "emit": "none",
+                 "compare": {"rule": "ignore", "reason": "solver scratch, never initialized on this path"},
+                 "determinism": "uninitialized", "reason": "solver scratch outside the static_2d slice",
                  "snapshot_file": "dof.sha256"}],
             "perturbation": [{"id": "P-E", "case": "static_2d.demo", "field": "materials.E", "index": "[1]",
                               "legacy_edit": "demo.mat record 3", "expected_only": True}]}
@@ -930,7 +1481,7 @@ def self_cases() -> list[tuple[str, str, callable]]:
     def reached(d): d["field"][0]["source"] = ["GLB.reached"]
     def bad_dtype(d): d["field"][0]["dtype"] = "float"
     def bad_unit(d): d["field"][2]["unit"] = "Pa"
-    def bad_shape(d): d["field"][0]["shape"] = ["nelem"]
+    def bad_shape(d): d["field"][0]["shape"] = ["nfoo"]
     def bad_owner(d): d["field"][0]["owner"] = "ProblemState.nodes"
     def bad_fid(d): d["field"][0]["id"] = "Mesh.nodes"
     def drift(d): d["checkpoint"][0]["anchor"] = "000000000000"
@@ -971,6 +1522,19 @@ def self_cases() -> list[tuple[str, str, callable]]:
     def version(d): d["version"] = 2
     def fmt(d): d.pop("float_format")
     def first_consumer(d): d["checkpoint"][0]["first_consumer"] = "nosuch"
+    # rules 17-19 (emit)
+    def nonignore_unobservable(d): d["field"][1]["determinism"] = "pointer"; d["field"][1]["compare"] = {"rule": "hash", "algo": "sha256"}
+    def emit_none_nonignore(d): d["field"][0]["emit"] = "none"
+    def ignore_not_none(d): d["field"][6].pop("emit")
+    def adapter_mismatch(d): d["field"][2]["emit"] = "adapter:dof_count"
+    def adapter_duplicate(d): d["field"][3]["emit"] = "adapter:runtime_dof_count"
+    def adapter_regex(d): d["field"][2]["emit"] = "adapter:Bad-Name"
+    def emit_vocab(d): d["field"][0]["emit"] = "dump"
+    def synth_rank(d): d["field"][0]["shape"] = ["npoin"]
+    def synth_dtype(d): d["field"][5]["dtype"] = "f64"
+    def synth_local(d): d["field"][2]["emit"] = "generated"
+    def synth_chain_rank(d): d["field"][3]["shape"] = ["nnode"]
+    def synth_zero_based(d): d["field"][0]["legacy_symbol"] = "global_var.appear_process"; d["field"][0]["dtype"] = "i32"
     return [("duplicate field id", "duplicate field id", dup), ("unknown reader", "unknown reader", unknown_reader),
             ("reached_only reader", "reached_only", reached), ("dtype vocab", "dtype", bad_dtype),
             ("unit incompatible", "incompatible", bad_unit), ("shape symbol", "shape symbol", bad_shape),
@@ -1000,7 +1564,19 @@ def self_cases() -> list[tuple[str, str, callable]]:
             ("determinism vocab", "determinism 'random'", det_vocab),
             ("derived_from unresolved", "is not a field id", derived_missing), ("derived rule vocab", "derived rule", derived_rule),
             ("version", "version must be 1", version), ("float_format missing", "float_format", fmt),
-            ("first_consumer unknown", "first_consumer", first_consumer)]
+            ("first_consumer unknown", "first_consumer", first_consumer),
+            ("non-ignore pointer determinism", "not allowed on a non-ignore row", nonignore_unobservable),
+            ("emit none on a non-ignore row", 'emit "none" is only allowed', emit_none_nonignore),
+            ("ignore row without emit none", 'ignore rows must be emit = "none"', ignore_not_none),
+            ("adapter name != field id", "must be the field id with dots", adapter_mismatch),
+            ("duplicate adapter name", "is already used by field", adapter_duplicate),
+            ("adapter name regex", "does not match ^[a-z]", adapter_regex),
+            ("emit vocabulary", "is not generated | adapter:<name> | none", emit_vocab),
+            ("generated rank mismatch", "is declared rank 2", synth_rank),
+            ("generated dtype mismatch", "does not match the declared `integer`", synth_dtype),
+            ("generated routine-local symbol", "is routine-local", synth_local),
+            ("generated chain rank mismatch", "rank 1 on element + rank 1 on %lnods_f", synth_chain_rank),
+            ("generated 0-based array", "lower bound other than 1 at Global.f90:", synth_zero_based)]
 
 
 def selftest() -> int:
@@ -1026,9 +1602,79 @@ def selftest() -> int:
     idem = text1 == text2 and "## 未覆盖 / 排除" in text1
     n_ok += int(idem)
     print(("ok   " if idem else "BAD  ") + "render idempotent + excluded section present")
-    total = len(cases) + 2
+    n_ok += selftest_gen(base, src)
+    total = len(cases) + 2 + len(GEN_EXPECT) + 2
     print(f"SELFTEST {'PASS' if n_ok == total else 'FAIL'}: {n_ok}/{total} expectations")
     return 0 if n_ok == total else 1
+
+
+GEN_EXPECT = [
+    ("module + visibility", "module yl_state_serializer\n"),
+    ("module end", "\nend module yl_state_serializer\n"),
+    ("public entry point", "  public :: yl_state_dump\n"),
+    ("diagnostics import", "  use yl_diag, only: yl_dump_enabled, yl_dump_dir\n"),
+    ("legacy only-import", "  use global_var, only: coord, element, ndimn\n"),
+    ("disabled short-circuit", "    if (.not. yl_dump_enabled) return\n"),
+    ("dispatcher branch", "    case ('model_ready')\n"),
+    ("state_open with the raw checkpoint id", "      call state_open(w, yl_dump_dir, 'model_ready', 6)\n"),
+    ("trailer", "      call state_close(w, 6)\n"),
+    ("unregistered checkpoint", "      call state_fail(w, '', 'yl_state_dump called with an unregistered checkpoint: '"
+                                "//trim(checkpoint))\n"),
+    ("checkpoint routine", "  subroutine dump_model_ready(w)\n"),
+    ("writer argument", "    type(state_writer_t), intent(inout) :: w\n"),
+    ("adapter delegation", "    call emit_runtime_dof_count(w)\n"),
+    ("dense guard", "    if (.not. allocated(coord)) call state_fail(w, 'mesh.nodes.xyz', 'coord is not allocated')\n"),
+    ("dense shape", "    call begin_field(w, 'mesh.nodes.xyz', NO_KEY, [integer(int64) :: int(size(coord, 1), int64), "
+                    "int(size(coord, 2), int64)], 'f64')\n"),
+    ("dense Fortran order", "    do d2 = 1, size(coord, 2)\n      do d1 = 1, size(coord, 1)\n"
+                            "        call put_f64(w, coord(d1, d2))\n"),
+    ("scalar shape constant", "    call begin_field(w, 'mesh.dimension', NO_KEY, SCALAR_SHAPE, 'i32')\n"
+                              "    call put_i32(w, ndimn)\n"),
+    ("chain leaf extent", "    n1 = 0\n    if (size(element) >= 1) then\n"),
+    ("chain entity guard", "      if (.not. associated(element(d2)%field)) call state_fail(w, 'mesh.elements.nodes', "
+                           "'element(d2)%field is not associated')\n"
+                           "      if (size(element(d2)%field) < 1) call state_fail(w, 'mesh.elements.nodes', "
+                           "'element(d2)%field is empty')\n"),
+    ("chain ragged rejection", "      if (size(element(d2)%field(1)%lnods_f) /= n1) call state_fail(w, 'mesh.elements.nodes', &\n"
+                               "        'element(d2)%field(1)%lnods_f extent 1 is ragged')\n"),
+    ("chain value", "        call put_i32(w, element(d2)%field(1)%lnods_f(d1))\n"),
+    ("record framing", "    call end_field(w)\n"),
+    ("rank-2 leaf extents", "    n1 = 0\n    n2 = 0\n    if (size(element) >= 1) then\n"),
+    ("rank-2 leaf extent reads", "      n1 = size(element(1)%field(1)%gpcod, 1)\n"
+                                 "      n2 = size(element(1)%field(1)%gpcod, 2)\n    end if\n"),
+    ("rank-2 leaf traversal", "    do d3 = 1, size(element)\n"),
+    ("rank-2 leaf value", "        do d1 = 1, n1\n"
+                          "          call put_f64(w, element(d3)%field(1)%gpcod(d1, d2))\n"),
+]
+
+
+def selftest_gen(base: Checker, src: SourceTree) -> int:
+    """Generate Fortran from the good in-memory sample and check its key properties."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "state-field-map.toml"
+        mp.write_bytes(b"# selftest map\n")
+        text = gen_fortran(base, mp)
+        again = gen_fortran(base, mp)
+    n_ok = 0
+    for name, want in GEN_EXPECT:
+        if want in text:
+            n_ok += 1
+            print(f"ok   gen-fortran {name}")
+        else:
+            print(f"BAD  gen-fortran {name}: missing {want!r}")
+    stable = text == again and not re.search(r"\b20\d\d-\d\d-\d\d\b", text)
+    n_ok += int(stable)
+    print(("ok   " if stable else "BAD  ") + "gen-fortran deterministic + no timestamp")
+    widths = max((len(ln) for ln in text.splitlines()), default=0)
+    guards = text.count("call state_fail(w, 'mesh.elements.nodes',")
+    # mesh.elements.nodes: allocated(element) + 3 in the extent pre-pass + 3 per entity + the
+    # ragged-extent check = 8 separate guard statements, never a short-circuit `.and.`
+    shaped = widths <= FORTRAN_COLS and text.isascii() and guards == 8 and " .and. " not in text
+    n_ok += int(shaped)
+    print(("ok   " if shaped else "BAD  ") + f"gen-fortran <= {FORTRAN_COLS} cols, ASCII, "
+          f"one guard statement per parent (max width {widths}, chain guards {guards})")
+    return n_ok
 
 
 def main(argv=None) -> int:
@@ -1038,15 +1684,16 @@ def main(argv=None) -> int:
         return selftest()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name, func in (("check", cmd_check), ("render", cmd_render)):
+    for name, func in (("check", cmd_check), ("render", cmd_render), ("gen-fortran", cmd_gen_fortran)):
         p = sub.add_parser(name)
         p.add_argument("--map", default=str(MAP_DEFAULT))
         p.add_argument("--inventory", default=None, help="override the map's reader_inventory path")
         p.add_argument("--src", default=str(SRC_DEFAULT), help="legacy source directory")
-        if name == "render":
-            p.add_argument("-o", "--output")
+        if name in ("render", "gen-fortran"):
+            what = "Markdown" if name == "render" else "Fortran"
+            p.add_argument("-o", "--output", default=None if name == "render" else str(GEN_DEFAULT))
             p.add_argument("--force", action="store_true",
-                           help="write the Markdown even when the check FAILs (exit code stays 1)")
+                           help=f"write the {what} even when the check FAILs (exit code stays 1)")
         p.set_defaults(func=func)
     a = ap.parse_args(argv)
     return a.func(a)

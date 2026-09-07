@@ -5,6 +5,9 @@
 - 配套：`docs/m2/state-field-map.toml`（权威机器可读映射）、`tools/yl_state_map.py check`（锚点 hash 与覆盖校验）、`docs/m1/reader-inventory.toml`（reader id 来源）
 - 行号：全部经 `sed -n` / `awk` 按物理行号逐条核对（源码含非 UTF-8 字节，不能用普通编辑器行号）；引用形式 `文件:行`，语句原文见各表
 
+
+> **M2-02 插桩后的行号（2026-09-07）**：`legacy/yl/Fem.f90` 第 10 行加了 `use yl_state_serializer`，三个锚点各加一行 `if (yl_dump_enabled) call yl_state_dump(...)`，因此本文所有 `Fem.f90:N` 已按 +1/+2/+3 更新为插桩后的行号，与 `docs/m2/state-field-map.toml` 的 `[[checkpoint]].site`（1909 / 3603 / 3657）一致。锚点语句文本与 12 位 hash 未变。其他文件（`Solver.f90`、`Global.f90`、`Prescrib.f90` 等）未插桩，行号不变。
+
 ## 1. 目的与范围
 
 检查点是 M2-02 序列化器插桩的位置，也是 M2-03 两例状态证据的比较单位。docs/05 的硬规则是：检查点必须位于消费者使用参数之前，但不得为了观测而提前执行原来属于阶段内的计算或分配。因此每个锚点都落在一条已有语句的边界上，位于"最后一个已执行 reader"之后、"第一个消费者"之前，中间不搬动任何语句。
@@ -15,7 +18,7 @@
 |---|---|---|---|
 | `restart` | 0 | `inp` 第 2 行 / INP.FEM90.run_control（`Fem.f90:99`） | `Fem.f90:277` 走 `lblks=0, lincs=0`（`:278-280`）；`:283 resta_read_write(1)` 不执行 |
 | `nblks` / `runblks` | 1 | `.glb` NBLKS 列 / GLB.global_data.init_and_blocks | 块循环 `:1683 do iblks=lblks+1,runblks` 只跑一次 |
-| `type_nl` | 5 | `.glb` TYPE_NL 列 / GLB.global_data.problem_type | `algort` `Fem.f90:15451`：仅 iiter=1 置 `kresl=1` |
+| `type_nl` | 5 | `.glb` TYPE_NL 列 / GLB.global_data.problem_type | `algort` `Fem.f90:15454`：仅 iiter=1 置 `kresl=1` |
 | `nincs` | 1 | `.man` 第 2 行 / MAN.STATIC_U.nincs（`:3594`） | 增量循环 `:3622` 只跑一次 |
 | `nstep`, `inc_step` | 1, 1 | `.man` 第 3 行 / MAN.STATIC_U.increment_control（`:3625`） | 步循环 `:3656` 只跑一次 |
 | `cwater`, `Qstatic` | 0, 0 | 同上（第 3 行末两项） | `:3633-3638`、`:3641-3650` 不执行 |
@@ -50,17 +53,17 @@
 | block 1 | `Fem.f90:1896` | `call external_load_2`（`.loa` 重力块 → `gravy/factg/factf/tcurvegravity`） |
 | block 1 | `Fem.f90:1899` | `call boundt`（`.tem`，计数全 0） |
 | block 1 | `Fem.f90:1903-1904` | `line_load_block(iblks)=lineload`、`line_temp_block(iblks)=linet`（游标簿记） |
-| block 1 | `Fem.f90:1908-1909` | `operation='SET'`；`call solve` → PROFILE SET（`Solver.f90:6820`）：读 `.sol`（`:6829-6832`），`totv_to_eq`（`:6834`，`Solver.f90:9027`），`iseq`（`:6838-7227`），`Stiff_length=Iseq(neq)`（`:7229`），`global_stiff1` 分配清零（`:7235-7236`），`rvector` 分配（`:7237`，未初始化） |
-| block 1 | `Fem.f90:1917` | `call modf_time_order`（`order_time_mdofn=0` 时无操作） |
-| block 1 | `Fem.f90:1938` | `call static_U` |
+| block 1 | `Fem.f90:1909-1909` | `operation='SET'`；`call solve` → PROFILE SET（`Solver.f90:6820`）：读 `.sol`（`:6829-6832`），`totv_to_eq`（`:6834`，`Solver.f90:9027`），`iseq`（`:6838-7227`），`Stiff_length=Iseq(neq)`（`:7229`），`global_stiff1` 分配清零（`:7235-7236`），`rvector` 分配（`:7237`，未初始化） |
+| block 1 | `Fem.f90:1918` | `call modf_time_order`（`order_time_mdofn=0` 时无操作） |
+| block 1 | `Fem.f90:1939` | `call static_U` |
 
 选址结果：
 
 | 检查点 | 插在……之后 | 插在……之前 | 之前最后一个 reader | 之后第一个消费者 |
 |---|---|---|---|---|
-| `model_ready` | `Fem.f90:1907` `write(chkunit,*)'time(solve): ', char_time` | `Fem.f90:1908` `operation='SET'` | TEM.boundt.pipe_count（经 `:1899 call boundt`） | PROFILE SET：`Solver.f90:6829` `Read (solveunit,*,…) text`；随后 `:6834 call totv_to_eq` 消费 `iffix`、`trans%nintf`、`nodfn`、`nlinks` |
-| `phase_ready(1)` | `Fem.f90:3597` `call diag_flush_stage()`（nincs 守卫 flush） | `Fem.f90:3601` `if(ngaps/=0.or.nrcsteel/=0)allocate(tofor0(ntotv))` | MAN.STATIC_U.nincs（`:3594`） | `Fem.f90:3622` `do iincs=lincs+1,nincs`（`:3601-3617` 在本路径为死代码，见 §4） |
-| `increment_ready(1,1)` | `Fem.f90:3652` `print *,'cwater,Qstatic=',cwater,Qstatic` | `Fem.f90:3654` `ttime0=ttime` | MAN.STATIC_U.tolerances（`:3631`） | `:3654-3655`（`ttime0/trstep0`）、`:3663-3664`（`xtime/ttime`）、`:3666 dfact_time_curve`、`:3667 modf_var_prescribed`（→ `fixed`）、`:3672 gravity`（→ `element%field(1)%rload`）、`:3678 force_external`（→ `tofor`）、`:3711 algort`（→ `kresl`）、`:3733 stiff_u`、`:3749 estif_assemble` |
+| `model_ready` | `Fem.f90:1907` `write(chkunit,*)'time(solve): ', char_time` | `Fem.f90:1909` `operation='SET'` | TEM.boundt.pipe_count（经 `:1899 call boundt`） | PROFILE SET：`Solver.f90:6829` `Read (solveunit,*,…) text`；随后 `:6834 call totv_to_eq` 消费 `iffix`、`trans%nintf`、`nodfn`、`nlinks` |
+| `phase_ready(1)` | `Fem.f90:3598` `call diag_flush_stage()`（nincs 守卫 flush） | `Fem.f90:3603` `if(ngaps/=0.or.nrcsteel/=0)allocate(tofor0(ntotv))` | MAN.STATIC_U.nincs（`:3594`） | `Fem.f90:3624` `do iincs=lincs+1,nincs`（`:3601-3617` 在本路径为死代码，见 §4） |
+| `increment_ready(1,1)` | `Fem.f90:3654` `print *,'cwater,Qstatic=',cwater,Qstatic` | `Fem.f90:3657` `ttime0=ttime` | MAN.STATIC_U.tolerances（`:3631`） | `:3654-3655`（`ttime0/trstep0`）、`:3663-3664`（`xtime/ttime`）、`:3666 dfact_time_curve`、`:3667 modf_var_prescribed`（→ `fixed`）、`:3672 gravity`（→ `element%field(1)%rload`）、`:3678 force_external`（→ `tofor`）、`:3711 algort`（→ `kresl`）、`:3733 stiff_u`、`:3749 estif_assemble` |
 | `restart_ready` | — | — | 无 | 无：`covered=false`，`restart=0`，`Fem.f90:283 call resta_read_write(1)` 位于 `:277 if (restart==0)` 的 else 分支，本路径不执行 |
 
 检查点之间被消费的量（决定哪些字段必须在前一个检查点登记）：
@@ -72,8 +75,8 @@
 
 requirements.md 写的是"model_ready = 首次 `global_stif_profile`/`stiff_u` 之前"。字面读法不能成立：
 
-- 首个 `call stiff_u` 在 `Fem.f90:3733`，处于 `do iiter=1,miter`（`:3702`）迭代循环内；它在 `.man` 的阶段头 reader（`:3592-3594`）与增量 reader（`:3625-3631`）**之后**。字面放置会让 `model_ready` 排到 `phase_ready(1)` 与 `increment_ready(1,1)` 之后，检查点顺序倒置。
-- `global_stif_profile` 从不被 `process_analysis` 直接调用；它由 `estif_assemble` 内部到达（`Stiff.f90:3425`、`:3783`），而 `call estif_assemble` 在 `Fem.f90:3749`，同样位于迭代循环内。
+- 首个 `call stiff_u` 在 `Fem.f90:3736`，处于 `do iiter=1,miter`（`:3702`）迭代循环内；它在 `.man` 的阶段头 reader（`:3592-3594`）与增量 reader（`:3625-3631`）**之后**。字面放置会让 `model_ready` 排到 `phase_ready(1)` 与 `increment_ready(1,1)` 之后，检查点顺序倒置。
+- `global_stif_profile` 从不被 `process_analysis` 直接调用；它由 `estif_assemble` 内部到达（`Stiff.f90:3425`、`:3783`），而 `call estif_assemble` 在 `Fem.f90:3752`，同样位于迭代循环内。
 - 在 `stiff_u` 之前、`.man` reader 之后的任何位置都已经执行过 PROFILE SET（`:1909`），即方程编号、profile 指针与刚度数组已经建立。此时观测到的是"求解器结构建立之后的模型"，不再是模型装载完成时的状态。
 
 采用的读法是"**求解器结构建立之前**"：`model_ready` 放在 `:1908 operation='SET'` 之前。这是最后一个模型级 reader（`boundt`，`:1899`）之后、第一个消费模型级状态的例程（PROFILE SET 的 `totv_to_eq`）之前的唯一语句边界；`:1903-1907` 只是游标簿记与计时打印。需求文本应回写为此表述。
@@ -84,10 +87,10 @@ requirements.md 写的是"model_ready = 首次 `global_stif_profile`/`stiff_u` �
 
 | 区间 | 语句 | 守卫 | 本路径值 | 结论 |
 |---|---|---|---|---|
-| `Fem.f90:3601` | `if(ngaps/=0.or.nrcsteel/=0)allocate(tofor0(ntotv))` | `ngaps`、`nrcsteel` | 0、0 | 不分配 |
-| `Fem.f90:3603-3617` | `do iincs=1,lincs` 内重读已完成增量的 `.man` 记录（含 `cwater`/`Qstatic` 子块） | `lincs` | 0（`Fem.f90:280`，因 `restart=0`） | 循环体零次 |
-| `Fem.f90:3633-3638` | `if(cwater/=0.and.delgroup>0)` 分配并读 `coef_water` | `cwater` | 0（`.man` 第 3 行第 8 项） | 不执行 |
-| `Fem.f90:3641-3650` | `if(Qstatic/=0)` 分配 `qstatic_force` 并读 5 条记录 | `Qstatic` | 0（`.man` 第 3 行第 9 项） | 不执行 |
+| `Fem.f90:3603` | `if(ngaps/=0.or.nrcsteel/=0)allocate(tofor0(ntotv))` | `ngaps`、`nrcsteel` | 0、0 | 不分配 |
+| `Fem.f90:3605-3617` | `do iincs=1,lincs` 内重读已完成增量的 `.man` 记录（含 `cwater`/`Qstatic` 子块） | `lincs` | 0（`Fem.f90:280`，因 `restart=0`） | 循环体零次 |
+| `Fem.f90:3635-3638` | `if(cwater/=0.and.delgroup>0)` 分配并读 `coef_water` | `cwater` | 0（`.man` 第 3 行第 8 项） | 不执行 |
+| `Fem.f90:3643-3650` | `if(Qstatic/=0)` 分配 `qstatic_force` 并读 5 条记录 | `Qstatic` | 0（`.man` 第 3 行第 9 项） | 不执行 |
 
 `:3619 xtime=0.0` 与 `:3652` 的 `print` 是区间内仅有的两条实际执行语句，均不消费映射表登记的字段。
 
@@ -125,7 +128,7 @@ requirements.md 写的是"model_ready = 首次 `global_stif_profile`/`stiff_u` �
 | `prescrib(k)%ifixvar0` | `Prescrib.f90:274` 拷贝局部变量 `ifixvar0`（`:45` 声明，例程内从未赋值） | 无 | ignore |
 | `prescrib(k)%rdofix, bfrecoord, gamaw, mfixset` | 本路径无赋值 | 无 | ignore |
 | `group%btime, educ, ditime_1, ivcoh, ivfri, ngvar, kinit_g, cgroup, point_direct` | 本路径无 reader | 无 | ignore |
-| `toler_var(1:mdofn)` | 模块变量 | `Fem.f90:3631` | `model_ready`、`phase_ready(1)` 不登记；`increment_ready(1,1)` exact |
+| `toler_var(1:mdofn)` | 模块变量 | `Fem.f90:3633` | `model_ready`、`phase_ready(1)` 不登记；`increment_ready(1,1)` exact |
 | `lcdofn(cdofn+1:mdofn)` | `Global.f90:954` 分配 `mdofn` | 仅 `1:cdofn` 在 `:1124` 赋值 | 形状登记 `["mdofn"]`，exact 只比 `1:cdofn`（序列化器截断；两例 cdofn=mdofn，截断为空） |
 | `element%egaus(2)%cartd` | 不分配：`Elements.f90:1232` 只对非 `mass` 规则分配 | 无 | 不登记；`egaus(2)%gpcod/djacb`（16 点 mass 规则）登记为 ignore 行 `runtime.gauss.*_mass`，因 q4 `order_intrules=(/1,1/)`（`:377`）使本路径所有消费者都取 `egaus(1)` |
 
@@ -136,7 +139,7 @@ Gauss 字段 `runtime.gauss.djacb/gpcod/cartd` 只登记 `egaus(1)`（ikg=1，4 
 
 ## 7. S03 陷阱：`fixed` 与 `dfact` 在 `increment_ready(1,1)` 仍为零
 
-- `fixed` 在 `prescrib_set` 中清零（`Prescrib.f90:63`），真正赋值 `fixed(ldofix)=dfact*prescrib(idofix)%vdofix` 在 `modf_var_prescribed`（`Fem.f90:12350`），由 `:3667` 调用。
+- `fixed` 在 `prescrib_set` 中清零（`Prescrib.f90:63`），真正赋值 `fixed(ldofix)=dfact*prescrib(idofix)%vdofix` 在 `modf_var_prescribed`（`Fem.f90:12353`），由 `:3667` 调用。
 - `tcurves(i)%dfact` 在 `external_load_1` 中置 0（`Load.f90:166`），由 `:3666 dfact_time_curve(ttime)` 才求值。
 
 两者都在 `increment_ready(1,1)` 锚点（`:3652/:3654`）之后。若 S03 的"约束扰动"直接改 `fixed` 或"荷载扰动"直接看 `dfact`，三个检查点都观测不到差异。映射表 `[[perturbation]]` 因此钉住以下目标，全部 `compare="exact"`：
@@ -144,10 +147,10 @@ Gauss 字段 `runtime.gauss.djacb/gpcod/cartd` 只登记 `egaus(1)`（ikg=1，4 
 | 扰动 | 字段 | legacy 符号 | 消费位点 |
 |---|---|---|---|
 | 材料 | `materials.E` | `props(imat)%mechanical%solid%e` | `Stiff.f90:102`（`stiff_u`） |
-| 约束 | `steps0.boundary.value` / `.nodes` | `prescrib(k)%vdofix` / `%nodfix` | `Fem.f90:12350` |
+| 约束 | `steps0.boundary.value` / `.nodes` | `prescrib(k)%vdofix` / `%nodfix` | `Fem.f90:12353` |
 
 P-BC 的 `index` 写成按集名的形式 `[set=1]`（与 `index_by = steps[0].boundary[].name` 一致），而不是位置下标 `[1]`：prescrib 记录按"集 × 节点"顺序生成（`Prescrib.f90:216,253`），lame_cylinder 上记录顺序与 deck 中集的顺序不一致，位置下标在两例上不指向同一条记录。
-| 荷载 | `steps0.load.gravity.magnitude` | `applied_load.gravy`、`factg`、`tcurvegravity` | `Load.f90:1268`、`:1200`；`Fem.f90:13419` |
+| 荷载 | `steps0.load.gravity.magnitude` | `applied_load.gravy`、`factg`、`tcurvegravity` | `Load.f90:1268`、`:1200`；`Fem.f90:13422` |
 
 `fixed`、`dfact` 本身仍登记为 RuntimeState、exact 全零，用于证明"检查点处尚未装载"这一事实本身是确定的（风险表 R24）。
 

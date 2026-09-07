@@ -478,10 +478,10 @@ module yl_diag_registry
     'Temper.f90:310', &
     'Solver.f90:6829', &
     'Solver.f90:6831', &
-    'Fem.f90:3592', &
-    'Fem.f90:3594', &
-    'Fem.f90:3625', &
-    'Fem.f90:3631' &
+    'Fem.f90:3593', &
+    'Fem.f90:3595', &
+    'Fem.f90:3627', &
+    'Fem.f90:3633' &
     ]
 
   character(len=16), parameter :: YL_READER_FILE(YL_NREADERS) = [character(len=16) :: &

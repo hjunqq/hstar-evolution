@@ -28,6 +28,8 @@
 | R21 | ifx list-directed 整数项接受实数形式并截断（`5.5`→5，`iostat=0`） | 输入错误被静默吞掉 | M4 记录级解析按字段类型严格判定；探针 F27 改用非数字 token |
 | R23 | 派生类型含未初始化分量与未关联指针（`prescrib%ifixvar0` Prescrib.f90:274、`deltafi/delitfi` Fem.f90:246、`rvector` Solver.f90:7237、`element%field%rload/tload/eload`）；整体 dump 会把随机字节写进摘要 | 重复运行摘要不稳定，S01 假失败 | M2-01 在 `docs/m2/state-field-map.toml` 逐分量登记 determinism，未初始化/指针一律 `ignore`；M2-02 序列化器只按白名单分量输出，指针先 `associated()` |
 | R24 | `fixed` 与 `tcurves%dfact` 在 `increment_ready(1,1)` 仍为 0（Fem.f90:3666-3667 才赋值） | 对 `fixed` 做 S03 约束扰动检不出差异 | M2-01 `[[perturbation]]` 把 S03 目标钉在 `props%…%e`、`prescrib%vdofix/nodfix`、`gravy/factg/tcurvegravity`；M2-03 按此执行 |
+| R25 | `.pre` 集合头的 `nextr` 是 `prescrib_set` 局部量且无任何持久留存（`tfixvar` 经 `iffix=tfixvar+1` 留存，`nextr` 走 `Prescrib.f90:261-268` 另一分支分配 `listep/value_ext`） | 状态快照无法证明外推（extrapolation）行为等价 | M2-01 登记为 `ignore` 并在 `docs/m2/M2-02-state-serializer.md` §6 写明；两例 `nextr=0`，该分支不执行；若将来支持 `nextr/=0` 必须先补 reader capture |
+| R26 | `runtime.gauss.gpcod/cartd/djacb` 是读入时计算的派生浮点，release(-O2) 与 debug/strict(-O0) 末位不同，导致 `fingerprint.json` 跨 profile 不同 | 误把指纹当跨构建等价判据会产生假失败 | 映射表按 `abs_tol` 登记这三个字段；跨构建等价由 `tools/yl_state_diff.py` 判定（实测 PASS compared=190），指纹只在同一二进制内做 S01 重复判据；见 `docs/m2/M2-02-state-serializer.md` §3 |
 | R16 | 初稿 ProblemState 自创分类，与 CAE 惯例和 YL 对象都不对应 | 三套词汇并存，输入更混乱 | ADR-0003 采用 CAE 对象模型；docs/01、03 与 schema 已改，M3/M5 按其实施 |
 
 每次新增风险补充责任人、发现提交、最小复现、预定处置阶段和关闭证据路径。

@@ -1,0 +1,111 @@
+{
+  "classes": [
+    {
+      "class": "deleted_field",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=materials.json field=materials.E problem=missing expected=present actual=absent",
+      "mutation": "delete one field entry from materials.json",
+      "on": "snapshot"
+    },
+    {
+      "class": "wrong_shape",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=mesh.json field=mesh.nodes.xyz problem=shape expected=[2,289] actual=[2,288]",
+      "mutation": "drop the last entity id/value block and shrink shape",
+      "on": "snapshot"
+    },
+    {
+      "class": "nonfinite",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=mesh.json field=mesh.nodes.xyz problem=nonfinite path=mesh.nodes[2].xyz[1] actual=nan",
+      "mutation": "set one f64 token to the quiet-NaN payload",
+      "on": "snapshot"
+    },
+    {
+      "class": "duplicate_id",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=mesh.json field=mesh.elements.group problem=duplicate_id path=mesh.elements[1] count=2",
+      "mutation": "repeat the first entity id",
+      "on": "snapshot"
+    },
+    {
+      "class": "wrong_dtype",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=materials.json field=materials.E problem=dtype expected=f64 actual=i32",
+      "mutation": "retype the field f64 -> i32",
+      "on": "snapshot"
+    },
+    {
+      "class": "wrong_checkpoint",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=phase_ready(1) problem=checkpoint_missing expected=[model_ready,phase_ready(1),increment_ready(1,1)] actual=[model_ready,increment_ready(1,1)]",
+      "mutation": "delete the second covered checkpoint",
+      "on": "snapshot"
+    },
+    {
+      "class": "value_diff",
+      "exit_code": 1,
+      "first_line": "MISMATCH stage=model_ready field=materials.E path=materials[1].E rule=exact expected=2.5e+10(42174876E8000000) actual=2.6e+10(421836E210000000) unit=Pa source=MAT.material_set.elastic_isotropic legacy=materials.props%mechanical%solid%e",
+      "mutation": "scale one f64 value by 1.04",
+      "on": "snapshot"
+    },
+    {
+      "class": "truncated",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready problem=truncated expected=162 actual=161",
+      "mutation": "raw state.txt trailer fields= one short",
+      "on": "snapshot"
+    },
+    {
+      "class": "stale_digest",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=mesh.json problem=digest expected=f2f9342a5dc13ed429bb74a4b89fc8d146e5fd0a4df2d9b6609ba729c5804ed6 actual=a2ac0ce3a84db12c12b55f295fce671f2e6a530b8e9f2406474ea346aeaca319",
+      "mutation": "mutate mesh.json without re-signing the sidecar",
+      "on": "snapshot"
+    }
+  ],
+  "guards": [
+    {
+      "class": "ragged_length",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=constraints.json field=mesh.sets.nset problem=length path=steps[0].boundary[2].nset expected=17 actual=16",
+      "mutation": "drop the last entry of the last key of a ragged field",
+      "on": "snapshot"
+    },
+    {
+      "class": "ragged_regroup",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=constraints.json field=mesh.sets.nset problem=length path=steps[0].boundary[1].nset expected=17 actual=16",
+      "mutation": "move one entry between ragged keys, flat sequence unchanged",
+      "on": "snapshot"
+    },
+    {
+      "class": "ref_checkpoint_missing",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=phase_ready(1) problem=checkpoint_missing expected=[model_ready,phase_ready(1),increment_ready(1,1)] actual=[model_ready,increment_ready(1,1)] detail=reference",
+      "mutation": "delete the second covered checkpoint from the REFERENCE",
+      "on": "snapshot"
+    },
+    {
+      "class": "missing_from_both",
+      "exit_code": 2,
+      "first_line": "STRUCT stage=model_ready file=materials.json field=materials.E problem=missing expected=present actual=absent detail=\"absent from both sides; the map expects it\"",
+      "mutation": "delete a map-required field from both sides",
+      "on": "snapshot"
+    }
+  ],
+  "raw_dir": "<run>/work/state",
+  "snapshot": "<run>/state",
+  "targets": {
+    "array": "mesh.nodes.xyz",
+    "array_file": "mesh.json",
+    "cp": "model_ready",
+    "cp2": "phase_ready(1)",
+    "id": "mesh.elements.group",
+    "id_file": "mesh.json",
+    "ragged": "mesh.sets.nset",
+    "ragged_file": "constraints.json",
+    "scalar": "materials.E",
+    "scalar_file": "materials.json"
+  }
+}
