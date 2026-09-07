@@ -1,0 +1,479 @@
+{
+  "binary": "build/release/hstar",
+  "binary_sha256": "445090142419dcb033ac5c857ed34ccb2deb8c5ef9d357f50c0a74e0328b99b3",
+  "diffs_dir": "docs/m2/evidence/S03-diffs",
+  "generated_at": "2026-09-07T14:32:07+00:00",
+  "map": {
+    "path": "docs/m2/state-field-map.toml",
+    "sha256": "232f6bbae7abc4352e5a1ea835f11997d5b94736abbaa67925f55aa8863ffa32"
+  },
+  "probes": [
+    {
+      "base_case": "static_2d.cooks_membrane",
+      "comparator": {
+        "actual": "<scratch>/s03d/S03_BC_cooks/runs/static_2d.cooks_membrane/20260907T143207Z_9759ff01_S03_BC_cooks/state",
+        "exit_code": 1,
+        "process_returncode": 1,
+        "reference": "cases/golden/static_2d/cooks_membrane/reference/state",
+        "report_path": "docs/m2/evidence/S03-diffs/S03_BC_cooks.json",
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "text_path": "docs/m2/evidence/S03-diffs/S03_BC_cooks.txt"
+      },
+      "description": "1.pre line 5 field 1 (prescribed values of set 1) 17*0. -> 1.0e-3,16*0., i.e. the first constrained DOF of set 1 moves from 0 to 1.0e-3 m. The state comparator must report exactly one primary MISMATCH on steps0.boundary.value at model_ready, on the record of set 1 / node 1, with 1 of the 34 boundary values changed. runtime.dof.fixed and runtime.dof.fixed_at_increment must NOT appear: modf_var_prescribed runs at Fem.f90:3667, after the model_ready anchor, so the constraint is still only visible on the prescribed values (R24). This probe encodes R24 as a test.",
+      "edit": {
+        "field": 1,
+        "file": "1.pre",
+        "line": 5,
+        "lines_changed": [
+          5
+        ],
+        "new_token": "1.0e-3,16*0.",
+        "original_token": "17*0.",
+        "tokens_changed": [
+          1
+        ]
+      },
+      "expect_state": {
+        "actual": "1e-03(3F50624DD2F1A9FC)",
+        "allow_secondary": [],
+        "changed_values": 1,
+        "comparator_exit": 1,
+        "expected": "0e+00(0000000000000000)",
+        "field": "steps0.boundary.value",
+        "forbid_fields": [
+          "runtime.dof.fixed",
+          "runtime.dof.fixed_at_increment"
+        ],
+        "mismatch_count": 1,
+        "path": "steps[0].boundary[set=1,rec=1,node=1].value",
+        "rule": "exact",
+        "stage": "model_ready"
+      },
+      "id": "S03_BC_cooks",
+      "materialize": {
+        "case_dir": "<scratch>/s03d/S03_BC_cooks/case",
+        "derive_applied": [
+          "1.pre line 5: '17*0.' -> '1.0e-3,16*0.'"
+        ],
+        "source": "cases/golden/static_2d/cooks_membrane"
+      },
+      "observed": {
+        "changed_values": 1,
+        "count_line": "count=1/34",
+        "exit_code": 1,
+        "forbid_fields": {
+          "runtime.dof.fixed": {
+            "all_zero": true,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": [
+              "model_ready"
+            ]
+          },
+          "runtime.dof.fixed_at_increment": {
+            "all_zero": true,
+            "exported": true,
+            "exported_at": [
+              "increment_ready(1,1)"
+            ],
+            "zero_in_reference": [
+              "increment_ready(1,1)"
+            ]
+          }
+        },
+        "leaf_count": {
+          "changed": 1,
+          "problem": null,
+          "total": 34
+        },
+        "primary_count": 1,
+        "primary_fields": [
+          "steps0.boundary.value"
+        ],
+        "secondary_count": 0,
+        "secondary_fields": [],
+        "struct_count": 0,
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "total_values": 34
+      },
+      "problems": [],
+      "run": {
+        "fingerprint": "7d48359b5df3973f01ff78f87b170ce83474c05ca7b5209ede82b2837c4a84de",
+        "normalize_ok": true,
+        "returncode": 0,
+        "run_dir": "<scratch>/s03d/S03_BC_cooks/runs/static_2d.cooks_membrane/20260907T143207Z_9759ff01_S03_BC_cooks",
+        "run_id": "20260907T143207Z_9759ff01_S03_BC_cooks",
+        "runner_returncode": 0,
+        "status": "COMPLETED"
+      },
+      "status": "PASS",
+      "verify": {
+        "checked": 40,
+        "fingerprint": "547e53a8fc6c348d49bb3608c4223911f1636c9e0d8dfbb3d2e36a3e22da2dfc",
+        "ok": true,
+        "problems": []
+      }
+    },
+    {
+      "base_case": "static_2d.cooks_membrane",
+      "comparator": {
+        "actual": "<scratch>/s03d/S03_E_cooks/runs/static_2d.cooks_membrane/20260907T143208Z_b7d6d2d2_S03_E_cooks/state",
+        "exit_code": 1,
+        "process_returncode": 1,
+        "reference": "cases/golden/static_2d/cooks_membrane/reference/state",
+        "report_path": "docs/m2/evidence/S03-diffs/S03_E_cooks.json",
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "text_path": "docs/m2/evidence/S03-diffs/S03_E_cooks.txt"
+      },
+      "description": "1.mat line 20 field 5 (ELASTIC_ISOTROPIC Young's modulus) 2.500E+10 -> 2.600E+10. The state comparator must report exactly one primary MISMATCH on materials.E at model_ready and nothing else: E is read once at MAT.material_set.elastic_isotropic and only STIFF_U consumes it, so no other model_ready field is derived from it. Proves the state snapshot is sensitive to a single material scalar.",
+      "edit": {
+        "field": 5,
+        "file": "1.mat",
+        "line": 20,
+        "lines_changed": [
+          20
+        ],
+        "new_token": "2.600E+10",
+        "original_token": "2.500E+10",
+        "tokens_changed": [
+          5
+        ]
+      },
+      "expect_state": {
+        "actual": "2.6e+10(421836E210000000)",
+        "allow_secondary": [],
+        "changed_values": 1,
+        "comparator_exit": 1,
+        "expected": "2.5e+10(42174876E8000000)",
+        "field": "materials.E",
+        "forbid_fields": [
+          "materials.density",
+          "materials.nu"
+        ],
+        "mismatch_count": 1,
+        "path": "materials[1].E",
+        "rule": "exact",
+        "stage": "model_ready"
+      },
+      "id": "S03_E_cooks",
+      "materialize": {
+        "case_dir": "<scratch>/s03d/S03_E_cooks/case",
+        "derive_applied": [
+          "1.mat line 20: 'ELASTIC_ISOTROPIC       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000E-01       1.000E-05  0  0  0' -> 'ELASTIC_ISOTROPIC       2.400E+03       1.000E+00       1.000E+00       2.600E+10       2.000E-01       1.000E-05  0  0  0'"
+        ],
+        "source": "cases/golden/static_2d/cooks_membrane"
+      },
+      "observed": {
+        "changed_values": 1,
+        "count_line": null,
+        "exit_code": 1,
+        "forbid_fields": {
+          "materials.density": {
+            "all_zero": false,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": []
+          },
+          "materials.nu": {
+            "all_zero": false,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": []
+          }
+        },
+        "leaf_count": {
+          "changed": 1,
+          "problem": null,
+          "total": 1
+        },
+        "primary_count": 1,
+        "primary_fields": [
+          "materials.E"
+        ],
+        "secondary_count": 0,
+        "secondary_fields": [],
+        "struct_count": 0,
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "total_values": 1
+      },
+      "problems": [],
+      "run": {
+        "fingerprint": "6fb279cac700db12959d588c47395c563efaa8cbe09931f954472c56e8453f87",
+        "normalize_ok": true,
+        "returncode": 0,
+        "run_dir": "<scratch>/s03d/S03_E_cooks/runs/static_2d.cooks_membrane/20260907T143208Z_b7d6d2d2_S03_E_cooks",
+        "run_id": "20260907T143208Z_b7d6d2d2_S03_E_cooks",
+        "runner_returncode": 0,
+        "status": "COMPLETED"
+      },
+      "status": "PASS",
+      "verify": {
+        "checked": 40,
+        "fingerprint": "547e53a8fc6c348d49bb3608c4223911f1636c9e0d8dfbb3d2e36a3e22da2dfc",
+        "ok": true,
+        "problems": []
+      }
+    },
+    {
+      "base_case": "static_2d.lame_cylinder",
+      "comparator": {
+        "actual": "<scratch>/s03d/S03_E_lame/runs/static_2d.lame_cylinder/20260907T143208Z_700409d7_S03_E_lame/state",
+        "exit_code": 1,
+        "process_returncode": 1,
+        "reference": "cases/golden/static_2d/lame_cylinder/reference/state",
+        "report_path": "docs/m2/evidence/S03-diffs/S03_E_lame.json",
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "text_path": "docs/m2/evidence/S03-diffs/S03_E_lame.txt"
+      },
+      "description": "1.mat line 20 field 5 (ELASTIC_ISOTROPIC Young's modulus) 2.500E+10 -> 2.600E+10 on the second golden case. Same edit and same single-field expectation as S03_E_cooks; lame_cylinder has an independent mesh (npoin 81, nelem 64) and a different boundary-set order, so passing on both cases shows the detection is a property of the serializer and not of one deck.",
+      "edit": {
+        "field": 5,
+        "file": "1.mat",
+        "line": 20,
+        "lines_changed": [
+          20
+        ],
+        "new_token": "2.600E+10",
+        "original_token": "2.500E+10",
+        "tokens_changed": [
+          5
+        ]
+      },
+      "expect_state": {
+        "actual": "2.6e+10(421836E210000000)",
+        "allow_secondary": [],
+        "changed_values": 1,
+        "comparator_exit": 1,
+        "expected": "2.5e+10(42174876E8000000)",
+        "field": "materials.E",
+        "forbid_fields": [
+          "materials.density",
+          "materials.nu"
+        ],
+        "mismatch_count": 1,
+        "path": "materials[1].E",
+        "rule": "exact",
+        "stage": "model_ready"
+      },
+      "id": "S03_E_lame",
+      "materialize": {
+        "case_dir": "<scratch>/s03d/S03_E_lame/case",
+        "derive_applied": [
+          "1.mat line 20: 'ELASTIC_ISOTROPIC       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000E-01       1.000E-05  0  0  0' -> 'ELASTIC_ISOTROPIC       2.400E+03       1.000E+00       1.000E+00       2.600E+10       2.000E-01       1.000E-05  0  0  0'"
+        ],
+        "source": "cases/golden/static_2d/lame_cylinder"
+      },
+      "observed": {
+        "changed_values": 1,
+        "count_line": null,
+        "exit_code": 1,
+        "forbid_fields": {
+          "materials.density": {
+            "all_zero": false,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": []
+          },
+          "materials.nu": {
+            "all_zero": false,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": []
+          }
+        },
+        "leaf_count": {
+          "changed": 1,
+          "problem": null,
+          "total": 1
+        },
+        "primary_count": 1,
+        "primary_fields": [
+          "materials.E"
+        ],
+        "secondary_count": 0,
+        "secondary_fields": [],
+        "struct_count": 0,
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "total_values": 1
+      },
+      "problems": [],
+      "run": {
+        "fingerprint": "6a5460b5f94fc3549708286f8ea6b7a1aba21a4128d3b9b522eff48d44c19441",
+        "normalize_ok": true,
+        "returncode": 0,
+        "run_dir": "<scratch>/s03d/S03_E_lame/runs/static_2d.lame_cylinder/20260907T143208Z_700409d7_S03_E_lame",
+        "run_id": "20260907T143208Z_700409d7_S03_E_lame",
+        "runner_returncode": 0,
+        "status": "COMPLETED"
+      },
+      "status": "PASS",
+      "verify": {
+        "checked": 40,
+        "fingerprint": "7c2edf39a3425fb6a6b0afe736f5b345ef15ae7f3ac5beec08755f549d73f2f8",
+        "ok": true,
+        "problems": []
+      }
+    },
+    {
+      "base_case": "static_2d.cooks_membrane",
+      "comparator": {
+        "actual": "<scratch>/s03d/S03_G_cooks/runs/static_2d.cooks_membrane/20260907T143209Z_8e12d479_S03_G_cooks/state",
+        "exit_code": 1,
+        "process_returncode": 1,
+        "reference": "cases/golden/static_2d/cooks_membrane/reference/state",
+        "report_path": "docs/m2/evidence/S03-diffs/S03_G_cooks.json",
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "text_path": "docs/m2/evidence/S03-diffs/S03_G_cooks.txt"
+      },
+      "description": "1.loa line 14 field 1 (body-force record, gravy) 9.81000E+00 -> 9.80000E+00. The state comparator must report exactly one primary MISMATCH on steps0.load.gravity.magnitude at model_ready. gcom = factg*gravy*tdensity*thick is formed inside gravity (Load.f90:1268), which runs after the model_ready anchor, so the direction factors and the amplitude curve must stay untouched. Proves the load block of the snapshot is sensitive to a scalar the solver has not yet consumed.",
+      "edit": {
+        "field": 1,
+        "file": "1.loa",
+        "line": 14,
+        "lines_changed": [
+          14
+        ],
+        "new_token": "9.80000E+00",
+        "original_token": "9.81000E+00",
+        "tokens_changed": [
+          1
+        ]
+      },
+      "expect_state": {
+        "actual": "9.8e+00(402399999999999A)",
+        "allow_secondary": [],
+        "changed_values": 1,
+        "comparator_exit": 1,
+        "expected": "9.81e+00(40239EB851EB851F)",
+        "field": "steps0.load.gravity.magnitude",
+        "forbid_fields": [
+          "steps0.load.gravity.direction",
+          "steps0.load.gravity.amplitude"
+        ],
+        "mismatch_count": 1,
+        "path": "steps0.load.gravity.magnitude",
+        "rule": "exact",
+        "stage": "model_ready"
+      },
+      "id": "S03_G_cooks",
+      "materialize": {
+        "case_dir": "<scratch>/s03d/S03_G_cooks/case",
+        "derive_applied": [
+          "1.loa line 14: '9.81000E+00  0.00000E+00  -1.00000E+00  0.00000E+00  -1.00000E+00' -> '9.80000E+00  0.00000E+00  -1.00000E+00  0.00000E+00  -1.00000E+00'"
+        ],
+        "source": "cases/golden/static_2d/cooks_membrane"
+      },
+      "observed": {
+        "changed_values": 1,
+        "count_line": null,
+        "exit_code": 1,
+        "forbid_fields": {
+          "steps0.load.gravity.amplitude": {
+            "all_zero": false,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": []
+          },
+          "steps0.load.gravity.direction": {
+            "all_zero": false,
+            "exported": true,
+            "exported_at": [
+              "model_ready"
+            ],
+            "zero_in_reference": []
+          }
+        },
+        "leaf_count": {
+          "changed": 1,
+          "problem": null,
+          "total": 1
+        },
+        "primary_count": 1,
+        "primary_fields": [
+          "steps0.load.gravity.magnitude"
+        ],
+        "secondary_count": 0,
+        "secondary_fields": [],
+        "struct_count": 0,
+        "summary": {
+          "compared": 190,
+          "mismatch": 1,
+          "skipped": 79,
+          "struct": 0
+        },
+        "total_values": 1
+      },
+      "problems": [],
+      "run": {
+        "fingerprint": "a2ccb905f6e2f44b515f69db79d0b21b43601d284c4be8cec15084f40ec829d7",
+        "normalize_ok": true,
+        "returncode": 0,
+        "run_dir": "<scratch>/s03d/S03_G_cooks/runs/static_2d.cooks_membrane/20260907T143209Z_8e12d479_S03_G_cooks",
+        "run_id": "20260907T143209Z_8e12d479_S03_G_cooks",
+        "runner_returncode": 0,
+        "status": "COMPLETED"
+      },
+      "status": "PASS",
+      "verify": {
+        "checked": 40,
+        "fingerprint": "547e53a8fc6c348d49bb3608c4223911f1636c9e0d8dfbb3d2e36a3e22da2dfc",
+        "ok": true,
+        "problems": []
+      }
+    }
+  ],
+  "runs_root": "<scratch>/s03d",
+  "schema": 1,
+  "summary": {
+    "PASS": 4
+  },
+  "test_id": "S03",
+  "tool": "yl_state_probe.py/1"
+}

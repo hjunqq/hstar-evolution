@@ -1,0 +1,33 @@
+schema = 1
+id = "S03_E_cooks"
+base_case = "static_2d.cooks_membrane"
+description = "1.mat line 20 field 5 (ELASTIC_ISOTROPIC Young's modulus) 2.500E+10 -> 2.600E+10. The state comparator must report exactly one primary MISMATCH on materials.E at model_ready and nothing else: E is read once at MAT.material_set.elastic_isotropic and only STIFF_U consumes it, so no other model_ready field is derived from it. Proves the state snapshot is sensitive to a single material scalar."
+
+[[derive]]
+op = "set_field"
+file = "1.mat"
+line = 20
+field = 5
+value = "2.600E+10"
+original_token = "2.500E+10"
+
+# MEASURED 2026-09-07 by the M2-03 Layer 2 run: release binary sha256 4450901424...,
+# baseline = the frozen-candidate M2-03 r1 run. Comparator output was:
+#   MISMATCH stage=model_ready field=materials.E path=materials[1].E rule=exact
+#            expected=2.5e+10(42174876E8000000) actual=2.6e+10(421836E210000000) unit=Pa
+#            source=MAT.material_set.elastic_isotropic legacy=materials.props%mechanical%solid%e
+#   FAIL struct=0 mismatch=1 compared=190 skipped=79   EXIT=1
+# No `count=` continuation is printed: nmats = 1 makes this a single-leaf field and
+# yl_state_diff gates the count line on total > 1. changed_values = 1 is the leaf count.
+[expect_state]
+comparator_exit = 1
+mismatch_count  = 1
+stage = "model_ready"
+field = "materials.E"
+path  = "materials[1].E"
+rule  = "exact"
+expected = "2.5e+10(42174876E8000000)"
+actual   = "2.6e+10(421836E210000000)"
+changed_values = 1
+allow_secondary = []
+forbid_fields = ["materials.density", "materials.nu"]

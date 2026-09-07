@@ -1,0 +1,34 @@
+schema = 1
+id = "S03_G_cooks"
+base_case = "static_2d.cooks_membrane"
+description = "1.loa line 14 field 1 (body-force record, gravy) 9.81000E+00 -> 9.80000E+00. The state comparator must report exactly one primary MISMATCH on steps0.load.gravity.magnitude at model_ready. gcom = factg*gravy*tdensity*thick is formed inside gravity (Load.f90:1268), which runs after the model_ready anchor, so the direction factors and the amplitude curve must stay untouched. Proves the load block of the snapshot is sensitive to a scalar the solver has not yet consumed."
+
+[[derive]]
+op = "set_field"
+file = "1.loa"
+line = 14
+field = 1
+value = "9.80000E+00"
+original_token = "9.81000E+00"
+
+# MEASURED 2026-09-07 by the M2-03 Layer 2 run: release binary sha256 4450901424...,
+# baseline = the frozen-candidate M2-03 r1 run. Comparator output was:
+#   MISMATCH stage=model_ready field=steps0.load.gravity.magnitude
+#            path=steps0.load.gravity.magnitude rule=exact
+#            expected=9.81e+00(40239EB851EB851F) actual=9.8e+00(402399999999999A) unit=m/s2
+#            source=LOA.external_load_2.gravity legacy=applied_load.gravy
+#   FAIL struct=0 mismatch=1 compared=190 skipped=79   EXIT=1
+# A scalar field carries no `ids`, so the path is the bare field id. No `count=` continuation
+# is printed (single leaf); changed_values = 1 is the leaf count.
+[expect_state]
+comparator_exit = 1
+mismatch_count  = 1
+stage = "model_ready"
+field = "steps0.load.gravity.magnitude"
+path  = "steps0.load.gravity.magnitude"
+rule  = "exact"
+expected = "9.81e+00(40239EB851EB851F)"
+actual   = "9.8e+00(402399999999999A)"
+changed_values = 1
+allow_secondary = []
+forbid_fields = ["steps0.load.gravity.direction", "steps0.load.gravity.amplitude"]

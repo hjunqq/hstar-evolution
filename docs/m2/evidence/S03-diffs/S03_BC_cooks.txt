@@ -1,0 +1,3 @@
+MISMATCH stage=model_ready field=steps0.boundary.value path=steps[0].boundary[set=1,rec=1,node=1].value rule=exact expected=0e+00(0000000000000000) actual=1e-03(3F50624DD2F1A9FC) unit=m source=PRE.prescrib_set.set_values legacy=prescribed.prescrib%vdofix
+  count=1/34
+FAIL struct=0 mismatch=1 compared=190 skipped=79

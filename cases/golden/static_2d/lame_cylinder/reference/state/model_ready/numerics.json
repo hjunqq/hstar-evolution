@@ -1,0 +1,1 @@
+{"checkpoint":"model_ready","fields":{"solver.linear":{"dtype":"str","index_by":"component","shape":[],"values":"PROFILE"},"solver.symmetric":{"dtype":"i32","index_by":"component","shape":[],"values":0}},"file":"numerics.json","float_format":"hex","map_sha256":"232f6bbae7abc4352e5a1ea835f11997d5b94736abbaa67925f55aa8863ffa32","schema":1}

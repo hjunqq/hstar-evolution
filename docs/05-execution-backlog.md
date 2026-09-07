@@ -54,7 +54,7 @@ M0 不要求状态快照实现；快照属于 M2。M0 的产物是可复现的�
 | M1-03 | M1-02 | 数量/引用/分配保护及负向探针（用 `diag_raise` 累积后 `diag_fail`）；修复 R17（`kinddefine` 未初始化 `t/u`）与 R18（`tcurves(0)` 越界）；静力路径上的裸 `stop` 替换为 `diag_*`（R20） | `06` 的首批负向矩阵全部通过（探针加入 `cases/probes/failure/`）；未覆盖 reader 在清单中可见；debug 与 strict profile 两例完整运行且结果与 release 逐值相同 |
 | M2-01 | M1-01、M0 | 检查点和状态字段映射表（`docs/m2/state-field-map.toml` + `tools/yl_state_map.py`） | 字段含来源、消费者、shape、单位、所有权、比较规则；`check` 证明每个检查点锚点位于首个消费者之前、非 skip reader 全部被字段引用 |
 | M2-02 | M2-01 | 状态序列化与比较器（`src/state/*`、`tools/yl_state.py`、`tools/yl_state_diff.py`） | 对缺字段、截断、NaN、错 ID、错 shape、错检查点、错 dtype、陈旧摘要的反例全部拒绝并定位到对象与字段；导出关闭时结果与输出逐字节不变 |
-| M2-03 | M2-02、M1-03 | 两例状态证据 | 重复运行结构一致；材料/约束/荷载单变量改动被准确检出；插桩前后结果等价 |
+| M2-03 | M2-02、M1-03 | 两例状态证据（`tools/yl_state_probe.py`、`cases/probes/state/`、冻结的 `reference/state/`） | 重复运行结构一致；材料/约束/荷载单变量改动被准确检出（各恰好一条主 MISMATCH，定位到对象与字段）；插桩前后结果等价 |
 
 不要为完成 M1 扫清整个 YL 的输入问题；首条路径之外的缺陷进入风险表。检查点必须位于
 消费者使用参数之前，但不得为了观测而提前执行原来属于阶段内的计算或分配。

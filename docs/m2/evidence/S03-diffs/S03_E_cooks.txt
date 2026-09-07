@@ -1,0 +1,2 @@
+MISMATCH stage=model_ready field=materials.E path=materials[1].E rule=exact expected=2.5e+10(42174876E8000000) actual=2.6e+10(421836E210000000) unit=Pa source=MAT.material_set.elastic_isotropic legacy=materials.props%mechanical%solid%e
+FAIL struct=0 mismatch=1 compared=190 skipped=79

@@ -1,0 +1,2 @@
+MISMATCH stage=model_ready field=steps0.load.gravity.magnitude path=steps0.load.gravity.magnitude rule=exact expected=9.81e+00(40239EB851EB851F) actual=9.8e+00(402399999999999A) unit=m/s2 source=LOA.external_load_2.gravity legacy=applied_load.gravy
+FAIL struct=0 mismatch=1 compared=190 skipped=79
