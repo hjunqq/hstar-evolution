@@ -29,7 +29,40 @@ subroutine parse_<kind>(unit, b, parts, errors)
   type(problem_errors_t), intent(inout) :: errors
 ```
 
-**不碰 `steps[0]` 的**（`.cor` / `.ele` / `.mat` / `.sol`）沿用不带 `parts` 的三参形式。
+**不碰 `steps[0]` 的**（`.cor` / `.ele` / `.mat`）沿用不带 `parts` 的形式。
+`.sol` 用 `sparts`（见 §2.2）。
+
+除 `parse_glb` 外，**每个解析器都额外收一个 `type(deck_context_t), intent(in) :: ctx`**：
+
+```fortran
+subroutine parse_cor(unit, ctx, b, errors)
+subroutine parse_loa(unit, ctx, b, parts, errors)
+subroutine parse_sol(unit, ctx, b, sparts, errors)
+```
+
+`parse_glb` 反过来**填** ctx：`subroutine parse_glb(unit, ctx, b, parts, errors)`，`ctx` 为 `intent(inout)`。
+
+### 2.2 跨文件上下文与第二个写聚合体（2026-09-08 修订，由 L1-b/d 与 L1-e 发现）
+
+共享模块是 `src/adapter/yl_adapter_parts.f90`（模块 `yl_adapter_parts`，原 `yl_adapter_step_parts`
+更名扩充），含三个类型：
+
+| 类型 | 方向 | 用途 |
+|---|---|---|
+| `deck_context_t` | **读** | `.glb` 建立、后续解析器**定尺寸或选分支**所必需的事实 |
+| `step_parts_t` | 写 | `steps[0]` 的碎片，来自四个文件 |
+| `solver_parts_t` | 写 | `solver` 的碎片，来自两个文件 |
+
+**为什么需要 `deck_context_t`**：`.loa` 的重力记录按 `ndimn`/`ngroup` 定长；`.pre` 的集合头有
+8 字段 `FIX` 与 9 字段 `MIF` 两种，由 `type_abc` 决定，另有 `nbackdt`、`ntrans` 两个分支；
+`.cor`/`.ele` 需要 `ndimn` 与单元类型才知道记录形状。这些全部由 `.glb` 读出。
+没有这条通道，后续解析器只能**猜**，而失败是静默的——`ndimn` 猜错会让其后每一次读都错位，
+把 MIF deck 当 FIX 解析**不会产生任何 I/O 错误**，只是读错字段。所以它们必须作为**数据**传递，
+而不是作为假设写死。（L1-b/d 的 `NDIMN=2` / `NNODE_Q4=4` 硬编码正是这个洞。）
+
+**`solver_parts_t` 与 `step_parts_t` 同因**：`builder_set_solver` 也是一次性 setter，而
+`.glb` 供给 `linear` 与 `symmetric`，`.sol` 供给 `profile%*` 四项。同样的纪律：
+解析器只填自己的叶子，驱动做那一次调用。
 
 ### 2.1 为什么多一个 `parts`（2026-09-08 修订，由 L1-e 发现）
 
@@ -50,7 +83,7 @@ subroutine parse_<kind>(unit, b, parts, errors)
 自己拥有的叶子；**由 L2-a 驱动在最后一次性完成全部 `builder_step_*` 调用**。
 builder 的单次语义完好无损，且仍在履职——它现在守的是驱动那一趟。
 
-**叶子所有权表在 `src/adapter/yl_adapter_step_parts.f90` 的模块头**，一个叶子一个写者。
+**叶子所有权表在 `src/adapter/yl_adapter_parts.f90` 的模块头**，一个叶子一个写者。
 写了不属于自己的叶子即为缺陷，**哪怕值恰好是对的**——第二个写者会静默胜出，而两位作者都不会发觉。
 
 **约束：**
