@@ -40,7 +40,17 @@ subroutine parse_loa(unit, ctx, b, parts, errors)
 subroutine parse_sol(unit, ctx, b, sparts, errors)
 ```
 
-`parse_glb` 反过来**填** ctx：`subroutine parse_glb(unit, ctx, b, parts, errors)`，`ctx` 为 `intent(inout)`。
+`parse_glb` 反过来**填** ctx，且它同时供给两个写聚合体的叶子：
+
+```fortran
+subroutine parse_glb(unit, ctx, b, parts, sparts, errors)
+  type(deck_context_t),  intent(inout) :: ctx      ! 它是唯一写者
+  type(step_parts_t),    intent(inout) :: parts    ! procedure_/load_mode/output/activation/...
+  type(solver_parts_t),  intent(inout) :: sparts   ! solver%linear、solver%symmetric
+```
+
+（此处早先的示例漏了 `sparts`，与同节叶子表矛盾；由 L1-c 指出。**叶子表是权威，示例是摘要**——
+与 `output` 归属那次更正同一条规则。）
 
 ### 2.2 跨文件上下文与第二个写聚合体（2026-09-08 修订，由 L1-b/d 与 L1-e 发现）
 

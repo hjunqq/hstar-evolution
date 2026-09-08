@@ -43,13 +43,15 @@
 !   `parse_glb` has run is this module's own fault, not the deck's, so it is
 !   PE_INTERNAL rather than a guess.
 !
-!   OPEN ITEM: `ctx%type_abc` is `integer(int32)`, but `yl_adapter_parts.f90`
-!   does not (yet) export named constants for its FIX/MIF values, and no
-!   `parse_glb` exists yet to check against. Every other `deck_context_t`
-!   field defaults to 0 meaning "no special branch, matches both golden
-!   decks" (`nbackdt`, `ntrans`), so `type_abc == 0` is read here as FIX by
-!   the same convention -- but that is this module's inference, not a
-!   confirmed constant, and is flagged to the lead pending `parse_glb`.
+!   `ctx%type_abc` is `character(len=LEN_TYPE_ABC)` (Global.f90:99's own
+!   width); the whitelist gate is `== TYPE_ABC_MIF` (both exported from
+!   yl_adapter_parts.f90), NOT `/= 'FIX'` -- Prescrib.f90:218/220 branches on
+!   `type_abc=='MIF'` for the 9-field header and `/='MIF'` for the ordinary
+!   8-field one, so every non-MIF value takes the 8-field path. An earlier
+!   draft of this module had the type and the polarity both wrong (inferred
+!   `integer`, gated on `/= 'FIX'`, reasoning from the golden decks alone);
+!   corrected against the lead's fix to deck_context_t and against
+!   Prescrib.f90 itself.
 !
 ! What this module assumes and cannot itself verify
 !   `prescrib_set` skips a listed node when
@@ -80,7 +82,7 @@ module yl_adapter_load
                                 builder_amplitude_begin, builder_amplitude_set_name, &
                                 builder_amplitude_set_type, builder_amplitude_add_point, &
                                 builder_amplitude_finish, builder_add_amplitude
-  use yl_adapter_parts, only: step_parts_t, deck_context_t
+  use yl_adapter_parts, only: step_parts_t, deck_context_t, TYPE_ABC_MIF
 
   implicit none
   private
@@ -94,12 +96,6 @@ module yl_adapter_load
 
   character(len=*), parameter :: SRC_LOA = 'Load.f90'
   character(len=*), parameter :: SRC_PRE = 'Prescrib.f90'
-
-  ! OPEN ITEM (see module header): no confirmed named constant exists yet for
-  ! deck_context_t%type_abc's FIX encoding. 0 by the same "default = matches
-  ! both golden decks" convention as ctx%nbackdt/ctx%ntrans -- this module's
-  ! inference, not a value read from any source, pending parse_glb.
-  integer(int32), parameter :: TYPE_ABC_FIX = 0_int32
 
 contains
 
@@ -182,12 +178,18 @@ contains
     ! golden deck (both carry type_abc='FIX'). Only fixed/prescribed
     ! displacement is in the static-q4/1 whitelist, so MIF is rejected here
     ! rather than misread as an 8-field record.
-    if (ctx%type_abc /= TYPE_ABC_FIX) then
+    ! THE GATE IS == TYPE_ABC_MIF, NOT /= 'FIX' (Prescrib.f90:218/220 branches on
+    ! type_abc=='MIF' for the 9-field header and type_abc/='MIF' for the ordinary
+    ! 8-field one; yl_adapter_parts.f90's deck_context_t carries the same warning).
+    ! An earlier draft of this module got this backwards ('FIX' as the accepted
+    ! literal, mirrored from the golden decks alone) -- caught and corrected by
+    ! the lead before it shipped.
+    if (trim(ctx%type_abc) == TYPE_ABC_MIF) then
       loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.reached_only_Prescrib_213', &
                                   line=218_int32)
       call reject_unsupported(errors, 'A9/mif-boundary-unsupported', 'steps[0].boundary', &
-           'type_abc /= FIX: only fixed/prescribed displacement is in the static-q4/1 whitelist; ' // &
-           'the 9-field MIF/VIE record shape (Prescrib.f90:218) is not reproduced', loc)
+           "type_abc == 'MIF': only fixed/prescribed displacement is in the static-q4/1 " // &
+           'whitelist; the 9-field MIF/VIE record shape (Prescrib.f90:218) is not reproduced', loc)
       return
     end if
 
@@ -361,12 +363,15 @@ contains
       end if
 
       ! RD: same reader id, Load.f90:231 -- the LINEAR branch reads a SECOND
-      ! record (the dfact_curve factors) right after curve_points; it has no
-      ! diag_check_read of its own and so is not a separate id in the reader
-      ! inventory (docs/m2/state-field-map.toml, amplitudes.points.value note:
-      ! "Read by the untracked statement Load.f90:231 ... not a separate M1
-      ! reader"), but it is on the executed path and skipping it would
-      ! desynchronise every read after it.
+      ! record (the dfact_curve factors) right after curve_points. It has no
+      ! diag_check_read of its own, is absent from the 152-reader inventory,
+      ! and was swept into the .loa "not_on_path" bucket by a blanket reason
+      ! that does not actually cover it -- a real M1 census gap, confirmed by
+      ! contradiction against 1.loa and written up in
+      ! docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md. It is on the
+      ! executed path regardless (both golden cases only complete if it
+      ! runs), so it is reproduced here; skipping it would desynchronise
+      ! every read after it.
       read (unit, *, iostat=ios) dfact_curve(1:ntime)
       call check_io(errors, ios, 'LOA.external_load_1.curve_points', SRC_LOA, 231, 'amplitudes', &
                     io_ok, record=int(itcurve, int32))
