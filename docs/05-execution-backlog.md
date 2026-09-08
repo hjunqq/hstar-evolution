@@ -65,7 +65,8 @@ M0 不要求状态快照实现；快照属于 M2。M0 的产物是可复现的�
 |---|---|---|---|
 | M3-01 | M2 | 最小类型、字段所有权和生命周期设计（`src/problem/`、`tools/yl_problem_check.py`、`docs/m3/M3-01-problemstate.md`） | 缺失/零/空分离（`opt_*` 包装 + 集合分配状态）；初始输入与积分历史变量分离；YL“组”拆为 elset/section/material；98 项已导出字段与类型双向核对通过，类型中无 Fortran 槽位名 |
 | M3-02 | M3-01 | normalize/validate/capability gate/finalize + manifest（`src/problem/yl_problem_pipeline.f90`） | 未知字段和不支持组合拒绝；派生值与默认值在 manifest 中可溯源；阶段间失败立即中止、阶段内累积全部缺陷；失败不留半成品且可同进程重试；每条已实现规则均有可触发的反例 |
-| M3-03 | M3-02 | build_runtime/commit 与旧变量映射 | 分配失败无部分提交；合法加载→失败加载→合法加载测试通过；结果与 M2 对齐 |
+| M3-03 | M3-02 | build_runtime/commit 与旧变量映射（`src/runtime/`、`docs/m3/M3-03-runtime.md`） | 分配失败无部分提交（12 个注入点由 T01 遍历，先前的好 runtime 逐位存活）；合法加载→失败加载→合法加载测试通过；重复加载逐位相同且 `runtime_free`/`commit_release` 幂等；规则表的 46 个 derive 行与 M2 映射表 model_ready 行双向双射（Fortran 侧断言正向与单射，Python 侧断言反向）。**与 M2 冻结基线的逐值比对顺延至 M4-01**：需 deck→ProblemState 适配器，本任务无此通路 |
+| M3-03a | M3-03 | 为 Fortran 配置真实质量/安全门禁 | CCG 的 `verify-quality`/`verify-security` 对 `src/runtime` 扫描 0 文件（不识别 `.f90`）；需把编译器严格档、别名门禁、行长/复杂度检查包成仓库自己的 gate，使约 5000 行 Fortran 不再只靠人工审查 |
 | M4-01 | M3-03 | 静力 Legacy Adapter | 完整消费所需路径；未知方言拒绝；不把动态运行量猜成输入常量 |
 | M4-02 | M4-01 | 独立进程差分运行 | 所有登记检查点、数值和坏输入门通过；显式旧模式可回退 |
 | M5-01 | M4-02 | TOML v1 规范及完整有效/无效例（CAE 对象模型，`case.units = "SI"` 必填） | 当前 bootstrap Schema 被可用契约替代；不暴露不支持功能；非 SI 单位声明为 INVALID_INPUT |
