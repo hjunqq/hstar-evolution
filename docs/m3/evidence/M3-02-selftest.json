@@ -1,10 +1,16 @@
 {
+  "caveat": "the 10 excluded nets are unreachable while INV-EMPTY-DERIVED stands; if that assertion is ever removed they become live single-fault checks and must be reclassified",
   "frozen_at": "2026-09-08",
   "note": "one build, one count, one set of hashes; sources verified unchanged across the run",
   "pipeline_selftest": {
+    "breakdown": {
+      "excluded_nets": 10,
+      "falsifiable_coverage_guards": 2,
+      "rule_and_behaviour": 473
+    },
     "capability_rows_covered": 15,
     "capability_rows_declared": 15,
-    "checks": 481,
+    "checks": 485,
     "diagnostics": 0,
     "failures": 0,
     "profiles": [
@@ -18,8 +24,8 @@
     "yl_problem_manifest.f90": "3774197d9d1d37ee299509da6f2e2c2fd58c2d02ee77bbc61a26d6e20b9f402c",
     "yl_problem_optional.f90": "ae2e18cf828d7639447dd5f0458d9c441db1aaecb29a90ba22d3a34a7ed54e1c",
     "yl_problem_pipeline.f90": "ee81f7052dc4f1b9422e242b219871b763fbe14ff0c75368739cc61e3de8de13",
-    "yl_problem_pipeline_selftest.f90": "d30b169b4e15e3f94b504cf9e0107a2211632477d0ded4c453e20051a80a706e",
-    "yl_problem_profile.f90": "e96f89b5629ca5de1a88eff54f0b5508049e2ea92fde421d00b7f60dd0ae9921",
+    "yl_problem_pipeline_selftest.f90": "a5e112c8bc82d0edc734e6359c10614b026fd4c49f9342ecc4364e84780215b4",
+    "yl_problem_profile.f90": "f44409e71e54a68a369ed8d06dd397bd994ec1eab08847143a336641db3bba35",
     "yl_problem_selftest.f90": "f7085dc6f121763760d8ed0fe0fb69c21509700cb928d733e72b2f45a8020fe9",
     "yl_problem_types.f90": "f335fafc1f89907bfb31c7af285611245c31e1f63301ecc78fb69eb4f96921cb"
   },

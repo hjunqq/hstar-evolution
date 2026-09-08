@@ -167,6 +167,19 @@ module yl_problem_profile
                       PROFILE_KIND_LOGICAL, 0_int32, '', .true.),                                   &
     capability_item_t('G5', 'load.gravity_enabled', 'steps[].load.gravity', 'enabled',              &
                       PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
+    ! READ THIS BEFORE RAISING THE SECTION COUNT.
+    ! This row is load-bearing beyond the gate. finalize derives one element set
+    ! per section, and a draft with two sections whose elements ALL belong to the
+    ! first would make the second set an allocated zero-length set -- an explicit
+    ! empty where nothing was authored, which ADR-0002 forbids. No validation rule
+    ! guards that case, on purpose: while this row reads 1 the case is
+    ! unreachable, and a rule that nothing can fail is the defect this milestone
+    ! exists to remove. The net today is the pipeline's INV-EMPTY-DERIVED
+    ! assertion, which reports the situation as an INTERNAL fault -- the wrong
+    ! class for what is really an input defect, and acceptable only because it
+    ! cannot fire. So raising this above 1 REQUIRES adding that validation rule
+    ! first, with a counter-example draft; otherwise the first two-section model a
+    ! user writes is answered with an internal fault.
     capability_item_t('G6', 'model.section_count', 'sections', 'size',                              &
                       PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
     capability_item_t('G6', 'analysis.step_count', 'steps', 'size',                                 &
