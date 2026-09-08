@@ -1,7 +1,9 @@
 ! yl_adapter_material -- M4-01 legacy adapter: .mat (materials) and .sol (solver
-! controls), per docs/m4/adapter-contract.md §2. Neither deck touches `steps[0]`, so
-! both routines keep the plain three-argument parse_<kind>(unit, b, errors) shape
-! (contract §2, "不碰 steps[0] 的...沿用不带 parts 的三参形式").
+! controls), per docs/m4/adapter-contract.md §2. Neither deck touches `steps[0]`,
+! confirmed against the state-field map and against team-lead review: .mat feeds
+! only materials[], .sol feeds only the top-level solver singleton. parse_mat keeps
+! the plain parse_<kind>(unit, ctx, b, errors) shape; parse_sol additionally takes
+! `sparts` per contract §2.2 (below).
 !
 ! Scope
 !   The fourteen reader-inventory sites whose `file` is .mat (12) or .sol (2):
@@ -37,28 +39,31 @@
 ! fact (e.g. rule V6's duplicate-id check, deliberately NOT repeated here), a wrong
 ! record SHAPE is unrecoverable inside this parser and must stop it cold.
 !
-! solver_t is a cross-file singleton -- UNRESOLVED, flagged to the team lead
+! solver_t is a cross-file singleton -- RESOLVED via yl_adapter_parts.solver_parts_t
 !   docs/m2/state-field-map.toml puts solver.symmetric's source at .glb
-!   (GLB.global_data.init_and_blocks, legacy_symbol global_var.nonsym), not at .sol.
-!   yl_problem_builder's builder_set_solver is a SINGLETON setter (one call per
-!   draft, like builder_step_set_load / _controls); this is exactly the class of bug
-!   the 2026-09-08 contract revision fixed for steps[0] via yl_adapter_step_parts.
-!   solver_t has no such aggregate. parse_sol below fills solver%linear and
-!   solver%profile.* and calls builder_set_solver, leaving solver%symmetric UNSET
-!   (never guessed -- see the routine). If the .glb parser (yl_adapter_model) also
-!   calls builder_set_solver for solver%symmetric, the two calls collide and the
-!   second is rejected outright; if it does not, solver%symmetric never gets set at
-!   all. Neither outcome is this module's to fix (file ownership) or silently paper
-!   over. Reported to the team lead; the likely fix mirrors step_parts_t.
+!   (GLB.global_data.init_and_blocks, legacy_symbol global_var.nonsym) and
+!   solver.linear at .glb too (GLB.global_data.problem_type) -- only
+!   solver.profile.* (the four SOL.PROFILE.profile_control fields) is .sol's.
+!   yl_problem_builder's builder_set_solver is a SINGLETON setter, the same class of
+!   bug the 2026-09-08 contract revision fixed for steps[0] via
+!   yl_adapter_parts.step_parts_t; the same file now also carries solver_parts_t for
+!   exactly this split. This was flagged from here and confirmed correct except for
+!   one detail: `linear` was originally assumed to be .sol's, but the map sources it
+!   from .glb like `symmetric`. parse_sol below therefore fills ONLY
+!   sparts%solver%profile.* and never calls builder_set_solver itself -- L2-a's
+!   driver makes that one call once both this parser and the .glb parser have filled
+!   their leaves of the shared `sparts`.
 module yl_adapter_material
 
   use iso_fortran_env, only: int32, real64, iostat_end
   use yl_problem_optional, only: opt_set
-  use yl_problem_types, only: material_t, solver_t
+  use yl_problem_types, only: material_t
   use yl_problem_builder, only: problem_builder_t, builder_add_material, &
-                                 builder_materials_empty, builder_set_solver, builder_failed
+                                 builder_materials_empty, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED
+                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, &
+                                PE_INTERNAL
+  use yl_adapter_parts, only: deck_context_t, solver_parts_t
 
   implicit none
   private
@@ -80,8 +85,15 @@ contains
   ! RD: MAT.material_set.title#1 .. MAT.material_set.elastic_extra
   ! (Material.f90:243-313). See the module header for why every switch below is
   ! checked the instant it is read, not deferred to a later stage.
-  subroutine parse_mat(unit, b, errors)
+  !
+  ! `ctx` (adapter-contract.md §2.2) is taken for uniformity with every other non-
+  ! .glb parser and to police call order (below); no .mat record shape in this
+  ! whitelist slice actually depends on any of ctx's fields -- unlike .cor/.ele/.pre,
+  ! nothing material_set reads here is sized or branched by ndimn, element kind or
+  ! type_abc.
+  subroutine parse_mat(unit, ctx, b, errors)
     integer, intent(in) :: unit
+    type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(problem_errors_t), intent(inout) :: errors
 
@@ -94,6 +106,15 @@ contains
     real(real64) :: density, ratio, thickness, e, nu, alfa, density_w
     type(material_t) :: mat
     type(source_location_t) :: loc
+
+    if (.not. ctx%filled) then
+      loc = make_source_location(file='.mat', reader='material_set', line=243_int32)
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+                      rule_id='A-MAT/context-not-filled', object_path='materials', &
+                      message='parse_mat was called before parse_glb filled deck_context_t', &
+                      source=loc))
+      return
+    end if
 
     ! RD: MAT.material_set.title#1 (Material.f90:243) -- a title line, discarded.
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -278,15 +299,30 @@ contains
   ! the static-q4/1 whitelist assumes (single stage, single increment). A restart
   ! deck is a cursor-coupling gap for L2-a, not fixed here (see module header for
   ! the parallel gap already flagged for ndimn/nnode in yl_adapter_mesh.f90).
-  subroutine parse_sol(unit, b, errors)
+  !
+  ! `b` is taken, per the shared parser shape, but never called: this routine owns
+  ! only sparts%solver%profile.* (adapter-contract.md §2.2, "solver_parts_t"), never
+  ! solver%linear or solver%symmetric (both .glb's), and builder_set_solver is a
+  ! one-shot setter the driver alone calls once every contributing leaf is filled.
+  subroutine parse_sol(unit, ctx, b, sparts, errors)
     integer, intent(in) :: unit
+    type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
+    type(solver_parts_t), intent(inout) :: sparts
     type(problem_errors_t), intent(inout) :: errors
 
     character(len=200) :: text, iomsg_buf
     integer(int32) :: ios, iafile, icond, ipdchk, ising
-    type(solver_t) :: sv
     type(source_location_t) :: loc
+
+    if (.not. ctx%filled) then
+      loc = make_source_location(file='.sol', reader='PROFILE', line=6829_int32)
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+                      rule_id='A-SOL/context-not-filled', object_path='solver', &
+                      message='parse_sol was called before parse_glb filled deck_context_t', &
+                      source=loc))
+      return
+    end if
 
     ! RD: SOL.PROFILE.title#1 (Solver.f90:6829) -- a title line, discarded.
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -308,16 +344,15 @@ contains
       return
     end if
 
-    call opt_set(sv%linear, 'PROFILE')
-    call opt_set(sv%profile%pivot_file, iafile)
-    call opt_set(sv%profile%condition_check, icond)
-    call opt_set(sv%profile%positive_definite_check, ipdchk)
-    call opt_set(sv%profile%singularity_check, ising)
-    ! sv%symmetric is left UNSET here on purpose -- see the module header
-    ! ("solver_t is a cross-file singleton -- UNRESOLVED").
-
-    loc = make_source_location(file='.sol', reader='PROFILE', line=6831_int32)
-    call builder_set_solver(b, sv, loc, errors)
+    ! Fill only this parser's leaves of the shared solver_parts_t. solver%linear and
+    ! solver%symmetric are the .glb parser's (module header); writing them here
+    ! would be exactly the "second writer wins silently" defect adapter-parts.f90's
+    ! header warns against, even though this parser happens to know PROFILE is the
+    ! active solver (it is this file's own identity, not a value read from .sol).
+    call opt_set(sparts%solver%profile%pivot_file, iafile)
+    call opt_set(sparts%solver%profile%condition_check, icond)
+    call opt_set(sparts%solver%profile%positive_definite_check, ipdchk)
+    call opt_set(sparts%solver%profile%singularity_check, ising)
   end subroutine parse_sol
 
   ! ============================================================================

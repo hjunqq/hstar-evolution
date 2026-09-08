@@ -32,13 +32,24 @@
 !   a top-level `ProblemState` collection, not a `steps[0]` leaf), so it is
 !   written the ordinary way, through `b`.
 !
-! Context this module does not own but needs (open item; flagged to the lead)
-!   `external_load_2`'s gravity records are sized by `ndimn`/`ngroup`, and
-!   `prescrib_set`'s branch structure is gated by `type_abc`/`nbackdT`/`ntrans`
-!   -- all four read earlier from `.glb` by `yl_adapter_model`, not from `.loa`
-!   or `.pre`. No shared context type exists yet, so they are taken here as
-!   plain `intent(in)` scalar arguments pending a decision on whether they
-!   should be consolidated into one (analogous to `step_parts_t`).
+! Context from `.glb` (contract SS2.2, yl_adapter_parts.f90 deck_context_t)
+!   `external_load_2`'s gravity records are sized by `ctx%ndimn`/`ctx%ngroup`,
+!   and `prescrib_set`'s branch structure is gated by `ctx%type_abc`/
+!   `ctx%nbackdt`/`ctx%ntrans` -- all four read earlier from `.glb` by
+!   `yl_adapter_model`, not from `.loa` or `.pre`, and carried in via `ctx`
+!   rather than guessed (a wrong `ndimn` misaligns every read after it; a MIF
+!   deck read as FIX raises no I/O error at all, it just reads the wrong
+!   fields). `ctx%filled` is checked first: calling this module before
+!   `parse_glb` has run is this module's own fault, not the deck's, so it is
+!   PE_INTERNAL rather than a guess.
+!
+!   OPEN ITEM: `ctx%type_abc` is `integer(int32)`, but `yl_adapter_parts.f90`
+!   does not (yet) export named constants for its FIX/MIF values, and no
+!   `parse_glb` exists yet to check against. Every other `deck_context_t`
+!   field defaults to 0 meaning "no special branch, matches both golden
+!   decks" (`nbackdt`, `ntrans`), so `type_abc == 0` is read here as FIX by
+!   the same convention -- but that is this module's inference, not a
+!   confirmed constant, and is flagged to the lead pending `parse_glb`.
 !
 ! What this module assumes and cannot itself verify
 !   `prescrib_set` skips a listed node when
@@ -64,12 +75,12 @@ module yl_adapter_load
   use yl_problem_types, only: boundary_t, amplitude_t, amplitude_point_t
   use yl_problem_optional, only: opt_set
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED
+                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, PE_INTERNAL
   use yl_problem_builder, only: problem_builder_t, amplitude_builder_t, &
                                 builder_amplitude_begin, builder_amplitude_set_name, &
                                 builder_amplitude_set_type, builder_amplitude_add_point, &
                                 builder_amplitude_finish, builder_add_amplitude
-  use yl_adapter_step_parts, only: step_parts_t
+  use yl_adapter_parts, only: step_parts_t, deck_context_t
 
   implicit none
   private
@@ -84,6 +95,12 @@ module yl_adapter_load
   character(len=*), parameter :: SRC_LOA = 'Load.f90'
   character(len=*), parameter :: SRC_PRE = 'Prescrib.f90'
 
+  ! OPEN ITEM (see module header): no confirmed named constant exists yet for
+  ! deck_context_t%type_abc's FIX encoding. 0 by the same "default = matches
+  ! both golden decks" convention as ctx%nbackdt/ctx%ntrans -- this module's
+  ! inference, not a value read from any source, pending parse_glb.
+  integer(int32), parameter :: TYPE_ABC_FIX = 0_int32
+
 contains
 
   ! ==========================================================================
@@ -94,28 +111,27 @@ contains
   !> both run against the same unit in the legacy call sequence
   !> (Fem.f90 -> STATIC_U), so a rewind between them would desynchronise the
   !> cursor from the deck the driver actually opened.
-  subroutine parse_loa(unit, ndimn, ngroup, b, parts, errors)
+  subroutine parse_loa(unit, ctx, b, parts, errors)
     integer, intent(in) :: unit
-    integer(int32), intent(in) :: ndimn   ! GLB.global_data.sizes_and_switches: mesh.dimension
-    integer(int32), intent(in) :: ngroup  ! GLB.global_data.sizes_and_switches: derived(sections)
+    type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(step_parts_t), intent(inout) :: parts
     type(problem_errors_t), intent(inout) :: errors
 
     logical :: ok
 
+    call require_context(errors, ctx, ok)
+    if (.not. ok) return
+
     call external_load_1(unit, b, errors, ok)
     if (.not. ok) return
-    call external_load_2(unit, ndimn, ngroup, parts, errors, ok)
+    call external_load_2(unit, ctx, parts, errors, ok)
   end subroutine parse_loa
 
   !> Parses `.pre`: `prescrib_set` in full.
-  subroutine parse_pre(unit, ndimn, type_abc, nbackdt, ntrans, b, parts, errors)
+  subroutine parse_pre(unit, ctx, b, parts, errors)
     integer, intent(in) :: unit
-    integer(int32), intent(in) :: ndimn      ! GLB.global_data.sizes_and_switches: mesh.dimension
-    character(len=*), intent(in) :: type_abc ! GLB.global_data.init_and_blocks: gates the set_header variant
-    integer(int32), intent(in) :: nbackdt    ! GLB.global_data.init_and_blocks: gates the restart-linked branch
-    integer(int32), intent(in) :: ntrans     ! GLB.global_data.transform_and_mif: gates the MIF coordinate record
+    type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b  ! unused: .pre writes only parts%boundary, no top-level collection
     type(step_parts_t), intent(inout) :: parts
     type(problem_errors_t), intent(inout) :: errors
@@ -131,7 +147,10 @@ contains
     type(boundary_t) :: bd
     integer :: n_rows, k
     type(source_location_t) :: loc
-    logical :: io_ok
+    logical :: io_ok, ctx_ok
+
+    call require_context(errors, ctx, ctx_ok)
+    if (.not. ctx_ok) return
 
     n_rows = 0
 
@@ -149,7 +168,7 @@ contains
     ! read INSTEAD of the nfixsets loop below (not inside it). Not in the
     ! reader inventory (never reached on the whitelisted static path: both
     ! golden decks carry nbackdT=0). Not reproduced.
-    if (nbackdt == 2) then
+    if (ctx%nbackdt == 2) then
       loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.set_count', line=213_int32)
       call reject_unsupported(errors, 'A8/restart-linked-boundary-unsupported', 'steps[0].boundary', &
            'nbackdT == 2: the Prescrib.f90:184-201 record shape is a restart-linked dialect ' // &
@@ -163,11 +182,11 @@ contains
     ! golden deck (both carry type_abc='FIX'). Only fixed/prescribed
     ! displacement is in the static-q4/1 whitelist, so MIF is rejected here
     ! rather than misread as an 8-field record.
-    if (trim(type_abc) /= 'FIX') then
+    if (ctx%type_abc /= TYPE_ABC_FIX) then
       loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.reached_only_Prescrib_213', &
                                   line=218_int32)
       call reject_unsupported(errors, 'A9/mif-boundary-unsupported', 'steps[0].boundary', &
-           "type_abc = '" // trim(type_abc) // "': only 'FIX' is in the static-q4/1 whitelist; " // &
+           'type_abc /= FIX: only fixed/prescribed displacement is in the static-q4/1 whitelist; ' // &
            'the 9-field MIF/VIE record shape (Prescrib.f90:218) is not reproduced', loc)
       return
     end if
@@ -208,7 +227,7 @@ contains
       ! MIF free-face coordinate record here; not reproduced (out of
       ! whitelist; ntrans=0 on both golden decks per GLB.global_data.
       ! transform_and_mif's note).
-      if (ntrans > 0 .and. ifixvar <= ndimn) then
+      if (ctx%ntrans > 0 .and. ifixvar <= ctx%ndimn) then
         loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.set_nodes', line=244_int32, &
                                     record=int(ifixset, int32))
         call reject_unsupported(errors, 'A11/mif-coordinate-record-unsupported', 'steps[0].boundary', &
@@ -428,9 +447,9 @@ contains
   ! present)
   ! ==========================================================================
 
-  subroutine external_load_2(unit, ndimn, ngroup, parts, errors, ok)
+  subroutine external_load_2(unit, ctx, parts, errors, ok)
     integer, intent(in) :: unit
-    integer(int32), intent(in) :: ndimn, ngroup
+    type(deck_context_t), intent(in) :: ctx
     type(step_parts_t), intent(inout) :: parts
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
@@ -438,6 +457,7 @@ contains
     character(len=20) :: text
     integer :: ios
     integer :: edge_load_group, delgroup, nbeamload, nplateload, nline
+    integer(int32) :: ndimn, ngroup
     real(real64) :: gravy
     real(real64), allocatable :: factg(:), factf(:)
     integer(int32), allocatable :: tcurvegravity(:)
@@ -445,6 +465,8 @@ contains
     logical :: io_ok
 
     ok = .false.
+    ndimn = ctx%ndimn
+    ngroup = ctx%ngroup
 
     ! RD: LOA.external_load_2.title#1 (Load.f90:749)
     read (unit, *, iostat=ios) text
@@ -569,6 +591,24 @@ contains
   ! ==========================================================================
   ! shared helpers
   ! ==========================================================================
+
+  !> Refuses to proceed on an unfilled deck_context_t. A caller invoking this
+  !> module before parse_glb has run is this module's own integration fault,
+  !> not a defect in the deck, so it is PE_INTERNAL rather than PE_INVALID_INPUT
+  !> or PE_UNSUPPORTED -- the two codes this module otherwise ever raises.
+  subroutine require_context(errors, ctx, ok)
+    type(problem_errors_t), intent(inout) :: errors
+    type(deck_context_t), intent(in) :: ctx
+    logical, intent(out) :: ok
+
+    ok = ctx%filled
+    if (ok) return
+    call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+                                       rule_id='A0/deck-context-not-filled', &
+                                       object_path='steps[0]', &
+                                       message='parse_loa/parse_pre called with an unfilled ' // &
+                                       'deck_context_t; parse_glb must run first'))
+  end subroutine require_context
 
   !> Raises PE_INVALID_INPUT and sets ok=.false. on a nonzero iostat; leaves
   !> ok=.true. and raises nothing otherwise. Every read in this module is

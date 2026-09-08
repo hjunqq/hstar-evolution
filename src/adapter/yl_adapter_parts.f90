@@ -74,6 +74,7 @@ module yl_adapter_parts
   public :: step_parts_t, step_parts_reset
   public :: solver_parts_t, solver_parts_reset
   public :: deck_context_t, deck_context_reset
+  public :: LEN_TYPE_ABC, TYPE_ABC_MIF
 
   type :: step_parts_t
     ! Scalars and aggregates, filled leaf by leaf per the ownership table above.
@@ -100,13 +101,28 @@ module yl_adapter_parts
   !> and the failure mode is silent: a wrong `ndimn` misaligns every subsequent read,
   !> and a MIF deck parsed as FIX produces no I/O error at all -- it just reads the
   !> wrong fields. That is why these travel as data rather than as assumptions.
+  !> Legacy's own width for `type_abc` (Global.f90:99). Kept identical so a value read
+  !> from the deck cannot be silently truncated on its way into this record.
+  integer, parameter :: LEN_TYPE_ABC = 50
+  !> The ONE value that changes the prescribed-set header's shape (Prescrib.f90:218).
+  !> Named here so `.glb` and `.pre` cannot drift on the spelling independently.
+  character(len=*), parameter :: TYPE_ABC_MIF = 'MIF'
+
   type :: deck_context_t
     logical :: filled = .false.        ! parse_glb sets this last; readers must check it
     integer(int32) :: ndimn = 0        ! GLB.global_data.sizes_and_switches
     integer(int32) :: ngroup = 0       ! GLB.global_data.sizes_and_switches
     integer(int32) :: nnode = 0        ! nodes per element of the (single) group
     integer(int32) :: element_kind = 0 ! group header `index`; 5 is Q4
-    integer(int32) :: type_abc = 0     ! GLB.global_data.init_and_blocks -- FIX vs MIF header
+    !> `character(50)` in legacy (Global.f90:99 declares
+    !> `character(50) type_problem,type_solver,type_load,type_ABC,type_solver_ctt`).
+    !> An earlier draft of this record typed it `integer(int32)`, which would have made
+    !> the .pre parser compare it against a number; caught before it shipped.
+    !> THE GATE IS `== TYPE_ABC_MIF`, NOT `/= 'FIX'`: Prescrib.f90:218/220 branches on
+    !> `type_abc=='MIF'` for the 9-field header and `type_abc/='MIF'` for the 8-field one,
+    !> so everything that is not MIF takes the ordinary path. Comparing against 'FIX'
+    !> instead would reject every value legacy accepts except that one literal.
+    character(len=LEN_TYPE_ABC) :: type_abc = ''
     integer(int32) :: nbackdt = 0      ! GLB.global_data.init_and_blocks
     integer(int32) :: ntrans = 0       ! GLB.global_data.init_and_blocks
   end type deck_context_t

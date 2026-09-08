@@ -55,15 +55,12 @@
 !   shared `step_parts_t`; the sequencing driver (L2-a) performs every `builder_step_*` call
 !   exactly once after all four parsers have run.
 !
-!   DISCREPANCY FLAGGED, NOT FIXED (src/adapter/yl_adapter_step_parts.f90 is not this module's
-!   file): that module's leaf-ownership table lists the whole of `output` as `.glb`'s. But
-!   docs/m2/state-field-map.toml sources `steps0.output.frequency_nodes` and
-!   `steps0.output.frequency_fields` to `MAN.STATIC_U.increment_control` (Fem.f90:3627,
-!   `noutn`/`noutf`) -- not to any `.glb` site. This module follows the map (the primary
-!   record) and writes `parts%output%frequency` only; `parts%output%format` and
-!   `parts%output%field` are left untouched, matching the table's intent for the leaves that
-!   are actually `.glb`'s. The table's header comment should be corrected to read
-!   "output.frequency .man, output.format/field .glb" -- flagged to the team, not edited here.
+!   `output%frequency%{nodes,fields}` is this module's leaf, `output%format`/`output%field`/
+!   `output%stress_averaging` are `.glb`'s -- corrected 2026-09-08 in
+!   src/adapter/yl_adapter_parts.f90's leaf-ownership table after this module's first draft
+!   flagged that its earlier version wrongly attributed all of `output` to `.glb`; the map
+!   (docs/m2/state-field-map.toml, `steps0.output.frequency_nodes`/`frequency_fields` sourced
+!   to `MAN.STATIC_U.increment_control`) is what settled it, and that table now says so.
 !
 ! WHITELIST (static-q4/1, unchanged, not enlarged -- docs/m4/adapter-contract.md S5)
 !   Every one of the six `inp` run_control flags is pinned to 0 by the map itself
@@ -123,21 +120,23 @@
 !        confirm `PE_INVALID_INPUT` fires with the reader-inventory id as `object_path` and
 !        that no partial value reaches `b` or `parts` -- mirroring the sticky-failure
 !        discipline `yl_problem_builder` already enforces on its own calls.
-!     4. A `lincs`-dependency fixture: since `lincs=0` here is asserted from `restart==0`
-!        (already enforced by `parse_inp`) rather than read, a test that calls `parse_man`
-!        without first calling `parse_inp` on the same builder should still behave correctly
-!        (this module never reads `restart` itself, so nothing in this file can detect that
-!        ordering was skipped -- the test documents that residual risk rather than closing
-!        it, since closing it would require a cross-module argument this file does not own).
+!     4. A `ctx%filled`-dependency fixture: call `parse_man` with a freshly-reset,
+!        never-filled `ctx` and confirm `F3/ctx-not-filled` fires (see below) rather than
+!        silently proceeding with `lincs=0`. This closes the ordering risk for "did parse_glb
+!        run first" but only for that much: `ctx%filled` is a proxy for "the driver reached
+!        parse_glb", not a proof that `parse_inp` specifically ran before `parse_man` on the
+!        same deck (parse_glb and parse_inp read different files and neither's state proves
+!        the other ran). That residual half of the assumption is still open and still worth a
+!        fixture documenting it, not closing it silently.
 module yl_adapter_fem90
 
   use iso_fortran_env, only: int32, real64
   use yl_problem_types, only: case_t
   use yl_problem_builder, only: problem_builder_t, builder_set_case, builder_note_failure
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                PE_INVALID_INPUT, PE_UNSUPPORTED
+                                PE_INVALID_INPUT, PE_UNSUPPORTED, PE_INTERNAL
   use yl_problem_optional, only: opt_set
-  use yl_adapter_step_parts, only: step_parts_t
+  use yl_adapter_parts, only: step_parts_t, deck_context_t
 
   implicit none
   private
@@ -162,8 +161,15 @@ contains
 
   !> Reads the five `inp` records FEM90 consumes before `call global_data`
   !> (legacy/yl/Fem.f90:97-185) and polices the run_control/runblks whitelist.
-  subroutine parse_inp(unit, b, errors)
+  !>
+  !> `ctx` is accepted only for uniformity with the other parsers (contract S2.2) and is
+  !> INTENTIONALLY UNUSED here: `inp` is read before `.glb` in FEM90's own order
+  !> (Fem.f90:94-117 precedes `call global_data`), so `ctx` cannot yet be filled when this
+  !> runs. Reading it here would be a bug, not a missed opportunity -- do not "fix" that by
+  !> adding a use of it.
+  subroutine parse_inp(unit, ctx, b, errors)
     integer, intent(in) :: unit
+    type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(problem_errors_t), intent(inout) :: errors
 
@@ -256,8 +262,12 @@ contains
   !> `controls`/`output%frequency` leaves of `parts` that this module owns (see the module
   !> header's leaf-ownership discussion; the other leaves of `steps[0]` are `.glb`/`.loa`/
   !> `.pre`'s and are never touched here).
-  subroutine parse_man(unit, b, parts, errors)
+  !>
+  !> `ctx` itself is not read for anything but `%filled` -- this module has no site that
+  !> needs `ndimn`/`ngroup`/etc, only the ordering guarantee `%filled` stands for (see below).
+  subroutine parse_man(unit, ctx, b, parts, errors)
     integer, intent(in) :: unit
+    type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(step_parts_t), intent(inout) :: parts
     type(problem_errors_t), intent(inout) :: errors
@@ -271,6 +281,25 @@ contains
     integer :: ios
     character(len=IOMSG_LEN) :: iomsg_buf
     type(source_location_t) :: loc
+
+    ! Ordering guard, not a deck read: `ctx%filled` is set only by parse_glb, which FEM90's
+    ! own body runs before STATIC_U (`call global_data` at Fem.f90:117, long before STATIC_U
+    ! is ever reached). An unfilled `ctx` here means the driver invoked parse_man before
+    ! parse_glb -- a sequencing bug in the driver, not a defect in the deck this module is
+    ! reading, hence PE_INTERNAL rather than PE_INVALID_INPUT/PE_UNSUPPORTED. This closes only
+    ! HALF of the residual ordering assumption flagged in the module header's equivalence-test
+    ! note 4: it proves parse_glb ran first, and parse_glb necessarily runs after parse_inp in
+    ! the documented FEM90 order, but it is not a direct proof that parse_inp itself ran on
+    ! this same deck -- that half stays open and is why `lincs=0` below still cites parse_inp
+    ! by name rather than by `ctx`.
+    if (.not. ctx%filled) then
+      loc = make_source_location(reader='STATIC_U')
+      call builder_note_failure(b, PE_INTERNAL, 'F3/ctx-not-filled', 'deck_context', '', &
+        'parse_man was called with an unfilled deck_context_t; parse_glb (and, by the ' // &
+        'documented FEM90 call order, parse_inp) must run before parse_man on the same deck', &
+        loc, errors)
+      return
+    end if
 
     ! RD: MAN.STATIC_U.title#1 (Fem.f90:3593) -- guard type_problem=='Q' (STATIC_U)
     ! read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)text
@@ -311,9 +340,10 @@ contains
     ! Fem.f90:280 (`if (restart==0) ... lincs=0`): lincs is pinned to 0 on this path. This
     ! module never reads `restart` itself -- INP.FEM90.run_control is parse_inp's site -- so
     ! this line is only correct because the driver calls parse_inp before parse_man on the
-    ! same builder, exactly as FEM90's own body does (Fem.f90:99 precedes Fem.f90:3593). See
-    ! the module header's targeted-equivalence-test note 4 for the residual risk if that call
-    ! order is ever violated.
+    ! same deck, exactly as FEM90's own body does (Fem.f90:99 precedes Fem.f90:3593). The
+    ! `ctx%filled` check above proves parse_glb ran first (and parse_glb runs after parse_inp
+    ! in that same documented order), which is corroborating evidence, not a direct proof for
+    ! parse_inp specifically -- see the module header's equivalence-test note 4.
     lincs = 0_int32
 
     ! Fem.f90:3622-3650 (loop body containing the two reads below). Reproduced as a loop, not
