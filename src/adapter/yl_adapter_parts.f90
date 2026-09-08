@@ -114,6 +114,25 @@ module yl_adapter_parts
     integer(int32) :: ngroup = 0       ! GLB.global_data.sizes_and_switches
     integer(int32) :: nnode = 0        ! nodes per element of the (single) group
     integer(int32) :: element_kind = 0 ! group header `index`; 5 is Q4
+    !> Per-section data from `.glb`'s group-header loop, in group order.
+    !>
+    !> WHY THESE EXIST, added 2026-09-08 after L2-a's first integration run:
+    !> legacy reads `.ele` INSIDE that loop, so a record's owning group is decided
+    !> POSITIONALLY -- group 1 takes the first `nelgroup(1)` records, group 2 the next
+    !> `nelgroup(2)`, and so on. The `.ele` file itself carries no group boundary; its
+    !> records are just `i0, lnods(1:nnode)`. Without these arrays the `.ele` parser
+    !> cannot attribute an element to a section at all, which is why nothing was setting
+    !> `mesh.elements[].elset`, `mesh.elements[].material` or `mesh.elsets[]` -- the two
+    !> parsers' headers each disclaimed the field and pointed at the other, and both were
+    !> right: `.glb` never sees an element record and `.ele` never sees a group boundary.
+    !>
+    !> Unallocated means `parse_glb` has not run. On the current whitelist each has
+    !> exactly one entry (the capability gate admits a single section), but they are
+    !> arrays because the positional rule is per group and a scalar would quietly become
+    !> wrong the day the gate widens.
+    integer(int32), allocatable :: nelgroup(:)     ! elements in each section
+    integer(int32), allocatable :: group_matno(:)  ! each section's header material id
+    integer(int32), allocatable :: group_kind(:)   ! each section's element-kind index
     !> `character(50)` in legacy (Global.f90:99 declares
     !> `character(50) type_problem,type_solver,type_load,type_ABC,type_solver_ctt`).
     !> An earlier draft of this record typed it `integer(int32)`, which would have made

@@ -70,6 +70,24 @@ subroutine parse_glb(unit, ctx, b, parts, sparts, errors)
 把 MIF deck 当 FIX 解析**不会产生任何 I/O 错误**，只是读错字段。所以它们必须作为**数据**传递，
 而不是作为假设写死。（L1-b/d 的 `NDIMN=2` / `NNODE_Q4=4` 硬编码正是这个洞。）
 
+### 2.3 `.ele` 的组归属（2026-09-08 修订，由 L2-a 首次集成发现）
+
+legacy 在 `.glb` 的**每组头循环之内**读 `.ele`，所以一条元素记录属于哪个 section 是
+**位置决定**的：第 1 组取前 `nelgroup(1)` 条，第 2 组取接下来 `nelgroup(2)` 条。
+`.ele` 文件自身**不含任何组边界**，它的记录就是 `i0, lnods(1:nnode)`。
+
+后果：在 `deck_context_t` 带上 `nelgroup(:)` / `group_matno(:)` / `group_kind(:)` 之前，
+`.ele` 解析器**无法把元素归属到 section**。所以没有人设置
+`mesh.elements[].elset`、`mesh.elements[].material`，也没有人调 `builder_add_elset`——
+两个解析器的头注释各自声明"这不归我"并指向对方，**而它们都是对的**：
+`.glb` 从不看见元素记录，`.ele` 从不看见组边界。
+
+首次集成因此在两个 golden 算例上都失败：先是 V8/N4 缺 `mesh.elsets`，
+补上空占位后 N6 对**每一个元素**报"不属于任何元素集合"（256 / 64 条 finding）。
+
+**职责划分**：`parse_glb` 填这三个数组（它是 `ctx` 的唯一写者）；
+`parse_ele` 据此按位置归属每条记录，设置 `elset` / `material` / `kind`，并调 `builder_add_elset`。
+
 **`solver_parts_t` 与 `step_parts_t` 同因**：`builder_set_solver` 也是一次性 setter，而
 `.glb` 供给 `linear` 与 `symmetric`，`.sol` 供给 `profile%*` 四项。同样的纪律：
 解析器只填自己的叶子，驱动做那一次调用。
