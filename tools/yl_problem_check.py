@@ -25,6 +25,7 @@ Usage
   python3 tools/yl_problem_check.py check  [--map docs/m2/state-field-map.toml]
                                            [--src FILE_OR_DIR]...
                                            [--doc docs/m3/M3-01-problemstate.md]
+                                           [--manifest src/problem/yl_problem_manifest.f90]
   python3 tools/yl_problem_check.py render [--map ...] [--src ...]
                                            [-o docs/m3/M3-01-problemstate.md] [--force]
   python3 tools/yl_problem_check.py --selftest
@@ -107,6 +108,22 @@ Check rules
      names differ only by case are a FAIL (they would be the same component)
   12 doc agreement (only when --doc is given): the file must exist and must equal exactly
      what `render` produces from the same map and types
+  14 derive-rule vocabulary (--manifest): one vocabulary is restated in three places --
+     the map header as prose, `DERIVED_RULES` in tools/yl_state_map.py, and the
+     `MANIFEST_RULE_*` constants in src/problem/yl_problem_manifest.f90. This rule compares
+     the two real enforcement points and IMPORTS `DERIVED_RULES` rather than restating it,
+     so it does not become a fourth copy. The constants are parsed under their own closed
+     grammar, `character(len=*), parameter, public :: MANIFEST_RULE_<NAME> = '<value>'`;
+     any other MANIFEST_RULE_* parameter declaration is a FAIL rather than a skip, and the
+     constant name must equal its value. Then: the constant values, minus `declared_count`
+     (a manifest-side check kind with no map counterpart), must equal `DERIVED_RULES`, and
+     every declared constant must appear in the closed `known_rule` select case, which is
+     where the vocabulary is actually enforced at run time. A message names the kinds
+     present on one side and missing on the other. This converts a divergence from a
+     manifest entry SILENTLY REFUSED during a run -- how M3-03's `geometry` kind would have
+     been found -- into a check-time failure. The manifest is an explicit extra input; it is
+     not part of --src and the ProblemState type rules do not apply to it
+
   13 wrapper integrity: the `opt_*` bodies are not put through the component grammar and
      are never walked as nested types, so their load-bearing structure is checked directly
      instead. For every DECLARED wrapper, four assertions: the component block is
@@ -201,9 +218,33 @@ from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from yl_io_inventory import split_lines  # noqa: E402
+from yl_state_map import DERIVED_RULES  # noqa: E402  (imported, never restated)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAP_DEFAULT = REPO_ROOT / "docs" / "m2" / "state-field-map.toml"
+MANIFEST_DEFAULT = REPO_ROOT / "src" / "problem" / "yl_problem_manifest.f90"
+# `declared_count` is a manifest-side check kind, not a map derive rule, so it is the one
+# MANIFEST_RULE_* constant with no counterpart in DERIVED_RULES.
+MANIFEST_ONLY = {"declared_count"}
+MANIFEST_RULE = re.compile(
+    r"^character\s*\(\s*len\s*=\s*\*\s*\)\s*,\s*parameter\s*,\s*public\s*::\s*"
+    r"MANIFEST_RULE_([A-Z0-9_]+)\s*=\s*'([a-z0-9_]+)'$", re.I)
+RULES_DEFAULT = REPO_ROOT / "src" / "runtime" / "yl_runtime_rules.f90"
+RUNTIME_OWNER = "RuntimeState."
+RUNTIME_CHECKPOINT = "model_ready"
+BUILD_RULE_ARITY = 11       # build_rule_t(rule_id, kind, condition, object_path, field,
+BUILD_RULE_KIND = 1         #              code, map_id, manifest_kind, manifest_rule,
+BUILD_RULE_MAP_ID = 6       #              reach, expires_when)
+BUILD_INPUT_ARITY = 2       # build_rule_input_t(rule_id, input_map_id)
+TABLE_DECL = re.compile(r"^type\s*\(\s*([A-Za-z_]\w*)\s*\)\s*,\s*parameter\s*"
+                        r"(?:,\s*public\s*)?::\s*([A-Za-z_]\w*)\s*\(\s*\*\s*\)\s*=\s*"
+                        r"\[(.*)\]$", re.I)
+CTOR = re.compile(r"^([A-Za-z_]\w*)\s*\((.*)\)$", re.S)
+
+MANIFEST_MENTION = re.compile(r"MANIFEST_RULE_([A-Z0-9_]+)", re.I)
+KNOWN_RULE_BEGIN = re.compile(r"\bfunction\s+known_rule\b", re.I)
+KNOWN_RULE_END = re.compile(r"^end\s+function\s+known_rule\b", re.I)
+
 # The gate reads exactly the two ProblemState type modules, never all of src/problem.
 SRC_DEFAULT = [REPO_ROOT / "src" / "problem" / "yl_problem_optional.f90",
                REPO_ROOT / "src" / "problem" / "yl_problem_types.f90"]
@@ -327,6 +368,10 @@ class Parser:
         self.wrappers: dict = {}    # opt_* type name -> its body statements (unparsed)
         self.problems: list = []
         self.warnings: list = []
+        self.manifest: dict | None = None
+        self.manifest_known: set = set()
+        self.produced: list | None = None   # (rule_id, produced map id) per BR_DERIVE row
+        self.edges: list = []               # (rule_id, input map id)
 
     def fail(self, msg: str, scope=None):
         """Everything in scope is reported. `scope` is vestigial and ignored: the gate is
@@ -391,6 +436,143 @@ class Parser:
         if buf:
             self.fail(f"{name}:{start}: continuation `&` never terminates (rule 2)",
                       ("file", name))
+
+    # --- shared Fortran parameter-table machinery (rules 14, 15, 16) --------------------
+    def read_statements(self, path: Path, rule: str) -> list:
+        """Continuation-joined statements of one auxiliary Fortran file. Auxiliary inputs
+        (the manifest module, the runtime rule table) are read for their `parameter` tables
+        only; the ProblemState declaration rules never apply to them."""
+        if not path.is_file():
+            self.fail(f"{path}: no such file ({rule})")
+            return []
+        return [(no, stmt) for no, stmt, _ in
+                self.statements(path.name, split_lines(path.read_bytes()))]
+
+    def table_rows(self, stmt: str, where: str, ctor: str, arity: int, rule: str) -> list:
+        """The elements of a `type(T), parameter :: NAME(*) = [ ... ]` array constructor,
+        each split into its positional arguments. Closed: an element that is not
+        `<ctor>(...)` with exactly `arity` arguments is a FAIL, never a skip."""
+        m = TABLE_DECL.match(stmt)
+        if not m:
+            self.fail(f"{where}: parameter table is outside the closed grammar "
+                      f"`type(T), parameter[, public] :: NAME(*) = [ ... ]` ({rule})")
+            return []
+        out = []
+        for i, elem in enumerate(split_top(m.group(3)), 1):
+            elem = elem.strip()
+            if not elem:
+                continue
+            c = CTOR.match(elem)
+            if not c or c.group(1).lower() != ctor:
+                self.fail(f"{where}: {m.group(2)} element {i} is not a `{ctor}(...)` "
+                          f"constructor: {elem[:60]!r} ({rule})")
+                continue
+            args = [a.strip() for a in split_top(c.group(2))]
+            if len(args) != arity:
+                self.fail(f"{where}: {m.group(2)} element {i} has {len(args)} arguments, "
+                          f"expected {arity} ({rule})")
+                continue
+            out.append((i, args))
+        return out
+
+    @staticmethod
+    def literal(arg: str):
+        """The text of a Fortran character literal, or None when the argument is not one."""
+        a = arg.strip()
+        return a[1:-1] if len(a) >= 2 and a[0] == a[-1] and a[0] in "'\"" else None
+
+    def parse_manifest(self, path: Path):
+        """Parse the MANIFEST_RULE_* parameter constants, closed-grammar. This file is NOT
+        in the ProblemState source scope -- it is an explicit extra input -- and only its
+        rule constants are read, never its types or procedures."""
+        self.manifest, self.manifest_known = {}, set()
+        stmts = self.read_statements(path, "rule 14")
+        if stmts:
+            self.manifest_statements(path.name, stmts)
+
+    def parse_manifest_text(self, name: str, text: str):
+        self.manifest, self.manifest_known = {}, set()
+        self.manifest_statements(name, [(no, st) for no, st, _ in
+                                        self.statements(name, text.split("\n"))])
+
+    def manifest_statements(self, name: str, stmts: list):
+        in_known = False
+        for no, stmt in stmts:
+            if KNOWN_RULE_END.match(stmt):
+                in_known = False
+            elif KNOWN_RULE_BEGIN.search(stmt):
+                in_known = True
+            if in_known:
+                self.manifest_known |= {m.lower() for m in MANIFEST_MENTION.findall(stmt)}
+                continue
+            if not MANIFEST_MENTION.search(stmt) or not re.search(r"\bparameter\b", stmt, re.I):
+                continue
+            m = MANIFEST_RULE.match(stmt)
+            if not m:
+                self.fail(f"{name}:{no}: MANIFEST_RULE_* declaration is outside the closed "
+                          f"grammar `character(len=*), parameter, public :: "
+                          f"MANIFEST_RULE_<NAME> = '<value>'`: {stmt!r} (rule 14)")
+                continue
+            const, value = m.group(1).lower(), m.group(2)
+            if const in self.manifest:
+                self.fail(f"{name}:{no}: MANIFEST_RULE_{const.upper()} declared twice "
+                          f"(rule 14)")
+            if const != value:
+                self.fail(f"{name}:{no}: MANIFEST_RULE_{const.upper()} carries the value "
+                          f"{value!r}; the constant name and its value must agree (rule 14)")
+            self.manifest[const] = value
+
+    def parse_rules(self, path: Path):
+        self.produced, self.edges = None, []
+        stmts = self.read_statements(path, "rule 15")
+        if stmts:
+            self.rules_statements(path.name, stmts)
+
+    def parse_rules_text(self, name: str, text: str):
+        self.rules_statements(name, [(no, st) for no, st, _ in
+                                     self.statements(name, text.split("\n"))])
+
+    def rules_statements(self, name: str, stmts: list):
+        """BUILD_RULES gives the map id each BR_DERIVE row produces; BUILD_RULE_INPUTS
+        gives the (rule_id, input_map_id) edges. Only those two tables are read."""
+        self.produced, self.edges = [], []
+        seen = set()
+        for no, stmt in stmts:
+            m = TABLE_DECL.match(stmt)
+            if not m:
+                continue
+            table = m.group(2).upper()
+            where = f"{name}:{no}"
+            if table == "BUILD_RULES":
+                seen.add(table)
+                for i, args in self.table_rows(stmt, where, "build_rule_t",
+                                               BUILD_RULE_ARITY, "rule 15"):
+                    if args[BUILD_RULE_KIND].upper() != "BR_DERIVE":
+                        continue
+                    mid = self.literal(args[BUILD_RULE_MAP_ID])
+                    if mid is None:
+                        self.fail(f"{where}: BUILD_RULES element {i} ({args[0]}) has a "
+                                  f"non-literal map_id {args[BUILD_RULE_MAP_ID]!r} "
+                                  f"(rule 15)")
+                        continue
+                    if not mid:
+                        self.fail(f"{where}: BUILD_RULES element {i} ({args[0]}) is "
+                                  f"BR_DERIVE with an empty map_id (rule 15)")
+                        continue
+                    self.produced.append((self.literal(args[0]) or args[0], mid))
+            elif table == "BUILD_RULE_INPUTS":
+                seen.add(table)
+                for i, args in self.table_rows(stmt, where, "build_rule_input_t",
+                                               BUILD_INPUT_ARITY, "rule 16"):
+                    rid, mid = self.literal(args[0]), self.literal(args[1])
+                    if rid is None or mid is None:
+                        self.fail(f"{where}: BUILD_RULE_INPUTS element {i} is not a pair of "
+                                  f"character literals (rule 16)")
+                        continue
+                    self.edges.append((rid, mid))
+        for table, rule in (("BUILD_RULES", "rule 15"), ("BUILD_RULE_INPUTS", "rule 16")):
+            if table not in seen:
+                self.fail(f"{name}: no `{table}` parameter table found ({rule})")
 
     def parse_text(self, name: str, lines: list):
         cur: TypeDef | None = None
@@ -722,6 +904,7 @@ class Checker:
             self.rule7()
             self.rule8_9()
             self.rule13()
+        self.rule14()
         return self.problems
 
     # rule 1
@@ -958,6 +1141,42 @@ class Checker:
             self.fail(f"{c.where}: `{self.show(key)}` is declared `{self.decl_of(c)}` but is marked "
                       f"required; the optionality wrapper is stale (rule 9)")
 
+    # rule 14
+    def rule14(self):
+        """One vocabulary, three restatements: the map header as prose, DERIVED_RULES in
+        tools/yl_state_map.py, and the MANIFEST_RULE_* constants in the Fortran manifest.
+        DERIVED_RULES is IMPORTED here, never restated, so this compares the two real
+        enforcement points. It converts a divergence from a manifest entry silently refused
+        at run time -- `known_rule` is a closed select case -- into a check-time failure
+        that names both sides."""
+        if self.p.manifest is None:
+            return
+        fortran = set(self.p.manifest.values()) - MANIFEST_ONLY
+        missing = sorted(DERIVED_RULES - fortran)
+        extra = sorted(fortran - DERIVED_RULES)
+        if missing:
+            self.fail(f"derive-rule vocabulary: {', '.join(missing)} "
+                      f"{'is' if len(missing) == 1 else 'are'} in the map vocabulary "
+                      f"(DERIVED_RULES) but ha{'s' if len(missing) == 1 else 've'} no "
+                      f"MANIFEST_RULE_* constant; `known_rule` would refuse the first "
+                      f"manifest entry using {'it' if len(missing) == 1 else 'them'} "
+                      f"(rule 14)")
+        if extra:
+            self.fail(f"derive-rule vocabulary: {', '.join(extra)} "
+                      f"{'has' if len(extra) == 1 else 'have'} a MANIFEST_RULE_* constant "
+                      f"but {'is' if len(extra) == 1 else 'are'} not in the map vocabulary "
+                      f"(DERIVED_RULES); the map would reject "
+                      f"`derived:{extra[0]}` (rule 14)")
+        # `known_rule` is where the vocabulary is actually enforced at run time, so a
+        # constant it does not list is as dead as one that was never declared.
+        unlisted = sorted(set(self.p.manifest) - self.p.manifest_known)
+        if unlisted and self.p.manifest_known:
+            self.fail(f"derive-rule vocabulary: MANIFEST_RULE_"
+                      f"{', MANIFEST_RULE_'.join(u.upper() for u in unlisted)} "
+                      f"{'is' if len(unlisted) == 1 else 'are'} declared but not listed in "
+                      f"`known_rule`, which would refuse "
+                      f"{'it' if len(unlisted) == 1 else 'them'} at run time (rule 14)")
+
     # rule 13
     def rule13(self):
         """The wrapper bodies are not put through the component grammar, so check their
@@ -1016,7 +1235,8 @@ class Checker:
         return (f"PASS: {len(self.rows)} exported ProblemState fields, "
                 f"{len(self.fields)} type fields ({opt} optional, {m5} M5-only), "
                 f"{len(self.reachable)} types, "
-                f"deny list {len(self.deny)}/{self.deny_raw} legacy slot names")
+                f"deny list {len(self.deny)}/{self.deny_raw} legacy slot names, "
+                f"{len(self.p.manifest or ())} derive-rule constants")
 
 
 def report(ck: Checker) -> int:
@@ -1041,6 +1261,7 @@ def load_all(a) -> Checker | None:
     p = Parser()
     try:
         p.parse_paths(src)
+        p.parse_manifest(Path(a.manifest))
     except OSError as e:
         print(f"FAIL: 1 problems\n  {'; '.join(src)}: {e}")
         return None
@@ -1263,6 +1484,28 @@ module yl_problem_optional
 end module yl_problem_optional
 """
 
+GOOD_MANIFEST = """\
+module yl_problem_manifest
+  implicit none
+  private
+""" + "".join(
+    "  character(len=*), parameter, public :: MANIFEST_RULE_%s = '%s'\n" % (r.upper(), r)
+    for r in sorted(DERIVED_RULES | MANIFEST_ONLY)) + """\
+contains
+  pure function known_rule(rule) result(ok)
+    character(len=*), intent(in) :: rule
+    logical :: ok
+    select case (trim(rule))
+""" + "    case (" + ", &\n          ".join(
+    "MANIFEST_RULE_" + r.upper() for r in sorted(DERIVED_RULES | MANIFEST_ONLY)) + """)
+      ok = .true.
+    case default
+      ok = .false.
+    end select
+  end function known_rule
+end module yl_problem_manifest
+"""
+
 SUPPORT_MODULE = """\
 module yl_problem_profile
   use iso_fortran_env, only: int32
@@ -1297,7 +1540,8 @@ end program yl_problem_selftest
 """
 
 
-def build(types: str = GOOD_TYPES, doc: dict | None = None, extra: dict | None = None) -> Checker:
+def build(types: str = GOOD_TYPES, doc: dict | None = None,
+          extra: dict | None = None, manifest: str | None = None) -> Checker:
     """Always parses the wrapper module alongside the types module, which is the real
     src/problem layout: registering `opt_*` in the type table must not turn an `opt_*`
     component into a nested type (the two-module regression)."""
@@ -1306,6 +1550,8 @@ def build(types: str = GOOD_TYPES, doc: dict | None = None, extra: dict | None =
              "yl_problem_selftest.f90": GOOD_PROGRAM}
     files.update(extra or {})
     p.parse_texts(files)
+    p.parse_manifest_text("yl_problem_manifest.f90",
+                          GOOD_MANIFEST if manifest is None else manifest)
     ck = Checker(doc if doc is not None else good_map(), p)
     ck.run()
     return ck
@@ -1414,6 +1660,40 @@ def self_cases() -> list:
     def unresolved_type():
         return build(sub("    type(case_t) :: case\n", "    type(missing_t) :: case\n"))
 
+    def kind_missing_from_fortran():
+        """A kind added to the map vocabulary but not to the Fortran constants: the
+        divergence M3-03 would otherwise have hit as a silently refused manifest entry."""
+        drop = sorted(DERIVED_RULES)[0]
+        m = GOOD_MANIFEST.replace(
+            "  character(len=*), parameter, public :: MANIFEST_RULE_%s = '%s'\n"
+            % (drop.upper(), drop), "")
+        m = m.replace("MANIFEST_RULE_%s, &\n          " % drop.upper(), "")
+        return build(manifest=m)
+
+    def kind_missing_from_map():
+        """The reverse: a Fortran constant with no counterpart in DERIVED_RULES."""
+        return build(manifest=GOOD_MANIFEST.replace(
+            "contains",
+            "  character(len=*), parameter, public :: MANIFEST_RULE_INVENTED = 'invented'\n"
+            "contains", 1).replace(
+            "    case (", "    case (MANIFEST_RULE_INVENTED, ", 1))
+
+    def kind_not_in_known_rule():
+        """Declared but absent from the closed select case, so refused at run time."""
+        keep = sorted(DERIVED_RULES)[-1]
+        return build(manifest=GOOD_MANIFEST.replace(
+            "MANIFEST_RULE_%s, &\n          " % keep.upper(), "").replace(
+            ", &\n          MANIFEST_RULE_%s)" % keep.upper(), ")"))
+
+    def manifest_grammar():
+        return build(manifest=GOOD_MANIFEST.replace(
+            "character(len=*), parameter, public :: MANIFEST_RULE_COUNT = 'count'",
+            "character(len=8), parameter :: MANIFEST_RULE_COUNT = 'count'"))
+
+    def manifest_name_value():
+        return build(manifest=GOOD_MANIFEST.replace(
+            "MANIFEST_RULE_GEOMETRY = 'geometry'", "MANIFEST_RULE_GEOMETRY = 'geometrie'"))
+
     def root_in_program():
         """The root hidden in a program unit: it can never be reached from the map."""
         return build(GOOD_TYPES.replace("problem_state_t", "root_t"),
@@ -1495,6 +1775,12 @@ def self_cases() -> list:
         ("rule 2  explicit bounds",    "explicit or assumed-size bounds",    explicit_bounds),
         ("rule 2  fixed-length char",  "only `character(len=:)`",            fixed_char),
         ("rule 2  unknown prologue",   "unrecognised module statement",      prologue),
+        ("rule 14 kind not in Fortran", "has no MANIFEST_RULE_* constant",
+                                                                       kind_missing_from_fortran),
+        ("rule 14 kind not in map",    "not in the map vocabulary",     kind_missing_from_map),
+        ("rule 14 not in known_rule",  "not listed in `known_rule`",    kind_not_in_known_rule),
+        ("rule 14 closed grammar",     "outside the closed grammar",    manifest_grammar),
+        ("rule 14 name vs value",      "name and its value must agree", manifest_name_value),
         ("rule 2  root in program",    "inside a program unit",              root_in_program),
         ("rule 3  member in program",  "uses undeclared type `case_t`",      member_in_program),
         ("rule 3  missing root",       "root type `problem_state_t`",        missing_root),
@@ -1741,6 +2027,9 @@ def main(argv=None) -> int:
         p.add_argument("--src", action="append", default=None,
                        help="a ProblemState type module or a directory of them; repeatable. "
                             "Default: " + ", ".join(q.name for q in SRC_DEFAULT))
+        p.add_argument("--manifest", default=str(MANIFEST_DEFAULT),
+                       help="Fortran module holding the MANIFEST_RULE_* constants "
+                            "(rule 14); an explicit extra input, not part of --src")
         if name == "check":
             p.add_argument("--doc", default=None,
                            help="also require this file to equal `render` output (rule 12)")

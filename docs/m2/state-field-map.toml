@@ -6,7 +6,17 @@
 #          RuntimeState ids start with `runtime.`, derived counts/maps with `derived.`, non-migrated switches with `control.` / `output.`.
 # legacy_symbol rule: <module>.<variable>[%component...] as declared in legacy/yl (module global_var / materials / prescribed /
 #          applied_load / temperature / solver / meshfine); `element%...` components are declared in module elements (Elements.f90).
-# source rule: exact reader ids from docs/m1/reader-inventory.toml, or exactly one `derived:<count|index_map|renumber|legacy_default|dof_expand>`.
+# source rule: exact reader ids from docs/m1/reader-inventory.toml, or exactly one
+#          `derived:<count|index_map|renumber|legacy_default|dof_expand|geometry>`. The derive-rule kinds, which say what the
+#          build stage must DO to produce the value (the closed set is enforced by tools/yl_state_map.py, DERIVED_RULES):
+#            count          -- the cardinality of a contract collection (npoin = count(mesh.nodes)).
+#            index_map      -- a lookup from a contract name or id to the legacy positional index it occupies.
+#            renumber       -- a new dense numbering assigned by walking the legacy order (totveq/iseq).
+#            legacy_default -- a constant LOOKED UP, not computed: a value the legacy path fixes for this profile and the
+#                              ADR-0003 contract does not author (a PROFILE control int, an unused switch, a zeroed buffer).
+#            dof_expand     -- a per-node or per-element quantity expanded over the dofs of the formulation.
+#            geometry       -- COMPUTED from the mesh geometry and the formulation's quadrature rule, not looked up: the
+#                              build stage must evaluate shape functions / the Jacobian at the Gauss points to obtain it.
 # checkpoint.site / anchor: the statement BEFORE which the snapshot is taken; anchor = yl_io_inventory.anchor_hash(full_statement(site)).
 # Same legacy symbol at two checkpoints is two rows (e.g. tcurves%dfact, fixed).
 # owner rule: one owner path per row. `derived` and `not_migrated` are buckets and repeat; every other owner is a real object
@@ -3871,7 +3881,7 @@ note = "allocated together with patch_sta/patch_load only under stabpw==1 and a 
 id = "runtime.gauss.djacb"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.element%egaus%djacb"
-source = ["derived:legacy_default"]
+source = ["derived:geometry"]
 derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
 consumers = ["STIFF_U", "gravity", "RESIDU_F"]
 shape = ["ngaus", "nelem"]
@@ -3889,7 +3899,7 @@ note = "egaus(1) only (ikg=1 'stiff' rule, 4 points; Elements.f90:379-380). Stor
 id = "runtime.gauss.gpcod"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.element%egaus%gpcod"
-source = ["derived:legacy_default"]
+source = ["derived:geometry"]
 derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
 consumers = ["gravity", "OUT_GID_WRITE"]
 shape = ["ndimn", "ngaus", "nelem"]
@@ -3907,7 +3917,7 @@ note = "egaus(1) only (ikg=1 'stiff' rule, 4 points). Gauss-point coordinates (E
 id = "runtime.gauss.cartd"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.element%egaus%cartd"
-source = ["derived:legacy_default"]
+source = ["derived:geometry"]
 derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
 consumers = ["STIFF_U", "RESIDU_F"]
 shape = ["ndimn", "nnode", "ngaus", "nelem"]
@@ -3925,7 +3935,7 @@ note = "egaus(1) only: cartd is allocated only for rules whose name is not 'mass
 id = "runtime.gauss.djacb_mass"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.element%egaus%djacb"
-source = ["derived:legacy_default"]
+source = ["derived:geometry"]
 derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
 consumers = ["read_element"]
 shape = ["ngaus_mass", "nelem"]
@@ -3943,7 +3953,7 @@ note = "Weighted determinant djacb*weigp of the ikg=2 rule (Elements.f90:1363). 
 id = "runtime.gauss.gpcod_mass"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.element%egaus%gpcod"
-source = ["derived:legacy_default"]
+source = ["derived:geometry"]
 derived_from = ["mesh.nodes.xyz", "mesh.elements.nodes", "sections.element_kind"]
 consumers = ["read_element"]
 shape = ["ndimn", "ngaus_mass", "nelem"]

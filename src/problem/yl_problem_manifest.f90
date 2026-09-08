@@ -21,9 +21,12 @@
 !   In scope for M3-02 there are ten rule-derived rows (seven index_map, two
 !   count, one legacy_default) plus the eight checkable declared-count
 !   comparisons of analysis-claude.md section 4b. M3-03 adds roughly forty-five
-!   more rows, including the dof_expand and renumber rule kinds. Those are
-!   already in the accepted rule vocabulary below, so M3-03 adds entries, not a
-!   new record format.
+!   more rows, including the dof_expand, renumber and geometry rule kinds. All
+!   three are in the accepted rule vocabulary below, so M3-03 adds entries, not
+!   a new record format. The vocabulary is not open, though: it must track the
+!   derive-rule set of docs/m2/state-field-map.toml, which is six kinds today
+!   and grew by one (geometry) during M3-03. See the comment on the
+!   MANIFEST_RULE_* constants for the three places that set is restated.
 !
 ! In memory first, file second (Q2)
 !   The accumulator is a plain in-memory container and the writer is a separate,
@@ -100,16 +103,42 @@ module yl_problem_manifest
   character(len=*), parameter, public :: MANIFEST_KIND_DEFAULT = 'default'
   character(len=*), parameter, public :: MANIFEST_KIND_CHECK = 'check'
 
-  ! Rule vocabulary. The first three are the M3-02 rules; dof_expand and
-  ! renumber are the two M3-03 rule kinds of docs/m2/state-field-map.toml and
-  ! are accepted now so that M3-03 needs no format or vocabulary change.
-  ! declared_count is the deck-count agreement check (V21, plan section
-  ! "规则集"), whose passing verdict must stay visible in the evidence.
+  ! Rule vocabulary.
+  !
+  ! The first six MUST be exactly the derive-rule kinds of the `source =
+  ! ["derived:<kind>"]` column of docs/m2/state-field-map.toml. That set is
+  ! closed and it is currently SIX: index_map, count, legacy_default,
+  ! dof_expand, renumber, geometry. Three of them are exercised by M3-02
+  ! (index_map, count, legacy_default); dof_expand and renumber arrive with the
+  ! M3-03 RuntimeState rows; geometry was added during M3-03 for the three
+  ! Gauss-point rows (runtime.gauss.djacb / gpcod / cartd), which had been
+  ! misclassified as legacy_default although they are the weighted Jacobian,
+  ! the Gauss-point coordinates and the Cartesian shape-function derivatives,
+  ! COMPUTED per element from the mesh geometry and the quadrature rule rather
+  ! than looked up.
+  !
+  ! declared_count is the seventh and is NOT a map kind: it is the deck-count
+  ! agreement check of V21 (plan section "规则集"), whose passing verdict must
+  ! stay visible in the evidence.
+  !
+  ! Keeping the set closed is the point -- an unknown rule is rejected, so a
+  ! typo cannot enter the evidence as a new rule kind. The cost is that the
+  ! vocabulary is now restated in three places, and all three must be updated
+  ! together when a kind is added:
+  !   1. docs/m2/state-field-map.toml   -- the prose header, which defines it;
+  !   2. tools/yl_state_map.py          -- DERIVED_RULES, enforcement on the map side;
+  !   3. this list and known_rule below -- enforcement on the Fortran side.
+  ! The proposal on the table is to have tools/yl_problem_check.py, which
+  ! already cross-checks the map against the Fortran types fail-closed, also
+  ! compare DERIVED_RULES against the MANIFEST_RULE_* constants parsed out of
+  ! this file. That turns a divergence into a build failure instead of a
+  ! manifest entry silently refused at run time.
   character(len=*), parameter, public :: MANIFEST_RULE_INDEX_MAP = 'index_map'
   character(len=*), parameter, public :: MANIFEST_RULE_COUNT = 'count'
   character(len=*), parameter, public :: MANIFEST_RULE_LEGACY_DEFAULT = 'legacy_default'
   character(len=*), parameter, public :: MANIFEST_RULE_DOF_EXPAND = 'dof_expand'
   character(len=*), parameter, public :: MANIFEST_RULE_RENUMBER = 'renumber'
+  character(len=*), parameter, public :: MANIFEST_RULE_GEOMETRY = 'geometry'
   character(len=*), parameter, public :: MANIFEST_RULE_DECLARED_COUNT = 'declared_count'
 
   ! Verdicts of a declared_count entry.
@@ -483,8 +512,12 @@ contains
     character(len=*), intent(in) :: rule
     logical :: ok
     select case (trim(rule))
+    ! The six map kinds plus declared_count. Adding a kind here means adding it
+    ! to docs/m2/state-field-map.toml and to DERIVED_RULES in
+    ! tools/yl_state_map.py in the same change.
     case (MANIFEST_RULE_INDEX_MAP, MANIFEST_RULE_COUNT, MANIFEST_RULE_LEGACY_DEFAULT, &
-          MANIFEST_RULE_DOF_EXPAND, MANIFEST_RULE_RENUMBER, MANIFEST_RULE_DECLARED_COUNT)
+          MANIFEST_RULE_DOF_EXPAND, MANIFEST_RULE_RENUMBER, MANIFEST_RULE_GEOMETRY, &
+          MANIFEST_RULE_DECLARED_COUNT)
       ok = .true.
     case default
       ok = .false.

@@ -38,8 +38,8 @@ Check rules (numbered as in .ccg/tasks/m2-01-state-field-map/analysis-schema.md 
      derived, control, output}
    5 field.checkpoint names a covered checkpoint
    6 source: reader ids exist in the inventory, are not reached_only and have executed_by;
-     a single derived:<rule> (count|index_map|renumber|legacy_default|dof_expand) needs a
-     non-empty, resolvable derived_from
+     a single derived:<rule> (count|index_map|renumber|legacy_default|dof_expand|geometry)
+     needs a non-empty, resolvable derived_from
    7 reverse coverage: every executed reader whose state_target is not a skip class
      (title_skip, empty_section, unused_switch) is referenced by >= 1 field source;
      warning only: each per-field ProblemState target of such a reader has an owner prefix
@@ -132,7 +132,12 @@ FIELD_TOP = re.compile(r"^(case|mesh|materials|sections|amplitudes|interactions|
 # plan regex plus an optional `[]` after the first segment (schema examples use materials[].E)
 OWNER = re.compile(r"^(ProblemState\.(case|mesh|materials|sections|amplitudes|interactions|steps\[\d+\]|solver)(\[\])?(\.|$)|RuntimeState(\.|$)|derived$|not_migrated$)")
 SITE = re.compile(r"^([A-Za-z_0-9.]+\.[fF]90):(\d+)$")
-DERIVED_RULES = {"count", "index_map", "renumber", "legacy_default", "dof_expand"}
+# Derive-rule vocabulary (closed). Single definition: the map header of docs/m2/state-field-map.toml
+# documents these kinds in prose, and this set is what enforces them.
+#   count | index_map | renumber | legacy_default | dof_expand -- see the map header.
+#   geometry -- computed from the mesh geometry and the formulation's quadrature rule, not looked up
+#               (the Gauss-point Jacobian, coordinates and Cartesian shape-function derivatives).
+DERIVED_RULES = {"count", "index_map", "renumber", "legacy_default", "dof_expand", "geometry"}
 DTYPES = {"i32", "i64", "f64", "str", "bool"}
 UNITS = {"1", "id", "m", "N", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K"}
 DETERMINISM = {"deterministic", "uninitialized", "pointer", "order_dependent"}
@@ -1601,7 +1606,8 @@ def self_cases() -> list[tuple[str, str, callable]]:
             ("order not increasing", "strictly increasing", order), ("checkpoint id vocab", "id not in vocabulary", bad_cp_id),
             ("non-deterministic with exact", "requires compare ignore or hash", nondet),
             ("determinism vocab", "determinism 'random'", det_vocab),
-            ("derived_from unresolved", "is not a field id", derived_missing), ("derived rule vocab", "derived rule", derived_rule),
+            ("derived_from unresolved", "is not a field id", derived_missing), ("derived rule vocab", "derived rule 'magic' not in ['count', 'dof_expand', 'geometry', "
+             "'index_map', 'legacy_default', 'renumber']", derived_rule),
             ("version", "version must be 1", version), ("float_format missing", "float_format", fmt),
             ("first_consumer unknown", "first_consumer", first_consumer),
             ("non-ignore pointer determinism", "not allowed on a non-ignore row", nonignore_unobservable),
@@ -1638,9 +1644,15 @@ def self_good_cases() -> list[tuple[str, callable]]:
         f.update(id="mesh.nodes.xyz_scratch", emit="none", determinism="uninitialized",
                  compare={"rule": "ignore", "reason": "scratch copy, never initialized"})
         d["field"].append(f)
+    def derived_geometry(d):
+        # runtime.gauss.gpcod: Gauss-point coordinates are computed from the node coordinates and the
+        # quadrature rule, so derived:geometry must be accepted like any other derive rule.
+        d["field"][4]["source"] = ["derived:geometry"]
+        d["field"][4]["derived_from"] = ["mesh.nodes.xyz", "mesh.elements.nodes"]
     def legacy_only_true(d): d["field"][0]["legacy_only"] = True
     def legacy_only_false_on_bucket(d): d["field"][6]["legacy_only"] = False
-    return [("owner path reused at another checkpoint", owner_across_checkpoints),
+    return [("derived:geometry source", derived_geometry),
+            ("owner path reused at another checkpoint", owner_across_checkpoints),
             ("owner path shared with an ignore row", owner_shared_with_ignore),
             ("legacy_only true on a ProblemState row", legacy_only_true),
             ("legacy_only false on a bucket owner", legacy_only_false_on_bucket)]
@@ -1754,6 +1766,186 @@ def selftest_gen(base: Checker, src: SourceTree) -> int:
     return n_ok
 
 
+# --- runtime rule table cross-check (M3-03) -----------------------------------------------
+#
+# The build-rule table of src/runtime/yl_runtime_rules.f90 and the model_ready
+# `RuntimeState.*` rows of this map must be the SAME set. Half of that is checkable in
+# Fortran and the self-test asserts it there: every rule row it produces exists, and no
+# two rows claim the same map row. The other half is not -- Fortran cannot read a .toml --
+# so the self-test EXPORTS its table and this command asserts the backward direction
+# against the map: every model_ready RuntimeState row has exactly one producing rule.
+#
+# Why an export and not a second copy of the table in Python: the table then exists
+# exactly ONCE in the repository. A Python transcription would be a second source of
+# truth and would go stale in the same way the M3-02 count written into a document did.
+#
+# Input is the self-test's stdout (build/runtime/<profile>/yl_runtime_selftest), read from
+# a file or from stdin:
+#
+#   build/runtime/release/yl_runtime_selftest | python3 tools/yl_state_map.py runtime-rules
+#
+# Export grammar, produced by build_rule_row_text plus the self-test's prefixes:
+#   RULES|tag=<tag>|rows=<n>|produced=<n>|falsifiable=<n>
+#   RULE|<tag>|<key>|<kind>|<object_path>|<field>|<code>|<map_id>|<manifest_kind>
+#        |<manifest_rule>|<reach>|<expires_when>|<input_map_id>,...
+RULE_COLUMNS = ("tag", "key", "kind", "object_path", "field", "code", "map_id",
+                "manifest_kind", "manifest_rule", "reach", "expires_when", "inputs")
+
+
+def parse_rule_export(text: str) -> tuple[dict, list[dict], list[str]]:
+    """(header, rows, problems). Never raises: a malformed export is a FAIL, not a crash."""
+    problems: list[str] = []
+    header: dict = {}
+    rows: list[dict] = []
+    headers_seen = 0
+    for lineno, line in enumerate(text.splitlines(), 1):
+        line = line.rstrip("\n")
+        if line.startswith("RULES|"):
+            headers_seen += 1
+            for piece in line.split("|")[1:]:
+                k, _, v = piece.partition("=")
+                header[k.strip()] = v.strip()
+            continue
+        if not line.startswith("RULE|"):
+            continue
+        parts = line.split("|")[1:]
+        if len(parts) != len(RULE_COLUMNS):
+            problems.append(f"export line {lineno}: {len(parts)} columns, expected "
+                            f"{len(RULE_COLUMNS)} ({'|'.join(RULE_COLUMNS)})")
+            continue
+        rows.append(dict(zip(RULE_COLUMNS, parts)))
+    if headers_seen != 1:
+        problems.append(f"expected exactly one RULES| header line, found {headers_seen}")
+    if not rows:
+        problems.append("the export carries no RULE| lines; did the self-test run?")
+    return header, rows, problems
+
+
+def check_runtime_rules(doc: dict, header: dict, rows: list[dict]) -> list[str]:
+    problems: list[str] = []
+
+    # The map side: the rows this build must produce, taken from the map and never
+    # written down here.
+    want = {f["id"]: f for f in doc.get("field", [])
+            if str(f.get("owner", "")).startswith("RuntimeState.")
+            and f.get("checkpoint") == "model_ready"}
+
+    # R1 the header's own counts describe the block that follows it. A truncated export
+    # would otherwise pass every set comparison below by simply containing less.
+    def as_int(key: str) -> int | None:
+        try:
+            return int(header.get(key, ""))
+        except ValueError:
+            problems.append(f"RULES| header has no usable {key}=")
+            return None
+
+    n_rows = as_int("rows")
+    if n_rows is not None and n_rows != len(rows):
+        problems.append(f"RULES| header says rows={n_rows} but {len(rows)} RULE| lines follow")
+
+    produced = [r for r in rows if r["kind"] == "derive"]
+    n_produced = as_int("produced")
+    if n_produced is not None and n_produced != len(produced):
+        problems.append(f"RULES| header says produced={n_produced} but {len(produced)} rows "
+                        f"have kind=derive")
+    n_fals = as_int("falsifiable")
+    n_fals_seen = sum(1 for r in rows if r["kind"] in ("check", "derive"))
+    if n_fals is not None and n_fals != n_fals_seen:
+        problems.append(f"RULES| header says falsifiable={n_fals} but {n_fals_seen} rows are "
+                        f"check or derive")
+
+    # R2 one table, one version.
+    tag = header.get("tag", "")
+    for r in rows:
+        if r["tag"] != tag:
+            problems.append(f"rule {r['key']} carries tag {r['tag']!r}, header says {tag!r}")
+
+    # R3 only derive rows claim a map row, and every one of them claims a real one.
+    for r in rows:
+        if r["kind"] == "derive":
+            if not r["map_id"]:
+                problems.append(f"derive rule {r['key']} claims no map row")
+            elif r["map_id"] not in want:
+                problems.append(f"derive rule {r['key']} claims map row {r['map_id']}, which is "
+                                f"not a model_ready RuntimeState row of the map")
+        elif r["map_id"]:
+            problems.append(f"{r['kind']} rule {r['key']} claims map row {r['map_id']}; only a "
+                            f"derive row may produce one")
+
+    # R4 injective: two rules producing one map row means one of them is unreachable
+    # evidence, and the ledger would silently keep only the last.
+    seen: dict[str, str] = {}
+    for r in produced:
+        if r["map_id"] in seen:
+            problems.append(f"map row {r['map_id']} is claimed by both {seen[r['map_id']]} and "
+                            f"{r['key']}")
+        else:
+            seen[r["map_id"]] = r["key"]
+
+    # R5 THE BACKWARD HALF -- the reason this command exists. Fortran cannot enumerate the
+    # map, so a map row nothing produces is invisible to the self-test: build_runtime would
+    # simply never build it and every in-binary assertion would still pass.
+    for fid in want:
+        if fid not in seen:
+            problems.append(f"map row {fid} (model_ready, {want[fid]['owner']}) has no producing "
+                            f"rule in {tag}")
+
+    # R6 the derivation rule each side declares must agree. The map says
+    # `source = ["derived:<rule>"]`; the table says manifest_rule. A row whose map source
+    # is reader ids instead is a value COPIED through, and its manifest kind must say
+    # `check` rather than claim a derivation it did not perform.
+    for r in produced:
+        f = want.get(r["map_id"])
+        if f is None:
+            continue
+        src = [str(x) for x in f.get("source", [])]
+        derived = [x.split(":", 1)[1] for x in src if x.startswith("derived:")]
+        if derived:
+            if r["manifest_kind"] != "derived":
+                problems.append(f"{r['key']} produces {r['map_id']}, whose map source is "
+                                f"{src[0]!r}, but records it as manifest kind "
+                                f"{r['manifest_kind']!r}")
+            elif r["manifest_rule"] != derived[0]:
+                problems.append(f"{r['key']} produces {r['map_id']} with manifest rule "
+                                f"{r['manifest_rule']!r}; the map says {src[0]!r}")
+        else:
+            if r["manifest_kind"] != "check":
+                problems.append(f"{r['key']} produces {r['map_id']}, whose map source is a "
+                                f"reader list {src} and not a derivation, but records it as "
+                                f"manifest kind {r['manifest_kind']!r} instead of 'check'")
+    return problems
+
+
+def cmd_runtime_rules(a) -> int:
+    map_path = Path(a.map)
+    try:
+        doc = load_map(map_path)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"FAIL: 1 problems\n  {map_path}: {e}")
+        return 1
+    try:
+        text = Path(a.export).read_text(encoding="utf-8") if a.export else sys.stdin.read()
+    except OSError as e:
+        print(f"FAIL: 1 problems\n  {a.export}: {e}")
+        return 1
+
+    header, rows, problems = parse_rule_export(text)
+    if not problems:
+        problems = check_runtime_rules(doc, header, rows)
+    if problems:
+        print(f"FAIL: {len(problems)} problems")
+        for p in problems[:200]:
+            print("  " + p)
+        return 1
+    want = sum(1 for f in doc.get("field", [])
+               if str(f.get("owner", "")).startswith("RuntimeState.")
+               and f.get("checkpoint") == "model_ready")
+    print(f"PASS: {header.get('tag', '?')} {len(rows)} rules, "
+          f"{sum(1 for r in rows if r['kind'] == 'derive')} produce the "
+          f"{want} model_ready RuntimeState map rows (bijection, both directions)")
+    return 0
+
+
 def main(argv=None) -> int:
     if argv is None:
         argv = sys.argv[1:]
@@ -1761,6 +1953,11 @@ def main(argv=None) -> int:
         return selftest()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
+    rr = sub.add_parser("runtime-rules")
+    rr.add_argument("--map", default=str(MAP_DEFAULT))
+    rr.add_argument("--export", default=None,
+                    help="the runtime self-test's stdout; reads stdin when omitted")
+    rr.set_defaults(func=cmd_runtime_rules)
     for name, func in (("check", cmd_check), ("render", cmd_render), ("gen-fortran", cmd_gen_fortran)):
         p = sub.add_parser(name)
         p.add_argument("--map", default=str(MAP_DEFAULT))
