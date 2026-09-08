@@ -1,9 +1,9 @@
 {
   "manifest_version": 1,
-  "generated_at": "2026-09-08T04:56:02+00:00",
+  "generated_at": "2026-09-08T14:26:01+00:00",
   "root": "legacy",
   "file_count": 39,
-  "total_bytes": 55713299,
+  "total_bytes": 55713409,
   "excludes": [
     "BASELINE.md",
     "source-manifest.json"
@@ -13,8 +13,8 @@
     "source_commit": "5414e737484edf2f53efbfd2bafd3702ebbbb88a",
     "source_tree": "HSTAR/",
     "stub_origin": "/home/huijun/HSTAR_Next/_archive/src/gidpost_stub.c",
-    "modified_by": "M2-02",
-    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements), + M2-02 state-dump instrumentation on the static_2d path (Fem.f90: one use line and three guarded yl_state_dump calls at the M2-01 checkpoints); reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
+    "modified_by": "M1-fix-2026-09-08",
+    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements), + M2-02 state-dump instrumentation on the static_2d path (Fem.f90: one use line and three guarded yl_state_dump calls at the M2-01 checkpoints); + M1 fix 2026-09-08: Load.f90:231 (amplitude dfact_curve factors record, external_load_1) given iostat=/iomsg=/diag_check_read wrapping -- was executed-but-unwrapped, misclassified into the loadunit not_on_path group (see docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md); reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
   },
   "case_insensitive_collisions": [],
   "files": [
@@ -50,8 +50,8 @@
     },
     {
       "path": "yl/Load.f90",
-      "bytes": 69953,
-      "sha256": "6e6fce45a76548428f21ed1279f6d5cb0890f0ed8f67a83a8604a261fd0370eb"
+      "bytes": 70063,
+      "sha256": "db8dbe49211ab89e14169878097075c8fff5277dcd45ae42cd68ebb75713665e"
     },
     {
       "path": "yl/Material.f90",

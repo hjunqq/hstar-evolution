@@ -2153,14 +2153,33 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 note = "records: times then factors; (0,1),(1,1)"
 
 [[reader]]
+id = "LOA.external_load_1.curve_factors"
+site = "Load.f90:231"
+anchor = "86faf373346c"
+file = ".loa"
+unit_var = "loadunit"
+routine = "external_load_1"
+statement = "read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)tcurves(itcurve)%dfact_curve(1:ntime)"
+seq = 5
+fields = ["dfact_curve[1:ntime]:real:amplitudes[].factors"]
+format = "list_directed"
+guard = "type_curve/='SEISMIC' .and. type_curve/='ARCLENGTH' .and. type_curve/='EXTRAPOLATION' .and. type_curve/='HARMONIC' .and. type_curve/='WATERLEVEL'"
+phase = "startup"
+consumers = "dfact_time_curve"
+state_target = "amplitudes[]"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "M1-finding-2026-09-08: was folded into the loadunit not_on_path group by mistake; it executes on both golden decks (records: (0,1),(1,1), same record as curve_points' pair)"
+
+[[reader]]
 id = "LOA.external_load_1.title#2"
-site = "Load.f90:239"
+site = "Load.f90:240"
 anchor = "2db16215127e"
 file = ".loa"
 unit_var = "loadunit"
 routine = "external_load_1"
 statement = "read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text"
-seq = 5
+seq = 6
 fields = ["text:str"]
 format = "text_skip"
 guard = "always"
@@ -2173,13 +2192,13 @@ note = "point load title"
 
 [[reader]]
 id = "LOA.external_load_1.point_load_count"
-site = "Load.f90:241"
+site = "Load.f90:242"
 anchor = "12bd4ed35c6d"
 file = ".loa"
 unit_var = "loadunit"
 routine = "external_load_1"
 statement = "read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)nplgroup,kpload"
-seq = 6
+seq = 7
 fields = ["nplgroup:int", "kpload:int"]
 format = "list_directed"
 guard = "always"
@@ -2192,13 +2211,13 @@ note = "0 0 -> no cload"
 
 [[reader]]
 id = "LOA.external_load_1.title#3"
-site = "Load.f90:363"
+site = "Load.f90:364"
 anchor = "2db16215127e"
 file = ".loa"
 unit_var = "loadunit"
 routine = "external_load_1"
 statement = "read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text"
-seq = 7
+seq = 8
 fields = ["text:str"]
 format = "text_skip"
 guard = "always"
@@ -2211,13 +2230,13 @@ note = "edges title"
 
 [[reader]]
 id = "LOA.external_load_1.edge_count"
-site = "Load.f90:365"
+site = "Load.f90:366"
 anchor = "d16d4c198d23"
 file = ".loa"
 unit_var = "loadunit"
 routine = "external_load_1"
 statement = "read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)nedge"
-seq = 8
+seq = 9
 fields = ["nedge:int"]
 format = "list_directed"
 guard = "always"
@@ -2338,7 +2357,7 @@ note = "17*0. / 9*0. on the decks"
 
 [[reader]]
 id = "LOA.external_load_2.title#1"
-site = "Load.f90:749"
+site = "Load.f90:750"
 anchor = "2db16215127e"
 file = ".loa"
 unit_var = "loadunit"
@@ -2356,7 +2375,7 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
 id = "LOA.external_load_2.title#2"
-site = "Load.f90:751"
+site = "Load.f90:752"
 anchor = "2db16215127e"
 file = ".loa"
 unit_var = "loadunit"
@@ -2374,7 +2393,7 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
 id = "LOA.external_load_2.edge_load_groups"
-site = "Load.f90:754"
+site = "Load.f90:755"
 anchor = "77d03cbe74e4"
 file = ".loa"
 unit_var = "loadunit"
@@ -2393,7 +2412,7 @@ note = "0 0 -> no pressure loads; delgroup=0 also disables MAN coef_water record
 
 [[reader]]
 id = "LOA.external_load_2.title#3"
-site = "Load.f90:910"
+site = "Load.f90:911"
 anchor = "13827bbe31cb"
 file = ".loa"
 unit_var = "loadunit"
@@ -2412,7 +2431,7 @@ note = "body force title"
 
 [[reader]]
 id = "LOA.external_load_2.gravity"
-site = "Load.f90:912"
+site = "Load.f90:913"
 anchor = "5c14fea3df3d"
 file = ".loa"
 unit_var = "loadunit"
@@ -2431,7 +2450,7 @@ note = "9.81 (0,-1) (0,-1)"
 
 [[reader]]
 id = "LOA.external_load_2.gravity_curve_title"
-site = "Load.f90:919"
+site = "Load.f90:920"
 anchor = "32449d136a1c"
 file = ".loa"
 unit_var = "loadunit"
@@ -2450,7 +2469,7 @@ note = "'Time_curve_for_each_group 1'"
 
 [[reader]]
 id = "LOA.external_load_2.gravity_curves"
-site = "Load.f90:921"
+site = "Load.f90:922"
 anchor = "812ea5b1e976"
 file = ".loa"
 unit_var = "loadunit"
@@ -2469,7 +2488,7 @@ note = "1"
 
 [[reader]]
 id = "LOA.external_load_2.title#4"
-site = "Load.f90:931"
+site = "Load.f90:932"
 anchor = "13827bbe31cb"
 file = ".loa"
 unit_var = "loadunit"
@@ -2487,7 +2506,7 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
 id = "LOA.external_load_2.beam_load_count"
-site = "Load.f90:933"
+site = "Load.f90:934"
 anchor = "10e686c751e7"
 file = ".loa"
 unit_var = "loadunit"
@@ -2506,7 +2525,7 @@ note = "0"
 
 [[reader]]
 id = "LOA.external_load_2.title#5"
-site = "Load.f90:1012"
+site = "Load.f90:1013"
 anchor = "13827bbe31cb"
 file = ".loa"
 unit_var = "loadunit"
@@ -2524,7 +2543,7 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
 id = "LOA.external_load_2.plate_load_count"
-site = "Load.f90:1014"
+site = "Load.f90:1015"
 anchor = "fcc4a7fa6c9a"
 file = ".loa"
 unit_var = "loadunit"
@@ -3620,9 +3639,9 @@ migration_phase = "M9 网格细化/水平集"
 [[not_on_path]]
 unit_var = "loadunit"
 file = ".loa"
-site_count = 33
+site_count = 32
 routines = "external_load_1, external_load_2"
-reason = ".loa records for point loads, edges, edge loads, beam/plate loads; counts are 0"
+reason = ".loa records for point loads, edges, edge loads, beam/plate loads; counts are 0. Load.f90:231 (amplitude dfact factors, gated on type_curve, not on any zero count) was misclassified into this group and has been pulled out into its own reader, LOA.external_load_1.curve_factors -- see M1-finding-2026-09-08."
 migration_phase = "M5.pressure/M6"
 
 [[not_on_path]]

@@ -27,6 +27,6 @@
   ],
   "passed": true,
   "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/lame_cylinder/reference/results.json",
-  "actual": "/tmp/yl-io-trace.73TbR1/results.json",
+  "actual": "/tmp/yl-io-trace.n3rRk3/results.json",
   "tolerance_section": "exact"
 }

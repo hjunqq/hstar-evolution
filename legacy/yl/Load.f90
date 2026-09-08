@@ -228,7 +228,8 @@
        !    end do
        elseif (type_curve/='ARCLENGTH'.and.type_curve/='EXTRAPOLATION'   &
            .and.type_curve/='HARMONIC'.and.type_curve/='WATERLEVEL') then
-        read(loadunit,*)tcurves(itcurve)%dfact_curve(1:ntime) !!one record 
+        read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)tcurves(itcurve)%dfact_curve(1:ntime) !!one record 
+        call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_curve_factors,0)
         endif
        lineload=lineload+nline
     end do
