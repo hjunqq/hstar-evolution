@@ -4,6 +4,10 @@
 #   tools/build.sh [release|debug] [--src DIR] [--out DIR] [--label NAME]
 #   tools/build.sh problem-types [--profile release|strict] [--out DIR] [--label NAME]
 #                                [--allow-external-out]
+#   tools/build.sh runtime        [--profile ...] [--out DIR] [--label NAME]
+#                                [--allow-external-out]
+#   tools/build.sh runtime-bridge [--profile ...] [--src DIR] [--out DIR] [--label NAME]
+#                                [--allow-external-out]
 #
 # Profiles:
 #   release  -O2                                  (reference numerics)
@@ -24,8 +28,23 @@
 #   OUT/obj/*.o *.mod        OUT/hstar          OUT/build.log
 #   OUT/build-manifest.json  compiler/flags/deps/hashes/ldd; fail-closed
 #
-# Target `problem-types` (M3-01, extended by M3-02) is a SEPARATE target, not a
-# solver profile. It compiles, in dependency order,
+# Targets `problem-types` (M3-01, extended by M3-02), `runtime` and
+# `runtime-bridge` (M3-03) are SEPARATE targets, not solver profiles. None of
+# their objects is an input to build/<profile>/hstar.
+#
+# `runtime` compiles the problem modules and then src/runtime/yl_runtime_{types,
+# contract,rules,build}.f90 and links src/runtime/yl_runtime_selftest.f90. It does
+# NOT compile yl_runtime_commit.f90: that module USEs the legacy modules, so it
+# belongs to `runtime-bridge` alone -- which is also the mechanical guarantee that
+# no self-test in the `runtime` binary can write a legacy global.
+#
+# `runtime-bridge` is the isolated bridge executable: the real legacy modules
+# through Level.f90 (Fem.f90 excluded, so there is no solver main), src/state,
+# src/problem, src/runtime INCLUDING yl_runtime_commit.f90, and its own PROGRAM.
+# It is the only target that compiles the commit module. Its evidence is PARTIAL by
+# construction: no solver consumer runs in it.
+#
+# Target `problem-types` in detail. It compiles, in dependency order,
 #   src/problem/yl_problem_{optional,types,errors,profile,manifest,builder,
 #                           pipeline}.f90
 # and links TWO self-test programs, each into its own binary:
@@ -76,6 +95,8 @@ while [ $# -gt 0 ]; do
     case "$1" in
         release|trace|debug|strict|sanitize) PROFILE="$1";;
         problem-types) TARGET=problem-types;;
+        runtime) TARGET=runtime;;
+        runtime-bridge) TARGET=runtime-bridge;;
         --profile)
             case "$2" in
                 release|trace|debug|strict|sanitize) PROFILE="$2";;
@@ -91,11 +112,12 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
-if [ "$TARGET" = problem-types ]; then
-    [ -z "$OUT" ] && OUT="$ROOT/build/problem-types/$PROFILE${LABEL:+-$LABEL}"
-else
-    [ -z "$OUT" ] && OUT="$ROOT/build/$PROFILE${LABEL:+-$LABEL}"
-fi
+case "$TARGET" in
+    problem-types|runtime|runtime-bridge)
+        [ -z "$OUT" ] && OUT="$ROOT/build/$TARGET/$PROFILE${LABEL:+-$LABEL}";;
+    *)
+        [ -z "$OUT" ] && OUT="$ROOT/build/$PROFILE${LABEL:+-$LABEL}";;
+esac
 
 hstar_env_check || { echo "build.sh: toolchain check failed" >&2; exit 3; }
 
@@ -121,11 +143,11 @@ LDFLAGS=(-qopenmp "-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
 # Deliberately placed BEFORE any solver source list, object list or link
 # command. It reuses the profile FFLAGS and the runtime-path link flags defined
 # above and then exits, so nothing below this block ever sees src/problem/*.
-if [ "$TARGET" = problem-types ]; then
-    # --src selects the legacy solver tree; this target always builds the
-    # repository's own src/problem. Refuse rather than ignore it silently.
+if [ "$TARGET" = problem-types ] || [ "$TARGET" = runtime ]; then
+    # --src selects the legacy solver tree; these targets always build the
+    # repository's own src/. Refuse rather than ignore it silently.
     if [ "$SRC_GIVEN" = 1 ]; then
-        echo "build.sh: problem-types does not accept --src: it always builds $ROOT/src/problem" >&2
+        echo "build.sh: $TARGET does not accept --src: it always builds $ROOT/src" >&2
         echo "          (--src selects the legacy solver tree and applies to the solver target only)" >&2
         exit 2
     fi
@@ -138,7 +160,7 @@ if [ "$TARGET" = problem-types ]; then
     PT_ROOT_ABS="$(realpath -m "$ROOT")"
     # pt_covers A B: true when B is A or lies under A.
     pt_covers() { [ "$2" = "$1" ] || case "$2" in "$1"/*) return 0;; *) return 1;; esac; }
-    pt_refuse() { echo "build.sh: problem-types: --out $OUT $1: refusing to erase it" >&2; exit 2; }
+    pt_refuse() { echo "build.sh: $TARGET: --out $OUT $1: refusing to erase it" >&2; exit 2; }
     pt_covers "$PT_OUT_ABS" "$PT_ROOT_ABS" && pt_refuse "is the repository root $PT_ROOT_ABS, or contains it"
     for pt_p in "$PT_ROOT_ABS/build/release" "$PT_ROOT_ABS/build/debug" \
                 "$PT_ROOT_ABS/build/strict" "$PT_ROOT_ABS/build/trace" \
@@ -149,7 +171,7 @@ if [ "$TARGET" = problem-types ]; then
         pt_covers "$PT_OUT_ABS" "$pt_p" && pt_refuse "contains $pt_p"
     done
     if ! pt_covers "$PT_ROOT_ABS" "$PT_OUT_ABS" && [ "$ALLOW_EXTERNAL_OUT" != 1 ]; then
-        echo "build.sh: problem-types: --out $OUT lies outside the repository $PT_ROOT_ABS." >&2
+        echo "build.sh: $TARGET: --out $OUT lies outside the repository $PT_ROOT_ABS." >&2
         echo "          Pass --allow-external-out if that is intended; it is erased before the build." >&2
         exit 2
     fi
@@ -157,24 +179,45 @@ if [ "$TARGET" = problem-types ]; then
     # Compile order is the dependency chain: optional wrappers -> aggregate
     # types -> error accumulator -> default profile/capability table -> manifest
     # accumulator -> draft builder -> the four pipeline stages.
-    PT_SRCS=(src/problem/yl_problem_optional.f90
-             src/problem/yl_problem_types.f90
-             src/problem/yl_problem_errors.f90
-             src/problem/yl_problem_profile.f90
-             src/problem/yl_problem_manifest.f90
-             src/problem/yl_problem_builder.f90
-             src/problem/yl_problem_pipeline.f90)
-    # Each main is a PROGRAM: compiled on its own and linked into its own binary.
-    PT_MAINS=(src/problem/yl_problem_selftest.f90
-              src/problem/yl_problem_pipeline_selftest.f90)
+    PT_PROBLEM_SRCS=(src/problem/yl_problem_optional.f90
+                     src/problem/yl_problem_types.f90
+                     src/problem/yl_problem_errors.f90
+                     src/problem/yl_problem_profile.f90
+                     src/problem/yl_problem_manifest.f90
+                     src/problem/yl_problem_builder.f90
+                     src/problem/yl_problem_pipeline.f90)
+    if [ "$TARGET" = problem-types ]; then
+        PT_SRCS=("${PT_PROBLEM_SRCS[@]}")
+        # Each main is a PROGRAM: compiled on its own and linked into its own binary.
+        PT_MAINS=(src/problem/yl_problem_selftest.f90
+                  src/problem/yl_problem_pipeline_selftest.f90)
+    else
+        # target `runtime` (M3-03). The problem modules come first because
+        # build_runtime consumes a finished ProblemState, its error accumulator and
+        # its manifest; then the runtime types, the versioned execution contract, the
+        # walkable build-rule table and build_runtime itself.
+        #
+        # yl_runtime_commit.f90 is deliberately ABSENT: it USEs the legacy modules, so
+        # it belongs to the `runtime-bridge` target and to nothing else. Keeping it out
+        # here is what makes this target buildable without the legacy tree, and it is
+        # also the mechanical guarantee that no self-test in this binary can write a
+        # legacy global.
+        PT_SRCS=("${PT_PROBLEM_SRCS[@]}"
+                 src/runtime/yl_runtime_types.f90
+                 src/runtime/yl_runtime_contract.f90
+                 src/runtime/yl_runtime_rules.f90
+                 src/runtime/yl_runtime_build.f90)
+        PT_MAINS=(src/runtime/yl_runtime_selftest.f90)
+    fi
     for f in "${PT_SRCS[@]}" "${PT_MAINS[@]}"; do
         [ -f "$ROOT/$f" ] || {
-            echo "build.sh: problem-types: missing source $ROOT/$f" >&2
+            echo "build.sh: $TARGET: missing source $ROOT/$f" >&2
             echo "build.sh: this target needs, in this order:" >&2
             for g in "${PT_SRCS[@]}" "${PT_MAINS[@]}"; do
                 [ -f "$ROOT/$g" ] && echo "            ok      $g" >&2 || echo "            MISSING $g" >&2
             done
-            echo "build.sh: (M3-01 deliverables 2-4 and the M3-02 pipeline modules)." >&2
+            echo "build.sh: (M3-01 deliverables 2-4, the M3-02 pipeline modules and," >&2
+            echo "build.sh:  for target runtime, the M3-03 runtime modules)." >&2
             exit 4
         }
     done
@@ -204,13 +247,13 @@ if [ "$TARGET" = problem-types ]; then
         # Read the log into a variable before appending to it, so the message
         # cannot be fed back into its own grep.
         diag="$(grep -E "error #|catastrophic|compilation aborted" "$LOG" | tail -20)"
-        log "=== COMPILE FAILED (problem-types/$PROFILE): $what (rc=$rc)"
+        log "=== COMPILE FAILED ($TARGET/$PROFILE): $what (rc=$rc)"
         log "--- diagnostics (full log: $LOG):"
         printf '%s\n' "$diag" | tee -a "$LOG" >&2
         exit 7
     }
 
-    log "=== HSTAR Evolution build: target=problem-types profile=$PROFILE out=$OUT"
+    log "=== HSTAR Evolution build: target=$TARGET profile=$PROFILE out=$OUT"
     log "FC: $HSTAR_FC ($("$HSTAR_FC" --version | head -1))"
     log "FFLAGS: ${PT_FFLAGS[*]}"
     log "note: no solver object is built here and no object here enters the solver."
@@ -238,10 +281,10 @@ if [ "$TARGET" = problem-types ]; then
     # are linked; the binaries follow, separated by the literal "--".
     PT_ENTRIES=()
     for f in "${PT_SRCS[@]}" "${PT_MAINS[@]}"; do PT_ENTRIES+=("$f|$ROOT/$f"); done
-    python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$PT_WARNINGS" \
+    python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$PT_WARNINGS" "$TARGET" \
         "${PT_FFLAGS[*]}" "${PT_LDFLAGS[*]}" "${PT_ENTRIES[@]}" -- "${PT_EXES[@]}" <<'PT_PY'
 import hashlib, json, os, platform, re, subprocess, sys
-out, profile, root, t0, t1, warnings, fflags, ldflags, *rest = sys.argv[1:]
+out, profile, root, t0, t1, warnings, target, fflags, ldflags, *rest = sys.argv[1:]
 sep = rest.index('--')
 entries, exes = rest[:sep], rest[sep + 1:]
 srcs = [e.split('|', 1) for e in entries]
@@ -275,7 +318,7 @@ unresolved = sorted({d['soname'] for b in binaries for d in b['runtime_dependenc
 env = {k: os.environ[k] for k in ('HSTAR_FC','HSTAR_MKLROOT','HSTAR_IOMP_LIBDIR','HSTAR_UNIT_PROFILE')}
 manifest = {
     'manifest_version': 1,
-    'target': 'problem-types',
+    'target': target,
     'profile': profile,
     'started_at': t0, 'finished_at': t1,
     'solver_linkage': ('none: these objects are not linked into build/<profile>/hstar, '
@@ -284,13 +327,13 @@ manifest = {
     'platform': {'os': platform.platform(), 'machine': platform.machine(), 'python': platform.python_version()},
     'toolchain': {**env, 'fc_version': ver(env['HSTAR_FC'])},
     'flags': {'fflags': fflags.split(), 'ldflags': ldflags.split()},
-    'sources': {'dir': root, 'identity': 'repository:src/problem',
+    'sources': {'dir': root, 'identity': 'repository:src',
                 'files': [{'path': rel, 'sha256': sha(abs_)} for rel, abs_ in srcs]},
     'binaries': binaries,
     'warnings_or_remarks': int(warnings),
     'unresolved_runtime_deps': unresolved,
 }
-json.dump(manifest, open(os.path.join(out, 'problem-types-manifest.json'), 'w'), indent=2)
+json.dump(manifest, open(os.path.join(out, target + '-manifest.json'), 'w'), indent=2)
 if unresolved:
     print('build.sh: unresolved runtime dependencies:', unresolved, file=sys.stderr)
     sys.exit(5)
@@ -319,10 +362,31 @@ PT_PY
         fi
     done
     if [ "${#PT_FAILED[@]}" -ne 0 ]; then
-        log "=== SELF-TESTS FAILED (problem-types/$PROFILE): ${PT_FAILED[*]}"
+        log "=== SELF-TESTS FAILED ($TARGET/$PROFILE): ${PT_FAILED[*]}"
         exit 6
     fi
-    log "=== BUILD OK (problem-types/$PROFILE) $T0 -> $T1: ${#PT_EXES[@]} self-test suites passed"
+
+    # The BACKWARD half of the rule-table bijection (M3-03). The self-test asserts the
+    # forward and injective halves in Fortran and exports its table as RULES|/RULE|
+    # lines; only Python can read docs/m2/state-field-map.toml and answer the other
+    # direction -- "does every model_ready RuntimeState row have a producing rule?".
+    #
+    # It runs HERE, inside the target, rather than as a habit someone has to remember,
+    # because the failure it catches is invisible from inside the binary: a build that
+    # simply never produces a map row passes every in-binary assertion, and its own
+    # export is self-consistent. Fail-closed, like every other gate in this file.
+    if [ "$TARGET" = runtime ]; then
+        log "--- cross-check: rule table vs docs/m2/state-field-map.toml (backward bijection)"
+        set +e
+        python3 "$ROOT/tools/yl_state_map.py" runtime-rules --export "$LOG" 2>&1 | tee -a "$LOG"
+        PT_XRC=${PIPESTATUS[0]}
+        set -e
+        if [ "$PT_XRC" -ne 0 ]; then
+            log "=== RULE-TABLE CROSS-CHECK FAILED ($TARGET/$PROFILE) rc=$PT_XRC"
+            exit 6
+        fi
+    fi
+    log "=== BUILD OK ($TARGET/$PROFILE) $T0 -> $T1: ${#PT_EXES[@]} self-test suites passed"
     exit 0
 fi
 
@@ -345,6 +409,217 @@ MAIN_SRCS=(Fem.f90)
 # Paths are relative to the repository root; recorded in the manifest as such.
 STATE_SRCS=(src/state/yl_state_io.f90 src/state/yl_state_adapters.f90
             src/state/yl_state_dump.f90)
+
+# --- target: runtime-bridge (M3-03) -------------------------------------------
+# The ISOLATED bridge executable. It links the REAL legacy modules -- the same
+# sources, in the same order, as the solver -- plus src/state (the M2 observers),
+# src/problem, src/runtime AND src/runtime/yl_runtime_commit.f90, and its own
+# PROGRAM instead of Fem.f90. It is the only target that compiles the commit
+# module, because that module is the only repository file that USEs global_var.
+#
+# WHY IT IS A SEPARATE BINARY AND NOT A SOLVER PROFILE
+#   Fem.f90 is excluded, so there is no solver main here and nothing can start a
+#   run; and no object built here is ever an input to build/<profile>/hstar. The
+#   solver binary therefore cannot drift, and the non-drift criterion is the same
+#   one the problem-types target uses: GNU build-id equality (readelf -n), not a
+#   whole-file hash.
+#
+#   This block sits AFTER the solver source lists because it reuses them verbatim
+#   -- one list, so the bridge cannot link a different legacy tree than the solver
+#   compiles -- and BEFORE the solver's own compile loop and link command, which it
+#   never reaches because it exits. Nothing below it ever sees src/runtime/*.
+#
+# WHAT IT PROVES, AND WHAT IT DOES NOT
+#   That commit_legacy_globals lands the runtime rows in the real globals with the
+#   real types, and that the existing observers read them back. It does NOT prove
+#   the solver is satisfied by them: no solver consumer runs in this binary. Any
+#   conclusion drawn from it must be labelled PARTIAL.
+if [ "$TARGET" = runtime-bridge ]; then
+    RB_OUT_ABS="$(realpath -m "$OUT")"
+    RB_ROOT_ABS="$(realpath -m "$ROOT")"
+    rb_covers() { [ "$2" = "$1" ] || case "$2" in "$1"/*) return 0;; *) return 1;; esac; }
+    rb_refuse() { echo "build.sh: runtime-bridge: --out $OUT $1: refusing to erase it" >&2; exit 2; }
+    rb_covers "$RB_OUT_ABS" "$RB_ROOT_ABS" && rb_refuse "is the repository root $RB_ROOT_ABS, or contains it"
+    for rb_p in "$RB_ROOT_ABS/build/release" "$RB_ROOT_ABS/build/debug" \
+                "$RB_ROOT_ABS/build/strict" "$RB_ROOT_ABS/build/trace" \
+                "$RB_ROOT_ABS/build/sanitize" "$RB_ROOT_ABS/cases" \
+                "$RB_ROOT_ABS/legacy" "$RB_ROOT_ABS/src" "$RB_ROOT_ABS/tools" \
+                "$RB_ROOT_ABS/docs" "$RB_ROOT_ABS/schemas"; do
+        rb_covers "$rb_p" "$RB_OUT_ABS" && rb_refuse "is $rb_p, or lies inside it"
+        rb_covers "$RB_OUT_ABS" "$rb_p" && rb_refuse "contains $rb_p"
+    done
+    if ! rb_covers "$RB_ROOT_ABS" "$RB_OUT_ABS" && [ "$ALLOW_EXTERNAL_OUT" != 1 ]; then
+        echo "build.sh: runtime-bridge: --out $OUT lies outside the repository $RB_ROOT_ABS." >&2
+        echo "          Pass --allow-external-out if that is intended; it is erased before the build." >&2
+        exit 2
+    fi
+
+    # Repository-side sources, in dependency order. The problem and runtime modules
+    # are compiled with the strict repository flags; the legacy tree keeps the
+    # profile flags, exactly as in the solver build.
+    RB_REPO_SRCS=(src/problem/yl_problem_optional.f90
+                  src/problem/yl_problem_types.f90
+                  src/problem/yl_problem_errors.f90
+                  src/problem/yl_problem_profile.f90
+                  src/problem/yl_problem_manifest.f90
+                  src/problem/yl_problem_builder.f90
+                  src/problem/yl_problem_pipeline.f90
+                  src/runtime/yl_runtime_types.f90
+                  src/runtime/yl_runtime_contract.f90
+                  src/runtime/yl_runtime_rules.f90
+                  src/runtime/yl_runtime_build.f90
+                  src/runtime/yl_runtime_commit.f90)
+    RB_MAIN=src/runtime/yl_runtime_bridge_test.f90
+
+    if [ "$SRC" = "$ROOT/legacy/yl" ]; then
+        python3 "$ROOT/tools/yl_manifest.py" check "$ROOT/legacy/source-manifest.json" >/dev/null \
+            || { echo "build.sh: legacy/source-manifest.json does not verify; refusing to build" >&2; exit 4; }
+        RB_SRC_IDENTITY="legacy/source-manifest.json"
+    else
+        RB_SRC_IDENTITY="external:$SRC"
+    fi
+    for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do
+        [ -f "$ROOT/$f" ] || {
+            echo "build.sh: runtime-bridge: missing source $ROOT/$f" >&2
+            echo "build.sh: this target needs, in this order:" >&2
+            for g in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do
+                [ -f "$ROOT/$g" ] && echo "            ok      $g" >&2 || echo "            MISSING $g" >&2
+            done
+            echo "build.sh: (the M3-03 commit module and its isolated bridge program)." >&2
+            exit 4
+        }
+    done
+    for f in "${SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing legacy source $SRC/$f" >&2; exit 4; }; done
+    [ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }
+
+    rm -rf "$OUT"; mkdir -p "$OUT/obj"
+    LOG="$OUT/build.log"; : > "$LOG"
+    T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    log() { echo "$*" | tee -a "$LOG"; }
+    run() { log "\$ $*"; "$@" >>"$LOG" 2>&1; }
+    rb_run() {
+        local what="$1"; shift
+        local rc diag
+        set +e; run "$@"; rc=$?; set -e
+        [ "$rc" -eq 0 ] && return 0
+        diag="$(grep -E "error #|catastrophic|compilation aborted|undefined reference" "$LOG" | tail -20)"
+        log "=== COMPILE FAILED (runtime-bridge/$PROFILE): $what (rc=$rc)"
+        log "--- diagnostics (full log: $LOG):"
+        printf '%s\n' "$diag" | tee -a "$LOG" >&2
+        exit 7
+    }
+
+    RB_FFLAGS=("${FFLAGS[@]}" -warn all -stand f18)
+
+    log "=== HSTAR Evolution build: target=runtime-bridge profile=$PROFILE src=$SRC out=$OUT"
+    log "FC: $HSTAR_FC ($("$HSTAR_FC" --version | head -1))"
+    log "note: Fem.f90 is NOT compiled here and no object here enters the solver binary."
+
+    rb_run "compiling the gidpost stub" "$HSTAR_CC" -c "$STUB" -o "$OUT/obj/gidpost_stub.o"
+    RB_OBJS=("$OUT/obj/gidpost_stub.o")
+    for f in "${DIAG_SRCS[@]}"; do
+        b="$(basename "$f")"; obj="$OUT/obj/${b%.*}.o"
+        rb_run "compiling $f" "$HSTAR_FC" -c "${FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" "$ROOT/$f" -o "$obj"
+        RB_OBJS+=("$obj")
+    done
+    for f in "${SRCS[@]}"; do
+        obj="$OUT/obj/${f%.*}.o"
+        rb_run "compiling $f" "$HSTAR_FC" -c "${FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" -I "$MKL_INC" "$SRC/$f" -o "$obj"
+        RB_OBJS+=("$obj")
+    done
+    for f in "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}"; do
+        b="$(basename "$f")"; obj="$OUT/obj/${b%.*}.o"
+        rb_run "compiling $f" "$HSTAR_FC" -c "${RB_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" -I "$MKL_INC" "$ROOT/$f" -o "$obj"
+        RB_OBJS+=("$obj")
+    done
+    b="$(basename "$RB_MAIN")"; RB_STEM="${b%.*}"
+    rb_run "compiling $RB_MAIN" "$HSTAR_FC" -c "${RB_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" -I "$MKL_INC" "$ROOT/$RB_MAIN" -o "$OUT/obj/$RB_STEM.o"
+    RB_EXE="$OUT/$RB_STEM"
+    rb_run "linking $RB_STEM" "$HSTAR_FC" "${FFLAGS[@]}" "${RB_OBJS[@]}" "$OUT/obj/$RB_STEM.o" -o "$RB_EXE" "${LDFLAGS[@]}"
+    T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+    RB_WARNINGS=$(grep -c -iE "warning #|remark #" "$LOG" || true)
+    log "warnings/remarks in log: $RB_WARNINGS"
+
+    RB_ENTRIES=()
+    for f in "${DIAG_SRCS[@]}"; do RB_ENTRIES+=("$f|$ROOT/$f"); done
+    for f in "${SRCS[@]}"; do RB_ENTRIES+=("$f|$SRC/$f"); done
+    for f in "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do RB_ENTRIES+=("$f|$ROOT/$f"); done
+    python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$RB_WARNINGS" "runtime-bridge" \
+        "${RB_FFLAGS[*]}" "${LDFLAGS[*]}" "$RB_SRC_IDENTITY" "${RB_ENTRIES[@]}" -- "$RB_EXE" <<'RB_PY'
+import hashlib, json, os, platform, re, subprocess, sys
+out, profile, root, t0, t1, warnings, target, fflags, ldflags, identity, *rest = sys.argv[1:]
+sep = rest.index('--')
+entries, exes = rest[:sep], rest[sep + 1:]
+srcs = [e.split('|', 1) for e in entries]
+def sha(p):
+    h = hashlib.sha256()
+    with open(p, 'rb') as f:
+        for c in iter(lambda: f.read(1 << 20), b''): h.update(c)
+    return h.hexdigest()
+def ver(cmd):
+    try: return subprocess.run([cmd, '--version'], capture_output=True, text=True).stdout.splitlines()[0]
+    except Exception as e: return f'unavailable: {e}'
+def build_id(p):
+    txt = subprocess.run(['readelf', '-n', p], capture_output=True, text=True).stdout
+    m = re.search(r'Build ID:\s*([0-9a-f]+)', txt)
+    return m.group(1) if m else None
+def ldd_deps(p):
+    out_ = subprocess.run(['ldd', p], capture_output=True, text=True).stdout
+    ds = []
+    for line in out_.splitlines():
+        m = re.match(r'\s*(\S+)\s*=>\s*(\S+)', line)
+        if m and os.path.isfile(m.group(2)):
+            ds.append({'soname': m.group(1), 'path': m.group(2), 'sha256': sha(m.group(2))})
+        elif 'not found' in line:
+            ds.append({'soname': line.split()[0], 'path': None, 'sha256': None})
+    return ds
+binaries = [{'path': e, 'bytes': os.path.getsize(e), 'sha256': sha(e),
+             'gnu_build_id': build_id(e), 'runtime_dependencies': ldd_deps(e)}
+            for e in exes]
+unresolved = sorted({d['soname'] for b in binaries for d in b['runtime_dependencies']
+                     if d['path'] is None})
+env = {k: os.environ[k] for k in ('HSTAR_FC','HSTAR_CC','HSTAR_MKLROOT','HSTAR_IOMP_LIBDIR','HSTAR_UNIT_PROFILE')}
+manifest = {
+    'manifest_version': 1,
+    'target': target,
+    'profile': profile,
+    'started_at': t0, 'finished_at': t1,
+    'solver_linkage': ('none: Fem.f90 is not compiled here and no object built here is an '
+                       'input to build/<profile>/hstar'),
+    'proves': ('commit_legacy_globals writes the model_ready RuntimeState rows into the real '
+               'legacy globals and the M2 observers read them back; PARTIAL -- no solver '
+               'consumer runs in this binary'),
+    'platform': {'os': platform.platform(), 'machine': platform.machine(), 'python': platform.python_version()},
+    'toolchain': {**env, 'fc_version': ver(env['HSTAR_FC']), 'cc_version': ver(env['HSTAR_CC'])},
+    'flags': {'fflags': fflags.split(), 'ldflags': ldflags.split()},
+    'sources': {'dir': root, 'identity': identity,
+                'files': [{'path': rel, 'sha256': sha(abs_)} for rel, abs_ in srcs]},
+    'binaries': binaries,
+    'warnings_or_remarks': int(warnings),
+    'unresolved_runtime_deps': unresolved,
+}
+json.dump(manifest, open(os.path.join(out, 'runtime-bridge-manifest.json'), 'w'), indent=2)
+if unresolved:
+    print('build.sh: unresolved runtime dependencies:', unresolved, file=sys.stderr)
+    sys.exit(5)
+for b in binaries:
+    print(f"binary {b['path']} sha256={b['sha256'][:16]} build-id={b['gnu_build_id']} "
+          f"deps={len(b['runtime_dependencies'])} warnings={warnings}")
+RB_PY
+
+    log "--- running the bridge suite: $RB_EXE"
+    set +e
+    "$RB_EXE" 2>&1 | tee -a "$LOG"
+    RB_RC=${PIPESTATUS[0]}
+    set -e
+    if [ "$RB_RC" -ne 0 ]; then
+        log "=== BRIDGE SUITE FAILED (runtime-bridge/$PROFILE) rc=$RB_RC"
+        exit 6
+    fi
+    log "=== BUILD OK (runtime-bridge/$PROFILE) $T0 -> $T1: bridge suite passed (PARTIAL evidence)"
+    exit 0
+fi
 
 # --- source integrity ---------------------------------------------------------
 if [ "$SRC" = "$ROOT/legacy/yl" ]; then

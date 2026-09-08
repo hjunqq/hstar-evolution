@@ -1,0 +1,751 @@
+! yl_runtime_commit -- commit_legacy_globals: the ONE writer of the legacy globals.
+!
+! Scope (.ccg/tasks/m3-03-build-runtime-commit/plan.md delivery 5)
+!   During the migration this is the only place in the repository that assigns to a
+!   variable of `global_var`, `prescribed`, `applied_load` or `meshfine`. Everything else
+!   -- the pipeline, build_runtime, the observers -- either reads legacy state or does not
+!   touch it at all. Concentrating the writes in one module is what makes the ownership
+!   question answerable: there is exactly one allocator and exactly one releaser.
+!
+!   It is NOT wired into the solver. Nothing in the solver link chain calls it, and
+!   nothing here is compiled into build/<profile>/hstar. It is exercised by the isolated
+!   bridge executable, which links the real legacy modules and no main program.
+!
+! THE COMMIT CONTRACT
+!   Two phases, in this order, and the boundary between them is the whole design:
+!
+!     VERIFY + STAGE   Every registered row is checked against the value-state ledger
+!                      and against its own allocation status, then every legacy target
+!                      is built COMPLETE in a local temporary -- allocation, kind
+!                      conversion, extent, the lot. Any failure returns here, and no
+!                      global has been touched.
+!     WRITE            The previous commit's storage is released and the staged values
+!                      are moved in. Nothing in this phase allocates, converts, or can
+!                      fail: it is `move_alloc` and scalar assignment, top to bottom.
+!
+!   So there is no state in which some globals carry this runtime and others carry the
+!   last one. That is the property the task is named for, and it is structural rather
+!   than reviewed: the staging locals are the only things that can fail, and they are
+!   local.
+!
+! OWNERSHIP, AND WHY A REPEAT COMMIT DOES NOT LEAK
+!   The legacy element, group, prescription and curve records reach their payloads
+!   through POINTER components (Elements.f90:89, :112, Global.f90:250, Prescrib.f90:25).
+!   `move_alloc` onto such an array deallocates the destination ARRAY and leaks every
+!   target its pointer components still refer to -- which is exactly how "load two leaks
+!   load one". So the write phase releases first, explicitly, target by target, and only
+!   then moves.
+!
+!   It releases ONLY what a previous commit_legacy_globals allocated. `commit_owned`
+!   records that, and it is the only thing that gets deallocated: storage a legacy reader
+!   allocated is never freed here, because this module did not allocate it and does not
+!   know what else still points into it. `commit_release` is idempotent -- calling it on
+!   a fresh process, or twice in a row, is a no-op and not a double free.
+!
+!   That "never freed here" is not the same as "left alone", and it matters which: for
+!   these pointer-bearing record types, `move_alloc` onto an already-allocated destination
+!   deallocates the destination ARRAY but does not free the pointer targets still hanging
+!   off it -- so moving onto a foreign allocation instead of releasing it first would
+!   silently LEAK it, not preserve it. `commit_legacy_globals` therefore refuses to run at
+!   all -- reports INV-COMMIT-TOTAL and touches no global -- when it finds ANY of the six
+!   record-array globals it moves (element, group, listp_group, prescrib, tcurves, trans)
+!   already allocated while `commit_owned` is still false. That is the only condition
+!   under which this module declines to commit a verified runtime.
+!
+!   The list is spelled out here and in the guard rather than described as "the record
+!   arrays", because the first version of that guard described the class and enumerated
+!   five of the six: `trans` was moved unguarded, and the leak the paragraph promises to
+!   prevent was reachable through it. A list that must be maintained is honest about
+!   needing maintenance; a description that quietly covers less than it says is not.
+!
+! WHAT IS WRITTEN
+!   The 46 `model_ready` `RuntimeState.*` rows of docs/m2/state-field-map.toml, plus the
+!   scalars that are those rows' own extents (npoin, nelem, ngroup, ndimn, mdofn, cdofn,
+!   ntotv, ndofix, ntcurve). Nothing else. The extents are written because a committed
+!   array whose declared extent disagrees with it is not a committed array; they are all
+!   derived from the runtime itself and none is read from anywhere else.
+!
+!   Deliberately NOT written: everything that belongs to the ProblemState half of the
+!   bridge -- coordinates, connectivity, materials, sections, solver controls, step
+!   controls. That is M4-01. Because element(:) is rebuilt here rather than patched, the
+!   M4-01 change is to FOLD the two halves into one staging pass, not to add a second
+!   commit that writes the other components of the same records. A second writer would
+!   reintroduce exactly the partial-commit state this module exists to make impossible,
+!   and this note is here so that is a decision and not an accident.
+!
+! WHAT COMMITTING PROVES, AND WHAT IT DOES NOT
+!   That the values reach the globals with the right extents and the right kinds. It
+!   does not prove the solver is satisfied by them: no solver consumer runs here. It does
+!   not prove the absence of a use-after-free or of a leak either -- a process cannot
+!   observe its own leaks -- which is why the release path is written to be checkable by
+!   an external tool and why that check is recorded as NOT PERFORMED rather than assumed.
+module yl_runtime_commit
+
+  use iso_fortran_env, only: int32, real64
+
+  use variable_types, only: ink, irk
+  use elements, only: element_field, gauss_element
+  use global_var, only: element, group, listp_group, trans, appear,                             &
+                        lmdofn, lcdofn, nodfn, iffix, fixed,                                    &
+                        result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
+                        line_load_block, line_temp_block, lineload, linet,                      &
+                        npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
+                        element_lib, group_of_elements, group_of_dvide_ipoin,                   &
+                        interpolation_group, unode_elements
+  use prescribed, only: prescrib, ndofix, freedom_prescribe
+  use applied_load, only: tcurves, ntcurve, time_curve
+  use meshfine, only: ice0
+
+  use yl_problem_optional, only: opt_int, opt_real, opt_get
+  use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
+                               PE_INTERNAL, PE_EXIT_INTERNAL
+  use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
+                              RUNTIME_VALUE_DEFINED, RUNTIME_VALUE_RESERVED,                    &
+                              RUNTIME_VALUE_ABSENT
+  use yl_runtime_rules, only: build_rule_produced_count, build_rule_produced_map_id,            &
+                              build_rule_t, build_rule_row, build_rule_count, build_rule_key,   &
+                              PE_STAGE_BUILD
+
+  implicit none
+  private
+
+  public :: commit_legacy_globals, commit_release, commit_owns_globals
+
+  ! .true. exactly while the legacy globals hold storage THIS module allocated. The
+  ! release path frees nothing unless this is set, so a process whose globals were filled
+  ! by the legacy readers cannot have them freed from under it.
+  logical, save :: commit_owned = .false.
+
+contains
+
+  !> Publish `runtime` into the legacy globals.
+  !>
+  !>   runtime  the built runtime. intent(in): committing does not consume it, and the
+  !>            same runtime may be committed again -- see the T02 properties.
+  !>   errors   findings are APPENDED. A finding here is always PE_INTERNAL: by the time
+  !>            a runtime exists its deck has been validated, so anything wrong at this
+  !>            point is a broken pipeline and not a bad model.
+  !>
+  !> On success every registered global carries this runtime. On failure not one global
+  !> was touched.
+  subroutine commit_legacy_globals(runtime, errors)
+    type(runtime_state_t), intent(in) :: runtime
+    type(problem_errors_t), intent(inout) :: errors
+
+    ! staging: scalars
+    integer(ink) :: s_npoin, s_nelem, s_ngroup, s_ndimn, s_mdofn, s_cdofn, s_ntotv
+    integer(ink) :: s_ndofix, s_ntcurve, s_iblks, s_lblks, s_lineload, s_linet
+    integer :: nevab, ngaus, ngaus_mass, nnode
+    ! staging: plain arrays
+    integer(ink), allocatable :: s_lmdofn(:), s_lcdofn(:), s_nodfn(:,:), s_iffix(:)
+    integer(ink), allocatable :: s_appear(:), s_ice0(:)
+    integer(ink), allocatable :: s_line_load_block(:), s_line_temp_block(:)
+    real(irk), allocatable :: s_fixed(:), s_result_zero(:), s_tofor(:), s_stfor(:)
+    real(irk), allocatable :: s_toforl(:), s_toform(:), s_delitfi(:), s_deltafi(:)
+    ! staging: record arrays
+    type(element_lib), allocatable :: s_element(:)
+    type(group_of_elements), allocatable :: s_group(:)
+    type(group_of_dvide_ipoin), allocatable :: s_listp(:)
+    type(interpolation_group), allocatable :: s_trans(:)
+    type(freedom_prescribe), allocatable :: s_prescrib(:)
+    type(time_curve), allocatable :: s_tcurves(:)
+
+    integer :: i, ie, ig, n
+    logical :: ok
+
+    ! ---------------------------------------------------------------- verify
+    call verify_registered(runtime, errors, ok)
+    if (.not. ok) return
+
+    ! W4 guard (see the OWNERSHIP header): if any record-array global this module writes
+    ! is already allocated while `commit_owned` is false, the storage was not put there by
+    ! a previous commit_legacy_globals -- it can only be a legacy reader's own allocation.
+    ! Staging and then `move_alloc`-ing over it would deallocate that array without
+    ! freeing the pointer targets inside it, i.e. leak it silently. Refuse instead of
+    ! leaking: this module will not run in a process whose legacy globals were populated
+    ! by something else.
+    if (.not. commit_owned) then
+      ! ALL SIX record-array globals this module move_allocs, not five: `trans` is
+      ! `interpolation_group`, which carries `listf` and `rintf` pointers
+      ! (Global.f90:210-214) and is moved at the same unconditional move_alloc as the
+      ! rest. Omitting it left the exact leak this guard exists to prevent reachable
+      ! through one of the six doors -- found in M3-03 Round-2 review. If a seventh
+      ! record array is ever committed, it belongs in this list on the same commit that
+      ! adds its move_alloc.
+      if (allocated(element) .or. allocated(group) .or. allocated(listp_group) .or.            &
+          allocated(prescrib) .or. allocated(tcurves) .or. allocated(trans)) then
+        call fail(errors, 'one of element, group, listp_group, prescrib, tcurves or trans '//  &
+                  'is already allocated but commit_owned is false -- committing would '//      &
+                  'silently leak a foreign allocation via move_alloc; refusing to run in a '// &
+                  'process whose legacy globals were populated by something other than '//     &
+                  'this module')
+        return
+      end if
+    end if
+
+    s_npoin = int(size(runtime%dof%node_variables, 2), ink)
+    s_cdofn = int(size(runtime%dof%node_variables, 1), ink)
+    s_nelem = int(size(runtime%element), ink)
+    s_ngroup = int(size(runtime%activation%section_state), ink)
+    s_mdofn = int(size(runtime%dof%component_to_active), ink)
+    s_ndimn = int(size(runtime%element(1)%field_coordinates, 1), ink)
+    nnode = size(runtime%element(1)%field_coordinates, 2)
+    nevab = size(runtime%dof%element_variables(1)%values)
+    ngaus = size(runtime%gauss(1)%stiffness%weighted_jacobian)
+    ngaus_mass = size(runtime%gauss(1)%mass%weighted_jacobian)
+    s_ntotv = int(size(runtime%dof%fixed_mask), ink)
+    s_ndofix = int(size(runtime%boundary), ink)
+    s_ntcurve = int(size(runtime%amplitudes), ink)
+    s_iblks = int(opt_or(runtime%increment%current_block), ink)
+    s_lblks = int(opt_or(runtime%increment%completed_blocks), ink)
+    ! The two line cursors are RESERVED: no value is claimed for them, so they are
+    ! staged as zero and the ledger is what says the zero means nothing. Writing a
+    ! number that looks like a file offset would be worse than writing none.
+    s_lineload = 0_ink
+    s_linet = 0_ink
+
+    ! ----------------------------------------------------------------- stage
+    ! Plain arrays. `int(..., ink)` and `real(..., irk)` are explicit at every crossing:
+    ! the runtime is int32/real64 by construction and the legacy kinds are whatever
+    ! Vartype.f90 says they are, and an implicit conversion here would be the one place
+    ! a kind change in the legacy tree could go unnoticed.
+    allocate (s_lmdofn(s_mdofn), s_lcdofn(s_mdofn))
+    s_lmdofn = int(runtime%dof%component_to_active, ink)
+    s_lcdofn = int(runtime%dof%active_to_component, ink)
+
+    allocate (s_nodfn(s_cdofn, s_npoin))
+    s_nodfn = int(runtime%dof%node_variables, ink)
+
+    allocate (s_iffix(s_ntotv), s_fixed(s_ntotv))
+    s_iffix = int(runtime%dof%fixed_mask, ink)
+    s_fixed = real(runtime%dof%prescribed_value, irk)
+
+    allocate (s_appear(s_ngroup))
+    s_appear = int(runtime%activation%section_state, ink)
+
+    allocate (s_result_zero(s_ntotv), s_tofor(s_ntotv), s_stfor(s_ntotv),                       &
+              s_toforl(s_ntotv), s_toform(s_ntotv))
+    s_result_zero = real(runtime%vectors%total_displacement, irk)
+    s_tofor = real(runtime%vectors%external_force_total, irk)
+    s_stfor = real(runtime%vectors%internal_force, irk)
+    s_toforl = real(runtime%vectors%external_force_load, irk)
+    s_toform = real(runtime%vectors%external_force_mass, irk)
+
+    ! RESERVED: allocated to the final length, contents deliberately not set. Reading
+    ! them before the first increment is what the ledger forbids, and staging a value
+    ! here would quietly turn "undefined" into "zero".
+    allocate (s_delitfi(s_ntotv), s_deltafi(s_ntotv))
+
+    allocate (s_line_load_block(size(runtime%cursor%load_line_per_block)))
+    allocate (s_line_temp_block(size(runtime%cursor%temperature_line_per_block)))
+
+    allocate (s_ice0(s_nelem))
+    do ie = 1, int(s_nelem)
+      s_ice0(ie) = int(opt_or(runtime%element(ie)%refinement_skip), ink)
+    end do
+
+    allocate (s_trans(s_ntotv))
+    do i = 1, int(s_ntotv)
+      s_trans(i)%nintf = int(runtime%dof%interpolation_count(i), ink)
+      nullify (s_trans(i)%listf, s_trans(i)%rintf)
+    end do
+
+    ! Element records: the four per-element pointer payloads plus the two Gauss rules.
+    allocate (s_element(s_nelem))
+    do ie = 1, int(s_nelem)
+      call null_element(s_element(ie))
+      allocate (s_element(ie)%ldofs(nevab))
+      s_element(ie)%ldofs = int(runtime%dof%element_variables(ie)%values, ink)
+
+      allocate (s_element(ie)%field(1))
+      call null_element_field(s_element(ie)%field(1))
+      allocate (s_element(ie)%field(1)%ldofs_f(nevab))
+      s_element(ie)%field(1)%ldofs_f =                                                          &
+        int(runtime%dof%element_field_variables(ie)%fields(1)%values, ink)
+      allocate (s_element(ie)%field(1)%elcod_f(s_ndimn, nnode))
+      s_element(ie)%field(1)%elcod_f = real(runtime%element(ie)%field_coordinates, irk)
+      ! RESERVED, as above: allocated to their final length and not written.
+      allocate (s_element(ie)%field(1)%tload(nevab))
+      allocate (s_element(ie)%field(1)%eload(nevab))
+      allocate (s_element(ie)%field(1)%rload(nevab))
+
+      allocate (s_element(ie)%egaus(2))
+      call null_gauss(s_element(ie)%egaus(1))
+      call null_gauss(s_element(ie)%egaus(2))
+      allocate (s_element(ie)%egaus(1)%djacb(ngaus))
+      allocate (s_element(ie)%egaus(1)%gpcod(s_ndimn, ngaus))
+      allocate (s_element(ie)%egaus(1)%cartd(s_ndimn, nnode, ngaus))
+      s_element(ie)%egaus(1)%djacb = real(runtime%gauss(ie)%stiffness%weighted_jacobian, irk)
+      s_element(ie)%egaus(1)%gpcod = real(runtime%gauss(ie)%stiffness%point_coordinates, irk)
+      s_element(ie)%egaus(1)%cartd = real(runtime%gauss(ie)%stiffness%shape_gradient, irk)
+      allocate (s_element(ie)%egaus(2)%djacb(ngaus_mass))
+      allocate (s_element(ie)%egaus(2)%gpcod(s_ndimn, ngaus_mass))
+      s_element(ie)%egaus(2)%djacb = real(runtime%gauss(ie)%mass%weighted_jacobian, irk)
+      s_element(ie)%egaus(2)%gpcod = real(runtime%gauss(ie)%mass%point_coordinates, irk)
+      ! egaus(2)%cartd stays null: legacy allocates cartd only for a rule whose name is
+      ! not 'mass' (Elements.f90:1232), so an allocated one here would be a shape the
+      ! solver never sees and a leak the releaser would have to guess at.
+    end do
+
+    ! Section records: the per-section node table.
+    allocate (s_group(s_ngroup))
+    do ig = 1, int(s_ngroup)
+      call null_group(s_group(ig))
+      n = size(runtime%topology%sections(ig)%nodes)
+      s_group(ig)%np_unode = int(n, ink)
+      allocate (s_group(ig)%unode(n))
+      do i = 1, n
+        call null_unode(s_group(ig)%unode(i))
+        s_group(ig)%unode(i)%ipoin = int(opt_or(runtime%topology%sections(ig)%nodes(i)%node_id), ink)
+        s_group(ig)%unode(i)%ne_unode =                                                         &
+          int(opt_or(runtime%topology%sections(ig)%nodes(i)%element_count), ink)
+        allocate (s_group(ig)%unode(i)%list(size(runtime%topology%sections(ig)%nodes(i)%elements)))
+        s_group(ig)%unode(i)%list = int(runtime%topology%sections(ig)%nodes(i)%elements, ink)
+        ! np_unode and patch_nod are the stabilisation pair: not assigned and not
+        ! allocated on this path. The ledger calls them ABSENT and verify_registered
+        ! has already refused a runtime that allocated them.
+        s_group(ig)%unode(i)%np_unode = 0_ink
+      end do
+    end do
+
+    ! Node -> section index.
+    allocate (s_listp(s_npoin))
+    do i = 1, int(s_npoin)
+      n = int(runtime%topology%node_sections%group_count(i))
+      s_listp(i)%mgroup = int(n, ink)
+      nullify (s_listp(i)%listg, s_listp(i)%listp)
+      if (n > 0) then
+        allocate (s_listp(i)%listg(n), s_listp(i)%listp(n))
+        s_listp(i)%listg = int(runtime%topology%node_sections%section_index(i)%values, ink)
+        s_listp(i)%listp = int(runtime%topology%node_sections%position_in_section(i)%values, ink)
+      end if
+    end do
+
+    ! Prescription records.
+    allocate (s_prescrib(s_ndofix))
+    do i = 1, int(s_ndofix)
+      call null_prescrib(s_prescrib(i))
+      s_prescrib(i)%ldofix = int(opt_or(runtime%boundary(i)%dof_index), ink)
+      s_prescrib(i)%lnefix = int(opt_or(runtime%boundary(i)%element_count), ink)
+      n = size(runtime%boundary(i)%attached_element)
+      allocate (s_prescrib(i)%leldofix(n), s_prescrib(i)%levdofix(n), s_prescrib(i)%lefdofix(n))
+      s_prescrib(i)%leldofix = int(runtime%boundary(i)%attached_element, ink)
+      s_prescrib(i)%levdofix = int(runtime%boundary(i)%attached_local_position, ink)
+      s_prescrib(i)%lefdofix = int(runtime%boundary(i)%attached_field, ink)
+    end do
+
+    ! Amplitude records. Only the current factor is a model_ready row; the curve itself
+    ! is authored data and belongs to the ProblemState half.
+    allocate (s_tcurves(s_ntcurve))
+    do i = 1, int(s_ntcurve)
+      call null_tcurve(s_tcurves(i))
+      s_tcurves(i)%dfact = real(opt_or_real(runtime%amplitudes(i)%factor), irk)
+    end do
+
+    ! ----------------------------------------------------------------- write
+    ! From here on nothing allocates, converts or can fail.
+    call commit_release()
+
+    npoin = s_npoin;  nelem = s_nelem;  ngroup = s_ngroup;  ndimn = s_ndimn
+    mdofn = s_mdofn;  cdofn = s_cdofn;  ntotv = s_ntotv
+    ndofix = s_ndofix; ntcurve = s_ntcurve
+    iblks = s_iblks;  lblks = s_lblks
+    lineload = s_lineload; linet = s_linet
+
+    call move_alloc(s_lmdofn, lmdofn)
+    call move_alloc(s_lcdofn, lcdofn)
+    call move_alloc(s_nodfn, nodfn)
+    call move_alloc(s_iffix, iffix)
+    call move_alloc(s_fixed, fixed)
+    call move_alloc(s_appear, appear)
+    call move_alloc(s_result_zero, result_zero)
+    call move_alloc(s_tofor, tofor)
+    call move_alloc(s_stfor, stfor)
+    call move_alloc(s_toforl, toforl)
+    call move_alloc(s_toform, toform)
+    call move_alloc(s_delitfi, delitfi)
+    call move_alloc(s_deltafi, deltafi)
+    call move_alloc(s_line_load_block, line_load_block)
+    call move_alloc(s_line_temp_block, line_temp_block)
+    call move_alloc(s_ice0, ice0)
+    call move_alloc(s_trans, trans)
+    call move_alloc(s_element, element)
+    call move_alloc(s_group, group)
+    call move_alloc(s_listp, listp_group)
+    call move_alloc(s_prescrib, prescrib)
+    call move_alloc(s_tcurves, tcurves)
+
+    commit_owned = .true.
+  end subroutine commit_legacy_globals
+
+  !> True while the legacy globals hold storage this module allocated.
+  pure logical function commit_owns_globals() result(owned)
+    owned = commit_owned
+  end function commit_owns_globals
+
+  !> Release everything a previous commit allocated. IDEMPOTENT and total.
+  !>
+  !> Frees the POINTER targets first and the arrays that hold them second, because
+  !> deallocating the array first would lose the only handle on those targets. Does
+  !> nothing at all unless a previous commit set `commit_owned`: storage a legacy reader
+  !> allocated is not this module's to free.
+  subroutine commit_release()
+    integer :: i, ig
+
+    if (.not. commit_owned) return
+
+    if (allocated(element)) then
+      do i = 1, size(element)
+        if (associated(element(i)%ldofs)) deallocate (element(i)%ldofs)
+        if (associated(element(i)%field)) then
+          do ig = 1, size(element(i)%field)
+            if (associated(element(i)%field(ig)%ldofs_f)) deallocate (element(i)%field(ig)%ldofs_f)
+            if (associated(element(i)%field(ig)%elcod_f)) deallocate (element(i)%field(ig)%elcod_f)
+            if (associated(element(i)%field(ig)%tload)) deallocate (element(i)%field(ig)%tload)
+            if (associated(element(i)%field(ig)%eload)) deallocate (element(i)%field(ig)%eload)
+            if (associated(element(i)%field(ig)%rload)) deallocate (element(i)%field(ig)%rload)
+          end do
+          deallocate (element(i)%field)
+        end if
+        if (associated(element(i)%egaus)) then
+          do ig = 1, size(element(i)%egaus)
+            if (associated(element(i)%egaus(ig)%djacb)) deallocate (element(i)%egaus(ig)%djacb)
+            if (associated(element(i)%egaus(ig)%gpcod)) deallocate (element(i)%egaus(ig)%gpcod)
+            if (associated(element(i)%egaus(ig)%cartd)) deallocate (element(i)%egaus(ig)%cartd)
+          end do
+          deallocate (element(i)%egaus)
+        end if
+      end do
+      deallocate (element)
+    end if
+
+    if (allocated(group)) then
+      do i = 1, size(group)
+        if (associated(group(i)%unode)) then
+          do ig = 1, size(group(i)%unode)
+            if (associated(group(i)%unode(ig)%list)) deallocate (group(i)%unode(ig)%list)
+          end do
+          deallocate (group(i)%unode)
+        end if
+      end do
+      deallocate (group)
+    end if
+
+    if (allocated(listp_group)) then
+      do i = 1, size(listp_group)
+        if (associated(listp_group(i)%listg)) deallocate (listp_group(i)%listg)
+        if (associated(listp_group(i)%listp)) deallocate (listp_group(i)%listp)
+      end do
+      deallocate (listp_group)
+    end if
+
+    if (allocated(prescrib)) then
+      do i = 1, size(prescrib)
+        if (associated(prescrib(i)%leldofix)) deallocate (prescrib(i)%leldofix)
+        if (associated(prescrib(i)%levdofix)) deallocate (prescrib(i)%levdofix)
+        if (associated(prescrib(i)%lefdofix)) deallocate (prescrib(i)%lefdofix)
+      end do
+      deallocate (prescrib)
+    end if
+
+    if (allocated(tcurves)) deallocate (tcurves)
+    if (allocated(trans)) deallocate (trans)
+
+    if (allocated(lmdofn)) deallocate (lmdofn)
+    if (allocated(lcdofn)) deallocate (lcdofn)
+    if (allocated(nodfn)) deallocate (nodfn)
+    if (allocated(iffix)) deallocate (iffix)
+    if (allocated(fixed)) deallocate (fixed)
+    if (allocated(appear)) deallocate (appear)
+    if (allocated(result_zero)) deallocate (result_zero)
+    if (allocated(tofor)) deallocate (tofor)
+    if (allocated(stfor)) deallocate (stfor)
+    if (allocated(toforl)) deallocate (toforl)
+    if (allocated(toform)) deallocate (toform)
+    if (allocated(delitfi)) deallocate (delitfi)
+    if (allocated(deltafi)) deallocate (deltafi)
+    if (allocated(line_load_block)) deallocate (line_load_block)
+    if (allocated(line_temp_block)) deallocate (line_temp_block)
+    if (allocated(ice0)) deallocate (ice0)
+
+    ndofix = 0_ink
+    ntcurve = 0_ink
+    commit_owned = .false.
+  end subroutine commit_release
+
+  ! ==========================================================================
+  ! verification
+  ! ==========================================================================
+
+  ! INV-COMMIT-TOTAL: every row the rule table produces has a ledger entry, and the
+  ! ledger entry agrees with what is actually allocated.
+  !
+  ! This is the check that makes the commit safe to write blind afterwards. It runs over
+  ! the RULE TABLE rather than over a list kept here, so a row added to the table without
+  ! a commit for it fails here instead of being committed as a silent absence.
+  subroutine verify_registered(runtime, errors, ok)
+    type(runtime_state_t), intent(in) :: runtime
+    type(problem_errors_t), intent(inout) :: errors
+    logical, intent(out) :: ok
+
+    integer :: i, j
+    integer(int32) :: state
+    logical :: found
+    character(len=:), allocatable :: map_id
+
+    ok = .false.
+
+    if (runtime_status_count(runtime) /= build_rule_produced_count()) then
+      call fail(errors, 'the runtime ledger holds '//itoa(runtime_status_count(runtime))//      &
+                ' rows and the rule table produces '//itoa(build_rule_produced_count()))
+      return
+    end if
+
+    do i = 1, build_rule_produced_count()
+      map_id = build_rule_produced_map_id(i)
+      call runtime_status_get(runtime, map_id, state, found)
+      if (.not. found) then
+        call fail(errors, 'the runtime carries no ledger entry for '//map_id)
+        return
+      end if
+      select case (state)
+      case (RUNTIME_VALUE_DEFINED, RUNTIME_VALUE_RESERVED, RUNTIME_VALUE_ABSENT)
+      case default
+        call fail(errors, 'the ledger entry for '//map_id//' is not a committable state')
+        return
+      end select
+    end do
+
+    ! The structural half: what the ledger says must match what is allocated. Only the
+    ! collections the commit dereferences are named, and each is named because a wrong
+    ! answer here is an unguarded dereference in the staging loops below.
+    if (.not. allocated(runtime%dof%node_variables) .or.                                        &
+        .not. allocated(runtime%dof%component_to_active) .or.                                   &
+        .not. allocated(runtime%dof%active_to_component) .or.                                   &
+        .not. allocated(runtime%dof%fixed_mask) .or.                                            &
+        .not. allocated(runtime%dof%prescribed_value) .or.                                      &
+        .not. allocated(runtime%dof%interpolation_count) .or.                                   &
+        .not. allocated(runtime%dof%element_variables) .or.                                     &
+        .not. allocated(runtime%dof%element_field_variables)) then
+      call fail(errors, 'the runtime dof group is incomplete')
+      return
+    end if
+    if (.not. allocated(runtime%element) .or. .not. allocated(runtime%gauss) .or.               &
+        .not. allocated(runtime%boundary) .or. .not. allocated(runtime%amplitudes) .or.         &
+        .not. allocated(runtime%topology%sections) .or.                                         &
+        .not. allocated(runtime%activation%section_state)) then
+      call fail(errors, 'a top-level runtime collection is not allocated')
+      return
+    end if
+    if (size(runtime%element) < 1 .or. size(runtime%gauss) < 1 .or.                             &
+        size(runtime%activation%section_state) < 1) then
+      call fail(errors, 'a top-level runtime collection is empty')
+      return
+    end if
+    if (.not. allocated(runtime%gauss(1)%stiffness%shape_gradient)) then
+      call fail(errors, 'the stiffness rule carries no shape gradients')
+      return
+    end if
+    ! W1 fix: both checks below used to look only at index 1. That made them spot checks,
+    ! not invariants -- a loop-index bug that only regressed element 2, or section 2, or
+    ! node 2 of some section, would sail through unexamined and get committed blind. Every
+    ! element's mass rule and every node of every section is checked now, and the failure
+    ! names the offending index so a regression is locatable from the message alone.
+    do i = 1, size(runtime%gauss)
+      if (allocated(runtime%gauss(i)%mass%shape_gradient)) then
+        call fail(errors, 'the mass rule carries shape gradients for gauss('//itoa(i)//         &
+                  '), which legacy never allocates for it')
+        return
+      end if
+    end do
+    if (allocated(runtime%topology%sections)) then
+      do i = 1, size(runtime%topology%sections)
+        if (.not. allocated(runtime%topology%sections(i)%nodes)) cycle
+        do j = 1, size(runtime%topology%sections(i)%nodes)
+          if (allocated(runtime%topology%sections(i)%nodes(j)%patch_nodes)) then
+            call fail(errors, 'the stabilisation patch list is allocated for section('//        &
+                      itoa(i)//')%nodes('//itoa(j)//'), but the ledger records it as ABSENT '// &
+                      'on this path')
+            return
+          end if
+        end do
+      end do
+    end if
+
+    ok = .true.
+  end subroutine verify_registered
+
+  ! ==========================================================================
+  ! nulling helpers
+  ! ==========================================================================
+  !
+  ! A staged legacy record is nulled component by component before anything is allocated
+  ! into it. Default initialisation would do this if the legacy types had any; they do
+  ! not, so a staged record would otherwise start with undefined pointer components and
+  ! `associated()` on one of those is undefined behaviour -- including inside
+  ! commit_release, which is the last place that may be uncertain.
+  !
+  ! Nulling is EXHAUSTIVE, not limited to the components this module itself sets or the
+  ! releaser tests. It costs nothing (a null pointer claims no storage and no ownership)
+  ! and it must cover every pointer component because this module hands the whole record
+  ! on to code it does not control -- yl_state_dump.f90 already calls `associated()` on
+  ! several element components this module never touches, and nothing here can promise
+  ! that is the last such reader. "the ones we use" would be an ownership boundary this
+  ! module cannot enforce; nulling everything sidesteps the question.
+  !
+  ! Each subroutine below is checked against the legacy type's own pointer declarations
+  ! and states the count, so a legacy type gaining a new pointer component shows up as a
+  ! mismatch the next time this file is touched rather than as a silent gap.
+
+  ! element_lib (Elements.f90:94-119): 15 `pointer` declaration lines, 25 pointer
+  ! components.
+  subroutine null_element(e)
+    type(element_lib), intent(inout) :: e
+    nullify (e%list_ne_include, e%point_direct)
+    nullify (e%estif, e%mmat, e%gstif, e%rotation, e%stres0, e%evk)
+    nullify (e%gmatx, e%qmatxa, e%rh, e%alfa, e%estift, e%estifh, e%djacb_dd)
+    nullify (e%alfa_it, e%alfa_first, e%alfa_second, e%indx)
+    nullify (e%aera_local, e%ldofs, e%field, e%egaus, e%cstif, e%strainx0)
+  end subroutine null_element
+
+  ! element_field (Elements.f90:62-92): 20 `pointer` declaration lines with live code (a
+  ! 21st, `gpvar_s`, is commented out in the legacy source and is not a real component),
+  ! 41 pointer components.
+  !
+  ! khandmc(2) is a FIXED-size array of type(stiff_field) -- not itself a pointer
+  ! component of element_field -- but it comes into existence the instant `field(1)` is
+  ! allocated, and stiff_field's own two pointers (fstif, hstar; Elements.f90:52-54) are
+  ! then exactly as undefined as anything else nulled here, for the same reason. Nulled
+  ! too, so nothing reachable from a staged field(1) is left indeterminate.
+  subroutine null_element_field(f)
+    type(element_field), intent(inout) :: f
+    nullify (f%lnods_f, f%lnods, f%ldofs_f, f%icftcontact, f%isatu)
+    nullify (f%elcod_f, f%gpvar0, f%sigz, f%gpvar, f%dmatxd)
+    nullify (f%bmatx, f%gamamax, f%gamamax0, f%gamamax_ini, f%gamamax_error)
+    nullify (f%relat_dis_nod0, f%relat_dis_nod, f%relat_dis_gaus0, f%relat_dis_gaus)
+    nullify (f%strain0, f%strain, f%kdiag, f%vkstrain0, f%vkstrain)
+    nullify (f%gapg0, f%gapg, f%gapn0, f%gapn, f%ntstress, f%natural_thickness)
+    nullify (f%state, f%state0, f%state1)
+    nullify (f%omega, f%dsig, f%stran0, f%rr, f%stran0_s)
+    nullify (f%tload, f%eload, f%rload)
+    nullify (f%khandmc(1)%fstif, f%khandmc(1)%hstar)
+    nullify (f%khandmc(2)%fstif, f%khandmc(2)%hstar)
+  end subroutine null_element_field
+
+  ! gauss_element (Elements.f90:20-28): 5 `pointer` declaration lines, 15 pointer
+  ! components.
+  subroutine null_gauss(g)
+    type(gauss_element), intent(inout) :: g
+    nullify (g%gpcod, g%djacb, g%cartd, g%bbar, g%shapwxy)
+    nullify (g%pwatr, g%permr, g%satur, g%csmos, g%poros, g%voide)
+    nullify (g%iload, g%iload0, g%vdval, g%vdval0)
+  end subroutine null_gauss
+
+  ! group_of_elements (Global.f90:234-261): 8 `pointer` declaration lines, 10 pointer
+  ! components. water_pipe, temp_pre and dof point at other record types this module
+  ! never populates -- the pointer still must be nulled, because an unset bit pattern
+  ! there is exactly the same undefined `associated()` hazard as any other component.
+  subroutine null_group(g)
+    type(group_of_elements), intent(inout) :: g
+    nullify (g%type_mass, g%order_time, g%list, g%belem, g%unode)
+    nullify (g%water_pipe, g%temp_pre, g%lcgroup, g%valun, g%dof)
+    g%np_unode = 0_ink
+  end subroutine null_group
+
+  ! unode_elements (Global.f90:263-271): 3 `pointer` declaration lines, 4 pointer
+  ! components.
+  subroutine null_unode(u)
+    type(unode_elements), intent(inout) :: u
+    nullify (u%list, u%patch_nod, u%patch_sta, u%patch_load)
+    u%ne_unode = 0_ink
+    u%np_unode = 0_ink
+    u%ipoin = 0_ink
+  end subroutine null_unode
+
+  ! freedom_prescribe (Prescrib.f90:14-35): 9 `pointer` declaration lines, 9 pointer
+  ! components.
+  subroutine null_prescrib(p)
+    type(freedom_prescribe), intent(inout) :: p
+    nullify (p%leldofix, p%levdofix, p%lefdofix, p%listep, p%value_ext,                         &
+             p%ldofixb, p%lnofixb, p%mlist, p%rintf)
+  end subroutine null_prescrib
+
+  ! time_curve (Load.f90:20-32): 12 `pointer` declaration lines, 24 pointer components.
+  subroutine null_tcurve(c)
+    type(time_curve), intent(inout) :: c
+    nullify (c%dtrec, c%dtend, c%dtbegin, c%ample, c%ttime_curve, c%dfact_curve,                &
+             c%time_begin, c%detal, c%fact_inc, c%a0sin, c%asin, c%wsin, c%w0sin,               &
+             c%dx, c%Ca, c%AI, c%omega, c%nalgo, c%ncdis, c%piter, c%giter, c%Nextr,            &
+             c%NFS, c%order_stoch_parameter)
+  end subroutine null_tcurve
+
+  ! ==========================================================================
+  ! small helpers
+  ! ==========================================================================
+
+  ! Every rejection this module can raise is the one rule row INV-COMMIT-TOTAL, and its
+  ! identity is read OUT OF THE RULE TABLE rather than spelled here: the finding must
+  ! carry the composed key `<rule_id>/<condition>` that build_rule_exercised matches on,
+  ! and the row's own object path and field. Spelling the bare family id here is exactly
+  ! the drift that made the M3-03 build rules invisible to their own coverage walk; see
+  ! the raise_row header in yl_runtime_build.f90 for the full account.
+  subroutine fail(errors, message)
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), intent(in) :: message
+    type(problem_error_t) :: finding
+    type(build_rule_t) :: row
+    logical :: found
+    integer :: i, k
+
+    i = 0
+    do k = 1, build_rule_count()
+      call build_rule_row(k, row, found)
+      if (.not. found) cycle
+      if (trim(row%rule_id) == 'INV-COMMIT-TOTAL') then
+        i = k
+        exit
+      end if
+    end do
+    if (i == 0) then
+      ! The commit's own rule row has gone from the table. Reported as itself rather
+      ! than silently degraded, because a rejection nothing can attribute is worse than
+      ! a loud one.
+      finding = make_problem_error(PE_INTERNAL, PE_STAGE_BUILD, 'INV-COMMIT-TOTAL', 'runtime',  &
+                                   field='*', message='the rule table no longer declares '//    &
+                                   'INV-COMMIT-TOTAL; original finding: '//message,             &
+                                   exit_class=PE_EXIT_INTERNAL)
+      call errors%add(finding)
+      return
+    end if
+    finding = make_problem_error(trim(row%code), PE_STAGE_BUILD, build_rule_key(i),             &
+                                 trim(row%object_path), field=trim(row%field),                  &
+                                 message=message)
+    call errors%add(finding)
+  end subroutine fail
+
+  ! The value of an opt_int, or 0 when it is unset. The commit only reaches these after
+  ! verify_registered accepted the runtime, so an unset scalar here would already be a
+  ! reported fault; the fallback exists so the staging loops have no branch.
+  pure integer(int32) function opt_or(x) result(v)
+    type(opt_int), intent(in) :: x
+    logical :: found
+    call opt_get(x, v, found)
+    if (.not. found) v = 0_int32
+  end function opt_or
+
+  pure real(real64) function opt_or_real(x) result(v)
+    type(opt_real), intent(in) :: x
+    logical :: found
+    call opt_get(x, v, found)
+    if (.not. found) v = 0.0_real64
+  end function opt_or_real
+
+  pure function itoa(v) result(s)
+    integer, intent(in) :: v
+    character(len=:), allocatable :: s
+    character(len=24) :: buf
+    write (buf, '(i0)') v
+    s = trim(buf)
+  end function itoa
+
+end module yl_runtime_commit
