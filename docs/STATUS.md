@@ -31,6 +31,8 @@
 本轮核实了环境（ifx 2025.3、MKL 2026.1、无 gfortran）、原仓库脏树差异、两例 deck 内容与输出路径，
 并据此修正文档；没有更改求解器或算例输入。
 
-下一步：M3-03 已复核，进入 M4-01（静力 Legacy Adapter）。M4-01 需一并解决：deck→ProblemState 通路（M3-03 的基线比对顺延于此），
+M3 阶段**延后出口**（ADR-0004）：三个任务各自 DONE，但出口条件「bridge 状态等价」需要 M4 的适配器，与 M4-01 一并签收。
+
+下一步：进入 M4-01（静力 Legacy Adapter）。M4-01 需一并解决：deck→ProblemState 通路（M3-03 的基线比对顺延于此），
 以及把 commit 的 ProblemState 那一半**折叠进同一次 staging**（不得新增第二个 writer）。
 另登记独立任务：为 Fortran 配置真实质量/安全门禁——CCG 现有门禁对 `src/runtime` 扫描 0 文件，不识别 `.f90`。
