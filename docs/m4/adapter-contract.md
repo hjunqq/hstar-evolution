@@ -19,14 +19,39 @@
 
 ## 2. 解析器的唯一公开形状
 
-每个解析器模块**只导出解析子程序**，形如：
+每个解析器模块**只导出解析子程序**。**碰 `steps[0]` 的**（`.glb` / `.loa` / `.pre` / `.man`）：
 
 ```fortran
-subroutine parse_<kind>(unit, b, errors)
+subroutine parse_<kind>(unit, b, parts, errors)
   integer, intent(in) :: unit                    ! 已打开的 deck 单元，由驱动持有
   type(problem_builder_t), intent(inout) :: b    ! 共享 draft builder
+  type(step_parts_t), intent(inout) :: parts     ! 共享 steps[0] 草稿聚合体
   type(problem_errors_t), intent(inout) :: errors
 ```
+
+**不碰 `steps[0]` 的**（`.cor` / `.ele` / `.mat` / `.sol`）沿用不带 `parts` 的三参形式。
+
+### 2.1 为什么多一个 `parts`（2026-09-08 修订，由 L1-e 发现）
+
+`steps[0]` 由**四个 deck 共同供给**——按映射表计数：`.glb` 28 项、`.man` 10 项、`.pre` 6 项、
+`.loa` 3 项。更麻烦的是两个聚合体本身就跨文件劈开：
+
+| 聚合体 | 来自 `.glb` | 来自别处 |
+|---|---|---|
+| `load_t` | `gravity.enabled` | `gravity.magnitude/direction/amplitude`（`.loa`） |
+| `controls_t` | `nonlinear_type` | 其余八项（`.man`） |
+
+而 `builder_step_set_load` / `builder_step_set_controls` 是**单次 setter**，第二次调用被拒为
+`builder.duplicate_singleton`。那是**对的**——它正是用来防止一个写者静默覆盖另一个。
+
+所以"把共享 `step_builder_t` 传下去"解决不了问题：无论谁发起，第二次 setter 调用都会被拒。
+
+**修订后的机制**：解析器**完全不调用 step builder 例程**，只往共享的 `step_parts_t` 里填
+自己拥有的叶子；**由 L2-a 驱动在最后一次性完成全部 `builder_step_*` 调用**。
+builder 的单次语义完好无损，且仍在履职——它现在守的是驱动那一趟。
+
+**叶子所有权表在 `src/adapter/yl_adapter_step_parts.f90` 的模块头**，一个叶子一个写者。
+写了不属于自己的叶子即为缺陷，**哪怕值恰好是对的**——第二个写者会静默胜出，而两位作者都不会发觉。
 
 **约束：**
 
