@@ -279,11 +279,18 @@ contains
         call opt_set(bd%nset, list_fix(k))
         call opt_set(bd%dof, int(ifixvar, int32))
         call opt_set(bd%value, val_fix(k))
-        ! itcurve == 0 means "no curve" (docs/m2/state-field-map.toml
-        ! steps0.boundary.amplitude note) -- ADR-0002 keeps that as UNSET
-        ! rather than a stored 0, so a downstream reader cannot mistake "no
-        ! amplitude" for "amplitude id 0".
-        if (itcurve /= 0) call opt_set(bd%amplitude, int(itcurve, int32))
+        ! itcurve is always an AUTHORED value, never absent: the deck states it
+        ! on every set_header record, and docs/m2/state-field-map.toml defines
+        ! its domain explicitly -- "0 = constant (no curve) on both cases;
+        ! otherwise 1..ntcurve". 0 there is a meaningful reading ("this record
+        ! has no amplitude reference"), not "the record is silent about
+        ! amplitude". ADR-0002 exists to keep those two apart, which means
+        ! recording the 0 rather than leaving the field unset: unset would
+        ! claim the deck never said anything, when it said exactly 0. (An
+        ! earlier draft of this line got that backwards and dropped every
+        ! itcurve=0 to absence -- caught by the L3-a fidelity gate, which
+        ! compares against a frozen baseline that exports the 0 verbatim.)
+        call opt_set(bd%amplitude, int(itcurve, int32))
         call opt_set(bd%record_reaction, int(outfix, int32))
         call push_boundary(rows, n_rows, bd)
       end do
