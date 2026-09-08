@@ -148,6 +148,20 @@ contains
     call require_context(errors, ctx, ctx_ok)
     if (.not. ctx_ok) return
 
+    ! Prescrib.f90:170-178 -- a restart pre-scan ("do jblks=1,iblks-1 read ...")
+    ! gated on restart==1, running BEFORE the rewind guards and BEFORE the
+    ! nbackdT check below. Not reproduced, and deliberately not threaded in as
+    ! context: its loop bound is iblks-1, and prescrib_set is only ever called
+    ! from inside "do iblks=lblks+1,runblks" (Fem.f90:1683) with runblks =
+    ! nblks, which the static-q4/1 whitelist fixes at 1 (GLB.global_data.
+    ! init_and_blocks: "nblks:derived(steps)"; single-stage static). So
+    ! iblks==1 always on this whitelist and the loop bound is 1-1=0 --
+    ! structurally empty regardless of restart's value, not because restart
+    ! happens to be 0 on the golden decks. (It also carries no reader-
+    ! inventory id, the same shape as the docs/m1/M1-finding-2026-09-08-
+    ! unwrapped-loa-read.md gap -- flagged to the lead, but unlike that one
+    ! this branch cannot execute on this whitelist under any restart value,
+    ! so nothing here is at risk of silently misreading.)
     n_rows = 0
 
     ! RD: PRE.prescrib_set.title#1 (Prescrib.f90:211)

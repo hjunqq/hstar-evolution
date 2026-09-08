@@ -97,7 +97,7 @@
 !         that judgement in this file could only drift from the capability table it is
 !         supposed to defer to.
 !     (b) Fields with NO ProblemState home at all -- pinned legacy switches
-!         (rmesh, ntlink, mat_curve, meshc, level_set_problem, ljdp, stab_matde, nlinks,
+!         (rmesh, ntlink, mat_curve, meshc, level_set_problem, ljdp, nlinks,
 !         block_stab, nbackf, ebody, ninit, uinitial, state_change, Bparameter, nlayer,
 !         ntrans, nlocalbeam/ndimnrt) plus two fields this parser is the sole guard for
 !         because nothing downstream inspects them (`type_ABC`, `type_nl`) and one
@@ -109,6 +109,14 @@
 !         rule to inspect.
 !   `outplot` is technically case (a)-adjacent (legacy_only, no gate row) but IS checked
 !   here for the same "nothing else will" reason as case (b).
+!
+!   `stab_matde` is case (b) too but is NOT a flat zero-pin, and getting that wrong once
+!   already broke a real deck (2026-09-08 correction, below): legacy's guard is
+!   `if(iblks>=stab_matde) call stab_initialize` (Fem.f90:2441 et al.), so the DISABLING
+!   value is stab_matde > nblks (both golden decks carry 99999, a disable sentinel), not
+!   0. An earlier reading of docs/m2/state-field-map.toml's note had this backwards and
+!   rejected every real deck; the map's note has since been corrected. See the check
+!   itself, right after nblks is read and pinned to 1 (seq 7), for the exact condition.
 !
 ! nsmat, nmass, nhmat, nqmat, nldfl, kgmat, nswkw, uwcpl, nflow, ECWPIPE (material_class_counts),
 !   kinit/winit/neuman/equvs/nbspring/outind/nbackdT/ninistn (init_and_blocks),
@@ -291,9 +299,11 @@ contains
       call fail_read(errors, loc, 'mesh', 'sizes_and_switches', iomsg_buf); return
     end if
     ! Pinned switches sharing this record (state-field-map.toml note on
-    ! steps0.output.format: "ntlink,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp,
-    ! stab_matde are unused_switch and pinned 0"). rmesh is checked FIRST and separately
-    ! because it is also the guard for the reached_only read at Global.f90:722 (module
+    ! steps0.output.format: "ntlink,kstab,mat_curve,meshc,rmesh,level_set_problem,ljdp
+    ! are unused_switch and pinned 0"; stab_matde shares the record but is NOT flat-zero
+    ! pinned -- checked separately below, after nblks is known, see the module header's
+    ! 2026-09-08 correction note). rmesh is checked FIRST and separately here because it
+    ! is also the guard for the reached_only read at Global.f90:722 (module
     ! header note): pinning it here makes that branch unreachable, which is this
     ! parser's way of reproducing rather than skipping the guard.
     if (rmesh /= 0_int32) then
@@ -318,9 +328,8 @@ contains
     if (ljdp /= 0_int32) then
       call reject_pinned(errors, loc, 'control.glb.ljdp', 'ljdp', ljdp); return
     end if
-    if (stab_matde /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.stab_matde', 'stab_matde', stab_matde); return
-    end if
+    ! stab_matde is NOT checked here (module header note below on the correction): its
+    ! meaning depends on nblks, read only at seq 7 (init_and_blocks). Checked there.
     if (abs(kstab) > 0.0_real64) then
       call fail_unsupported(errors, loc, 'A-GLB/kstab-nonzero', 'control.glb.kstab', 'kstab', &
         'kstab is a pinned-zero unused switch on static-q4/1', '0.0', rtoa(kstab))
@@ -377,6 +386,23 @@ contains
         'this parser assembles exactly one steps[0] (adapter-contract.md SS2.1); a ' // &
         'multi-block deck needs a step_parts_t per block, which does not exist yet', &
         '1', itoa(nblks))
+      return
+    end if
+    ! stab_matde (read at seq 2, sizes_and_switches): CORRECTED 2026-09-08 -- an earlier
+    ! reading of docs/m2/state-field-map.toml's note had this backwards (both golden
+    ! decks carry 99999, which this parser used to reject outright). Legacy's guard is
+    ! `if(iblks>=stab_matde) call stab_initialize` (Fem.f90:2441,3030,3661,4869): with
+    ! `iblks<=nblks` always true on this whitelist (nblks==1, just pinned above),
+    ! `stab_matde>nblks` makes the condition FALSE, i.e. stab_initialize never runs and
+    ! the feature is DISABLED -- 99999 is a disable sentinel, not a violated pin.
+    ! `stab_matde<=nblks` is the unsupported case: it would run stab_initialize, which
+    ! this build does not reproduce.
+    if (stab_matde <= nblks) then
+      call fail_unsupported(errors, loc, 'A-GLB/stab-matde-enabled', 'control.glb', &
+        'stab_matde', &
+        'stab_matde<=nblks would run stab_initialize (Fem.f90:2441), which this ' // &
+        'build does not reproduce; a disable sentinel (e.g. 99999) is required', &
+        '> '//itoa(nblks), itoa(stab_matde))
       return
     end if
     if (nlinks /= 0_int32) then
@@ -879,8 +905,10 @@ contains
       call builder_sections_empty(b, here(1216_int32), errors)
       if (builder_failed(b)) return
       allocate (activation(0))
+      allocate (ctx%nelgroup(0), ctx%group_matno(0), ctx%group_kind(0))
     else
       allocate (activation(ngroup))
+      allocate (ctx%nelgroup(ngroup), ctx%group_matno(ngroup), ctx%group_kind(ngroup))
       do igroup = 1, ngroup
         ! seq 61 -- RD: GLB.global_data.group_header (Global.f90:1216), loop igroup=1..ngroup
         read (unit, *, iostat=ios, iomsg=iomsg_buf) gname, gkname, gindex, gclass, &
@@ -987,6 +1015,16 @@ contains
             ctx_nnode = 0_int32
           end if
         end if
+
+        ! deck_context_t's per-section arrays (adapter-contract.md SS2.3, added after
+        ! L2-a's first integration run): .ele carries no group boundary of its own, so
+        ! parse_ele attributes its records to a section POSITIONALLY -- group 1 takes
+        ! the first ctx%nelgroup(1) records, group 2 the next ctx%nelgroup(2), and so on.
+        ! This parser is the only place gnelgroup/gmatno/gindex are ever seen, so it is
+        ! the only place that can hand them on.
+        ctx%nelgroup(igroup) = gnelgroup
+        ctx%group_matno(igroup) = gmatno
+        ctx%group_kind(igroup) = gindex
 
         ! ---------------------------------------------------------------------------
         ! INTERLEAVING (module header): this group's .ele elements are read here by

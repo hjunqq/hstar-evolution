@@ -43,21 +43,48 @@
 !   deliberately NOT re-checked here: this parser only rejects what validate cannot
 !   see, namely a record it cannot make sense of at all.
 !
-! End of file
-!   Neither .cor nor .ele carries its own record count; legacy gets npoin/nelem from
-!   .glb (Global.f90:694, :1229) and loops that many times. deck_context_t carries
-!   ndimn/nnode but deliberately not npoin/nelem/nelgroup (those size COLLECTIONS,
-!   not a single record, and are outside what makes a .cor/.ele record misparse), so
-!   each routine reads until IOSTAT_END. For a well-formed deck this is equivalent;
-!   verified against both golden decks (cooks_membrane: 289 nodes/256 elements;
-!   lame_cylinder: 81 nodes/64 elements -- matching reader-inventory hit counts).
+! End of .cor
+!   .cor carries no record count of its own; legacy gets npoin from .glb
+!   (Global.f90:694) and loops that many times. deck_context_t carries ndimn but
+!   deliberately not npoin (that sizes a COLLECTION, not a single record, and is
+!   outside what makes a .cor record misparse), so parse_cor reads until
+!   IOSTAT_END. For a well-formed deck this is equivalent; verified against both
+!   golden decks (cooks_membrane: 289 nodes; lame_cylinder: 81 nodes -- matching
+!   reader-inventory hit counts).
+!
+! .ele's group attribution (adapter-contract.md §2.3, added 2026-09-08 after L2-a's
+! first integration run)
+!   .ele is NOT read to IOSTAT_END like .cor: legacy reads `.ele` INSIDE `.glb`'s
+!   per-group header loop (Global.f90:1213-1310, `read_element` called from
+!   Elements.f90:1296), so a record's owning section is decided POSITIONALLY -- the
+!   first `nelgroup(1)` records belong to section 1, the next `nelgroup(2)` to
+!   section 2, and so on. The .ele file itself carries no group boundary; its
+!   records are just `i0, lnods(1:nnode)`. Before deck_context_t carried
+!   `nelgroup(:)` / `group_matno(:)` / `group_kind(:)`, this parser had no way to
+!   attribute a record to a section at all -- an earlier revision of this module
+!   left `elset`/`material`/`kind` UNSET on every element and never called
+!   `builder_add_elset`, on the reasoning that those are `derived_from` sections[]
+!   in docs/m2/state-field-map.toml and therefore someone else's job. That
+!   reasoning was correct about WHERE the values come from and wrong about WHO
+!   can compute them: the .glb parser never sees an element record, so "someone
+!   else" did not exist. The map's `derived_from` names the SOURCE FILE (.glb, via
+!   ctx), not a different MODULE. Caught by L2-a's first integration run: normalize
+!   rule N6 rejected every element on both golden decks (256 / 64 findings) because
+!   `mesh.elsets[]` was empty.
+!
+!   Because the count now comes from `ctx` rather than being discovered by reading
+!   to EOF, a mismatch between `sum(ctx%nelgroup)` and the records actually present
+!   is no longer something this parser can shrug off as "however many there were" --
+!   it is a genuine deck defect (PE_INVALID_INPUT, rule A-ELE/count-mismatch),
+!   raised whether the file runs out early or has records left over.
 module yl_adapter_mesh
 
   use iso_fortran_env, only: int32, real64, iostat_end
   use yl_problem_optional, only: opt_set
-  use yl_problem_types, only: node_t, element_t
+  use yl_problem_types, only: node_t, element_t, elset_t
   use yl_problem_builder, only: problem_builder_t, builder_add_node, builder_nodes_empty, &
-                                 builder_add_element, builder_elements_empty, builder_failed
+                                 builder_add_element, builder_elements_empty, &
+                                 builder_add_elset, builder_elsets_empty, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, PE_INTERNAL
   use yl_problem_profile, only: capability_expect_int
@@ -138,26 +165,30 @@ contains
   end subroutine parse_cor
 
   ! RD: ELE.read_element.element_connectivity (Elements.f90:1087)
-  ! One record per element: `i0, lnods(1:nnode)`. Legacy loops ielem=1..nelem across
-  ! all groups with nelem/nelgroup from .glb, invisible here for the reason the
-  ! module header gives, so this parser also reads until end of file.
+  ! One record per element: `i0, lnods(1:nnode)`. Attribution to a section is
+  ! POSITIONAL, per `ctx%nelgroup(:)` (module header, adapter-contract.md §2.3):
+  ! the first `ctx%nelgroup(1)` records belong to section 1, the next
+  ! `ctx%nelgroup(2)` to section 2, and so on. This parser therefore reads exactly
+  ! `sum(ctx%nelgroup)` records, grouped in that order, rather than to IOSTAT_END --
+  ! the count is now an input (from `ctx`) instead of something only discoverable by
+  ! reading, so a mismatch is this parser's to report, not to absorb.
   !
-  ! kind/material/elset are left UNSET on every element built here. All three are
-  ! `derived_from` sections[] in docs/m2/state-field-map.toml (the .glb group
-  ! header), never read from .ele itself -- filling them is whoever derives
-  ! sections[] from .glb, not this parser (adapter-contract.md §2, "只通过
-  ! yl_problem_builder 写 draft" does not mean guessing a field this file never
-  ! carries).
+  ! Sets `elset` = the section's 1-based position, `material` = ctx%group_matno for
+  ! that section and `kind` = ctx%group_kind for that section on every element, and
+  ! calls builder_add_elset once per section, in section order (rule N4 keys
+  ! mesh.elsets[] to sections[] positionally, so order here is load-bearing).
   subroutine parse_ele(unit, ctx, b, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(problem_errors_t), intent(inout) :: errors
 
-    integer(int32) :: i0, irec, ios
+    integer(int32) :: i0, irec, ios, igroup, k, total
     integer(int32), allocatable :: lnods(:)
+    integer(int32), allocatable :: group_elements(:)
     character(len=256) :: iomsg_buf
     type(element_t) :: element
+    type(elset_t) :: es
     type(source_location_t) :: loc
 
     if (.not. ctx%filled) then
@@ -168,38 +199,85 @@ contains
                       source=loc))
       return
     end if
+    if (.not. allocated(ctx%nelgroup) .or. .not. allocated(ctx%group_matno) &
+        .or. .not. allocated(ctx%group_kind)) then
+      loc = make_source_location(file='.ele', reader='read_element', line=1087_int32)
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+                      rule_id='A-ELE/context-incomplete', object_path='mesh.elements', &
+                      message='deck_context_t is marked filled but nelgroup/group_matno/' &
+                      //'group_kind were never allocated', source=loc))
+      return
+    end if
 
-    if (.not. element_kind_ok(errors, ctx%element_kind)) return
+    ! No groups at all: an explicitly empty mesh, both collections.
+    if (size(ctx%nelgroup) == 0_int32) then
+      loc = make_source_location(file='.ele', reader='read_element', line=1087_int32)
+      call builder_elements_empty(b, loc, errors)
+      call builder_elsets_empty(b, loc, errors)
+      return
+    end if
 
     allocate (lnods(ctx%nnode))
     irec = 0_int32
-    do
-      read (unit, *, iostat=ios, iomsg=iomsg_buf) i0, lnods
-      if (ios == iostat_end) exit
-      irec = irec + 1_int32
-      loc = make_source_location(file='.ele', reader='read_element', line=1087_int32, &
-                                  record=irec)
-      if (ios /= 0) then
-        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
-                        rule_id='A-ELE/malformed-record', object_path='mesh.elements', &
-                        index=irec, &
-                        message='malformed .ele record: '//trim(iomsg_buf), source=loc))
-        return
-      end if
+    do igroup = 1_int32, size(ctx%nelgroup)
+      if (.not. element_kind_ok(errors, ctx%group_kind(igroup), igroup)) return
 
-      call opt_set(element%id, i0)
-      if (allocated(element%nodes)) deallocate (element%nodes)
-      allocate (element%nodes(ctx%nnode))
-      element%nodes = lnods
+      allocate (group_elements(ctx%nelgroup(igroup)))
+      do k = 1_int32, ctx%nelgroup(igroup)
+        read (unit, *, iostat=ios, iomsg=iomsg_buf) i0, lnods
+        irec = irec + 1_int32
+        loc = make_source_location(file='.ele', reader='read_element', line=1087_int32, &
+                                    record=irec)
+        if (ios == iostat_end) then
+          call count_mismatch(errors, loc, irec - 1_int32, sum(ctx%nelgroup))
+          return
+        end if
+        if (ios /= 0) then
+          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                          rule_id='A-ELE/malformed-record', object_path='mesh.elements', &
+                          index=irec, &
+                          message='malformed .ele record: '//trim(iomsg_buf), source=loc))
+          return
+        end if
 
-      call builder_add_element(b, element, loc, errors)
+        call opt_set(element%id, i0)
+        call opt_set(element%elset, igroup)
+        call opt_set(element%material, ctx%group_matno(igroup))
+        call opt_set(element%kind, ctx%group_kind(igroup))
+        if (allocated(element%nodes)) deallocate (element%nodes)
+        allocate (element%nodes(ctx%nnode))
+        element%nodes = lnods
+
+        call builder_add_element(b, element, loc, errors)
+        if (builder_failed(b)) return
+        group_elements(k) = i0
+      end do
+
+      es%elements = group_elements
+      call builder_add_elset(b, es, loc, errors)
       if (builder_failed(b)) return
+      deallocate (group_elements)
     end do
 
-    if (irec == 0_int32) then
-      loc = make_source_location(file='.ele', reader='read_element', line=1087_int32)
-      call builder_elements_empty(b, loc, errors)
+    ! Leftover records: try to read one more. Succeeding means the file has more
+    ! than `sum(ctx%nelgroup)` records, a deck defect symmetric with running out
+    ! early above -- the count is the authority either way (module header).
+    total = irec
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) i0, lnods
+    if (ios == iostat_end) return
+    loc = make_source_location(file='.ele', reader='read_element', line=1087_int32, &
+                                record=total + 1_int32)
+    if (ios /= 0) then
+      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                      rule_id='A-ELE/malformed-record', object_path='mesh.elements', &
+                      index=total + 1_int32, &
+                      message='malformed .ele record: '//trim(iomsg_buf), source=loc))
+      return
     end if
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                    rule_id='A-ELE/count-mismatch', object_path='mesh.elements', &
+                    message='.ele has more records than sum(ctx%nelgroup) declares', &
+                    actual='> '//itoa(total), expected=itoa(total), source=loc))
   end subroutine parse_ele
 
   ! ============================================================================
@@ -241,10 +319,12 @@ contains
   ! "spend the read anyway and let a later stage catch it" option worth taking --
   ! ctx%nnode may coincidentally match some other kind's node count (e.g. legacy's
   ! H4 is also 4-node, Elements.f90) and produce a record that parses cleanly but
-  ! means nothing this build understands.
-  logical function element_kind_ok(errors, element_kind) result(ok)
+  ! means nothing this build understands. `igroup` is the 1-based section position
+  ! (ctx%group_kind is now per-section, adapter-contract.md §2.3), reported as the
+  ! index so a rejection on section 2 is not indistinguishable from one on section 1.
+  logical function element_kind_ok(errors, element_kind, igroup) result(ok)
     type(problem_errors_t), intent(inout) :: errors
-    integer(int32), intent(in) :: element_kind
+    integer(int32), intent(in) :: element_kind, igroup
     integer(int32) :: expected
     logical :: found
     type(source_location_t) :: loc
@@ -258,11 +338,24 @@ contains
     loc = make_source_location(file='.glb', reader='global_data', line=1216_int32)
     call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, &
                     rule_id='A-ELE/element-kind', object_path='sections[]', &
-                    field='element_kind', &
+                    field='element_kind', index=igroup, &
                     message='only the capability table''s element.kind_code (Q4) is ' &
                     //'whitelisted; this parser only knows how to shape a Q4 connectivity ' &
                     //'record', actual=itoa(element_kind), expected=itoa(expected), source=loc))
   end function element_kind_ok
+
+  ! .ele ran out of records before sum(ctx%nelgroup) was consumed. The symmetric
+  ! "too many" case is handled inline in parse_ele (it needs one more read attempt
+  ! after the loop, which does not fit this shape).
+  subroutine count_mismatch(errors, loc, actual_count, expected_count)
+    type(problem_errors_t), intent(inout) :: errors
+    type(source_location_t), intent(in) :: loc
+    integer(int32), intent(in) :: actual_count, expected_count
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                    rule_id='A-ELE/count-mismatch', object_path='mesh.elements', &
+                    message='.ele ran out of records before sum(ctx%nelgroup) was consumed', &
+                    actual=itoa(actual_count), expected=itoa(expected_count), source=loc))
+  end subroutine count_mismatch
 
   ! Minimal integer-to-text helper for `actual=`/`expected=`. Private and local, same
   ! rationale as yl_problem_errors's own itoa: no dependency pulled in for one
