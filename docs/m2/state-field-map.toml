@@ -154,7 +154,7 @@ emit = "generated"
 determinism = "deterministic"
 snapshot_file = "control.json"
 reason = "guard switch outside the static_2d slice; pinned 0 on both golden cases"
-note = "pinned guard: value 0 keeps control flow on static_2d path. restart=0 on both cases; restart=1 leaves the static_2d path (resta_read_write(1), Fem.f90:283)"
+note = "CORRECTED 2026-09-08 (M4-01 integration): the earlier text recorded this field as 0 and concluded that stab_initialize therefore runs every step. Both golden decks carry 99999 (1.glb record 2, field 15), so Fem.f90:2441/3030/3661/4869 `if(iblks>=stab_matde)call stab_initialize` is FALSE for every iblks on this path (iblks<=nblks=1) and stab_initialize NEVER runs. The side effects the old note attributed to it -- result_zero=0, element%field(1)%gpvar0/gpvar=0 for appearing U groups -- are therefore NOT produced by this routine here; whatever makes them true has another cause. 99999 is a disable sentinel. The supported condition is stab_matde > nblks, not stab_matde == 0."
 
 [[field]]
 id = "control.run.relis"
@@ -1584,7 +1584,7 @@ note = "Load.f90:222 default branch; ragged per curve. Adapter emits one ntime-s
 id = "amplitudes.points.value"
 checkpoint = "model_ready"
 legacy_symbol = "applied_load.tcurves%dfact_curve"
-source = ["LOA.external_load_1.curve_points"]
+source = ["LOA.external_load_1.curve_factors"]
 consumers = ["dfact_time_curve"]
 shape = ["ntime", "ntcurve"]
 dtype = "f64"
@@ -1595,7 +1595,7 @@ compare = { rule = "exact" }
 emit = "adapter:amplitudes_points_value"
 determinism = "deterministic"
 snapshot_file = "loads.sha256"
-note = "Read by the untracked statement Load.f90:231 (same record group as curve_points; not a separate M1 reader). Ragged per curve. Adapter emits one ntime-sized dfact_curve list per curve key."
+note = "CORRECTED 2026-09-08: this row is fed by Load.f90:231, which the earlier note called \"untracked ... not a separate M1 reader\". That call was wrong for M1's purpose: it is a separate READ statement consuming a separate record, so it can fail independently and needs its own diagnostic. It is now the registered reader LOA.external_load_1.curve_factors. See docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md. Ragged per curve; the adapter emits one ntime-sized dfact_curve list per curve key."
 
 [[field]]
 id = "amplitudes.harmonic"
@@ -1882,7 +1882,7 @@ compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "control.json"
-reason = "pseudo-nonlinear stability start block; 0 on both cases"
+reason = "pseudo-nonlinear stability start block; 99999 on both cases -- a DISABLE sentinel, not zero"
 note = "pinned guard: value 0 keeps control flow on static_2d path. Fem.f90:3658 `if(iblks>=stab_matde)call stab_initialize`: with stab_matde=0 and iblks=1 the condition is TRUE, so stab_initialize (:2342-2376) runs every step: result_zero=0, element%field(1)%gpvar0/gpvar=0 for appearing U groups, stop if ninit/=0. A different value changes whether that reset happens."
 
 [[field]]
