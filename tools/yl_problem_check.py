@@ -15,27 +15,54 @@ Sub-commands
             docs/m3/M3-01-problemstate.md (stdout or -o). The full check runs first and
             on FAIL nothing is written (exit 1) unless --force (writes, still exits 1).
             The doc is therefore generated and cannot drift by hand.
-  --selftest  run the built-in in-memory fixtures: one good sample that must PASS plus
-            one mutation per rule that must FAIL with a specific substring
+  --selftest  run the built-in fixtures: one good sample that must PASS plus one mutation
+            per rule that must FAIL with a specific substring. Each case named `rule N ...`
+            must match a message TAGGED `(rule N)`: a case that goes green on some other
+            rule's earlier message leaves the rule it claims to cover unexercised, which is
+            a green suite hiding a dead gate. Add that assertion to any new rule set.
 
 Usage
   python3 tools/yl_problem_check.py check  [--map docs/m2/state-field-map.toml]
-                                           [--src src/problem]
+                                           [--src FILE_OR_DIR]...
                                            [--doc docs/m3/M3-01-problemstate.md]
   python3 tools/yl_problem_check.py render [--map ...] [--src ...]
                                            [-o docs/m3/M3-01-problemstate.md] [--force]
   python3 tools/yl_problem_check.py --selftest
 
+Source scope
+  The default source set is exactly the two ProblemState type modules,
+  `src/problem/yl_problem_optional.f90` and `src/problem/yl_problem_types.f90` -- NOT all
+  of `src/problem`. The other modules there (builder, profile, errors, manifest) are M3-02
+  support code that declares no ProblemState type, and the closed grammar below rightly
+  rejects declarations they legitimately need: a `parameter` table cannot use
+  deferred-length characters, so fixed length plus an initializer is required there, and
+  the builder keeps a `private` statement inside its type. Judging them by a grammar
+  written for the state contract produces only false positives.
+
+  The scope is an explicit list rather than a reachability walk so that the grammar stays
+  exactly as strict on the files it does read. Nothing can hide behind it: a ProblemState
+  type moved into an unscoped module makes rule 3 report `root type ... is not declared`
+  or ``%comp` uses undeclared type`, and its map rows then fail rules 4 and 5 as well. A
+  named `--src` path that does not exist is itself a FAIL, so the gate can never pass by
+  quietly reading nothing. All four of those are covered by --selftest.
+
+  `--src` is repeatable and takes a file or a directory; a directory contributes every
+  `.f90` in it. That is how the selftest fixtures and any scratch tree are checked.
+
 Check rules
    1 map: TOML parses, version == 1, [[field]] non-empty; the exported set is RECOMPUTED
      as `compare.rule != "ignore"` and `owner` starts with `ProblemState.` (never
      hard-coded) and must be non-empty
-   2 declaration grammar: every file under --src parses under the CLOSED grammar below.
-     A statement the grammar does not recognise is a FAIL, never a silent skip.
-   3 type graph: the root type (`problem_state_t`) exists; every `type(T)` component
-     resolves to a type declared under --src; no duplicate type names; no cycles. An
-     `opt_*` wrapper component is ALWAYS a leaf and is never descended into, so it is
-     excluded from the reported type count
+   2 declaration grammar: every type in every source file parses under the CLOSED grammar
+     below. A statement the grammar does not recognise is a FAIL, never a silent skip. The
+     gate is narrowed by its source list, never by relaxing this (see Source scope above)
+   3 type graph: the root type (`problem_state_t`) exists; every `type(T)` component of a
+     type reached from the root resolves to a type declared in the source set; no duplicate
+     type names; no cycles. An `opt_*` wrapper component is ALWAYS a leaf and is never
+     descended into, so wrappers are excluded from the reported type count. This rule is
+     what closes the source scope: a ProblemState type that is not in the source set is
+     undeclared, and says so. A member type hidden in a program unit is registered nowhere
+     and fails here too; the root gets its own message
    4 forward coverage: every exported `ProblemState.*` owner path resolves, via the
      owner-path rule below, to exactly one declared leaf field. Zero matches is a FAIL;
      a path that stops on a non-leaf (a `type(T)` component) is a FAIL
@@ -166,6 +193,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import tempfile
 import tomllib
 from collections import defaultdict
 from pathlib import Path
@@ -176,7 +204,9 @@ from yl_io_inventory import split_lines  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MAP_DEFAULT = REPO_ROOT / "docs" / "m2" / "state-field-map.toml"
-SRC_DEFAULT = REPO_ROOT / "src" / "problem"
+# The gate reads exactly the two ProblemState type modules, never all of src/problem.
+SRC_DEFAULT = [REPO_ROOT / "src" / "problem" / "yl_problem_optional.f90",
+               REPO_ROOT / "src" / "problem" / "yl_problem_types.f90"]
 DOC_DEFAULT = REPO_ROOT / "docs" / "m3" / "M3-01-problemstate.md"
 
 ROOT_TYPE = "problem_state_t"
@@ -298,18 +328,36 @@ class Parser:
         self.problems: list = []
         self.warnings: list = []
 
-    def fail(self, msg: str):
+    def fail(self, msg: str, scope=None):
+        """Everything in scope is reported. `scope` is vestigial and ignored: the gate is
+        scoped by its SOURCE LIST (see the module docstring), not by which types happen to
+        be reachable, so the closed grammar stays exactly as strict on the files it reads."""
         self.problems.append(msg)
 
-    def parse_dir(self, root: Path):
-        if not root.is_dir():
-            self.fail(f"--src {root}: not a directory (rule 2)")
-            return
-        files = sorted(p for p in root.iterdir() if p.suffix.lower() in (".f90", ".F90"))
-        if not files:
-            self.fail(f"--src {root}: no Fortran source files (rule 2)")
-        for p in files:
-            self.parse_text(p.name, split_lines(p.read_bytes()))
+    def tfail(self, td: "TypeDef", msg: str):
+        self.problems.append(msg)
+
+    def parse_paths(self, paths: list):
+        """Each path is a Fortran source file or a directory of them. A named path that
+        does not exist is a FAIL: silently checking nothing is the worst failure mode a
+        gate can have."""
+        files: list = []
+        for raw in paths:
+            path = Path(raw)
+            if path.is_dir():
+                found = sorted(q for q in path.iterdir()
+                               if q.suffix.lower() in (".f90", ".F90"))
+                if not found:
+                    self.fail(f"--src {path}: no Fortran source files (rule 2)")
+                files += found
+            elif path.is_file():
+                files.append(path)
+            else:
+                self.fail(f"--src {path}: no such file or directory (rule 2)")
+        if not files and not self.problems:
+            self.fail("--src: empty source set (rule 2)")
+        for q in files:
+            self.parse_text(q.name, split_lines(q.read_bytes()))
 
     def parse_texts(self, texts: dict):
         for name in sorted(texts):
@@ -322,7 +370,8 @@ class Parser:
             code, cmt = split_comment(raw)
             code = code.strip()
             if code.startswith("#"):
-                self.fail(f"{name}:{no}: preprocessor directive is not allowed (rule 2)")
+                self.fail(f"{name}:{no}: preprocessor directive is not allowed (rule 2)",
+                          ("file", name))
                 continue
             if buf:
                 code = code.lstrip("&").strip()
@@ -340,7 +389,8 @@ class Parser:
             if not buf:
                 cmts = []
         if buf:
-            self.fail(f"{name}:{start}: continuation `&` never terminates (rule 2)")
+            self.fail(f"{name}:{start}: continuation `&` never terminates (rule 2)",
+                      ("file", name))
 
     def parse_text(self, name: str, lines: list):
         cur: TypeDef | None = None
@@ -357,10 +407,14 @@ class Parser:
             if skip_unit:
                 if re.match(r"^end\s*program\b", stmt, re.I):
                     skip_unit = False
-                elif TYPE_HEADER.match(stmt):
-                    self.fail(f"{where}: type `{TYPE_HEADER.match(stmt).group(1)}` is declared "
-                              f"inside a program unit, where the map can never reach it; "
-                              f"ProblemState types must live in a module (rule 2)")
+                elif TYPE_HEADER.match(stmt) \
+                        and TYPE_HEADER.match(stmt).group(1).lower() == ROOT_TYPE:
+                    # A member type hidden in a program unit is registered nowhere, so
+                    # whatever references it fails rule 3 with "uses undeclared type". The
+                    # root has no referent, so it needs its own message.
+                    self.fail(f"{where}: root type `{ROOT_TYPE}` is declared inside a program "
+                              f"unit, where the map can never reach it; ProblemState types "
+                              f"must live in a module (rule 2)")
                 continue
             if cur is None:
                 if re.match(r"^program\s+[A-Za-z_]\w*$", stmt, re.I):
@@ -376,7 +430,8 @@ class Parser:
                     tn = m.group(1)
                     if tn.lower() in self.types:
                         self.fail(f"{where}: duplicate type `{tn}`, first at "
-                                  f"{self.types[tn.lower()].where} (rule 3)")
+                                  f"{self.types[tn.lower()].where} (rule 3)",
+                                  ("type", tn.lower()))
                     cur = TypeDef(tn, where, [])
                     self.types[tn.lower()] = cur
                     if tn.lower() in OPT_WRAPPERS:
@@ -387,19 +442,23 @@ class Parser:
                     continue
                 if TYPE_HEADER_LOOSE.match(stmt):
                     self.fail(f"{where}: type header does not match "
-                              f"`type[, public] :: name_t`: {stmt!r} (rule 2)")
+                              f"`type[, public] :: name_t`: {stmt!r} (rule 2)",
+                              ("file", name))
                     continue
                 if not PROLOGUE_OK.match(stmt):
-                    self.fail(f"{where}: unrecognised module statement {stmt!r} (rule 2)")
+                    self.fail(f"{where}: unrecognised module statement {stmt!r} (rule 2)",
+                              ("file", name))
                 continue
             if END_TYPE.match(stmt):
                 if not cur.comps:
-                    self.fail(f"{where}: type `{cur.name}` has no components (rule 2)")
+                    self.fail(f"{where}: type `{cur.name}` has no components (rule 2)",
+                              ("type", cur.name.lower()))
                 cur = None
                 continue
             self.component(cur, where, stmt, cmt)
         if cur is not None:
-            self.fail(f"{cur.where}: type `{cur.name}` is never closed by `end type` (rule 2)")
+            self.fail(f"{cur.where}: type `{cur.name}` is never closed by `end type` "
+                      f"(rule 2)", ("type", cur.name.lower()))
 
     def component(self, td: TypeDef, where: str, stmt: str, cmt: str):
         low = stmt.lower()
@@ -407,10 +466,10 @@ class Parser:
                          ("contains", "type-bound procedures are not allowed"),
                          ("procedure", "type-bound procedures are not allowed")):
             if re.match(r"^" + bad + r"\b", low):
-                self.fail(f"{where}: in type `{td.name}`: {why} (rule 2)")
+                self.tfail(td, f"{where}: in type `{td.name}`: {why} (rule 2)")
                 return
         if "::" not in stmt:
-            self.fail(f"{where}: in type `{td.name}`: component declaration needs `::`: "
+            self.tfail(td, f"{where}: in type `{td.name}`: component declaration needs `::`: "
                       f"{stmt!r} (rule 2)")
             return
         decl, entities = stmt.split("::", 1)
@@ -425,40 +484,40 @@ class Parser:
             if a == "allocatable":
                 alloc = True
             elif a.startswith("dimension"):
-                self.fail(f"{where}: in type `{td.name}`: `dimension` attribute is not "
+                self.tfail(td, f"{where}: in type `{td.name}`: `dimension` attribute is not "
                           f"allowed, declare the shape on the entity (rule 2)")
                 return
             else:
-                self.fail(f"{where}: in type `{td.name}`: attribute `{a}` is not allowed "
+                self.tfail(td, f"{where}: in type `{td.name}`: attribute `{a}` is not allowed "
                           f"(rule 2)")
                 return
         if base == "character" and not alloc:
-            self.fail(f"{where}: in type `{td.name}`: `character(len=:)` needs "
+            self.tfail(td, f"{where}: in type `{td.name}`: `character(len=:)` needs "
                       f"`, allocatable` (rule 2)")
             return
         for ent in split_top(entities):
             if not ent:
-                self.fail(f"{where}: in type `{td.name}`: empty entity in {stmt!r} (rule 2)")
+                self.tfail(td, f"{where}: in type `{td.name}`: empty entity in {stmt!r} (rule 2)")
                 continue
             if "=" in ent:
-                self.fail(f"{where}: in type `{td.name}`: initializer in {ent!r} defeats the "
+                self.tfail(td, f"{where}: in type `{td.name}`: initializer in {ent!r} defeats the "
                           f"unset discipline (rule 2)")
                 continue
             m = ENTITY.match(ent)
             if not m:
                 b = ENTITY_BAD_DIMS.match(ent)
                 if b:
-                    self.fail(f"{where}: in type `{td.name}`: {b.group(1)} declares explicit "
+                    self.tfail(td, f"{where}: in type `{td.name}`: {b.group(1)} declares explicit "
                               f"or assumed-size bounds; only deferred shape `(:)` is allowed "
                               f"(rule 2)")
                 else:
-                    self.fail(f"{where}: in type `{td.name}`: unrecognised entity {ent!r} "
+                    self.tfail(td, f"{where}: in type `{td.name}`: unrecognised entity {ent!r} "
                               f"(rule 2)")
                 continue
             cname, dims = m.group(1), m.group(2)
             rank = dims.count(":") if dims else 0
             if rank and not alloc:
-                self.fail(f"{where}: in type `{td.name}`: `{cname}` has deferred shape "
+                self.tfail(td, f"{where}: in type `{td.name}`: `{cname}` has deferred shape "
                           f"without `, allocatable` (rule 2)")
                 continue
             if base == "real" and not re.search(r"\(", spec):
@@ -466,7 +525,7 @@ class Parser:
                                      f"explicit kind")
             for prev in td.comps:
                 if prev.name.lower() == cname.lower():
-                    self.fail(f"{where}: in type `{td.name}`: component `{cname}` collides "
+                    self.tfail(td, f"{where}: in type `{td.name}`: component `{cname}` collides "
                               f"with `{prev.name}` at {prev.where}; Fortran is "
                               f"case-insensitive (rule 11)")
                     break
@@ -487,10 +546,10 @@ class Parser:
         if m:
             return "type", m.group(1)
         if TS_CHAR_BAD.match(s):
-            self.fail(f"{where}: in type `{td.name}`: only `character(len=:)` is allowed, "
+            self.tfail(td, f"{where}: in type `{td.name}`: only `character(len=:)` is allowed, "
                       f"got {s!r} (rule 2)")
             return None, None
-        self.fail(f"{where}: in type `{td.name}`: type-spec {s!r} is outside the closed "
+        self.tfail(td, f"{where}: in type `{td.name}`: type-spec {s!r} is outside the closed "
                   f"grammar (rule 2)")
         return None, None
 
@@ -511,52 +570,52 @@ class Parser:
         for piece in pieces:
             m = MARKER.match(piece)
             if not m or m.group(1) not in MARKER_NAMES:
-                self.fail(f"{where}: in type `{td.name}`: malformed marker {piece!r}; "
+                self.tfail(td, f"{where}: in type `{td.name}`: malformed marker {piece!r}; "
                           f"expected @m5-only:<reason> | @optional | @required:<reason> | @map:<id> "
                           f"| @repr:<dtype> from <dtype>; <reason> "
                           f"(rule 6)")
                 continue
             key, val = m.group(1), (m.group(2) or "").strip()
             if key in out:
-                self.fail(f"{where}: in type `{td.name}`: marker @{key} repeated (rule 6)")
+                self.tfail(td, f"{where}: in type `{td.name}`: marker @{key} repeated (rule 6)")
                 continue
             if key in (MARKER_M5, "required"):
                 if m.group(2) is None or not val:
-                    self.fail(f"{where}: in type `{td.name}`: @{key} needs "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @{key} needs "
                               f"`: <reason>` (rule 6)")
                     continue
                 if len(val) < M5_REASON_MIN or not PRINTABLE.match(val):
-                    self.fail(f"{where}: in type `{td.name}`: @{key} reason {val!r} must be "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @{key} reason {val!r} must be "
                               f">= {M5_REASON_MIN} printable characters (rule 6)")
                     continue
             elif key == MARKER_REPR:
                 r = REPR_VALUE.match(val)
                 if not r:
-                    self.fail(f"{where}: in type `{td.name}`: @repr needs "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @repr needs "
                               f"`: <dtype> from <dtype>; <reason>`, got {val!r} (rule 6)")
                     continue
                 to, frm, why = r.group(1).lower(), r.group(2).lower(), r.group(3).strip()
                 if to not in DTYPE_BASE or frm not in DTYPE_BASE:
-                    self.fail(f"{where}: in type `{td.name}`: @repr dtype must be one of "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @repr dtype must be one of "
                               f"{', '.join(sorted(DTYPE_BASE))}, got {to!r} from {frm!r} "
                               f"(rule 6)")
                     continue
                 if to == frm:
-                    self.fail(f"{where}: in type `{td.name}`: @repr declares no change "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @repr declares no change "
                               f"({to} from {frm}) (rule 6)")
                     continue
                 if len(why) < M5_REASON_MIN or not PRINTABLE.match(why):
-                    self.fail(f"{where}: in type `{td.name}`: @repr reason {why!r} must be "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @repr reason {why!r} must be "
                               f">= {M5_REASON_MIN} printable characters (rule 6)")
                     continue
                 val = f"{to} from {frm}; {why}"
             elif key == "map":
                 if not val or not FIELD_ID_RE.match(val):
-                    self.fail(f"{where}: in type `{td.name}`: @map needs a field id, "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @map needs a field id, "
                               f"got {val!r} (rule 6)")
                     continue
             elif val:
-                self.fail(f"{where}: in type `{td.name}`: @{key} takes no value, "
+                self.tfail(td, f"{where}: in type `{td.name}`: @{key} takes no value, "
                           f"got {val!r} (rule 6)")
                 continue
             out[key] = val
@@ -646,6 +705,7 @@ class Checker:
         self.by_type: dict = defaultdict(list)   # fortran path (lower) -> [map ids]
         self.by_id: dict = {}       # map id -> fortran path
         self.deny: set = set()
+        self.reachable: set = set()
         self.deny_raw = 0
         self.stats: dict = {}
 
@@ -677,15 +737,16 @@ class Checker:
 
     # rule 3
     def rule3(self) -> bool:
+        """Also computes REACHABILITY, which scopes every ProblemState component rule.
+        `src/problem` holds M3-02 support modules (builder, profile, errors, manifest) that
+        declare no ProblemState type; their declarations are not the map's business and
+        must not be judged by a grammar written for the state contract. A type reachable
+        from the root through component references IS part of ProblemState, wherever it is
+        declared, so a support module cannot smuggle one past the rules."""
         types = self.p.types
         if ROOT_TYPE not in types:
             self.fail(f"types: root type `{ROOT_TYPE}` is not declared under --src (rule 3)")
             return False
-        for td in types.values():
-            for c in td.comps:
-                if c.base == "type" and c.type_name.lower() not in types:
-                    self.fail(f"{c.where}: `{td.name}%{c.name}` uses undeclared type "
-                              f"`{c.type_name}` (rule 3)")
         seen: set = set()
 
         def walk(tn: str, stack: tuple):
@@ -697,6 +758,13 @@ class Checker:
                 if is_nested(c, types):
                     walk(c.type_name.lower(), stack + (tn,))
         walk(ROOT_TYPE, ())
+        self.reachable = seen
+        for tn in sorted(seen):
+            td = types[tn]
+            for c in td.comps:
+                if c.base == "type" and c.type_name.lower() not in types:
+                    self.fail(f"{c.where}: `{td.name}%{c.name}` uses undeclared type "
+                              f"`{c.type_name}` (rule 3)")
         return not any("cycle through" in p for p in self.problems)
 
     def enumerate_fields(self):
@@ -947,7 +1015,7 @@ class Checker:
         opt = sum(1 for f in self.fields.values() if self.is_opt(f.comp))
         return (f"PASS: {len(self.rows)} exported ProblemState fields, "
                 f"{len(self.fields)} type fields ({opt} optional, {m5} M5-only), "
-                f"{sum(1 for t in self.p.types if t not in OPT_WRAPPERS)} types, "
+                f"{len(self.reachable)} types, "
                 f"deny list {len(self.deny)}/{self.deny_raw} legacy slot names")
 
 
@@ -969,11 +1037,12 @@ def load_all(a) -> Checker | None:
     except (OSError, tomllib.TOMLDecodeError) as e:
         print(f"FAIL: 1 problems\n  {a.map}: {e}")
         return None
+    src = a.src or [str(q) for q in SRC_DEFAULT]
     p = Parser()
     try:
-        p.parse_dir(Path(a.src))
+        p.parse_paths(src)
     except OSError as e:
-        print(f"FAIL: 1 problems\n  {a.src}: {e}")
+        print(f"FAIL: 1 problems\n  {'; '.join(src)}: {e}")
         return None
     ck = Checker(doc, p)
     ck.run()
@@ -1194,6 +1263,29 @@ module yl_problem_optional
 end module yl_problem_optional
 """
 
+SUPPORT_MODULE = """\
+module yl_problem_profile
+  use iso_fortran_env, only: int32
+  implicit none
+  private
+  integer, parameter :: LEN_VALUE = 32
+
+  type :: profile_entry_t
+    character(len=LEN_VALUE) :: key = ""
+    integer(int32) :: int_value = 0_int32
+    logical, pointer :: flag => null()
+  end type profile_entry_t
+
+  type :: problem_builder_t
+    private
+    type(profile_entry_t), allocatable :: entries(:)
+  end type problem_builder_t
+contains
+  subroutine noop()
+  end subroutine noop
+end module yl_problem_profile
+"""
+
 GOOD_PROGRAM = """\
 program yl_problem_selftest
   use yl_problem_optional, only: opt_int
@@ -1218,6 +1310,24 @@ def build(types: str = GOOD_TYPES, doc: dict | None = None, extra: dict | None =
     ck.run()
     return ck
 
+
+SOLVER_BLOCK = """\
+  type, public :: solver_t
+    type(opt_logical) :: symmetric  !@repr: bool from i32; nonsym is a 0/1 flag
+  end type solver_t
+
+"""
+
+SECOND_MODULE = """\
+module yl_problem_solver
+  use yl_problem_optional, only: opt_logical
+  implicit none
+  private
+  type, public :: solver_t
+    type(opt_logical) :: symmetric  !@repr: bool from i32; nonsym is a 0/1 flag
+  end type solver_t
+end module yl_problem_solver
+"""
 
 DIM = "    integer :: dimension  !@required: every deck states the spatial dimension\n"
 
@@ -1304,10 +1414,22 @@ def self_cases() -> list:
     def unresolved_type():
         return build(sub("    type(case_t) :: case\n", "    type(missing_t) :: case\n"))
 
-    def type_in_program():
-        return build(extra={"yl_problem_selftest.f90": GOOD_PROGRAM.replace(
+    def root_in_program():
+        """The root hidden in a program unit: it can never be reached from the map."""
+        return build(GOOD_TYPES.replace("problem_state_t", "root_t"),
+                     extra={"yl_problem_selftest.f90": GOOD_PROGRAM.replace(
+                         "  integer :: n = 0\n",
+                         "  type, public :: problem_state_t\n    integer :: q\n"
+                         "  end type problem_state_t\n")})
+
+    def member_in_program():
+        """A member type moved out of the module is registered nowhere, so the reachable
+        type that references it fails: a support module cannot smuggle one past the rules."""
+        t = GOOD_TYPES.replace("  type, public :: case_t\n", "  type, public :: gone_t\n", 1)
+        t = t.replace("  end type case_t\n", "  end type gone_t\n", 1)
+        return build(t, extra={"yl_problem_selftest.f90": GOOD_PROGRAM.replace(
             "  integer :: n = 0\n",
-            "  type, public :: stray_t\n    integer :: q\n  end type stray_t\n")})
+            "  type, public :: case_t\n    integer :: q\n  end type case_t\n")})
 
     def wrapper_no_default():
         return build(extra={"yl_problem_optional.f90": GOOD_OPTIONAL.replace(
@@ -1373,7 +1495,8 @@ def self_cases() -> list:
         ("rule 2  explicit bounds",    "explicit or assumed-size bounds",    explicit_bounds),
         ("rule 2  fixed-length char",  "only `character(len=:)`",            fixed_char),
         ("rule 2  unknown prologue",   "unrecognised module statement",      prologue),
-        ("rule 2  type in program",    "inside a program unit",              type_in_program),
+        ("rule 2  root in program",    "inside a program unit",              root_in_program),
+        ("rule 3  member in program",  "uses undeclared type `case_t`",      member_in_program),
         ("rule 3  missing root",       "root type `problem_state_t`",        missing_root),
         ("rule 3  undeclared type",    "undeclared type `missing_t`",        unresolved_type),
         ("rule 4  map field unmapped", "no component `density`",             drop_type_field),
@@ -1397,7 +1520,7 @@ def self_cases() -> list:
         ("rule 13 `has` not logical",  "declares `has` as",                  wrapper_has_kind),
         ("rule 13 no `has` component", "declares no `has` component",        wrapper_no_has),
         ("rule 13 wrapper not private", "does not make its components",      wrapper_not_private),
-        ("rule 13 wrapper undeclared",  "uses undeclared type `opt_logical`", wrapper_missing),
+        ("rule 13 wrapper undeclared", "used but its type is not declared", wrapper_missing),
         ("rule 10 legacy slot name",   "is a legacy slot name",              slot_name),
         ("rule 11 case collision",     "Fortran is",                         case_collision),
     ]
@@ -1490,6 +1613,70 @@ def selftest_owner_rule() -> int:
     return n
 
 
+def selftest_scope() -> int:
+    """The gate is scoped by its SOURCE LIST. Exercised on real files in a temp directory,
+    because the scope decision lives in path resolution, not in the parser."""
+    n = 0
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / "yl_problem_optional.f90").write_text(GOOD_OPTIONAL)
+        (root / "yl_problem_types.f90").write_text(GOOD_TYPES)
+        (root / "yl_problem_profile.f90").write_text(SUPPORT_MODULE)
+        scoped = [str(root / "yl_problem_optional.f90"), str(root / "yl_problem_types.f90")]
+
+        def run(paths):
+            p = Parser()
+            p.parse_paths(paths)
+            ck = Checker(good_map(), p)
+            ck.run()
+            return ck
+
+        ck = run(scoped)
+        ok = not ck.problems
+        n += int(ok)
+        print(("ok   " if ok else "BAD  ") + "a support module beside the scoped files, with "
+              "an initializer, a fixed-length character, a pointer and a type-bound "
+              "`private`, is not parsed: " + (ck.summary() if ok else "; ".join(ck.problems)))
+
+        ck = run([str(root)])
+        hit = next((q for q in ck.problems if "profile_entry_t" in q), None)
+        n += int(bool(hit))
+        print(("ok   " if hit else "BAD  ") + "the same file IS judged when the scope "
+              "includes it, so the grammar is not weakened: " + (hit or str(ck.problems)))
+
+        (root / "yl_problem_types.f90").unlink()
+        ck = run(scoped)
+        hit = next((q for q in ck.problems if "no such file" in q), None)
+        n += int(bool(hit))
+        print(("ok   " if hit else "BAD  ") + "a missing scoped file FAILs rather than "
+              "checking nothing: " + (hit or str(ck.problems)))
+
+        # a ProblemState type moved out of the scoped files
+        moved = GOOD_TYPES.replace("  type, public :: case_t\n", "  type, public :: gone_t\n", 1)
+        moved = moved.replace("  end type case_t\n", "  end type gone_t\n", 1)
+        (root / "yl_problem_types.f90").write_text(moved)
+        (root / "yl_problem_outside.f90").write_text(
+            "module yl_problem_outside\n  implicit none\n"
+            "  type, public :: case_t\n    character(len=:), allocatable :: name\n"
+            "  end type case_t\nend module yl_problem_outside\n")
+        ck = run(scoped)
+        hit = next((q for q in ck.problems if "uses undeclared type `case_t`" in q), None)
+        also = any(q.startswith("map field `case.name`") for q in ck.problems)
+        n += int(bool(hit) and also)
+        print(("ok   " if hit and also else "BAD  ") + "a ProblemState type moved outside the "
+              "scope FAILs via rule 3, and its map rows stop resolving: " +
+              (hit or str(ck.problems)))
+
+        (root / "yl_problem_types.f90").write_text(GOOD_TYPES.replace("problem_state_t",
+                                                                     "root_t"))
+        ck = run(scoped)
+        hit = next((q for q in ck.problems if "root type" in q), None)
+        n += int(bool(hit))
+        print(("ok   " if hit else "BAD  ") + "a missing root FAILs: " +
+              (hit or str(ck.problems)))
+    return n
+
+
 def selftest() -> int:
     base = build()
     ok = not base.problems
@@ -1500,11 +1687,21 @@ def selftest() -> int:
     for name, expect, factory in cases:
         problems = factory().problems
         hit = next((p for p in problems if expect in p), None)
-        if hit:
-            n_ok += 1
-            print(f"ok   {name}: {hit}")
-        else:
+        if hit is None:
             print(f"BAD  {name}: expected {expect!r}, got {problems}")
+            continue
+        # Attribution: the message a case matches must be tagged with the rule the case
+        # NAMES. Without this a case can go green on an unrelated rule's earlier message,
+        # leaving the rule it claims to cover never exercised -- a green suite hiding a
+        # dead gate, which is how this project has shipped dead gates before.
+        claim = re.match(r"^rule (\d+)\b", name)
+        tags = re.findall(r"\(rule (\d+)\)", hit)
+        if claim and (not tags or tags[-1] != claim.group(1)):
+            print(f"BAD  {name}: matched a message tagged (rule {tags[-1] if tags else '?'}), "
+                  f"not rule {claim.group(1)}: {hit}")
+            continue
+        n_ok += 1
+        print(f"ok   {name}: {hit}")
     # regression: an `opt_*` component must enumerate as a leaf even though the wrapper
     # module is parsed alongside the types module and registered in the type table
     leaf = "materials(i)%e" in base.fields and "materials(i)%e" in base.by_type
@@ -1514,6 +1711,7 @@ def selftest() -> int:
     n_ok += int(leaf)
     print(("ok   " if leaf else "BAD  ") + "opt_* wrapper components resolve as leaves "
           "with the wrapper module parsed alongside: " + base.summary())
+    n_ok += selftest_scope()
     miss = build()
     miss.rule12(Path("/nonexistent/M3-01-problemstate.md"))
     gone = any("does not exist" in p for p in miss.problems)
@@ -1524,7 +1722,7 @@ def selftest() -> int:
     n_ok += int(idem)
     print(("ok   " if idem else "BAD  ") + "render deterministic + M5 provenance present")
     n_ok += selftest_owner_rule()
-    total = len(cases) + 4 + len(OWNER_RULE_CASES)
+    total = len(cases) + 9 + len(OWNER_RULE_CASES)
     print(f"SELFTEST {'PASS' if n_ok == total else 'FAIL'}: {n_ok}/{total} expectations")
     return 0 if n_ok == total else 1
 
@@ -1540,7 +1738,9 @@ def main(argv=None) -> int:
     for name, func in (("check", cmd_check), ("render", cmd_render)):
         p = sub_.add_parser(name)
         p.add_argument("--map", default=str(MAP_DEFAULT))
-        p.add_argument("--src", default=str(SRC_DEFAULT), help="ProblemState type modules")
+        p.add_argument("--src", action="append", default=None,
+                       help="a ProblemState type module or a directory of them; repeatable. "
+                            "Default: " + ", ".join(q.name for q in SRC_DEFAULT))
         if name == "check":
             p.add_argument("--doc", default=None,
                            help="also require this file to equal `render` output (rule 12)")

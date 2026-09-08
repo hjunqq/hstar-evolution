@@ -1,0 +1,129 @@
+# M3-02：normalize / validate / capability gate / finalize
+
+- 日期：2026-09-08
+- 范围：输入流水线中段。**不含** parse/reader（M4/M5）、`build_runtime`/`commit_legacy_globals`（M3-03）
+- 依赖：M3-01（`962f7ca`）的类型与可选性包装
+
+## 1. 组成
+
+| 模块 | 作用 |
+|---|---|
+| `yl_problem_errors` | `problem_error_t`（code / stage / rule_id / object_path / index / field / message / actual / expected / exit_class / source）与 `problem_errors_t`（add / any / count / get / clear / render / exit_code）。**纯内存**，不调用任何 `diag_*`：那些例程持有全局 pending 状态并会终止进程，而 T01 要求同一进程内失败后立刻重试成功 |
+| `yl_problem_profile` | 版本化默认 profile（本阶段仅 `nstre` 一项）+ 能力表 `static-q4/1`。两张表都是 `parameter` 常量，因此**必须**用定长字符分量——具名常量不能持有 deferred-length 分量 |
+| `yl_problem_manifest` | manifest 累积器 + writer。三种条目：`derived`（规则/来源/结果）、`default`（profile 与版本）、`check`（声明值 vs 派生值 vs 判定），后者让通过的核对也留痕 |
+| `yl_problem_builder` | 最小 draft builder，M4/M5 复用。三态由私有枚举 `COLL_UNSET/EMPTY/FILLED` 承载；`COLL_EMPTY` 在全文件只有 11 处赋值，每个集合的 `_empty` 子程序各一处，**不可能被误触** |
+| `yl_problem_pipeline` | 四阶段，仅 `prepare_problem` 公开，阶段私有，屏障顺序无法绕过 |
+
+## 2. 阶段契约
+
+```
+prepare_problem(draft, profile_in, problem, manifest, errors, declared)
+```
+
+- **阶段之间失败即止**，阶段**之内**累积全部独立缺陷。
+- 每阶段先建候选，成功才 `move_alloc` 转移；失败时调用方的输入与既有产物逐位不变（T01 断言分配状态与全部 `has` 标志）。
+- `declared_counts_t` 为可选尾参：deck 的冗余数量声明在 `problem_state_t` 里没有落点（那是 legacy 形状的类型），因此单独传入，且"未声明"与"声明为零"保持可区分。
+
+## 3. 规则集
+
+| 阶段 | 规则 | 失败码 |
+|---|---|---|
+| normalize | N1 文本规范化（trim + 枚举值大写）、N4 elset/section 数目一致、N5 未分配集合保持未分配（禁止性）、N6 element→elset 反向填充 | N4/N6 `INVALID_INPUT` |
+| validate | V1 必填、V2–V5/V18 引用、V6–V7 重复、V8/V9/V20 存在性、V10–V13 数量、V16/V17/V19 语义、V21 声明数量核对、V22 无对应集合的数量须为零 | `MISSING_FIELD` / `DANGLING_REF` / `DUPLICATE_REF` / `EMPTY_COLLECTION` / `COUNT_MISMATCH` / `INVALID_INPUT`；V22 为 `UNSUPPORTED`（exit 3） |
+| capability | G1–G6（单元、公式、材料模型、求解器、荷载、步/增量），期望值全部从能力表按名取，不在别处复制 | `UNSUPPORTED` |
+| finalize | 6 条 `index_map` + `nstre` 默认值 + 8 条声明数量 `check` | `MISSING_FIELD` / `DANGLING_REF` |
+
+`P0`：`profile_in` 与本次构建的 `PROFILE_TAG` 不符即 `INVALID_INPUT`——被忽略的选择器比没有选择器更糟。
+V15 无失败码：**授权的零必须通过**，一条会拒绝 `magnitude = 0.0` 的规则本身就是缺陷。
+
+## 4. 明确不实现（无可达反例）
+
+按本任务的强制验收标准，给不出反例的规则一律剔除而非硬写：
+
+| 规则 | 原因 |
+|---|---|
+| `case.units == SI` | `case%units` 是 `@m5-only`，legacy 路径上恒 unset；本阶段无 mode 输入。随 M5 authoring 契约落地 |
+| V14 显式空重力 | legacy 用序号 0 表达"无重力"，本身就是 ADR-0002 禁止的哨兵。序号 0 现按 legacy 的"none"拼写接受 |
+| gate 的 restart 项 | 两例都无法表达 restart，构造不出反例 |
+| gate 的 `load_mode` 项 | 可构造反例但本阶段下游无消费，属空转 |
+| `cdofn` / `lcdofn` / `ndofix` | 依赖 DOF 激活表或 RuntimeState 重编号，本阶段无组件持有。注：DOF 激活标志表其实是 **deck 来源**，一旦进入 draft 即可计算 |
+
+**规模更正**：原计划写"7 条 index_map + 2 条 count + 1 条 default = 10 行"，与上表自相矛盾——被禁止的三条恰好就是第 7 条 index_map（`lcdofn`）与那两条 count（`cdofn`、`ndofix`）。实际 finalize 产出 **6 条 index_map + 1 条 default = 7 类**，加 8 条 `check`。**条目数随 draft 规模变化，不是常数**：`mesh.sets.nset` 等按集合逐条产出，因此有两个约束集合的 good draft 是 **16 条**而非 15。审查复核指出文档写死 15 不可复现——记数时必须写明针对哪个 draft，否则换个 draft 这个数字就成了错的。
+
+## 5. 验证记录（2026-09-08）
+
+| 项 | 判据 | 结果 |
+|---|---|---|
+| 类型级自检 | `yl_problem_selftest` | 50/50（两 profile） |
+| 流水线自检 | `yl_problem_pipeline_selftest` | **481/481**（两 profile），能力表行覆盖 15/15。计数与源码 sha256 成对冻结于 `docs/m3/evidence/M3-02-selftest.json` |
+| 反例覆盖 | 每条已实现规则至少一个反例触发 | N4/N5/N6、V1–V13、V15–V22、G1–G6 全覆盖 |
+| I04 三态 | unset / explicit empty / authored zero 三种判定互不混淆 | PASS |
+| T01 事务 | 注入失败后 draft 逐位不变、无产物、无 manifest 条目；紧接着合法 draft 成功 | PASS |
+| 阶段屏障 | normalize 失败时后续三阶段不执行且其缺陷不出现 | PASS |
+| 累积 | 单阶段三个独立缺陷全部报出 | PASS |
+| 构建 | `build.sh problem-types` release + strict，两套自检分别报告 | 0 warning，2 suites passed |
+| 求解器漂移 | GNU build-id | `b10f13ba5694…` 不变 |
+| 回归 | M3-01 门禁 / M2 映射表 / M1 注册表 / 源码 manifest / 探针 47 / 状态探针 4 / 两例 `yl_compare` | 全部 PASS，max\|d\|=0 |
+
+## 6. 覆盖的度量单位与其护栏
+
+**能力门的覆盖单位是"行"，不是 rule_id。** 表里 15 行只对应 6 个 rule_id，
+G1 占 4 行、G2 占 3 行、G3/G4 各 2 行、G5 占 1 行、G6 占 4 行。
+按 rule_id 绑定断言无法区分同一 id 下的两行——审计发现 **6 行从未被任何反例触达**，
+且都因为同 id 的另一行已让它"看起来被覆盖"。另有一条旧用例同时改了两个字段，
+测了一行的同时遮蔽了另一行。**反例必须只改一处。**
+
+现已固化为**常设断言**：自检运行期遍历能力表，按 `object_path`+`field`（两侧擦除下标）
+把真实 finding 匹配回表行，打印"已覆盖行/声明行"，任一行未触发即整套失败并点名该行。
+lead 实证：插入第 16 行且不写反例，得到 `covered: 15/16`、`NEVER TRIGGERED: G9 probe.newrow`、`FAIL`。
+
+## 7. 结构性限制：可遍历的表 vs 代码里的 raise 点
+
+同一陷阱在 validate 家族更严重：8 条规则的多数分支从未被触达（V1 有 11 个条件只覆盖 1 个，
+V22 有 10 个覆盖 1 个，V21 有 8 个覆盖 1 个……），其中有些本就是"同一 id 下的不同规则"——
+例如 step 集合规则对**未分配**与**零长**返回不同错误码，那正是三态纪律本身。补齐后自检从 286 增至 456 项。
+
+**但两者能被守住的程度不同**：
+- 能力表的行**可以**被机器守住，因为模块把它们声明成了一张测试可以遍历的表；
+- validate 的条件**守不住**，因为它们只作为代码里的 raise 点存在。
+
+因此 validate 这边补的是一次**已完成的审计，不是常设控制**。它会和能力门当初一样退化。
+
+> **对 M3-03 的硬性要求**：新增校验规则必须声明在可遍历的表里，
+> 使"每条规则的每个条件都有反例"成为套件断言。否则本任务在覆盖上的全部投入会在下一个里程碑重新腐化。
+
+## 8. 审查发现的 High 与它牵出的两个同源缺陷
+
+**报告的原因**：`derive_node_sets` 把集合数取成边界序号的**最大值**，序号有缺口时会分配出零长 `mesh%nsets` 条目。
+"显式空集合"本应只能由 builder 的 `_empty` 例程产生（全文件仅 11 处赋值），finalize 用算术制造了同一状态，
+等于替作者声明了他没声明的空集合；并且它**证伪了 V21**（声明数量核对跑在 authored 集合上，deck 声明 2 可通过而发布出去是 3）。
+处置按"拒绝而非填补"：新增 **V24**（边界集合序号必须 1..n 无缺口、不得小于 1）。选择拒绝的理由是：
+缺口意味着上游丢了一个集合，重编号会发布一个键的含义与 deck 不符的模型。
+
+**结构性守卫牵出的另外两个原因**（都不在报告的那个 draft 的触发范围内）：
+- **V25**：元素集合按 id 引用元素，但**从来没有规则检查过这些 id 是否存在**（V4/V5 只查了节点集合与连通性里的节点 id）。
+  一个引用了未声明元素的集合会派生成空集合，缺陷要到两个阶段之后才以"凭空造出的空集合"形式暴露。
+  **这是整份反例矩阵漏掉的 validate 覆盖漏洞，靠逐条用例找不到，是结构性守卫在意外位置触发才暴露的。**
+- **退出等级错配**：越界的 `element%elset` 让 section 1 没有元素，守卫以 exit 6（内部故障）触发，
+  而该 draft 的真实缺陷是 exit 2 的输入错。现改为元素到 section 的映射一旦判坏就停止后续派生，
+  避免同一个缺陷被重复报三次，并让报文指向真正的原因。
+
+**一条如实记录的残留**：两个 section、其元素全部指向第一个时，仍会造出空的第二个集合。
+它今天不可达**只是因为能力门恰好只允许一个 section**——这是意外，不是设计。
+按常设决定**不为它加规则**（无可达反例的规则正是我们已删掉五次的东西），由 `INV-EMPTY-DERIVED` 兜底。
+> **依赖登记**：一旦支持的 section 数超过 1，必须为该情形补规则。该注记同时写在能力表的 section 数那一行旁。
+
+**由此得到的分类**：不变量"因构造而不可达"与"因能力上限而不可达"**不是一回事**——后者有失效日期。
+注释必须写明属于哪一种。
+
+**运行期信号**：`INV-` 类 finding 一旦真的出现在某次运行里，含义是**上游缺了一条规则**，而不是这条断言在制造噪声。
+本次三个原因里有两个正是这样暴露的：守卫被标成 `INV-` 是基于"它不可达"的假设，而该假设当时是错的——
+它只是在补上 V24/V25 之后才真正成为不变量。
+
+**方法论上的自评（作者自述，值得照抄）**：三处逐个修复，全都可以被**一条**通用断言覆盖——"发布出的 problem 里不得含有 draft 未声明的零长集合"。第二、三个原因是因为守卫恰好在一个手头已有的 draft 上触发才被发现，**那是运气，不是方法**。因此通用断言优先于逐例修复。
+
+## 9. 过程中发现的问题（值得后续沿用）
+
+- **M3-01 门禁作用域**：它曾把 ProblemState 的字段规则套用到本任务的支持模块，产生 72 条误报。现按显式两文件作用域，且 `--src` 指向不存在的路径本身即失败，门禁不可能因"什么都没读"而通过。
+- **测试绑错规则**：门禁自检里有一条名为规则 13 的用例，实际匹配到的是规则 3 更早抛出的报文——绿灯、看似覆盖、而所称之物从未被执行。现已固化为常设断言：用例名所称规则号必须等于匹配报文的规则号。
+- **自检里 8 处断言拼写错误**，其中 2 处会让测试对着空气通过，由流水线作者在交叉核对时发现。**只匹配 code 不够，有 `rule_id` 的规则必须一并断言**，否则会静默绑定到更早抛出同码的另一条规则。

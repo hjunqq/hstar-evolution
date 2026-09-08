@@ -24,12 +24,18 @@
 #   OUT/obj/*.o *.mod        OUT/hstar          OUT/build.log
 #   OUT/build-manifest.json  compiler/flags/deps/hashes/ldd; fail-closed
 #
-# Target `problem-types` (M3-01) is a SEPARATE target, not a solver profile.
-# It compiles src/problem/{yl_problem_optional,yl_problem_types}.f90 and links
-# the type-level self-test program src/problem/yl_problem_selftest.f90 into
-# OUT/yl_problem_selftest, using its own output and module directory
+# Target `problem-types` (M3-01, extended by M3-02) is a SEPARATE target, not a
+# solver profile. It compiles, in dependency order,
+#   src/problem/yl_problem_{optional,types,errors,profile,manifest,builder,
+#                           pipeline}.f90
+# and links TWO self-test programs, each into its own binary:
+#   src/problem/yl_problem_selftest.f90          -> OUT/yl_problem_selftest
+#   src/problem/yl_problem_pipeline_selftest.f90 -> OUT/yl_problem_pipeline_selftest
+# Both are run; both must pass or the target fails, and the log names the suite
+# that broke. The target uses its own output and module directory
 # (default OUT=build/problem-types/<profile>[-<label>]) and its own manifest
-# OUT/problem-types-manifest.json. src/problem/* MUST NOT appear in the solver
+# OUT/problem-types-manifest.json, which records every source in compile order
+# with its sha256 and both test binaries. src/problem/* MUST NOT appear in the solver
 # source list, object list, link command or SRC_ENTRIES: per
 # .ccg/tasks/m3-01-problemstate-types/analysis-codex.md S5 the new objects stay
 # out of the solver link chain, so the solver binary cannot drift. The
@@ -148,16 +154,27 @@ if [ "$TARGET" = problem-types ]; then
         exit 2
     fi
 
-    # Compile order: optional wrappers -> aggregate types -> self-test program.
-    PT_SRCS=(src/problem/yl_problem_optional.f90 src/problem/yl_problem_types.f90)
-    PT_MAIN=src/problem/yl_problem_selftest.f90
-    PT_EXE="$OUT/yl_problem_selftest"
-    for f in "${PT_SRCS[@]}" "$PT_MAIN"; do
+    # Compile order is the dependency chain: optional wrappers -> aggregate
+    # types -> error accumulator -> default profile/capability table -> manifest
+    # accumulator -> draft builder -> the four pipeline stages.
+    PT_SRCS=(src/problem/yl_problem_optional.f90
+             src/problem/yl_problem_types.f90
+             src/problem/yl_problem_errors.f90
+             src/problem/yl_problem_profile.f90
+             src/problem/yl_problem_manifest.f90
+             src/problem/yl_problem_builder.f90
+             src/problem/yl_problem_pipeline.f90)
+    # Each main is a PROGRAM: compiled on its own and linked into its own binary.
+    PT_MAINS=(src/problem/yl_problem_selftest.f90
+              src/problem/yl_problem_pipeline_selftest.f90)
+    for f in "${PT_SRCS[@]}" "${PT_MAINS[@]}"; do
         [ -f "$ROOT/$f" ] || {
             echo "build.sh: problem-types: missing source $ROOT/$f" >&2
-            echo "build.sh: this target needs src/problem/yl_problem_optional.f90," >&2
-            echo "          src/problem/yl_problem_types.f90 and" >&2
-            echo "          src/problem/yl_problem_selftest.f90 (M3-01 deliverables 2-4)." >&2
+            echo "build.sh: this target needs, in this order:" >&2
+            for g in "${PT_SRCS[@]}" "${PT_MAINS[@]}"; do
+                [ -f "$ROOT/$g" ] && echo "            ok      $g" >&2 || echo "            MISSING $g" >&2
+            done
+            echo "build.sh: (M3-01 deliverables 2-4 and the M3-02 pipeline modules)." >&2
             exit 4
         }
     done
@@ -176,6 +193,22 @@ if [ "$TARGET" = problem-types ]; then
     T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     log() { echo "$*" | tee -a "$LOG"; }
     run() { log "\$ $*"; "$@" >>"$LOG" 2>&1; }
+    # Compiler diagnostics land in $LOG, not on the terminal. Without this the
+    # `set -e` abort on a failed compile leaves the caller with a bare exit 1
+    # and no indication of which source did not build.
+    pt_run() {
+        local what="$1"; shift
+        local rc diag
+        set +e; run "$@"; rc=$?; set -e
+        [ "$rc" -eq 0 ] && return 0
+        # Read the log into a variable before appending to it, so the message
+        # cannot be fed back into its own grep.
+        diag="$(grep -E "error #|catastrophic|compilation aborted" "$LOG" | tail -20)"
+        log "=== COMPILE FAILED (problem-types/$PROFILE): $what (rc=$rc)"
+        log "--- diagnostics (full log: $LOG):"
+        printf '%s\n' "$diag" | tee -a "$LOG" >&2
+        exit 7
+    }
 
     log "=== HSTAR Evolution build: target=problem-types profile=$PROFILE out=$OUT"
     log "FC: $HSTAR_FC ($("$HSTAR_FC" --version | head -1))"
@@ -183,23 +216,34 @@ if [ "$TARGET" = problem-types ]; then
     log "note: no solver object is built here and no object here enters the solver."
 
     PT_OBJS=()
-    for f in "${PT_SRCS[@]}" "$PT_MAIN"; do
+    for f in "${PT_SRCS[@]}"; do
         b="$(basename "$f")"; obj="$OUT/obj/${b%.*}.o"
-        run "$HSTAR_FC" -c "${PT_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" "$ROOT/$f" -o "$obj"
+        pt_run "compiling $f" "$HSTAR_FC" -c "${PT_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" "$ROOT/$f" -o "$obj"
         PT_OBJS+=("$obj")
     done
-    run "$HSTAR_FC" "${FFLAGS[@]}" "${PT_OBJS[@]}" -o "$PT_EXE" "${PT_LDFLAGS[@]}"
+    # One binary per PROGRAM: the two mains must not be linked together.
+    PT_EXES=()
+    for f in "${PT_MAINS[@]}"; do
+        b="$(basename "$f")"; stem="${b%.*}"; obj="$OUT/obj/$stem.o"; exe="$OUT/$stem"
+        pt_run "compiling $f" "$HSTAR_FC" -c "${PT_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" "$ROOT/$f" -o "$obj"
+        pt_run "linking $stem" "$HSTAR_FC" "${FFLAGS[@]}" "${PT_OBJS[@]}" "$obj" -o "$exe" "${PT_LDFLAGS[@]}"
+        PT_EXES+=("$exe")
+    done
     T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
     PT_WARNINGS=$(grep -c -iE "warning #|remark #" "$LOG" || true)
     log "warnings/remarks in log: $PT_WARNINGS"
 
+    # Sources are recorded in compile order, the mains last in the order they
+    # are linked; the binaries follow, separated by the literal "--".
     PT_ENTRIES=()
-    for f in "${PT_SRCS[@]}" "$PT_MAIN"; do PT_ENTRIES+=("$f|$ROOT/$f"); done
+    for f in "${PT_SRCS[@]}" "${PT_MAINS[@]}"; do PT_ENTRIES+=("$f|$ROOT/$f"); done
     python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$PT_WARNINGS" \
-        "${PT_FFLAGS[*]}" "${PT_LDFLAGS[*]}" "$PT_EXE" "${PT_ENTRIES[@]}" <<'PT_PY'
+        "${PT_FFLAGS[*]}" "${PT_LDFLAGS[*]}" "${PT_ENTRIES[@]}" -- "${PT_EXES[@]}" <<'PT_PY'
 import hashlib, json, os, platform, re, subprocess, sys
-out, profile, root, t0, t1, warnings, fflags, ldflags, exe, *entries = sys.argv[1:]
+out, profile, root, t0, t1, warnings, fflags, ldflags, *rest = sys.argv[1:]
+sep = rest.index('--')
+entries, exes = rest[:sep], rest[sep + 1:]
 srcs = [e.split('|', 1) for e in entries]
 def sha(p):
     h = hashlib.sha256()
@@ -213,14 +257,21 @@ def build_id(p):
     txt = subprocess.run(['readelf', '-n', p], capture_output=True, text=True).stdout
     m = re.search(r'Build ID:\s*([0-9a-f]+)', txt)
     return m.group(1) if m else None
-ldd = subprocess.run(['ldd', exe], capture_output=True, text=True).stdout
-deps = []
-for line in ldd.splitlines():
-    m = re.match(r'\s*(\S+)\s*=>\s*(\S+)', line)
-    if m and os.path.isfile(m.group(2)):
-        deps.append({'soname': m.group(1), 'path': m.group(2), 'sha256': sha(m.group(2))})
-    elif 'not found' in line:
-        deps.append({'soname': line.split()[0], 'path': None, 'sha256': None})
+def ldd_deps(p):
+    out_ = subprocess.run(['ldd', p], capture_output=True, text=True).stdout
+    ds = []
+    for line in out_.splitlines():
+        m = re.match(r'\s*(\S+)\s*=>\s*(\S+)', line)
+        if m and os.path.isfile(m.group(2)):
+            ds.append({'soname': m.group(1), 'path': m.group(2), 'sha256': sha(m.group(2))})
+        elif 'not found' in line:
+            ds.append({'soname': line.split()[0], 'path': None, 'sha256': None})
+    return ds
+binaries = [{'path': e, 'bytes': os.path.getsize(e), 'sha256': sha(e),
+             'gnu_build_id': build_id(e), 'runtime_dependencies': ldd_deps(e)}
+            for e in exes]
+unresolved = sorted({d['soname'] for b in binaries for d in b['runtime_dependencies']
+                     if d['path'] is None})
 env = {k: os.environ[k] for k in ('HSTAR_FC','HSTAR_MKLROOT','HSTAR_IOMP_LIBDIR','HSTAR_UNIT_PROFILE')}
 manifest = {
     'manifest_version': 1,
@@ -235,28 +286,43 @@ manifest = {
     'flags': {'fflags': fflags.split(), 'ldflags': ldflags.split()},
     'sources': {'dir': root, 'identity': 'repository:src/problem',
                 'files': [{'path': rel, 'sha256': sha(abs_)} for rel, abs_ in srcs]},
-    'binary': {'path': exe, 'bytes': os.path.getsize(exe), 'sha256': sha(exe),
-               'gnu_build_id': build_id(exe)},
-    'runtime_dependencies': deps,
+    'binaries': binaries,
     'warnings_or_remarks': int(warnings),
-    'unresolved_runtime_deps': [d['soname'] for d in deps if d['path'] is None],
+    'unresolved_runtime_deps': unresolved,
 }
 json.dump(manifest, open(os.path.join(out, 'problem-types-manifest.json'), 'w'), indent=2)
-if manifest['unresolved_runtime_deps']:
-    print('build.sh: unresolved runtime dependencies:', manifest['unresolved_runtime_deps'], file=sys.stderr)
+if unresolved:
+    print('build.sh: unresolved runtime dependencies:', unresolved, file=sys.stderr)
     sys.exit(5)
-print(f"binary {exe} sha256={manifest['binary']['sha256'][:16]} build-id={manifest['binary']['gnu_build_id']} "
-      f"deps={len(deps)} warnings={warnings}")
+for b in binaries:
+    print(f"binary {b['path']} sha256={b['sha256'][:16]} build-id={b['gnu_build_id']} "
+          f"deps={len(b['runtime_dependencies'])} warnings={warnings}")
 PT_PY
 
-    log "--- running self-test: $PT_EXE"
-    "$PT_EXE" 2>&1 | tee -a "$LOG"
-    PT_RC=${PIPESTATUS[0]}
-    if [ "$PT_RC" -ne 0 ]; then
-        log "=== SELF-TEST FAILED (problem-types/$PROFILE) rc=$PT_RC"
+    # Every suite is run even if an earlier one fails, so one invocation reports
+    # the state of both; the target fails if any of them failed.
+    PT_FAILED=()
+    for exe in "${PT_EXES[@]}"; do
+        log "--- running self-test: $exe"
+        # `set -euo pipefail` is in force: without suspending -e the failing
+        # `$exe | tee` pipeline would abort the script here, before the result
+        # is reported and before the remaining suites are run.
+        set +e
+        "$exe" 2>&1 | tee -a "$LOG"
+        PT_RC=${PIPESTATUS[0]}
+        set -e
+        if [ "$PT_RC" -ne 0 ]; then
+            log "--- SELF-TEST FAILED: $(basename "$exe") rc=$PT_RC"
+            PT_FAILED+=("$(basename "$exe") (rc=$PT_RC)")
+        else
+            log "--- SELF-TEST PASSED: $(basename "$exe")"
+        fi
+    done
+    if [ "${#PT_FAILED[@]}" -ne 0 ]; then
+        log "=== SELF-TESTS FAILED (problem-types/$PROFILE): ${PT_FAILED[*]}"
         exit 6
     fi
-    log "=== BUILD OK (problem-types/$PROFILE) $T0 -> $T1"
+    log "=== BUILD OK (problem-types/$PROFILE) $T0 -> $T1: ${#PT_EXES[@]} self-test suites passed"
     exit 0
 fi
 

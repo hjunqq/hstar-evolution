@@ -64,7 +64,7 @@ M0 不要求状态快照实现；快照属于 M2。M0 的产物是可复现的�
 | ID | 依赖 | 交付物 | 完成判据 |
 |---|---|---|---|
 | M3-01 | M2 | 最小类型、字段所有权和生命周期设计（`src/problem/`、`tools/yl_problem_check.py`、`docs/m3/M3-01-problemstate.md`） | 缺失/零/空分离（`opt_*` 包装 + 集合分配状态）；初始输入与积分历史变量分离；YL“组”拆为 elset/section/material；98 项已导出字段与类型双向核对通过，类型中无 Fortran 槽位名 |
-| M3-02 | M3-01 | normalize/validate/finalize | 未知字段和不支持组合拒绝；派生值有来源；失败立即中止后续阶段 |
+| M3-02 | M3-01 | normalize/validate/capability gate/finalize + manifest（`src/problem/yl_problem_pipeline.f90`） | 未知字段和不支持组合拒绝；派生值与默认值在 manifest 中可溯源；阶段间失败立即中止、阶段内累积全部缺陷；失败不留半成品且可同进程重试；每条已实现规则均有可触发的反例 |
 | M3-03 | M3-02 | build_runtime/commit 与旧变量映射 | 分配失败无部分提交；合法加载→失败加载→合法加载测试通过；结果与 M2 对齐 |
 | M4-01 | M3-03 | 静力 Legacy Adapter | 完整消费所需路径；未知方言拒绝；不把动态运行量猜成输入常量 |
 | M4-02 | M4-01 | 独立进程差分运行 | 所有登记检查点、数值和坏输入门通过；显式旧模式可回退 |

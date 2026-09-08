@@ -22,6 +22,7 @@
 | M2-02 状态序列化与比较器 | DONE | 三检查点导出 190 字段（生成式 dump + 25 adapter）；`yl_state.py normalize` 出 §5 九文件与指纹；`yl_state_diff.py` 结构优先定位到对象/字段；dump 开关 × 三 profile × 两例结果逐值不变、`1.flavia.res` 逐字节相同；S01 三次指纹相同；S02 九类反例 + 四类护栏命中；探针 47/47；新风险 R25、R26 |
 | M2-03 两例状态证据 | DONE | S01 两例各 3 次指纹相同、3 对两两 PASS；S03 四条扰动探针 4/4 命中（材料 E、约束值、重力，R24 编码为测试）；状态基线冻结到 `reference/state/`（40 文件/例，附 `frozen.json` provenance）；`yl_state_probe.py --selftest` 47/47 |
 | M3-01 ProblemState 类型 | DONE | `src/problem/` 最小类型（24 个类型 / 100 字段，98 项对应 M2 映射表，2 项 M5-only）；`opt_*` 包装区分 unset/zero/empty；独立 `problem-types` 构建目标不入求解器链接链（build-id 不变）；`yl_problem_check.py` 双向核对 + 槽位名黑名单；映射表 6 项缺陷修正 + `legacy_only`(47) |
+| M3-02 输入流水线 | DONE | normalize/validate/capability gate/finalize 四阶段，仅 `prepare_problem` 公开、阶段间失败即止、阶段内累积；错误累积器为纯内存（不触 `diag_*`，保证同进程重试）；manifest 记派生/默认/核对三类；反例矩阵 481/481 覆盖每条已实现规则的每个条件，能力表 15 行由套件遍历断言（计数与源码哈希冻结于 `docs/m3/evidence/M3-02-selftest.json`）；5 条无反例规则明确不实现 |
 | M1～M5 实现及验收 | TODO | 尚无 checked I/O、状态比较器、现代初始化或可运行 TOML |
 | M6～M9 | BACKLOG | 按真实需求逐能力启动 |
 
@@ -29,4 +30,4 @@
 本轮核实了环境（ifx 2025.3、MKL 2026.1、无 gfortran）、原仓库脏树差异、两例 deck 内容与输出路径，
 并据此修正文档；没有更改求解器或算例输入。
 
-下一步：M3-01 已复核，进入 M3-02（normalize/validate/finalize）。
+下一步：M3-02 已复核，进入 M3-03（build_runtime / commit_legacy_globals）（normalize/validate/finalize）。
