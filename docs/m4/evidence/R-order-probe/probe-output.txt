@@ -1,0 +1,108 @@
+=== R-order probe: driving global_data outside PROGRAM FEM90 ===
+pre-call state: inp read, restart=0 probn=1
+ Input the problem name?
+ NPOIN                                                                          
+  
+         289         289         256           2           1           1
+           0 GIDR                  0.000000000000000E+000           0
+           0           0           0           0       99999
+ NINIT                                                                          
+  
+           0           0           0           1           0           0
+           0           0           0           0           0 
+ FIX                                                          0           0
+           0           0           0           0           0
+ outinpunit=          37 outindunit=          54
+ TYPE_PROBLEM                                                                   
+  
+ Q                                                 
+ PROFILE                                           
+ LOAD                                                         5           0
+           0           0
+ type_layer1                                                                    
+  
+ NMASS                                                                          
+  
+           1           1           1           1           0           0
+           1           0           1           0           0
+ nfreeflownode                                                                  
+  
+ NTSMAT                                                                         
+  
+         999         999           0           0           0
+ beeta1,beeta2,theta1=  0.500000000000000       0.250000000000000     
+   1.00000000000000     
+ equvs_process(1:ngroup)                                                        
+  
+ appear_level(1:ngroup)                                                         
+  
+ APPEAR_PROCESS                                                                 
+  
+ appear_process=           1
+ MATNO_PROCESS                                                                  
+  
+ iblks=           0 ngroup=           1 matno=           1
+ force_process=           0
+ uinitial=           0
+ 1-ILINKS(I0                                                                    
+  
+ 1-tLINKS(I0                                                                    
+  
+ text1=
+ 1-NGROUP--GROUP                                                                
+  
+ (3)                                                                            
+  
+ igroup=           1
+ name=Q4        
+ tne=         256
+ text_tension_joint=
+ tension_joint                                                                  
+  
+ text_tension_contact=
+ contact_joint                                                                  
+  
+ ground_inf=           0 /100=           0
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ COMMENT                                                                        
+  
+ jmat=           1
+ MECHANICAL                    SOLID                                    1
+ ELASTIC_ISOTROPIC                2400.00000000000        1.00000000000000     
+   1.00000000000000        25000000000.0000       0.200000000000000     
+  1.000000000000000E-005           0           0           0
+--- global_data + material_set returned; observed globals ---
+  npoin  = 289
+  nelem  = 256
+  ndimn  = 2
+  ngroup = 1
+  nmats  = 1
+  mdofn  = 2
+  cdofn  = 2
+  ntotv  = 578
+  coord allocated (2,289
+  coord entries not both-zero = 288
+  coord(:,2) =  3.000000000000000E+00 ,  2.750000000000000E+00
+  coord(:,npoin) =  4.800000000000000E+01 ,  6.000000000000000E+01
+  element allocated, size = 256
+  element(1)%field(1)%lnods_f = 1 2 19 18
+  nodfn allocated (2,289
+  props allocated, size = 1
+=== probe completed without abort ===
