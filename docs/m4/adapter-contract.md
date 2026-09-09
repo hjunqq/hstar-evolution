@@ -88,6 +88,27 @@ legacy 在 `.glb` 的**每组头循环之内**读 `.ele`，所以一条元素记
 **职责划分**：`parse_glb` 填这三个数组（它是 `ctx` 的唯一写者）；
 `parse_ele` 据此按位置归属每条记录，设置 `elset` / `material` / `kind`，并调 `builder_add_elset`。
 
+### 2.4 `sections[]` 也必须延后发布（2026-09-09 修订，由 L3-a 保真度门发现）
+
+`sections[].thickness` 的来源是 **`.mat`**（`MAT.material_set.elastic_isotropic`），
+legacy 按材料存（`Material.f90:319`），而 ADR-0003 把它归给 section，因此需要
+**section → material → thickness** 的解析。映射表在 `sections.thickness` 那一行明写
+这个解析"**is the bridge's job**"——bridge 就是本层。
+
+而 legacy 先读 `.glb`（`Fem.f90:117`）后读 `.mat`（`:191`）。所以 `parse_glb` 知道某个 section 时，
+**还不知道它的 thickness**；而 `builder_add_section` 接收一整个 `section_t`，**builder 不提供事后修改**
+——这是刻意的，静默改写已发布状态正是这些类型要防的事。
+
+**结果**：`sections[]` 与 `steps[0]`、`solver` 一样延后发布。`parse_glb` 把除 thickness 外的
+全部字段填进 `section_parts_t`；`parse_mat` 按 `ctx%group_matno(igroup)` 解析出每个 section 的材料、
+填入 thickness；**驱动**在两者都跑完后按顺序做那一组 `builder_add_section` 调用。
+
+> **同一形状的第三例。** deck 把模型视为整体的对象拆散到多个文件里——`steps[0]` 四个文件、
+> `solver` 两个、`sections[]` 两个。三次都不是某个解析器写错了，是**通道没建**。
+> 若将来发现第四例，应当先怀疑"又一个跨文件对象"，而不是先怀疑解析器。
+
+映射表还要求：**拒绝"两个 section 共用同一材料却声明了不同 thickness"的 deck**。该检查归 `parse_mat`。
+
 **`solver_parts_t` 与 `step_parts_t` 同因**：`builder_set_solver` 也是一次性 setter，而
 `.glb` 供给 `linear` 与 `symmetric`，`.sol` 供给 `profile%*` 四项。同样的纪律：
 解析器只填自己的叶子，驱动做那一次调用。

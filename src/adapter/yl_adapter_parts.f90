@@ -66,13 +66,14 @@ module yl_adapter_parts
   use iso_fortran_env, only: int32
   use yl_problem_optional, only: opt_text
   use yl_problem_types, only: controls_t, load_t, output_t, boundary_t, activation_t,          &
-                              solver_t, profile_t
+                              solver_t, profile_t, section_t
 
   implicit none
   private
 
   public :: step_parts_t, step_parts_reset
   public :: solver_parts_t, solver_parts_reset
+  public :: section_parts_t, section_parts_reset
   public :: deck_context_t, deck_context_reset
   public :: LEN_TYPE_ABC, TYPE_ABC_MIF
 
@@ -146,6 +147,30 @@ module yl_adapter_parts
     integer(int32) :: ntrans = 0       ! GLB.global_data.init_and_blocks
   end type deck_context_t
 
+  !> The `sections[]` collection, held back until BOTH files that feed it have run.
+  !>
+  !> WHY, added 2026-09-09 after L3-a found `sections[].thickness` being dropped:
+  !> `.glb`'s group headers supply every section field except one, and `.mat` supplies
+  !> `thickness` -- legacy stores it per material (`props(imat)%mechanical%solid%thickness`,
+  !> Material.f90:319) while ADR-0003 gives it to the section, so it must be resolved
+  !> section -> material -> thickness. `docs/m2/state-field-map.toml`'s own note on
+  !> `sections.thickness` assigns that resolution to "the bridge's job", which is this
+  !> adapter layer.
+  !>
+  !> Legacy reads `.glb` (Fem.f90:117) before `.mat` (:191), so at the moment `parse_glb`
+  !> knows a section it does not yet know that section's thickness. `builder_add_section`
+  !> takes a whole `section_t` and the builder has no way to amend one afterwards -- by
+  !> design, since silent mutation of published state is what these types exist to
+  !> prevent. So publication is deferred: `parse_glb` fills every other field here,
+  !> `parse_mat` fills `thickness`, and the driver makes the `builder_add_section` calls
+  !> once, in order, after both have run.
+  !>
+  !> This is the same shape as `step_parts_t` and `solver_parts_t`, for the same reason
+  !> and the third time: the deck splits across files an object the model keeps whole.
+  type :: section_parts_t
+    type(section_t), allocatable :: sections(:)
+  end type section_parts_t
+
   !> Fragments of the top-level `solver`, which two files supply:
   !>   `.glb` -> linear (GLB.global_data.problem_type), symmetric (GLB..init_and_blocks)
   !>   `.sol` -> profile%* (SOL.PROFILE.profile_control, four fields)
@@ -166,6 +191,12 @@ contains
     type(step_parts_t) :: fresh
     parts = fresh
   end subroutine step_parts_reset
+
+  pure subroutine section_parts_reset(parts)
+    type(section_parts_t), intent(inout) :: parts
+    type(section_parts_t) :: fresh
+    parts = fresh
+  end subroutine section_parts_reset
 
   pure subroutine solver_parts_reset(parts)
     type(solver_parts_t), intent(inout) :: parts
