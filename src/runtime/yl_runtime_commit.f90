@@ -214,7 +214,10 @@ module yl_runtime_commit
   !   name them. Their only guard is yl_runtime_bridge_test's assertions on the committed
   !   globals; four of them had none until a5a6e15. See L2c-fold-design.md §4.5.
   integer, parameter, public :: COMMIT_LEN_MAP_ID = 40
-  integer, parameter, public :: COMMIT_LEN_NOTE = 32
+  ! Widened from 32 for the appear_process exception: a detail that has to be abbreviated
+  ! to fit stops being a detail. It is the reader's only in-band warning that part of a
+  ! row's value did not come from where its state says.
+  integer, parameter, public :: COMMIT_LEN_NOTE = 72
 
   ! WHAT `state` IS A STATEMENT ABOUT -- the definition, settled 2026-09-09, and every
   ! criterion in tools/yl_state_map.py is generated from it:
@@ -365,7 +368,7 @@ module yl_runtime_commit
     commit_provenance_t('derived.dof.lcdofn', COMMIT_FROM_RUNTIME, 'lcdofn(1:cdofn)'),                                          &
     commit_provenance_t('runtime.increment.iblks_at_model', COMMIT_FROM_RUNTIME, ''),                                           &
     commit_provenance_t('runtime.increment.lblks_at_model', COMMIT_FROM_RUNTIME, ''),                                           &
-    commit_provenance_t('steps0.activation.active', COMMIT_FROM_PROBLEM, 'steps[0].activation[]'),                                                   &
+    commit_provenance_t('steps0.activation.active', COMMIT_FROM_PROBLEM, 'steps[0].activation[]; col 0 = 0, legacy init Global.f90:968'),                                                   &
     commit_provenance_t('steps0.activation.material', COMMIT_FROM_PROBLEM, 'steps[0].activation[]'),                                                 &
     commit_provenance_t('runtime.activation.appear', COMMIT_FROM_RUNTIME, ''),                                                  &
     commit_provenance_t('steps0.output.stress_averaging', COMMIT_FROM_PROBLEM, 'steps[0].output'),                                             &
@@ -799,6 +802,19 @@ contains
     end do
 
     ! steps[0].activation[].active -> appear_process(1:ngroup, 0:nblks).
+    !
+    ! THE ONE MIXED ROW IN THE LEDGER. Columns 1..nblks come from ProblemState, but COLUMN
+    ! 0 IS A LEGACY CONSTANT with no ProblemState counterpart -- `activation[]` carries one
+    ! entry per step, not nblks+1 -- so this row's entry says FROM_PROBLEM while part of
+    ! its value is legacy's own initialisation. Audited 2026-09-09 (M4-01 3b checkpoint):
+    ! of the five literals this staging assigns, three belong to `emit = "none"` rows and
+    ! one is overwritten before publication; this is the only published row with a constant
+    ! component, which is why the ledger keeps six states instead of growing a seventh for
+    ! it. The exception is not left to this comment: the ledger's note carries it, and
+    ! yl_runtime_bridge_test asserts BOTH `lbound(appear_process,2) == 0` and
+    ! `appear_process(:,0) == 0`, so it is a red line rather than a claim. If a SECOND
+    ! mixed row ever appears, that is a category and the state vocabulary is reopened.
+    !
     ! LOWER BOUND 0 ON THE SECOND DIMENSION, not 1: column 0 is the initial state, zeroed
     ! at Global.f90:968 and CONSUMED at Fem.f90:1719-1720, and yl_state_adapters.f90:815
     ! asserts `lbound(...,2) == 0` before emitting. A 1-based allocation here would shift
