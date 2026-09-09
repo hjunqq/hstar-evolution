@@ -182,9 +182,53 @@ def diff(ref: Path, act: Path, map_path: Path, out_json: Path) -> tuple[int, dic
     return p.returncode, report, p.stdout + p.stderr
 
 
-def classify(rows: dict[str, dict[str, str]], report: dict, unreached: dict[str, str]
+def read_provenance(path: Path | None) -> dict[str, str] | None:
+    """{map id: provenance state} from `PROV|<id>|<state>|<detail>` lines, or None.
+
+    The lines are the commit provenance ledger's own export (yl_runtime_commit's
+    table, printed by the bridge suite into the build log). This harness does not
+    parse the Fortran table: a second reader of the same declaration would be a
+    second source that can drift while both look right.
+    """
+    if path is None:
+        return None
+    prov = {}
+    for line in path.read_text(errors="replace").splitlines():
+        if line.startswith("PROV|"):
+            parts = line.split("|")
+            if len(parts) >= 3:
+                prov[parts[1]] = parts[2]
+    return prov or None
+
+
+def classify(rows: dict[str, dict[str, str]], report: dict, unreached: dict[str, str],
+             prov: dict[str, str] | None = None
              ) -> list[tuple[str, str, str, str, str]]:
-    """(checkpoint, field, rule, classification, detail) for EVERY map row, always."""
+    """(checkpoint, field, rule, classification, detail) for EVERY map row, always.
+
+    WHY A `NOT_MIGRATED` BUCKET EXISTS, AND WHY IT IS NOT LENIENCY
+        L3-c found five rows reaching this differential as MISMATCH while carrying
+        nothing but Fortran default initialisation: the new path had no recorded
+        source for them, so a snapshot row and a provenance-free byte were
+        indistinguishable here. That is a false RED.
+
+        The false GREEN is the same defect and nobody had flagged it: a row the new
+        path never wrote whose default value happens to equal the old path's is
+        reported MATCH and inflates the evidence. Both directions are uninformative
+        for exactly the same reason, so a row the ledger records as NOT_MIGRATED is
+        put in its own bucket whatever the comparator said about it, and is never
+        counted as MATCH.
+
+        The bucket is therefore a DEBT COUNTER, not an exemption: it empties itself
+        as the M4-01 fold records sources, and at NOT_MIGRATED=0 this harness's
+        adjudication surface is the full comparison face again.
+
+    WHY ONLY IN old-vs-new
+        The ledger describes what the NEW path's commit records. In `--old-vs-old`
+        both children are the legacy binary and both write everything, so every row
+        is legitimately compared; applying the bucket there would suppress ~118 rows
+        of real evidence per case. `prov` is passed only for the criterion run.
+    """
     status = report.get("fields", {}) if report else {}
     out = []
     for cp in sorted(rows):
@@ -193,6 +237,18 @@ def classify(rows: dict[str, dict[str, str]], report: dict, unreached: dict[str,
             if rule == "ignore":
                 out.append((cp, fid, rule, "NOT_COMPARABLE", "compare.rule = ignore (the map's own rule)"))
                 continue
+            if prov is not None:
+                state = prov.get(fid)
+                if state is None:
+                    out.append((cp, fid, rule, "UNVERIFIED",
+                                "the provenance ledger records no source for this row; "
+                                "a row missing from the ledger is not assumed migrated"))
+                    continue
+                if state == "NOT_MIGRATED":
+                    out.append((cp, fid, rule, "NOT_MIGRATED",
+                                "the new path records no source for this value, so neither "
+                                "agreement nor disagreement here is evidence"))
+                    continue
             if cp in unreached:
                 out.append((cp, fid, rule, "UNVERIFIED", unreached[cp]))
                 continue
@@ -277,6 +333,12 @@ def main(argv=None) -> int:
     ap.add_argument("--runs-root", default=str(REPO_ROOT / "runs"))
     ap.add_argument("--new-root", default=str(REPO_ROOT / "build" / "l3c-shadow" / "run"))
     ap.add_argument("--map", default=str(REPO_ROOT / "docs" / "m2" / "state-field-map.toml"))
+    ap.add_argument("--provenance", metavar="FILE", default=None,
+                    help="a file carrying the commit ledger's PROV| export (the runtime-bridge "
+                         "build log). Rows the ledger records as NOT_MIGRATED go to their own "
+                         "bucket instead of MATCH or MISMATCH -- see classify(). Ignored with "
+                         "--old-vs-old, where both children are the legacy binary and every row "
+                         "is legitimately compared.")
     ap.add_argument("--timeout", type=float, default=600.0)
     ap.add_argument("--old-vs-old", action="store_true",
                     help="control: run the OLD binary twice, in two separate processes and "
@@ -287,6 +349,10 @@ def main(argv=None) -> int:
     ap.add_argument("--no-check-clean", action="store_true")
     ap.add_argument("-o", "--output")
     a = ap.parse_args(argv)
+    prov = read_provenance(Path(a.provenance)) if a.provenance else None
+    if prov and a.old_vs_old:
+        print("  note: --provenance ignored under --old-vs-old (both children are the legacy "
+              "binary, so every row is legitimately compared)")
 
     map_path = Path(a.map)
     rows = map_rows(map_path)
@@ -303,7 +369,7 @@ def main(argv=None) -> int:
 
     doc = {"mode": "old-vs-old" if a.old_vs_old else "old-vs-new",
            "map": str(map_path), "cases": {}, "totals": {}}
-    totals = {"MATCH": 0, "MISMATCH": 0, "NOT_COMPARABLE": 0, "UNVERIFIED": 0}
+    totals = {"MATCH": 0, "MISMATCH": 0, "NOT_COMPARABLE": 0, "UNVERIFIED": 0, "NOT_MIGRATED": 0}
     stop = False
 
     for case in cases:
@@ -369,8 +435,8 @@ def main(argv=None) -> int:
                 unreached.setdefault(cp, f"harness aborted before comparison: {e}")
             report = {}
 
-        table = classify(rows, report, unreached)
-        counts = {"MATCH": 0, "MISMATCH": 0, "NOT_COMPARABLE": 0, "UNVERIFIED": 0}
+        table = classify(rows, report, unreached, None if a.old_vs_old else prov)
+        counts = {"MATCH": 0, "MISMATCH": 0, "NOT_COMPARABLE": 0, "UNVERIFIED": 0, "NOT_MIGRATED": 0}
         for _, _, _, cls, _ in table:
             counts[cls] += 1
             totals[cls] += 1
@@ -378,7 +444,8 @@ def main(argv=None) -> int:
         rec["rows"] = [{"checkpoint": c, "field": f, "rule": r, "class": k, "detail": d}
                        for c, f, r, k, d in table]
         print(f"  {case}: MATCH={counts['MATCH']} MISMATCH={counts['MISMATCH']} "
-              f"NOT_COMPARABLE={counts['NOT_COMPARABLE']} UNVERIFIED={counts['UNVERIFIED']}")
+              f"NOT_COMPARABLE={counts['NOT_COMPARABLE']} UNVERIFIED={counts['UNVERIFIED']}"
+              + (f" NOT_MIGRATED={counts['NOT_MIGRATED']}" if counts['NOT_MIGRATED'] else ""))
 
         if not a.no_check_clean:
             dirty = cases_clean()
@@ -397,7 +464,12 @@ def main(argv=None) -> int:
 
     doc["totals"] = totals
     print(f"\nTOTALS  MATCH={totals['MATCH']}  MISMATCH={totals['MISMATCH']}  "
-          f"NOT_COMPARABLE={totals['NOT_COMPARABLE']}  UNVERIFIED={totals['UNVERIFIED']}")
+          f"NOT_COMPARABLE={totals['NOT_COMPARABLE']}  UNVERIFIED={totals['UNVERIFIED']}"
+          + (f"  NOT_MIGRATED={totals['NOT_MIGRATED']}" if totals['NOT_MIGRATED'] else ""))
+    if totals['NOT_MIGRATED']:
+        print(f"  NOT_MIGRATED is the M4-01 fold's remaining debt, not an exemption: those "
+              f"rows are neither evidence for nor against equivalence, and the bucket empties "
+              f"as the fold records their sources.")
     if a.output:
         Path(a.output).write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(f"report: {a.output}")
