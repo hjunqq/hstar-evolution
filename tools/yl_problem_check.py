@@ -905,7 +905,45 @@ class Checker:
             self.rule8_9()
             self.rule13()
         self.rule14()
+        self.rule15()
         return self.problems
+
+    # rule 15
+    def rule15(self):
+        """No ProblemState.* row may be non-deterministic.
+
+        WHY THIS RULE EXISTS, AND WHAT IT DOES NOT DO
+            docs/05-execution-backlog.md's M3-01 acceptance column promises
+            "初始输入与积分历史变量分离". That property holds today -- element%estif is
+            owner=not_migrated and stres0/gmatx/gpvar0/gpvar have no map row at all --
+            but it held as a BY-PRODUCT of rule 3's 98-row bijection, with nothing
+            declaring or enforcing it. One added map row giving a history slot a
+            `ProblemState.*` owner would end it and nothing would go red. That is the
+            inverse of this project's recurring defect: not a declaration unbound to
+            what it declares, but a property with no declaration at all, so nobody
+            learns when it stops holding. (Found by accept-m2m3 while building the M3
+            acceptance matrix, 2026-09-09.)
+
+            The rule is DERIVED from the map rather than from a hand-written list of
+            history slots, because such a list would rot: all 98 ProblemState rows are
+            `determinism = "deterministic"` today, while every `uninitialized` (26),
+            `order_dependent` (9) and `pointer` (6) row is owned elsewhere.
+
+            IT IS A NECESSARY CONDITION, NOT THE PROPERTY. It catches the likely way
+            the separation breaks -- an uninitialised or pointer-valued history slot
+            acquiring a ProblemState owner. It does NOT prove that no history variable
+            is a ProblemState field: a history slot that happens to be deterministic at
+            its checkpoint would pass. Criterion 5 of the M3 acceptance matrix records
+            what remains assertion-only.
+        """
+        bad = [r for r in self.doc.get("field", [])
+               if str(r.get("owner", "")).startswith("ProblemState.")
+               and r.get("determinism") != "deterministic"]
+        for r in bad:
+            self.fail(f"map: {r.get('id')} is owned by {r.get('owner')} but its determinism "
+                      f"is {r.get('determinism')!r}; a ProblemState field must be "
+                      f"deterministic -- an uninitialised, order-dependent or pointer-valued "
+                      f"slot is integration state, not initial input (rule 15)")
 
     # rule 1
     def rule1(self):
