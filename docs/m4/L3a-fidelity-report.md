@@ -6,17 +6,19 @@
 
 | | MATCH | MISMATCH | NOT_COMPARABLE | UNVERIFIED |
 |---|---|---|---|---|
-| **工具原始输出**（`yl_adapter_fidelity` 程序自己打印的 `SUMMARY` 行，两个 golden deck 一致） | 94 | 3 | 1 | 0 |
-| **本报告终审判定**（作者读过每条非 MATCH 背后的源码后给出的分类，见 §2/§3） | 94 | 1 | 3 | 0 |
+| **工具原始输出**（`yl_adapter_fidelity` 程序自己打印的 `SUMMARY` 行，两个 golden deck 一致） | 95 | 2 | 1 | 0 |
+| **本报告终审判定 — 验收结论**（作者读过每条非 MATCH 背后的源码后给出的分类，见 §2/§3） | **95** | **0** | **3** | 0 |
 
 两组不一致，原因是程序对"两侧都 unset"这类情况的自动 cause 标注只是初筛线索，不是终审结论
 （`yl_adapter_fidelity.f90` 模块头原话："this program's tag is a lead, not a verdict"）。终审
-判定把程序原始打的 3 个 `MISMATCH` 拆成了两类：1 个维持 `MISMATCH`（`sections.thickness`，
-真实缺陷，见 §2/§7），2 个改判为 `NOT_COMPARABLE`（`sections.material_header`／
-`sections.material`，真正是下一阶段的派生列，见 §2/§3）。程序原始的 `NOT_COMPARABLE=1`
-（`mesh.sets.nset`，集合行数不一致）在终审判定里保持不变。**任何引用本报告计数的人，都应
-引用终审判定这一行（94/1/3/0），而不是工具原始输出——但两者都必须能在报告里查到，不能只
-留一个。**
+判定把程序原始打的 2 个 `MISMATCH` 全部改判为 `NOT_COMPARABLE`（`sections.material_header`／
+`sections.material`，真正是下一阶段的派生列，见 §2/§3），程序原始的 `NOT_COMPARABLE=1`
+（`mesh.sets.nset`，集合行数不一致）在终审判定里保持不变，合计 3 个 `NOT_COMPARABLE`。
+`sections.thickness` 在上一轮曾是本报告唯一的真实 `MISMATCH`（被 team lead 指出后从
+"派生列"改判为"缺陷"），这一轮**修复落地、重新对拍后已回归为 `MATCH`**（§0.1、§2、§7），
+终审判定的 `MISMATCH` 因此归零。**这是 L3-a 的验收结论：MATCH=95、MISMATCH=0、
+NOT_COMPARABLE=3（均已命名下一比对地点，见 §2/§8），任何引用本报告计数的人都应引用终审
+判定这一行——但两组数字都必须能在报告里查到，不能只留一个。**
 
 ## 0. 本报告回答的问题
 
@@ -83,6 +85,27 @@ oracle draft（`yl_adapter_harvest.harvest_problem_state`），按 `docs/m2/stat
   `materials[]`——`material_t` 也确实没有能装它的字段。**这个值被读出来又被扔掉了**，没有
   任何地方接住它，不是"下一阶段会处理"。已更正为 `MISMATCH`，cause=unsupported field /
   dropped input，详见 §2 该行；与另外两个真正的派生列分开列出，不再混为一谈。
+- **`sections.thickness`：缺陷 → 报告 → 修复 → 回归确认，修复比看起来的一次性局部改动
+  大得多**：字段 owner 没有做一个局部补丁，而是发现 `sections[]` 需要跟 `steps[0]`／
+  `solver` 一样，成为第三个"跨文件先攒齐、再一次性发布"的聚合对象（contract §2.4）——
+  因为 `sections[]` 由 `parse_glb` 发布，legacy 里 `.glb` 先于 `.mat` 读取，而
+  `builder_add_section` 和其它单例 setter 一样，一份 `section_t` 发布之后不能再补。于是：
+  `parse_glb` 现在只填 `section_parts_t`、不再发布；`parse_mat` 新增
+  `resolve_section_thickness`，通过 `ctx%group_matno` 做 section→material 下标换算，填上
+  `thickness`；`yl_adapter_driver.f90` 在两个 parser 都跑完之后统一发布 `sections[]`
+  （新增的发布块，见该模块头 2026-09-09 的补充说明）。**这不是本报告最初以为的"一个条件
+  判断写错了"那种局部修复，而是一次架构变化**——本报告在 §5 已经记录过一次自己的比较器
+  bug，这里额外记一笔：一个看起来是"少存一个值"的缺陷，根因排查下去是"这个字段本来就没有
+  正确的发布通道"，值得写进沿革里，而不是当作和 `steps0.boundary.amplitude` 一样的
+  局部条件反转来交代。团队还额外做了两件本报告的两个 golden deck 结构上做不到的验证（详见
+  §7）：(a) 把 map 要求的"两个 section 共用一个 material 但 thickness 不一致就拒绝"实现
+  成对一张"先见值"表的真实比较，并写明了为什么这两个 golden deck（`nmats=ngroup=1`）永远
+  触发不了这条分支——记录原因，而不是因为触发不了就跳过；(b) 在一个**合成的**两 section／
+  两 material（thickness 1.0 与 2.5）deck 和一个 `imat` 被破坏的 deck 上验证了下标换算
+  本身，因为两个 golden deck 的 `nmats=ngroup=1` 从结构上就藏住了 section→material 换算
+  这一步，本报告的 oracle 对拍在这两个 deck 上永远看不到换算错了会是什么样子。这次修复后
+  本报告重新编译全部七个 adapter 模块（`-warn all -stand f18` 零警告）、重新在两个 golden
+  deck 上跑过对拍，`sections.thickness` 回归为 `MATCH`（详见 §2、§7）。
 
 ## 1. 比较对象与复现命令
 
@@ -181,7 +204,7 @@ cooks_membrane 的输出为准，数值差异（如 boundary 记录数 34 vs 18�
 | `materials.model` | harvest_problem_state (oracle) | MATCH | — | — |
 | `materials.density` | harvest_problem_state (oracle) | MATCH | — | — |
 | `materials.ratio` | harvest_problem_state (oracle) | MATCH | — | — |
-| `sections.thickness` | harvest_problem_state (oracle) | **MISMATCH**（真实缺陷，不是派生列，见下） | **unsupported field / dropped input** | **本行不是"下一阶段该做的派生"，而是这一层适配器自己该做却没做的工作**（本报告曾错误地把它和 `sections.material_header`/`sections.material` 归为一类，已更正，见 §0.1）。map 行 `source = ['MAT.material_set.elastic_isotropic']`——`thickness` 是从 `.mat` **读出的、有作者的 deck 值**，不是 `derived:*`；map 行 note 明确把 "section→material→thickness 的下标换算（并拒绝两个 section 共用一个 material 但 thickness 不一致的 deck）" 记在 **"the bridge's job"**，也就是这一层适配器的职责，不是某个更下游阶段的。`yl_adapter_material.f90:205` 确实读出了 `thickness`；:274-276 明确不存它，理由是它的 owner 是 `sections[].thickness` 而非 `materials[]`——但 `material_t`/`section_t` 都没有任何字段接住它，也没有任何其它 parser 尝试写 `sections[].thickness`。**值被读出来又被原地扔掉，没有任何地方接住**：candidate 侧永远 unset；oracle 侧（`harvest_sections`）按 `group(g)` 索引 `props(g)` 补上了值（两个 golden 案例 `nmats=ngroup=1`，索引才凑巧对上）。消费者：`STIFF_U`（`Stiff.f90:116`，2D 时乘进单元刚度）与 `gravity`（`Load.f90:1230`，乘进体力荷载）。**两个 golden deck 上该值都是 `1.0`**（冻结基线 `groups.json` 记的 hex `3FF0000000000000`，map note 称为 "1.0 plane-strain placeholder"），所以今天没有数值后果；但任何 `thickness /= 1.0` 的 deck 都会在这条路径上**静默丢失**这个输入值——违反本关卡自己的验收标准 "no field is silently dropped"，正是本关卡要抓的那一类问题。 |
+| `sections.thickness` | harvest_problem_state (oracle) | **MATCH（修复后回归确认；曾是真实 MISMATCH，见下）** | — | **本行曾是一个真实的、已修复的缺陷，不是派生列（§0.1）**：map 行 `source = ['MAT.material_set.elastic_isotropic']`——`thickness` 是从 `.mat` **读出的、有作者的 deck 值**；map note 明确把 section→material→thickness 的下标换算记在 "the bridge's job"，也就是这一层适配器自己的职责。修复前，`yl_adapter_material.f90:205` 读出了 `thickness` 但 :274-276 不存它（owner 是 `sections[]` 不是 `materials[]`，而当时没有任何字段能接住它），值被读出来又被原地扔掉，candidate 侧永远 unset，违反 "no field is silently dropped"。消费者：`STIFF_U`（`Stiff.f90:116`）与 `gravity`（`Load.f90:1230`）；两个 golden deck 上该值恰好都是 `1.0`（冻结基线 `groups.json`），所以修复前没有数值后果，但任何 `thickness≠1.0` 的 deck 都会静默丢失这个值。**修复不是局部条件反转，而是把 `sections[]` 提升为第三个跨文件先攒齐、再一次性发布的聚合对象**（`section_parts_t`，contract §2.4）：`parse_glb` 只填不发布，新增的 `parse_mat.resolve_section_thickness` 通过 `ctx%group_matno` 做 section→material 换算并填上 `thickness`（连带实现了 map 要求的"两 section 共用 material 但 thickness 不一致就拒绝"，对一张先见值表做真实比较，并写明两个 golden deck 为何永远触发不到这条分支），`yl_adapter_driver.f90` 统一发布。字段 owner 额外在一个**合成的**两 section/两 material（1.0 vs 2.5）deck 和一个损坏 `imat` 的 deck 上验证了换算本身——这两个 golden deck 的 `nmats=ngroup=1` 从结构上就藏住了这一步，本报告的 oracle 对拍在这两个 deck 上永远看不到换算出错的样子，这条证据是本报告的对拍**结构上产生不出来**的（详见 §0.1、§7）。修复后重新编译全部七个 adapter 模块（`-warn all -stand f18` 零警告）、重新对拍两个 golden deck，确认现在 `MATCH`。 |
 | `materials.E` | harvest_problem_state (oracle) | MATCH | — | — |
 | `materials.nu` | harvest_problem_state (oracle) | MATCH | — | — |
 | `materials.thermal_expansion` | harvest_problem_state (oracle) | MATCH | — | — |
@@ -264,39 +287,41 @@ cooks_membrane 的输出为准，数值差异（如 boundary 记录数 34 vs 18�
 
 ## 3. 计数
 
-| 分类 | 工具原始输出（程序 `SUMMARY` 行，两个 golden 案例一致） | 本报告终审判定（见下方说明） |
+| 分类 | 工具原始输出（程序 `SUMMARY` 行，两个 golden 案例一致） | 本报告终审判定 — 验收结论 |
 |---|---|---|
-| MATCH | 94 | 94 |
-| MISMATCH | 3 | **1**（`sections.thickness`——真实缺陷，见 §2/§7，非 §0.1 更正前误判的派生列） |
-| NOT_COMPARABLE | 1 | **3**（`mesh.sets.nset`、`sections.material_header`、`sections.material`） |
+| MATCH | 95 | **95** |
+| MISMATCH | 2 | **0** |
+| NOT_COMPARABLE | 1 | **3**（`mesh.sets.nset`、`sections.material_header`、`sections.material`，均为真正的派生列，各自的下一比对地点见 §2） |
 | UNVERIFIED | 0 | 0 |
 
-（共 98 行，两个 golden 案例逐行一致；`steps0.boundary.amplitude` 已修复并回归为
-`MATCH`——见下方沿革。）
+（共 98 行，两个 golden 案例逐行一致；`steps0.boundary.amplitude` 与 `sections.thickness`
+均已修复并回归为 `MATCH`——见下方沿革。）
 
-**沿革**（三次计数，都是真实跑出来的，不是笔误）：
+**沿革**（四次计数，都是真实跑出来的，不是笔误——把每一次的错误也留在这里，而不是只留
+最后一次看起来"干净"的结果）：
 
 1. **初版**（`steps0.boundary.amplitude` 缺陷修复前）：MATCH=93 / MISMATCH=1（把该缺陷误判
    为可接受的"normalization difference"）/ NOT_COMPARABLE=4（把 `sections.thickness` 和
    两个真正的派生列混在一起）。
-2. **parser 修复后重新跑**：`steps0.boundary.amplitude` 回归为 `MATCH`；工具原始输出变为
+2. **`steps0.boundary.amplitude` 修复后重新跑**：回归为 `MATCH`；工具原始输出变为
    `MATCH=94|MISMATCH=3|NOT_COMPARABLE=1`，本报告当时仍把 3 个 `MISMATCH` 全部改判为
-   `NOT_COMPARABLE`（沿用了初版的错误归类）。
-3. **本次**：team lead 核实指出 `sections.thickness` 不是派生列（map `source` 是一个真实
-   deck 读数，不是 `derived:*`；且 note 明确把下标换算记在"the bridge's job"，即这一层
-   适配器自己），是一个"值被读出来又被扔掉、没有任何地方接住"的真实缺陷，维持
-   `MISMATCH`。另外两行（`sections.material_header`/`sections.material`）确认是真正的
-   `derived:index_map` 派生列，改判 `NOT_COMPARABLE` 成立。终审判定因此定格在
-   **94/1/3/0**（表格右列），工具原始输出 **94/3/1/0**（表格左列）——两者都保留在上表，
-   避免只留一组数字掩盖了这次改判本身。
+   `NOT_COMPARABLE`（沿用了初版对 `sections.thickness` 的错误归类）。
+3. **`sections.thickness` 归类更正**（尚未修复）：team lead 核实指出它不是派生列（map
+   `source` 是一个真实 deck 读数，不是 `derived:*`；且 note 明确把下标换算记在"the
+   bridge's job"，即这一层适配器自己），是一个"值被读出来又被扔掉、没有任何地方接住"的
+   真实缺陷，改判为 `MISMATCH`。终审判定当时是 **94/1/3/0**，工具原始输出仍是
+   **94/3/1/0**。
+4. **`sections.thickness` 修复后重新跑（本次，验收结论）**：字段 owner 把 `sections[]`
+   提升为第三个跨文件先攒齐、再一次性发布的聚合对象（`section_parts_t`，contract
+   §2.4，详见 §0.1），重新编译全部七个 adapter 模块（零警告）后重新对拍，该字段回归为
+   `MATCH`。终审判定定格在 **95/0/3/0**，工具原始输出 **95/2/1/0**——两者都保留在
+   headline 和上表，避免只留一组数字掩盖了历次改判本身。
 
-上表右列"终审判定"与左列"工具原始输出"不一致，是**故意的、且不止一次发生**：程序对
-"两侧都 unset"这种情况的自动 cause 标注只是初筛线索，不是终审结论
-（`yl_adapter_fidelity.f90` 模块头原话："this program's tag is a lead, not a verdict"）。
-这也是为什么本报告这一轮改动之后，仍然要把两组数字都摆在最前面（headline）和这里——上一轮
-只把改判后的数字当"最终结果"写在这里，被 team lead 指出必须同时看得到工具原始输出，才
-更正为现在这个双列格式。程序里已修的一个 bug 把 `mesh.sets.nset` 从"假 MATCH"纠正为
-`NOT_COMPARABLE`（见 §5），这一条改判从第二次起就没再变过。
+上表右列"终审判定"与左列"工具原始输出"不一致，是**故意的**：程序对"两侧都 unset"这种情况
+的自动 cause 标注只是初筛线索，不是终审结论（`yl_adapter_fidelity.f90` 模块头原话："this
+program's tag is a lead, not a verdict"）。这也是为什么本报告要把两组数字都摆在最前面
+（headline）和这里，而不是只留改判后的数字。程序里已修的一个 bug 把 `mesh.sets.nset` 从
+"假 MATCH"纠正为 `NOT_COMPARABLE`（见 §5），这一条改判从第一次起就没再变过。
 
 ## 4. GAP_MAN_STATIC_U：oracle 覆盖不到的 10 行
 
@@ -378,20 +403,33 @@ record 4 (tolerances, mdofn=2)
   `constraints.json` 把该字段导出为字面 `0`，不是 unset，实锤了"deck 说了 0"这一事实）。
   已由 `yl_adapter_load.f90` 的作者修复为无条件写值，本报告修复后重新编译、重新对拍两个
   golden deck，确认现在两侧都是 `0`，`MATCH`。
-- **发现了一处字段被静默丢弃（silent drop of an authored input），尚未修复**：
+- **发现过一处字段被静默丢弃（silent drop of an authored input），已修复、已回归确认**：
   `sections.thickness`（§0.1、§2）。这一行**不属于**"下一阶段该做的派生"一类——map 行
   `source = ['MAT.material_set.elastic_isotropic']` 说明 `thickness` 是从 `.mat` 读出的、
   有作者的 deck 值，map note 把 section→material→thickness 的下标换算明确记在
-  **这一层适配器**（"the bridge's job"）名下，不是某个下游阶段。`yl_adapter_material.f90:
-  205` 读出了这个值，:274-276 却因为"owner 是 sections[] 不是 materials[]"而不存它，且
-  没有任何其它 parser 接住它——**值进来了，出去时不见了**，没有中间某个阶段"稍后会做"。
-  判定 cause=**unsupported field / dropped input**：consumer 是 `STIFF_U`
-  （`Stiff.f90:116`）和 `gravity`（`Load.f90:1230`），两个 golden deck 上该值恰好都是
-  `1.0`（冻结基线 `groups.json`），今天没有数值后果，但任何 `thickness≠1.0` 的 deck 都会
-  在这条路径上丢失这个输入——这正是验收标准 "no field is silently dropped" 要防止的情形。
-  **本报告最初把这一行和另外两个真正的派生列混为一谈，判定为可推迟的 `NOT_COMPARABLE`，
-  这个归类是错的**，已由 team lead 核实指出并在此更正；缺陷本身尚未修复，留给字段的
-  owner 决定处理方式（本报告不改 parser）。
+  **这一层适配器**（"the bridge's job"）名下，不是某个下游阶段。修复前，
+  `yl_adapter_material.f90:205` 读出了这个值，:274-276 却因为"owner 是 sections[] 不是
+  materials[]"而不存它，且没有任何其它 parser 接住它——**值进来了，出去时不见了**，没有
+  中间某个阶段"稍后会做"，判定 cause=**unsupported field / dropped input**：consumer 是
+  `STIFF_U`（`Stiff.f90:116`）和 `gravity`（`Load.f90:1230`），两个 golden deck 上该值
+  恰好都是 `1.0`（冻结基线 `groups.json`），修复前没有数值后果，但任何 `thickness≠1.0`
+  的 deck 都会在这条路径上丢失这个输入——这正是验收标准 "no field is silently dropped"
+  要防止的情形。**本报告最初把这一行和另外两个真正的派生列混为一谈，判定为可推迟的
+  `NOT_COMPARABLE`，这个归类是错的**，已由 team lead 核实指出并更正为 `MISMATCH`。
+  字段 owner 随后修复了它——不是一个条件判断的局部反转，而是把 `sections[]` 提升为第三个
+  跨文件先攒齐、再一次性发布的聚合对象（`section_parts_t`，contract §2.4：`parse_glb` 只
+  填不发布，`parse_mat` 新增的 `resolve_section_thickness` 通过 `ctx%group_matno` 做
+  section→material 换算并填上 `thickness`，`yl_adapter_driver.f90` 统一发布），详见
+  §0.1。**本报告的对拍本身证明不了这次修复是对的**，只能证明"两个 golden deck 上现在
+  MATCH 了"——两个 golden deck 都是 `nmats=ngroup=1`，section→material 换算这一步在这两
+  个 deck 上从结构上就是平凡的（1 对 1），本报告的 oracle 对拍看不出换算错了会是什么样子。
+  字段 owner 额外在一个**合成的**两 section／两 material（thickness 1.0 vs 2.5）deck 和
+  一个损坏 `imat` 的 deck 上验证了换算本身，并把 map 要求的"两 section 共用 material 但
+  thickness 不一致就拒绝"实现成对一张先见值表的真实比较（而不是因为在两个 golden deck 上
+  永远触发不到就跳过，理由写在了 `yl_adapter_material.f90` 里）——这份证据本报告的方法
+  论**结构上产生不出来**，是对本报告覆盖盲区的补充，不是本报告自己的结论，如实记在这里。
+  本报告在修复落地后重新编译全部七个 adapter 模块（零警告）、重新对拍两个 golden deck，
+  确认现在 `MATCH`。
 - **没有发现 default injection**：candidate 侧全程未调用 `prepare_problem`，而
   `sections[].stress_components` 这类唯一已知的 M3-02 profile 默认值注入点属于 finalize
   阶段（`yl_problem_pipeline_selftest.f90` 的 `check_default` 断言），本次对拍范围之外，
@@ -405,50 +443,53 @@ record 4 (tolerances, mdofn=2)
   `.ccg/tasks/m4-01-legacy-adapter/plan.md` 的 L3-b，当前**尚未落地**），不是把它们悬空
   留在这里。
 
-**STOP RULE 检查**：`steps0.boundary.amplitude`（已修复）和 `sections.thickness`（尚未修复）
-各自都触发过一次"发现即停"——都符合"可能意味着输入被重新解释了语义/被静默丢弃"的描述，
-均已按 STOP RULE 的要求单独报告（先于继续扩大覆盖面或粉饰归类），前者已交给 parser 作者
-定位修复并回归确认，后者已指出问题所在、交给字段 owner 决定处理方式，本报告都没有自行
-改比较规则去让它们"通过"或"看起来可以推迟"。其余 3 个 NOT_COMPARABLE（真正的派生列）逐一
-读过对应的 parser/oracle 源码之后，没有一个指向"输入被重新解释了语义"或"被丢弃"——都是
-已登记的、有理由的 scope 边界（下一阶段该做的事这次还没做，具体去处见 §2），因此没有对它们
-触发"发现即停"。
+**STOP RULE 检查**：`steps0.boundary.amplitude` 和 `sections.thickness` 各自都触发过一次
+"发现即停"——都符合"可能意味着输入被重新解释了语义/被静默丢弃"的描述，均已按 STOP RULE 的
+要求单独报告（先于继续扩大覆盖面或粉饰归类），都交给了对应 parser/字段的 owner 定位修复，
+本报告都没有自行改比较规则去让它们"通过"或"看起来可以推迟"，两者现在都已修复并回归确认为
+`MATCH`。修复后重新跑本关卡本身也是 STOP RULE 流程的一部分——**不是"报告了就算数"，是
+"修复后必须让同一个关卡再验一遍，且验的结果必须真的是 MATCH，不能只是不再报错"**（这条
+在 `sections.thickness` 上被明确要求过："若不是 MATCH，STOP，因为那意味着换算算错了，比
+原来的缺陷更糟"——本次重新跑确认了是 `MATCH`，没有触发这第二层 STOP）。其余 3 个
+NOT_COMPARABLE（真正的派生列）逐一读过对应的 parser/oracle 源码之后，没有一个指向"输入被
+重新解释了语义"或"被丢弃"——都是已登记的、有理由的 scope 边界（下一阶段该做的事这次还
+没做，具体去处见 §2），因此没有对它们触发"发现即停"。
 
 ## 8. 结论：parser 正确性是否得到了独立支持？
 
-对 **94/98**（95.9%）行——包括全部网格几何（节点坐标、单元连通性、单元种类/材料/组）、
-全部材料属性、绝大多数截面属性、全部幅值曲线、interactions、solver（含 PROFILE 四个控制
-参数）、`steps[0]` 的 procedure/load_mode/controls.nonlinear_type/gravity/activation/output
-（含全部 20 个 GID 输出请求标志）、`steps0.boundary[]` 的**全部 6 个**分量（修复后）、以及
-全部 10 个 `GAP_MAN_STATIC_U` 行——**是**：candidate parser 与驱动真 legacy reader 的独立
-oracle 逐字段精确相等（10 个 GAP 行则与 `.man` 字节的手工解码 + 冻结基线的独立交叉核对精确
-相等），这是此前"两个 golden deck 零 finding"从未证明过的、真正意义上的 input-to-model
-保真度证据。这 94 行里包含了一次真实的、被本报告找到并促成修复的缺陷（`steps0.boundary.
-amplitude` 的 silent substitution，见 §0.1/§2/§7）——这本身就是"零 finding 不足以支撑
-input-to-model 保真度"这个论点的直接证据：内部一致性检查从未也不可能发现这个缺陷，因为
-候选 parser 自己是自洽的（it never contradicted itself），只有跟一个独立于它的权威源逐字段
-对拍才会暴露。
+对 **95/98**（96.9%）行——包括全部网格几何（节点坐标、单元连通性、单元种类/材料/组）、
+全部材料属性、**全部**截面属性（含修复后的 `sections.thickness`）、全部幅值曲线、
+interactions、solver（含 PROFILE 四个控制参数）、`steps[0]` 的
+procedure/load_mode/controls.nonlinear_type/gravity/activation/output（含全部 20 个 GID
+输出请求标志）、`steps0.boundary[]` 的**全部 6 个**分量、以及全部 10 个
+`GAP_MAN_STATIC_U` 行——**是**：candidate parser 与驱动真 legacy reader 的独立 oracle
+逐字段精确相等（10 个 GAP 行则与 `.man` 字节的手工解码 + 冻结基线的独立交叉核对精确相等），
+这是此前"两个 golden deck 零 finding"从未证明过的、真正意义上的 input-to-model 保真度
+证据。这 95 行里包含了**两次**真实的、被本报告找到并促成修复的缺陷（`steps0.boundary.
+amplitude` 的 silent substitution，`sections.thickness` 的 dropped input，见
+§0.1/§2/§7）——这本身就是"零 finding 不足以支撑 input-to-model 保真度"这个论点的直接证据：
+内部一致性检查从未也不可能发现这两个缺陷，因为候选 parser 自己是自洽的（it never
+contradicted itself），只有跟一个独立于它的权威源逐字段对拍才会暴露；`sections.thickness`
+尤其如此——它的根因（`sections[]` 缺一个跨文件发布通道）在两个 golden deck 上完全不产生
+可观察的内部矛盾，是纯粹靠对拍才浮出水面的一类缺陷。
 
-对以下 4 行，本报告**不能**给出"已确认一致"的结论，理由不尽相同，不能一概而论：
+对以下 3 行，本报告**不能**给出"已确认一致"的结论，但理由是同一类，且已逐一命名去处：
 
-- **`sections.thickness`——1 个真实的、尚未修复的缺陷**（终审判定 `MISMATCH`）：这不是"下
-  一阶段还没做"，而是**这一层适配器自己该接住、却没有任何地方接住**的一个 deck 授权值
-  （§0.1、§2、§7）。今天在两个 golden deck 上恰好无害（值为 1.0），但这正是本关卡存在的
-  意义——找到"零 finding 掩盖不了"的东西。已报告给字段 owner，尚待修复，修复后应重新
-  跑本关卡确认。
 - **`mesh.sets.nset`、`sections.material_header`、`sections.material`——3 行是下一阶段
   该做、这次对拍范围内还没做的工作**（终审判定 `NOT_COMPARABLE`）：candidate 在这次比较
   的阶段边界内**正确地**什么都没做（均为 map 行 `source = ["derived:index_map"]`，设计上
-  由 finalize 计算）。§2 已为每一行指名了具体的下一比对地点（`checkpoint=model_ready`，
+  由 finalize 计算——这一点已单独跟 `sections.thickness` 核实区分过，见 §0.1、§7，不再是
+  一次可能的误判）。§2 已为每一行指名了具体的下一比对地点（`checkpoint=model_ready`，
   `snapshot_file=groups.json`/`constraints.sha256`，对应
   `.ccg/tasks/m4-01-legacy-adapter/plan.md` 的 **L3-b**）——核实：`docs/m4/` 目录下目前
   **没有** L3-b 的报告，这三行的保真度因此是**已命名、待兑现**的义务，不是被本报告悄悄
   收纳掉的灰色地带。
 
-终审判定 MISMATCH=1（`sections.thickness`，真实缺陷，未修复）、NOT_COMPARABLE=3（真正的
-派生列，已逐一给出下一比对地点），因此本报告判定：**在本次对拍覆盖的 98 个
-`ProblemState.*` 字段范围内，parser 的 input-to-model 保真度在 94 行上获得了独立于"零
-finding"之外的第二重证据（其中 1 行——`steps0.boundary.amplitude`——是靠这重证据才发现
-并纠正的真实缺陷）；1 行（`sections.thickness`）被这重证据发现是一个尚未修复的真实缺陷，
-不应被当作已通过；其余 3 行的保真度不在本报告的比较阶段内，去处已经点名，等 L3-b 落地后
-应用同样的方法在那里重新核实。**
+终审判定 MISMATCH=0、NOT_COMPARABLE=3（均为真正的派生列，已逐一给出下一比对地点），
+**本次是 L3-a 的验收结论**：在本次对拍覆盖的 98 个 `ProblemState.*` 字段范围内，parser 的
+input-to-model 保真度在 95 行上获得了独立于"零 finding"之外的第二重证据（其中 2 行——
+`steps0.boundary.amplitude` 与 `sections.thickness`——是靠这重证据才发现并纠正的真实
+缺陷，均已修复并回归确认为 `MATCH`）；其余 3 行的保真度不在本报告的比较阶段内，去处已经
+点名，等 L3-b 落地后应用同样的方法在那里重新核实。**没有遗留的 MISMATCH，也没有遗留的
+UNVERIFIED**，本报告到此认为 L3-a 覆盖范围内的 parser 保真度已获独立支持，验收决定交
+team lead。

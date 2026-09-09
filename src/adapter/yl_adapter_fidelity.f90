@@ -92,6 +92,7 @@ module yl_adapter_fidelity
   use yl_problem_builder, only: problem_builder_t, step_builder_t, &
                                 builder_begin, builder_finish, builder_failed, &
                                 builder_note_failure, builder_add_step, builder_set_solver, &
+                                builder_add_section, builder_sections_empty, &
                                 builder_step_begin, builder_step_finish, &
                                 builder_step_set_procedure, builder_step_set_load_mode, &
                                 builder_step_set_controls, builder_step_set_load, &
@@ -100,7 +101,8 @@ module yl_adapter_fidelity
                                 builder_step_activation_empty
   use yl_adapter_parts, only: deck_context_t, deck_context_reset, &
                               step_parts_t, step_parts_reset, &
-                              solver_parts_t, solver_parts_reset
+                              solver_parts_t, solver_parts_reset, &
+                              section_parts_t, section_parts_reset
   use yl_adapter_fem90, only: parse_inp, parse_man
   use yl_adapter_model, only: parse_glb
   use yl_adapter_mesh, only: parse_cor, parse_ele
@@ -265,6 +267,7 @@ contains
     type(deck_context_t) :: ctx
     type(step_parts_t) :: parts
     type(solver_parts_t) :: sparts
+    type(section_parts_t) :: secparts
     type(step_builder_t) :: sb
     type(step_t) :: step_val
     type(source_location_t) :: loc
@@ -280,6 +283,7 @@ contains
     call deck_context_reset(ctx)
     call step_parts_reset(parts)
     call solver_parts_reset(sparts)
+    call section_parts_reset(secparts)
     call builder_begin(b)
 
     mark0 = errors%count()
@@ -312,7 +316,7 @@ contains
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
-      call parse_glb(u_glb, ctx, b, parts, sparts, errors)
+      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
@@ -324,7 +328,7 @@ contains
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
-      call parse_mat(u_mat, ctx, b, errors)
+      call parse_mat(u_mat, ctx, b, secparts, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
@@ -342,6 +346,24 @@ contains
       mark = errors%count()
       call parse_man(u_man, ctx, b, parts, errors)
       if (errors%count() > mark) exit parse_all
+
+      ! -- publish sections[] exactly once, from the shared section_parts_t (contract
+      ! SS2.4, 2026-09-09): `sections[]` is now the third assemble-before-publish
+      ! aggregate (steps[0], solver, sections[]), mirroring yl_adapter_driver.f90's own
+      ! post-parse block verbatim -- see that module's header for the full rationale.
+      loc = make_source_location(reader=SITE, &
+              file='(sections[] publish: not one deck record, see yl_adapter_driver header)')
+      if (allocated(secparts%sections)) then
+        if (size(secparts%sections) == 0) then
+          call builder_sections_empty(b, loc, errors)
+          if (builder_failed(b)) exit parse_all
+        else
+          do i = 1, size(secparts%sections)
+            call builder_add_section(b, secparts%sections(i), loc, errors)
+            if (builder_failed(b)) exit parse_all
+          end do
+        end if
+      end if
 
       loc = make_source_location(reader=SITE, &
               file='(steps[0] assembly: not one deck record, see yl_adapter_driver header)')
