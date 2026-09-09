@@ -20,8 +20,19 @@
 #   strict   debug + -init=snan,arrays -fpe0 (ifx traps on the signalling NaN
 #            even without -fpe0). Aborts earlier at Elements.f90:2588
 #            (uninitialised t/u for 1-D element kinds) -> M1 firewall target.
-#   sanitize strict + -check uninit (MemorySanitizer). BLOCKED on this
-#            toolchain: the uninstrumented OpenMP runtime trips MSan before main.
+#   sanitize strict + -check uninit (MemorySanitizer). UNBLOCKED 2026-09-09.
+#            It really did trip MSan before main -- but the report is a false
+#            positive inside the UNINSTRUMENTED OpenMP runtime
+#            (__kmp_affinity_insert_numa_nodes, z_Linux_util.cpp:364), reached
+#            while libiomp reads the machine topology, before any repository or
+#            legacy code runs. Setting KMP_AFFINITY=disabled skips that topology
+#            walk; the runtime-bridge suite then completes 720/720 under MSan.
+#            This is a workaround for an uninstrumented dependency, NOT a
+#            suppression of a finding in our own code: nothing here is silenced,
+#            and any MSan report from repository or legacy code still fails the
+#            run. Note also that this profile is MemorySanitizer (use of
+#            uninitialised memory); it does NOT detect leaks. Leak evidence needs
+#            -fsanitize=address or valgrind and is still NOT PERFORMED.
 #   Only `release` is the M0 reference build; the checking profiles are kept
 #   so that the recorded evidence can be reproduced (docs/build-linux.md).
 #
@@ -682,9 +693,19 @@ for b in binaries:
           f"deps={len(b['runtime_dependencies'])} warnings={warnings}")
 RB_PY
 
+    # See the `sanitize` note in the header: libiomp's topology walk is
+    # uninstrumented and reports a false positive before main. Disabling the walk
+    # is the smallest thing that lets MSan reach our code; it silences nothing we
+    # own.
+    RB_RUN_ENV=()
+    if [ "$PROFILE" = sanitize ]; then
+        RB_RUN_ENV=(env KMP_AFFINITY=disabled)
+        log "--- sanitize: running with KMP_AFFINITY=disabled (uninstrumented libiomp false positive)"
+    fi
+
     log "--- running the bridge suite: $RB_EXE"
     set +e
-    "$RB_EXE" 2>&1 | tee -a "$LOG"
+    "${RB_RUN_ENV[@]}" "$RB_EXE" 2>&1 | tee -a "$LOG"
     RB_RC=${PIPESTATUS[0]}
     set -e
     if [ "$RB_RC" -ne 0 ]; then
@@ -703,7 +724,7 @@ RB_PY
         for c in cooks_membrane lame_cylinder; do
             log "--- running the dialect suite on $c"
             set +e
-            "$DT" "$ROOT/cases/golden/static_2d/$c/legacy" "$DT_SCRATCH" 2>&1 | tee -a "$LOG"
+            "${RB_RUN_ENV[@]}" "$DT" "$ROOT/cases/golden/static_2d/$c/legacy" "$DT_SCRATCH" 2>&1 | tee -a "$LOG"
             DT_RC=${PIPESTATUS[0]}
             set -e
             if [ "$DT_RC" -ne 0 ]; then
