@@ -324,7 +324,7 @@ module yl_runtime_commit
     commit_provenance_t('sections.name', COMMIT_FROM_PROBLEM, 'sections[].name'),                                                              &
     commit_provenance_t('sections.element_kind', COMMIT_FROM_PROBLEM, 'sections[].element_kind'),                                                      &
     commit_provenance_t('sections.class', COMMIT_FROM_PROBLEM, 'sections[].class'),                                                             &
-    commit_provenance_t('derived.counts.nrfields', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('derived.counts.nrfields', COMMIT_FROM_RUNTIME, 'size(element_field_variables(ie)%fields)'),                                                    &
     commit_provenance_t('sections.fields', COMMIT_FROM_PROBLEM, 'sections[].fields'),                                                            &
     commit_provenance_t('sections.special', COMMIT_FROM_PROBLEM, 'sections[].special'),                                                           &
     commit_provenance_t('sections.formulation', COMMIT_FROM_PROBLEM, 'sections[].formulation'),                                                       &
@@ -338,9 +338,9 @@ module yl_runtime_commit
     commit_provenance_t('sections.elcod_local', COMMIT_FROM_PROBLEM, 'sections[].local_axes'),                                                       &
     commit_provenance_t('sections.uplift_ic', COMMIT_FROM_PROBLEM, 'sections[].uplift'),                                                         &
     commit_provenance_t('sections.liquj', COMMIT_FROM_PROBLEM, 'sections[].liquefaction'),                                                             &
-    commit_provenance_t('sections.dof_count', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('sections.dof_list', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('derived.counts.nstre', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('sections.dof_count', COMMIT_DERIVED, 'nevab / nnode, both runtime extents'),                                                         &
+    commit_provenance_t('sections.dof_list', COMMIT_FROM_RUNTIME, 'active_to_component(1:nfdof)'),                                                          &
+    commit_provenance_t('derived.counts.nstre', COMMIT_DERIVED, 'legacy rule on ndimn and class'),                                                       &
     commit_provenance_t('derived.counts.ntcurve', COMMIT_FROM_RUNTIME, 'extent ntcurve'),                                       &
     commit_provenance_t('amplitudes.points.count', COMMIT_DERIVED, 'size(amplitudes[].points)'),                                                    &
     commit_provenance_t('amplitudes.type', COMMIT_FROM_PROBLEM, 'amplitudes[].type'),                                                            &
@@ -516,7 +516,7 @@ contains
     type(freedom_prescribe), allocatable :: s_prescrib(:)
     type(time_curve), allocatable :: s_tcurves(:)
 
-    integer :: i, ie, ig, j, n
+    integer :: i, ie, ig, j, n, f, nrf, nfdof, nstre
     logical :: ok
 
     ! ---------------------------------------------------------------- verify
@@ -830,6 +830,83 @@ contains
       s_group(ig)%type_stiff = int(opt_or(problem%sections(ig)%stiffness_kind), ink)
       s_group(ig)%type_ecoint = int(opt_or(problem%sections(ig)%stress_recovery), ink)
       s_group(ig)%elcod_local = real(opt_or_real(problem%sections(ig)%local_axes), irk)
+
+      ! ---- the four remaining section rows (M4-01 step 4, group) -------------------
+      !
+      ! nrfields: FROM_RUNTIME. It is the plain extent of a runtime collection -- the
+      ! number of field slices build_runtime split this section's element variables into.
+      ! It does NOT go through ProblemState: sections[].fields is an opt_text NAMING a
+      ! field, not a list of them, so ProblemState has no count to offer.
+      !
+      ! Read from the section's FIRST element and then required to hold for every element
+      ! of the section. Reading only element 1 would be a spot check, and the W1 fix in
+      ! verify_registered is this file's precedent for refusing that: a split that
+      ! regressed only element 2 would be committed blind.
+      ie = int(problem%mesh%elsets(ig)%elements(1))
+      nrf = size(runtime%dof%element_field_variables(ie)%fields)
+      do i = 1, size(problem%mesh%elsets(ig)%elements)
+        if (size(runtime%dof%element_field_variables(                                           &
+              int(problem%mesh%elsets(ig)%elements(i)))%fields) /= nrf) then
+          call fail(errors, 'section '//itoa(ig)//' splits its elements into different '//      &
+                    'numbers of fields; nrfields is a property of the section and cannot '//    &
+                    'be read from one element')
+          return
+        end if
+      end do
+      s_group(ig)%nrfields = int(nrf, ink)
+
+      ! sections.dof_count: DERIVED. nfdof = nevab / nnode, where both are runtime extents
+      ! (nevab = size(runtime%dof%element_variables(1)%values), nnode =
+      ! size(runtime%element(1)%field_coordinates, 2)) and the map states the relation as
+      ! "nevab = nfdof*nnode". Computed, not read, which is what DERIVED means here.
+      if (nnode <= 0 .or. mod(nevab, nnode) /= 0) then
+        call fail(errors, 'nevab '//itoa(nevab)//' is not a whole multiple of nnode '//         &
+                  itoa(nnode)//', so the per-field dof count nevab/nnode is not an integer')
+        return
+      end if
+      nfdof = nevab / nnode
+
+      ! sections.dof_list: PRECONDITION FIRST, then a copy.
+      !
+      ! listdof_f is the list of GLOBAL COMPONENT NUMBERS the field carries. commit takes
+      ! it from the runtime's active_to_component (the same array that becomes `lcdofn`),
+      ! which is the model's component list -- and that is the field's list only when the
+      ! section has ONE field carrying EVERY component. With two fields the deck decides
+      ! which components go to which field, and nothing in the runtime or in ProblemState
+      ! records that split: commit would be inventing it.
+      !
+      ! So the condition is stated and REFUSED when it does not hold, rather than noted.
+      ! Widening the capability gate to a multi-field section fails HERE, at the line that
+      ! makes the assumption, instead of silently publishing one field's components as
+      ! another's.
+      if (nrf /= 1 .or. nfdof /= int(s_mdofn)) then
+        call fail(errors, 'section '//itoa(ig)//' has '//itoa(nrf)//' field(s) carrying '//     &
+                  itoa(nfdof)//' dofs against a model component count of '//                    &
+                  itoa(int(s_mdofn))//'; commit can only source a field dof list from the '//   &
+                  'model component list when one field carries every component')
+        return
+      end if
+      allocate (s_group(ig)%dof(nrf))
+      do f = 1, nrf
+        s_group(ig)%dof(f)%nfdof = int(nfdof, ink)
+        allocate (s_group(ig)%dof(f)%listdof_f(nfdof))
+        s_group(ig)%dof(f)%listdof_f = STAGE_POISON_I
+        s_group(ig)%dof(f)%listdof_f = int(runtime%dof%active_to_component(1:nfdof), ink)
+      end do
+
+      ! derived.counts.nstre: DERIVED, and the derivation is legacy's own, transcribed
+      ! from Global.f90:1279-1289 in that order because the later lines OVERWRITE the
+      ! earlier ones:
+      !     nstre = 3*(ndimn-1)              ! :1279
+      !     if (ndimn == 2) nstre = 4        ! :1287   -- not 3, which the formula gives
+      !     if (class == 'BM' .or. index == 1) nstre = 1   ! :1288
+      ! Writing only the ndimn==2 case would be right on both golden decks and wrong as
+      ! soon as a 3-D or beam section appears.
+      nstre = 3 * (int(s_ndimn) - 1)
+      if (int(s_ndimn) == 2) nstre = 4
+      if (trim(opt_text_or(problem%sections(ig)%class)) == 'BM' .or.                             &
+          int(opt_or(problem%sections(ig)%element_kind)) == 1) nstre = 1
+      s_group(ig)%nstre = int(nstre, ink)
 
       n = size(runtime%topology%sections(ig)%nodes)
       s_group(ig)%np_unode = int(n, ink)
@@ -1146,6 +1223,20 @@ contains
             if (associated(group(i)%unode(ig)%list)) deallocate (group(i)%unode(ig)%list)
           end do
           deallocate (group(i)%unode)
+        end if
+        ! group%dof is the SECOND two-level chain in this routine (props is the first),
+        ! and it is unwound the same way: every listdof_f before the dof array that holds
+        ! them, or deallocating dof loses the only handle on them. Neither the
+        ! release-totality assertion nor MSan can see it if this is dropped -- the lead
+        ! measured that on prescrib%leldofix, a one-level pointer that predates the fold --
+        ! so this line's correctness rests on the valgrind exit condition, not on a green
+        ! suite.
+        if (associated(group(i)%dof)) then
+          do ig = 1, size(group(i)%dof)
+            if (associated(group(i)%dof(ig)%listdof_f))                                         &
+              deallocate (group(i)%dof(ig)%listdof_f)
+          end do
+          deallocate (group(i)%dof)
         end if
       end do
       deallocate (group)
@@ -1806,6 +1897,8 @@ contains
     type(group_of_elements), intent(inout) :: g
     g%np_unode = STAGE_POISON_I
     g%nelgroup = STAGE_POISON_I
+    g%nrfields = STAGE_POISON_I
+    g%nstre = STAGE_POISON_I
     ! The 15 section header fields (step 4). Characters get '' rather than a numeric
     ! sentinel -- there is no integer to put in a character(2) -- so for those the
     ! detection of a missing write is the bridge test's trim() comparison, not the value

@@ -1987,6 +1987,18 @@ PROV_VIA_RUNTIME = {
     "derived.dof.lcdofn":
         "runtime%dof%active_to_component (@map: derived.dof.lcdofn). NOT via ProblemState: "
         "same reason -- it is an output of the DOF numbering.",
+    "derived.counts.nrfields":
+        "size(runtime%dof%element_field_variables(ie)%fields), the number of field slices "
+        "build_runtime split a section's element variables into. NOT via ProblemState: "
+        "sections[].fields is an opt_text NAMING a field, not a list of them, so the "
+        "authoring contract has no count to offer -- and it is a plain extent of a runtime "
+        "collection, which is what FROM_RUNTIME already means.",
+    "sections.dof_list":
+        "runtime%dof%active_to_component(1:nfdof), the model's component list -- the same "
+        "array that becomes `lcdofn`. NOT via ProblemState: which components belong to "
+        "which field is deck data neither state records, so commit asserts the one case "
+        "where the question does not arise (a single field carrying every component) and "
+        "refuses otherwise.",
     "derived.dof.active_flags":
         "the dump reconstructs it as merge(1,0,lmdofn/=0), and commit writes lmdofn from "
         "runtime%dof%component_to_active. NOT via ProblemState: the deck's own 0/1 flags "

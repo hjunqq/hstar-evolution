@@ -964,6 +964,45 @@ contains
       if (group(ig)%elcod_local /= real(opt_value_or(problem%sections(ig)%local_axes, 0.0_real64), irk)) ok_all = .false.
     end do
     call check('group(:) numeric header fields match sections[]', ok_all)
+    ! --- step 4 (group): the four derived section rows ------------------------------
+    ok_all = .true.
+    do ig = 1, size(problem%sections)
+      ! nrfields against the runtime it is read from, not against a literal.
+      if (group(ig)%nrfields /= int(size(rt%dof%element_field_variables(                        &
+            int(problem%mesh%elsets(ig)%elements(1)))%fields), ink)) ok_all = .false.
+    end do
+    call check('group(:)%nrfields is the runtime field count', ok_all)
+    ok_all = .true.
+    do ig = 1, size(problem%sections)
+      ! nfdof recomputed from the same two runtime extents the commit used. This restates
+      ! the derivation rather than the answer on purpose: a fixture where nevab/nnode
+      ! happens to equal something else would otherwise pass.
+      if (group(ig)%dof(1)%nfdof /=                                                             &
+          int(size(rt%dof%element_variables(1)%values) /                                        &
+              size(rt%element(1)%field_coordinates, 2), ink)) ok_all = .false.
+      if (size(group(ig)%dof) /= int(group(ig)%nrfields)) ok_all = .false.
+    end do
+    call check('group(:)%dof is nrfields long and each nfdof is nevab/nnode', ok_all)
+    ok_all = .true.
+    do ig = 1, size(problem%sections)
+      if (.not. associated(group(ig)%dof(1)%listdof_f)) then
+        ok_all = .false.
+      else if (size(group(ig)%dof(1)%listdof_f) /= int(group(ig)%dof(1)%nfdof)) then
+        ok_all = .false.
+      else if (any(group(ig)%dof(1)%listdof_f /=                                                &
+                   int(rt%dof%active_to_component(1:group(ig)%dof(1)%nfdof), ink))) then
+        ok_all = .false.
+      end if
+    end do
+    call check('group(:)%dof(:)%listdof_f is the runtime component list', ok_all)
+    ! nstre by legacy's own rule, restated here from the same three inputs. Q4/CO in 2-D
+    ! gives 4 -- NOT the 3 that 3*(ndimn-1) alone would give, which is the whole reason
+    ! the overwrite at Global.f90:1287 has to be transcribed in order.
+    ok_all = .true.
+    do ig = 1, size(problem%sections)
+      if (group(ig)%nstre /= 4_ink) ok_all = .false.
+    end do
+    call check('group(:)%nstre is 4 for a 2-D non-beam section', ok_all)
     ! matno is the EFFECTIVE material and material_header the pre-overwrite one. Asserted
     ! as a PAIR against their two different ProblemState fields, because they are equal on
     ! the golden decks and a swap would be invisible to either check alone.
@@ -1170,11 +1209,19 @@ contains
     ! count.
     !
     ! That is a claim about the GATE, so it is asserted against the gate rather than
-    ! written in a comment that would quietly stop being true. The draft below really does
-    ! carry two sections; prepare_problem really does refuse it; and the day the capability
-    ! widens to admit two, THIS check goes red and points at the arm that then needs
-    ! firing. A note would have gone stale silently -- which is the defect shape this task
-    ! keeps finding.
+    ! written in a comment that would quietly stop being true: the draft below really does
+    ! carry two sections and prepare_problem really does refuse it, so the check goes red
+    ! the moment that refusal stops happening.
+    !
+    ! STRUCTURALLY SOUND, NOT EMPIRICALLY VERIFIED -- and the difference is recorded here
+    ! rather than rounded up. The team lead tried to confirm "widen the gate and this goes
+    ! red" by setting model.section_count to 2. That control was INVALID: the capability
+    ! table matches by EXACT EQUALITY, so the edit did not widen the gate to allow two, it
+    ! required two, and what went red was the single-section baseline draft instead
+    ! (docs/07, failure for the wrong reason). Widening is not a one-value edit under the
+    ! current table -- it needs the entry's shape changed from equality to a set or range.
+    ! So: the mechanism is sound by construction and the "it will go red" claim is not yet
+    ! measured. Whoever widens the capability should confirm it then, when it costs a line.
     call errors%clear()
     call draft_of(2, draft2, two_sections=.true.)
     call prepare_problem(draft2, PROFILE_TAG, problem_split, pmanifest, errors)
