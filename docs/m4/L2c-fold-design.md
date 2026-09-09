@@ -1,4 +1,4 @@
-> **状态：v3（2026-09-09）。v2 的四项必改已完成，v3 处理 lead 对第 0 项守卫的对照发现。**
+> **状态：v4（2026-09-09）。lead 的三条裁定（`.tem` 解析器 / 载体 / sanitize 措辞）已并入，设计定稿待批。**
 >
 > 独立对抗性复核：`docs/m4/L2c-fold-review.md`。主干四条（方案 A、折叠不能分批、
 > 账本轴取「出处」、最大风险在释放路径）经复核未被推翻，保留。v1 被证伪的部分逐条处置：
@@ -8,8 +8,8 @@
 > | §2 的 59/59/2 错，应为 **24 / 5 / 89 / 2**；其中 5 行失败模式本身不稳定 | §2 整段重写，5 行单列并给出 `need_count` 的实测形状 |
 > | §6 步 2 的通过判据不成立（dump 仍中止，从 `coord` 移到 `lnods_f`） | §6 重排：新增步 **3b** 把两个确定中止的 B 类行提前，检查点 ★ 挪到 3b 之后 |
 > | 调用点是 **8** 不是 9，且文内自相矛盾 | §3 表与推荐②统一；并注明 `a5a6e15` 之后真实调用点已是 **11**，实施时以当次 `grep` 减去那条注释为准 |
-> | 那 14 行是 deck 供的输入字段，不是 legacy 默认值 | §1.6.1 更正；§1.6.2 给出**更强**的答案：13 行的值由**适配器拒绝规则唯一蕴含**（`COMMIT_FROM_GATE`），照常参加比对，**不需要豁免桶** |
-> | `DEFAULTED` 只是把假绿换成假豁免 | 取消 `DEFAULTED`；`NOT_MIGRATED` 只剩 ≤8 行，且 §4.4 要求该桶**封闭**（多一行少一行即失败） |
+> | 那 14 行是 deck 供的输入字段，不是 legacy 默认值 | §1.6.1 更正。v3 一度改成"由闸门蕴含"，**v4 又被 lead 推翻**：判据是 legacy 有没有把它留在全局里，所以值必须**带出来**（§3.2），闸门降级为交叉校验 |
+> | `DEFAULTED` 只是把假绿换成假豁免 | 取消 `DEFAULTED`，v4 连 `FROM_GATE` 也取消；**豁免桶为空**，§4.4 的封闭检查现在守的是"没有任何一行被豁免" |
 > | 实施前须先补盲区守卫 | **已完成**：提交 `a5a6e15`，4 条断言 + 5 个反例，581/581 → **720/720** |
 > | §5.1 的「构造」并不能锁死三处 | §5.1 重写：承认只覆盖可分配全局那一半，指针目标那一半**没有仓库内机制**；§5.4 把 ASan/valgrind 定为**出口条件**；§5.1.3 新增一条能机检「忘在 release 里」的释放后总体性断言 |
 >
@@ -19,15 +19,21 @@
 > |---|---|
 > | `np_unode` 守卫抓不到「漏写」 | §4.5.1 如实写明三个守卫**能证明什么、不能证明什么**（复现了 lead 的对照，并把范围扩到 `strict` / `sanitize`：**三个剖面全部漏检**）；`yl_runtime_bridge_test.f90` 的注释同步更正，不再声称覆盖漏写 |
 > | 通用解法：staging 分配后立即投毒 | **§5.5 新增**，作为机制与 §5.1.3、§5.4 并列；含哨兵取值、三条约束（尤其"哨兵绝不能被 legacy 看见"与 RESERVED 行的例外必须由账本说了算） |
-> | 四个温度计数按"legacy 读不读"定，不按"deck 上是 0"定 | **§1.7.1 查实**：`.tem` 在 `Global.f90:661` 无条件打开，`boundt` 在 `Fem.f90:1899` 无条件调用，四个计数在 `Temper.f90:126/154/246/310` 被 `read` 赋值。**legacy 确实读**，所以写 0 是伪造读取结果 → 必须写 `.tem` 解析器；解析器一旦存在，这四行自动成为 `FROM_GATE`，**载体问题随之消失** |
+> | 四个温度计数按"legacy 读不读"定，不按"deck 上是 0"定 | **§1.7.1 查实**：`.tem` 在 `Global.f90:661` 无条件打开，`boundt` 在 `Fem.f90:1899` 无条件调用，四个计数在 `Temper.f90:126/154/246/310` 被 `read` 赋值。**legacy 确实读**，所以写 0 是伪造读取结果 → 必须写 `.tem` 解析器 |
 > | `npoinb`/`nsmat`/`delgroup` 同理 | **§1.7.2**：legacy 读了并留在全局。`delgroup` 可以干净走闸门；`npoinb`/`nsmat` 确实需要一个不破坏双射的承载方式 —— 按你的话，报你决定 |
 > | `nsmat` map 缺陷（`0646de3`）、`build.sh adapter` 目标（`21a5c98`） | 已采纳；§1.8 改记为**已修**，§6 的两个构建目标都跑 |
 >
-> **v3 新增、需要 lead 决定的一件事**：`sanitize` 剖面**今天跑不起来**
-> —— 干净工作树上 rc=6，死在 libiomp 内部的 MSan 误报，进不了仓库代码。
-> `KMP_AFFINITY=disabled` 即可绕过（实测 `PASS: 720/720`）。
-> `tools/build.sh` 现在是你的，请决定是否把它加进 `sanitize` 剖面的运行环境 ——
-> 在此之前 §5.4 的出口条件无从满足。
+> **v4 相对 v3 的改动（lead 的三条裁定，全部采纳）：**
+>
+> | lead 裁定 | v4 的处置 |
+> |---|---|
+> | `.tem` 解析器批准；并指出 reader 清单的枚举缺口 | §1.9 新增（我独立复算：153 站点全部执行；比对面上的缺口**恰好** 4 行，全是 `TEM.boundt.*`，`.tem` 解析器不多不少刚好补上）。**顺带报一处计数差异与它暴露的机制缺失，见 §1.9 的注记** |
+> | 载体：`npoinb`/`nsmat`/`stab_matde` **三个都带出来**，判据是"legacy 有没有把它留在全局里" | §3.2 新增完整载体设计：`deck_residue_t`，**27 行**（按定义从 map 算出，不是手抄），放 `src/problem/`，闭合性闸门与 `yl_problem_check` 同形；§3.2.5 逐条说明它为何不破坏"单次 staging、无第二 writer" |
+> | `sanitize` 已解封（`274c1c0`），措辞要有分寸 | §5.4 重写：绕行 ≠ 压制（我们自己代码的 MSan 报告仍然失败）；**并写明这个剖面不测泄漏** —— 泄漏要 ASan/valgrind，仍是 NOT PERFORMED，§5.1 下半要的正是后者 |
+>
+> **v4 把 v3 的 `COMMIT_FROM_GATE` 整个取消了。** 值来自载体（`COMMIT_FROM_DECK`），
+> 闸门只作交叉校验；两个独立来源互相印证，强于从一个推出另一个，
+> 而且豁免桶因此清空（§4.4）。
 
 # M4 L2-c：把 ProblemState 那一半折叠进 `commit_legacy_globals` 的单次 staging —— 设计提案
 
@@ -57,20 +63,24 @@
 | 其中：适配器自行合成、不需要任何全局 | **2** |
 | 另有：`emit = none` 的 `RuntimeState` 行（快照永远看不见） | **14** |
 
-**结论先说四句：**
+**结论先说五句：**
 
-1. **推荐 A：把 `commit_legacy_globals` 的签名改成同时接收 `problem_state_t` 与 `runtime_state_t`。**
+1. **推荐 A，签名 `commit_legacy_globals(problem, residue, runtime, errors)`。**
    B（让 `build_runtime` 把 ProblemState 的值搬进 `runtime_state_t`）会撞碎 map ↔ `RuntimeState`
-   的双射闸门。**同一道闸门也否掉了"把这些值读进 ProblemState"这个看起来更干净的办法** ——
-   见 §3.1，这是 v2 新增的关键发现。
+   的双射闸门；**同一道闸门也否掉了"把这些值读进 ProblemState"**（§3.1）。
+   第三个参数 `deck_residue_t` 承载 **27 行**"从 deck 读出、落进 legacy 全局、
+   而 ADR-0003 契约不建模"的值 —— 它是唯一与 map 对这些行的定性一致的载体（§3.2）。
 2. **折叠必须一次全覆盖。** 118 行（24+5+89）不写就是中止、不稳定或未定义内存，
    没有"先折一半"这个选项。
 3. **不变量 3 的账本轴是"出处"，不是"写没写"** —— 写是被 dump 的总体性强制的。
    但账本按**发出行**建表，结构上覆盖不到那 14 个 `emit = none` 的行；这个缺口在 §4.5 显式记账，
    并已经由提交 `a5a6e15` 补上了其中最危险的 4 行的守卫。
-4. **单个最大风险仍是释放路径，且 v2 承认它没有仓库内机制。** §5.1 原来提的"把名单改成构造"
+4. **单个最大风险仍是释放路径，且它没有仓库内机制。** §5.1 原来提的"把名单改成构造"
    只覆盖可分配全局那一半；指针目标那一半（泄漏真正住的地方）表达不了。
-   因此 ASan/valgrind **是出口条件，不是建议**。
+   因此 ASan/valgrind **是出口条件，不是建议**——注意 `sanitize` 剖面（MSan）**不测泄漏**，
+   两者不能互相替代（§5.4）。
+5. **两条新机制是折叠成立的前提，不是可选项**：staging 投毒（§5.5，覆盖 89 行的"漏写"，
+   实测三个剖面都看不见它）与释放后总体性断言（§5.1.3，覆盖"忘在 `commit_release` 里"）。
 
 ---
 
@@ -183,7 +193,7 @@ v1 把这 14 行的取值来源写成"map 每行自己的 `reason`/`note` 记录
 map 的 `reason`/`note` 记的是**消费点**和**两个 golden deck 上的观察值**，不是赋值点。
 所以"补一个默认值"这个说法从根上不成立：deck **供了**这些值，是新路径没有把它们带过来。
 
-#### 1.6.2 但真正的答案比"钉值"好：**13 行的值是适配器闸门自己蕴含的**
+#### 1.6.2 适配器已经全部读了它们，而且拒绝任何不合规的值
 
 lead 要我优先评估 (i-a)"让适配器真的去读它们"。**逐行查完了：适配器今天已经全部读了。**
 而且它做的比"读"更强——它**拒绝**任何不合规的值。逐行（引用 HEAD 的 `src/adapter/**`，
@@ -206,57 +216,62 @@ lead 要我优先评估 (i-a)"让适配器真的去读它们"。**逐行查完�
 | `control.glb.uinitial` | `yl_adapter_model.f90:825` | `reject_pinned` on `any(uinitial(1:nblks) /= 0)` | 全 0 |
 | **`control.glb.stab_matde`** | `yl_adapter_model.f90:301` 读，`:396` 判 | `stab_matde <= nblks` 才拒 —— **一个区间，不是一个值** | **不确定** |
 
-**这把"钉常量"换成了一个完全不同的东西。** 对前 13 行，commit 写 0 不是硬编码观察值，
-而是**写下闸门唯一放行的那个值**：任何携带非 0 的 deck 在 `adapt_legacy_deck` 阶段就被拒了，
-`problem_state_t` 根本不会诞生。所以
+**这把"钉常量"换成了别的东西，但 v4 不再把它当作取值来源。** v3 曾提议
+"commit 写下闸门唯一放行的那个值"（`COMMIT_FROM_GATE`）。lead 的裁定推翻了这个取值方式，
+理由我接受且认为更一致：
 
-- **不需要 `NOT_MIGRATED` 桶，也不需要静默豁免**：这 13 行照常参加比对。
-  它们会 MATCH；哪天闸门被放宽而 commit 没跟上，差分**立刻变红**。
-  这正好消掉复核者点出的"静默豁免比静默假绿更难发现"。
-- 账本里它们的出处是 **`COMMIT_FROM_GATE`**，值旁边记的是**拒绝规则的 id**
-  （`F1/restart`、`A-GLB/nlayer-nonzero` …），不是"两个 deck 上是 0"。这是可机检的来源。
+> 判据不是"有没有消费者"，也不是"闸门放不放行"，而是 **legacy 有没有把它留在全局里** ——
+> 影子差分比的是全局。
 
-**一处必须写明的限制**：`FROM_GATE` 的正确性依赖"这个 `problem_state_t` 来自旧 deck 适配器"。
-这些拒绝规则住在适配器，不在 M3-02 的能力闸门里；将来的现代输入路径不会跑它们。
-所以 `FROM_GATE` 只在旧适配器是唯一生产者期间成立，这条依赖要写进账本条目本身，
-而不是留在注释里。
+这 14 行 legacy 全部读进并留在 `global_var` / `applied_load` 的模块变量里。
+所以**值必须被带出来**（§3.2 的载体），而闸门降级为**独立的交叉校验**：
 
-#### 1.6.3 剩下的一行：`stab_matde`，以及为什么它不能靠"读进 ProblemState"解决
+- **取值**：来自适配器实际读到的那个数（`COMMIT_FROM_DECK`）；
+- **闸门**：仍然拒绝任何非 0，所以带出来的值**必须**是 0 —— commit 断言两者一致，
+  不一致就是 `INV-COMMIT-TOTAL` 失败。
+
+这比 v3 的方案严格更强：两个独立来源必须相互印证，而不是从一个推出另一个。
+形状与 §5.2 第 2 点的 extent 规则相同（extent 只从 runtime 推，ProblemState 那一半只许断言一致）。
+它也顺带消掉了 v3 那条限制（`FROM_GATE` 只在旧适配器是唯一生产者期间成立）——
+现代输入路径不跑这些拒绝规则，但那时它也不产生 residue，交叉校验自然退化为"无可校验"。
+
+#### 1.6.3 剩下的一行：`stab_matde` —— 闸门给的是区间，不是值
 
 `stab_matde` 的闸门是 `> nblks`（一个禁用区间），两个 golden deck 都是 99999，
 但一个合规的第三份 deck 可以是 5。写常量 99999 在那份 deck 上就是**错的**。
 
-自然的想法是"读进 ProblemState 再由 commit 写出去"——**这条路被堵死了，堵它的是同一道闸门**。
+最自然的想法"读进 ProblemState 再由 commit 写出去"**被堵死了，堵它的是杀死方案 B 的同一道闸门**。
 见 §3.1：`not_migrated` 与 `derived` 行没有 `ProblemState.*` owner 路径，
 `tools/yl_problem_check.py` 的双射不允许 `problem_state_t` 出现一个没有 map 行的分量
 （`@m5-only` 的语义是"ADR-0003 契约有、legacy 没有"，正好反过来）。
 
-**这一行的三条路，请 lead 选（我推荐 (b)）：**
+**lead 的裁定：带出来，不写常量。** 理由与 §1.6.2 同一条 —— legacy 把它留在了全局里。
+闸门（`stab_matde > nblks`）跟着值一起走，作为一条交叉校验：
+带出来的值必须落在闸门放行的区间内，否则是缺陷。
 
-- (a) **闸门收紧成一个精确值**（`stab_matde == 99999`）。commit 写的值因此可证明正确。
-  代价是拒绝一部分 legacy 能正常处理的 deck —— 一次**声明式的能力收窄**，
-  必须登记进能力表，而不是悄悄发生。
-- (b) **封闭的单行 `NOT_MIGRATED` 桶**：桶里恰好这一行，多一行少一行都让差分失败（§4.4）。
-  代价是这一行在影子差分里永远不产生证据，但它**只有一行**，而且封闭桶让它不可能悄悄长大。
-- (c) 给 map 加一个能承载它的 owner 路径。这是 map 所有者的动作，超出本设计。
+于是 v3 提的三条路全部作废：不收紧闸门（不缩小能力），不进豁免桶（不制造静默豁免），
+不改 map 的 owner（map 说它是 `not_migrated`，那就是对的）。见 §3.2。
 
-推荐 (b)：它不缩小能力，代价被限制在一行，且封闭性使这个代价可见。
-(a) 更"干净"，但用拒绝真实 deck 换取一行快照的可比性，代价方向不对。
+### 1.7 同一个问题问 `derived` 行：13 行同样要走载体
 
-### 1.7 同一个问题问 `derived` 行：还有 7 行处境相同
+复核和 lead 的裁定都只点名了 14 个 `not_migrated` 行。**但 32 个 `derived` 行里有 28 行的
+`source` 也是 deck 读入记录**（只有 4 行是 `derived:` 规则）。按 lead 给的同一条判据
+（legacy 有没有把它留在全局里、能不能从 ProblemState 算出来）逐行查完，分两类：
 
-复核和 lead 都只讨论了 14 个 `not_migrated` 行。**但 32 个 `derived` 行里有 28 行的 `source`
-也是 deck 读入记录**（只有 4 行是 `derived:` 规则）。逐行查完，它们分三种，前两种没问题：
-
-- **可从 ProblemState 重算（17 行）** —— `npoin`/`nelem`/`ngroup`/`nmats`/`nblks`/`ntcurve`/
-  `mdofn`/`nfixsets`/`nrfields`/`elset_size`/`dof_count`/`dof_list`/`nphase`/
-  `amplitudes.points.count`/`cdofn`/`lcdofn`/`ndofix`。
+- **可从 ProblemState / RuntimeState 算出（19 行）** —— `npoin`/`nelem`/`ngroup`/`nmats`/
+  `nblks`/`ntcurve`/`mdofn`/`nfixsets`/`nrfields`/`elset_size`/`dof_count`/`dof_list`/
+  `nphase`/`amplitudes.points.count`/`cdofn`/`lcdofn`/`ndofix`/`nstre`/`active_flags`。
   map 的 `[shape_symbols]` 段本身就是这么定义它们的（`nmats = "count(materials)"`、
-  `nblks = "count(steps)"`）。**这些是真正的 derived，不需要任何决定。**
-- **闸门蕴含（7 行）** —— `runblks`（`yl_adapter_fem90.f90:232` 拒非 1）、
-  `nplgroup`/`nedge`/`edge_load_group`/`nbeamload`/`nplateload`（`yl_adapter_load.f90` 各自
-  `reject_dialect` 拒非 0）、`nstre`（`derived:legacy_default`）。与 §1.6.2 同一处理。
-- **既不能重算、也没有闸门（7 行）** —— **和 `stab_matde` 同一处境**：
+  `nblks = "count(steps)"`）。**这些是真正的 derived，不进载体** ——
+  进了就成了第二个来源（§3.2.1）。
+- **算不出来的（13 行）→ 全部走载体**：`runblks`、`npoinb`、`nsmat`、`delgroup`、
+  `nplgroup`、`nedge`、`edge_load_group`、`nbeamload`、`nplateload`、
+  `ntemp_surface`、`ntedge`、`ntelgroup`、`npipe`。
+
+这 13 行里，适配器对 6 个已经有闸门（`runblks` 拒非 1，`yl_adapter_fem90.f90:232`；
+`nplgroup`/`nedge`/`edge_load_group`/`nbeamload`/`nplateload` 各自 `reject_dialect` 拒非 0，
+`yl_adapter_load.f90`），闸门按 §1.6.2 降级为交叉校验。**剩下 7 个连闸门都没有**，
+下表逐行列出它们今天的处境 —— 这 7 行是 v3 报给 lead、lead 已裁定"带出来"的那一批：
 
 | 行 | 旧全局 | 适配器怎么处理它 | 两个 golden deck 上的值 |
 |---|---|---|---|
@@ -273,7 +288,8 @@ lead 要我优先评估 (i-a)"让适配器真的去读它们"。**逐行查完�
 （`git show HEAD:src/adapter/yl_adapter_driver.f90 | grep -c harvest` → 0）。
 所以产品路径上这四个温度计数**没有读取者**。）
 
-**所以需要 lead 决定的不是 1 行，是 8 行**：`stab_matde` + 上表 7 行。
+**这 7 行加上 `stab_matde` 就是 v3 报给 lead 的 8 个悬案，lead 已全部裁定为"带出来"。**
+连同 6 个有闸门的 `derived` 行与 14 个 `not_migrated` 行，载体一共 **27 行**（§3.2.1）。
 
 #### 1.7.1 legacy 在 static_2d 上**确实读 `.tem`** —— 所以写 0 是伪造读取结果
 
@@ -297,12 +313,12 @@ lead 给的判据不是"0 对不对"，而是"legacy 在这条路径上写不写
 完全一样：读记录、非 0 即 `reject_dialect`。lead 已确认 M4-01 的解析器扩展不再被阻塞
 （L3-a 已验收）。
 
-**解析器一旦存在，载体问题自动消失**：这四行随即与 `nedge` 同类，成为
-`COMMIT_FROM_GATE`（值由拒绝规则唯一蕴含），**不需要 ProblemState 承载它们**，
-也就不触碰 §3.1 的双射闸门。
-"伪造"与"闸门蕴含"的分界线，正好是**新路径有没有真的读过那条记录**。
+**解析器一旦存在，这四行就有了真实来源**：它们与 `nedge`/`nplgroup` 同类，
+读出的值填进 §3.2 的 `deck_residue_t`，闸门（非 0 即拒）作为交叉校验跟着走。
+**不需要 ProblemState 承载它们**，也就不触碰 §3.1 的双射闸门。
+"伪造"与"如实带出"的分界线，正好是**新路径有没有真的读过那条记录**。
 
-#### 1.7.2 `npoinb` / `nsmat` / `delgroup`：读了却丢弃，legacy 把它们留在全局里
+#### 1.7.2 `npoinb` / `nsmat` / `delgroup`：适配器读了却丢弃，而 legacy 把它们留在全局里
 
 同一条规则应用到这三行，答案与温度计数不同：
 
@@ -319,9 +335,11 @@ lead 给的判据不是"0 对不对"，而是"legacy 在这条路径上写不写
 | `derived.counts.nsmat` | **消费**：`Fem.f90:15499` 的刚度重组节奏（见 `0646de3` 的更正） | 同上，且更强：它影响控制流，钉死等于替 deck 做决定 |
 | `derived.counts.delgroup` | 只在 `edge_load_group /= 0` 的块内有意义，而该分支已被拒 | 三者中唯一可以干净地走闸门：在 `edge_load_group == 0` 时要求 `delgroup == 0`，代价接近零 |
 
-**报给 lead 的结论**：`delgroup` 走闸门；`npoinb` 与 `nsmat` 需要一个承载方式 ——
-按你的话，这是架构决定，我不自行选。`stab_matde` 与它们同类（§1.6.3），
-三者一起决定比分开决定省事。
+**lead 的裁定：三个都带出来**，判据同 §1.6.2（legacy 把它们留在全局里，
+差分比的是全局，"无人消费"不构成豁免）。`delgroup` 也带，不再走闸门 ——
+它与另外两个同源同形，为一行开一条例外只会让载体的边界变模糊。
+`npoinb` 无人消费这一点仍然值得记着：它说明**这条载体上的值可以完全不影响计算，
+却仍然必须正确** —— 因为判据面是状态，不是行为。
 
 ### 1.8 一处 map 事实错误：`derived.counts.nsmat`（**已由 `0646de3` 修复**）
 
@@ -341,6 +359,42 @@ legacy deck 1.glb 第 10-11 行:  NMASS NSMAT NHMAT ... ->  1  1  1  1  0  0  1 
 把控制流结论整个倒转 —— `Fem.f90:15499` 的 `IF (NSMAT.EQ.0 .OR. ...)` 在 0 时析取恒真、
 每次都重组刚度，而实际的 1 只在 `inc_step` 首迭代重组。
 **一个 note 里的错值，改变的是"legacy 在这条路径上到底做了什么"的答案。**
+
+### 1.9（v4 新增）范围本身建立在一份不完整的枚举上
+
+lead 顺着 `.tem` 这条线查得更远，结论必须记在这里，因为它比 `.tem` 这一件事更重要：
+
+- `docs/m1/reader-inventory.toml` 共 **153** 个读取站点，两个 golden 算例上
+  **`hits` 全部 ≥ 1 —— 全都执行了**（程序化核对）。
+- 适配器没有覆盖其中一部分（下方注记说明我与 lead 的计数差异）。
+- **M4-01 计划里那张 125 站点的分解表根本没有列 `.tem` / `.ifs` / `.opr` / `.nrt` / `.ftr`。**
+  也就是说：**范围是在一个不完整的枚举上定的。**
+
+影响面确实很小，我独立算了一遍并复现了 lead 的结论：未覆盖站点里，`title_skip` 读了就丢，
+`.ifs` / `.ftr` / `.nrt` 的 `empty_section` 计数**不产生任何 `model_ready` map 行**，
+`.opr` 的两行是 `rule = ignore` + `emit = none`。**落在比对面上、且有真实比较规则的只有 4 行**：
+
+| 行 | 来源站点 | rule |
+|---|---|---|
+| `derived.counts.ntemp_surface` | `TEM.boundt.temp_surface_count` | exact |
+| `derived.counts.ntedge` | `TEM.boundt.temp_edge_count` | exact |
+| `derived.counts.ntelgroup` | `TEM.boundt.temp_elgroup_count` | exact |
+| `derived.counts.npipe` | `TEM.boundt.pipe_count` | exact |
+
+**所以 §1.7.1 提的 `.tem` 解析器恰好把比对面上的缺口全关上，不多不少。**
+
+> **一处计数差异，请 lead 记下。** 我用"适配器源码里的 `RD:` 标记 ∩ 清单 id"做机械统计，
+> 得到未覆盖 **36** 个（lead 记 28）。差异不在比对面上，而在标记与 id 的对不齐。
+> 我追了其中一个：`amplitudes.points.value` 的来源站点是
+> `LOA.external_load_1.curve_factors`，而适配器**确实读了它**
+> （`yl_adapter_load.f90:387`，正是 `Load.f90:231` 那条语句），
+> 只是把 `RD:` 标记写成了 `LOA.external_load_1.curve_points`。
+> 于是我的脚本把一个已覆盖的站点记成缺口。
+> **这正说明需要一个机制**：任何"适配器覆盖了全部读取站点"的说法今天都无法被机械验证，
+> 因为 `RD:` 标记与清单 id 之间没有闸门。建议把
+> "每个 `RD:` 标记必须命中一个 `reader-inventory.toml` 的 id，
+> 且每个 `hits ≥ 1` 的 id 要么被某个 `RD:` 命中、要么在一张署名的豁免表里"
+> 做成 `tools/build.sh` 的一条检查。**这条不属于折叠，但它是折叠范围的前提。**
 
 ---
 
@@ -415,10 +469,116 @@ lead 的 (i-a) 问的是"适配器已经在解析这些记录了，为什么不�
 `yl_problem_check` 直接 FAIL。要绕过它，就得重新定义 map 里 owner 列的含义 ——
 **与选项 B 要做的事一模一样，也是不变量 4 禁止的同一件事。**
 
-这就是为什么 §1.6.2 的答案落在"闸门蕴含的值"而不是"读进 ProblemState 再写出去"：
-前者不需要 ProblemState 多一个字段，也不需要动任何闸门的判据。
+所以答案不是"读进 ProblemState 再写出去"，也不是（v3 一度提的）"由闸门蕴含出来"，
+而是 **§3.2 的第三种承载：一个与 map 对这些行的定性一致的载体** ——
+它们既不是 ProblemState 字段，也不是可以推出来的量，
+它们是"从 deck 读出、落进 legacy 全局、而 ADR-0003 的契约不建模"的东西。
 
-### 选项 A —— `commit_legacy_globals(problem, runtime, errors)`
+### 3.2（v4 新增，lead 裁定后的载体设计）`deck_residue_t`
+
+#### 3.2.1 要承载的是什么：27 行，封闭且可枚举
+
+定义（不是清单，清单由定义算出）：
+
+> **residue = 每一个 `model_ready`、`emit ≠ none`、`owner` 是 `derived` 或 `not_migrated`、
+> 且其值既不能从 `problem_state_t` 的集合基数算出、也不能从 `runtime_state_t` 取得的行。**
+
+按这个定义从 map 枚举，**恰好 27 行**（46 个候选行减去 19 个可算出的），全部 `i32`，
+其中 `control.glb.uinitial` 是 `[nblks]` 的数组，其余是标量：
+
+- **`not_migrated` 14 行**：`control.run.{restart,relis,adina}`、
+  `control.glb.{ninit,nlinks,block_stab,nbackf,ebody,nlayer,state_change,bparameter,ntrans,stab_matde,uinitial}`
+- **`derived` 13 行**：`derived.counts.{runblks,npoinb,nsmat,nplgroup,nedge,edge_load_group,delgroup,nbeamload,nplateload,ntemp_surface,ntedge,ntelgroup,npipe}`
+
+对照：19 个"可算出"的是 `npoin`/`nelem`/`ngroup`/`nmats`/`nblks`/`ntcurve`/`mdofn`/
+`nfixsets`/`nrfields`/`elset_size`/`dof_count`/`dof_list`/`nphase`/`amplitudes.points.count`/
+`cdofn`/`lcdofn`/`ndofix`/`nstre`/`active_flags`。它们**不进载体** ——
+进了就成了第二个来源，正是不变量 4 禁止的。
+
+#### 3.2.2 为什么这个角色已经有先例，以及先例在哪
+
+`src/adapter/yl_adapter_parts.f90` 的 `deck_context_t` **已经就是这个角色**：
+它的模块头写着"facts `.glb` establishes that later parsers need"，
+`parse_glb` 填、别人只读，带 `filled` 标志，按 ADR-0002 的三态纪律。
+更直接的是：**它今天就已经在携带 `ntrans` 和 `nbackdt`** ——
+而 `ntrans` 正是本节 27 行里的一行。区别只是它今天携带的目的是**给后续 parser 分支用**，
+不是给 commit 写全局用。
+
+所以这不是发明一个新概念，是把一个已存在的概念用到它本来该到的终点。
+
+#### 3.2.3 但它不能住在 `src/adapter/`
+
+`commit_legacy_globals` 在 `src/runtime/`。让 runtime `use yl_adapter_parts` 会把依赖方向倒过来
+（今天是 adapter → problem → runtime）。所以：
+
+**新类型 `deck_residue_t` 放在 `src/problem/`**（建议 `src/problem/yl_problem_deck_residue.f90`，
+types-only，与 `yl_problem_types.f90` 同级同纪律）。
+adapter 填它、`adapt_legacy_deck` 与 `problem_state_t` 一并返回、commit 读它。
+依赖方向不变，没有新的层级。
+
+**名字要挡住误读**：它**不是** ProblemState 的一部分，也不该被读成"ProblemState 的补充字段"。
+建议在模块头第一句就写死：*"这里的每一行，map 都说它的 owner 不是 `ProblemState.*`。
+本类型存在的唯一理由是 legacy 把这些值留在全局里，而影子差分比的是全局。
+任何一行如果哪天获得了 `ProblemState.*` owner，它就应当从这里搬走。"*
+
+#### 3.2.4 闭合性：同一把闸门，换一个对象
+
+`problem_state_t` 有 `tools/yl_problem_check.py` 强制它与 map 的 98 个 `ProblemState.*` 行双射。
+`deck_residue_t` 要有**同形的**闸门，判据是 §3.2.1 的定义：
+
+- 每个分量带 `@map:<id>` 标记，指向一个真实的 map 行；
+- 每个满足定义的 map 行恰好对应一个分量（**反向也检**，与 `yl_state_map.py` 的 R5 同一理由：
+  一个没人承载的行在 Fortran 侧是看不见的）；
+- map 新增一个符合定义的行而这里没跟上 → **检查失败**，而不是静默少带一个值。
+
+这样"哪些行走载体"**由 map 的定义算出，不由人手抄**，不变量 4 保住。
+
+#### 3.2.5 为什么它不破坏"单次 staging、无第二 writer"
+
+这是 lead 明确要求说明的一点。三条，逐条对应不变量 1 和 2：
+
+1. **它是 commit 的第三个 `intent(in)` 参数，和 `problem`、`runtime` 完全同格。**
+   签名变成 `commit_legacy_globals(problem, residue, runtime, errors)`。
+   载体只被**读**；它不 `use` 任何 legacy 模块，因此在编译期就写不了全局
+   （与 §3 选项 C 给辅助模块定的同一条可 grep 的闸门）。
+2. **它不新增任何 staging 段，也不新增任何 write 段。** 27 行全部是 `i32` 标量
+   （加一个 `[nblks]` 数组），进的是步 5 那一段本来就要写的纯标量 staging，
+   走的是同一个 VERIFY → STAGE → WRITE 结构。没有第二个 `move_alloc` 点，
+   没有第二个 `commit_release` 需要照顾。
+   **一处例外要说清**：`uinitial` 是这 27 行里唯一的可分配全局，它已经在 §5.1 的
+   "8 个可分配全局"名单里（不因载体而新增），但它的**分配**排在步 3、**取值**来自载体。
+   所以步 3 就要读 residue 的这一行 —— 签名在步 2 已经改好，这是可以的；
+   记在这里是因为"载体只在步 5 被读"是个诱人但错误的简化。
+3. **它不引入第二个所有权判定。** 载体不决定任何一行的 owner、容差或 ignore 规则 ——
+   它只运送一个数。owner 仍由 map 说了算，比较规则仍由 map 每行的 `compare.rule` 说了算。
+
+反过来说，**不用载体才会破坏不变量**：把这 27 行钉成常量，等于在 commit 里放一份
+"deck 应该是什么样"的第二真相；塞进 `problem_state_t`，等于让 map 说谎。
+
+#### 3.2.6 机制取舍：第三个参数，还是并入现有 parts 链
+
+lead 让我自己定并说明理由。**选 (甲)**：
+
+- **(甲) 第三个参数**（推荐）：`adapt_legacy_deck` 多返回一个 `deck_residue_t`，
+  调用方原样传给 commit。显式、可 grep、类型系统看得见谁依赖它。
+  代价：8～11 个调用点各多一个参数（本来就要为方案 A 改这些调用点，边际成本接近零）。
+- **(乙) 并入现有 parts 传递链**：让 `deck_context_t` 长出这 27 行，
+  再由驱动器转成 `deck_residue_t`。少一个类型，但把"给 parser 分支用的事实"
+  和"给 commit 写全局用的值"混在一个类型里，两者的生命周期与只读约束并不相同。
+
+**选 (甲) 的三条理由：**
+
+1. `deck_context_t` 的模块头写明它是"`.glb` 建立、**后续 parser** 需要的事实"，
+   而 residue 里有 `.loa` 供给的 5 行、`.inp` 供给的 4 行、将来 `.tem` 供给的 4 行 ——
+   塞进去会让那句模块头当场变成假话，而那句话正是它今天能被信任的原因。
+2. 两者的**只读约束方向相反**：`deck_context_t` 是"`parse_glb` 写、后续 parser 读"，
+   residue 是"多个 parser 写、commit 读"。合并会让"谁可以写这个字段"从一句话变成一张表。
+3. **可 grep**：`commit_legacy_globals(problem, residue, runtime, errors)` 让"commit 依赖
+   deck 供给的值"在每个调用点上都看得见。藏在 parts 链里，这条依赖就只有读过驱动器的人知道。
+
+代价是每个调用点多一个参数 —— 而这些调用点本来就要为方案 A 改，边际成本接近零。
+
+### 选项 A —— `commit_legacy_globals(problem, residue, runtime, errors)`
 
 commit 同时接收 `problem_state_t` 与 `runtime_state_t`，在**同一个 staging 段**里把两半一起建出来，
 写阶段仍然只有 `move_alloc` 和标量赋值。
@@ -504,15 +664,14 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
    | `COMMIT_FROM_PROBLEM` | 值取自 `problem_state_t` 的对应 owner 分量 | 84 − 已由 runtime 覆盖的部分 |
    | `COMMIT_FROM_RUNTIME` | 值取自 `runtime_state_t`（今天的 32 个发出行 + A 类 extent） | 42 |
    | `COMMIT_DERIVED` | 从 ProblemState 的集合基数算出（`count(materials)` 一类，见 §1.7） | 17 + 4 |
-   | `COMMIT_FROM_GATE` | 值由**适配器的拒绝规则**唯一蕴含；条目里记规则 id（`F1/restart`），不记"两个 deck 上是 0" | 20（13 + §1.7 的 7） |
+   | `COMMIT_FROM_DECK` | 值由 `deck_residue_t` 从 deck 带来（§3.2）；条目同时记下**交叉校验用的闸门规则 id**（`F1/restart`、`A-GLB/nlayer-nonzero` …），闸门与带来的值不一致即 `INV-COMMIT-TOTAL` 失败 | **27** |
    | `COMMIT_SYNTHETIC` | dump 侧自行合成，commit 无事可做（D 类） | 2 |
-   | `COMMIT_NOT_MIGRATED` | **没有来源**：既不能重算、也没有闸门（§1.6.3 + §1.7 的 8 行） | ≤ 8 |
+   | `COMMIT_NOT_MIGRATED` | **没有来源** | **0** |
 
-   `COMMIT_FROM_GATE` 是 v2 相对 v1 最重要的改动：v1 的 `DEFAULTED` 把 20 行推进豁免桶，
-   而它们其实是**可比对、且应当比对**的 —— 闸门放宽而 commit 没跟上时，
-   差分要立刻变红，这正是复核者担心的"静默豁免"的反面。
-   每个 `FROM_GATE` 条目必须携带它依赖的拒绝规则 id，以及 §1.6.2 末尾那条限制
-   （只在旧 deck 适配器是唯一生产者期间成立）。
+   v4 的关键变化：v3 的 `COMMIT_FROM_GATE`（值由闸门蕴含）被 `COMMIT_FROM_DECK`
+   （值由载体带来、闸门只作交叉校验）取代，**豁免桶随之清空**。
+   两个独立来源互相印证，强于从一个推出另一个；这也让 §4.4 的封闭桶检查退化成
+   "桶必须是空的"——一条更简单、更硬的判据。
 
 3. **总体性闸门**，放在 commit 的 VERIFY 段，与 `INV-COMMIT-TOTAL` 同形：
    生成表里的每一个行 id 都必须在声明表里有条目，否则 commit **拒绝提交**。
@@ -521,7 +680,7 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
 4. **旁挂文件**：commit 成功后写出 `<dump dir>/model_ready/provenance.txt`，
    `tools/yl_shadow_diff.py` 读它。
 
-### 4.4 `NOT_MIGRATED` 桶必须**封闭**（lead 必改项 ④）
+### 4.4 `NOT_MIGRATED` 桶必须**封闭** —— v4 之后它必须是**空的**
 
 只说"记为第五个桶、既不算 MATCH 也不算 MISMATCH"是不够的。复核者说得对：
 一个不被任何 STOP RULE 看的桶，是比静默假绿更暗的地方 —— 假绿至少还在 MATCH 计数里。
@@ -530,8 +689,13 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
 
 - 差分实际归入 `NOT_MIGRATED` 的行 id 集合，必须**逐字等于**账本里声明为
   `COMMIT_NOT_MIGRATED` 的集合；
-- 且该集合必须**逐字等于**一份入库的、评审过的期望清单（本设计的 §1.6.3 + §1.7 的 8 行）；
+- 且该集合必须**逐字等于**一份入库的、评审过的期望清单 ——
+  **v4 之后这份清单是空的**：27 行全部走载体（§3.2），2 行是 D 类（dump 自行合成），
+  没有一行"没有来源"；
 - **多一行或少一行都让差分以非 0 退出**，与一条 MISMATCH 同级。
+
+桶空掉不等于这条检查可以省。它现在守的是一条更强的话：**"这条路径上没有任何一行是被豁免的"**。
+哪天有人往桶里加第一行，那必须是一次显式的、要过评审的动作，而不是一次实现上的将就。
 
 于是"桶变大"这件事在 CI 里是一次响亮的失败，而不是一个没人看的数字。
 这与 §4.3 第 3 点的总体性闸门是同一条理由：**豁免必须被枚举，不能被计算。**
@@ -595,7 +759,7 @@ lead 独立做了一次我没做的对照：**不是改错值，而是把 commit
 
 ## 5. 会出什么问题，怎么被发现
 
-### 5.1 最大风险：释放路径 —— 而且 v2 承认它**没有仓库内机制**
+### 5.1 最大风险：释放路径 —— 它没有仓库内机制
 
 模块头已经把这类缺陷的形状写死了：*"a list that must be maintained is honest about needing
 maintenance; a description that quietly covers less than it says is not"* —— 第一版 W4 守卫
@@ -701,7 +865,7 @@ v1 建议"把待发布的全局收进一张显式清单，守卫/`move_alloc`/`c
 
 ---
 
-### 5.4 出口条件（不是建议）：外部内存工具 —— 以及它今天跑不起来
+### 5.4 出口条件（不是建议）：外部内存工具
 
 §5.1.2 已经说明：释放路径的下半（嵌套指针目标）在仓库内**没有**检查手段，
 而 `props(i)%mechanical%solid` 这条两级链把这块面积放大了一个量级。
@@ -711,30 +875,33 @@ v1 建议"把待发布的全局收进一张显式清单，守卫/`move_alloc`/`c
 > 在两个 golden 算例上，跑 commit → commit → release → commit → release 序列，
 > **无泄漏、无 use-after-free**，结果与命令入报告。这一条不通过，折叠不算完成。
 
-**但它今天跑不起来，原因已查明并可一行修复。** 在**干净工作树**上实测：
+#### 5.4.1 `sanitize` 剖面已解封（`274c1c0`），但它**不测泄漏**
 
-```
-tools/build.sh runtime-bridge sanitize   ->  rc=6
-SUMMARY: MemorySanitizer: use-of-uninitialized-value
-         ... in __kmp_affinity_insert_numa_nodes(kmp_topology_t*)
-```
+v3 报告的 rc=6 已由 lead 修复：`build.sh` 现在在 `--profile sanitize` 下自动设
+`KMP_AFFINITY=disabled`，MSan 因此能进到仓库代码，`runtime-bridge` 在 MSan 下 720/720。
 
-这是 Intel OpenMP 运行时（libiomp）内部的 MSan 误报，发生在进入仓库任何一行代码**之前**，
-与被测代码无关。加一个环境变量即可绕过：
+**措辞纪律（沿用 `274c1c0` 的分寸，不要放宽）：**
 
-```
-KMP_AFFINITY=disabled build/<out>/yl_runtime_bridge_test   ->  PASS: 720/720
-```
+- 这是**对一个未插桩依赖的绕行，不是对发现的压制**。被跳过的是 libiomp 自己的拓扑遍历
+  （`__kmp_affinity_insert_numa_nodes`，`z_Linux_util.cpp:364`），发生在 `main` 之前。
+  **仓库代码或 legacy 代码里的任何 MSan 报告仍然让运行失败**，没有任何东西被静音。
+- **这个剖面是 MemorySanitizer（未初始化内存），它不检测泄漏。**
+  泄漏证据需要 `-fsanitize=address`（含 LeakSanitizer）或 valgrind，
+  今天仍然是 **NOT PERFORMED**。
 
-**请 lead 决定**（`tools/build.sh` 现在是你的）：把 `KMP_AFFINITY=disabled`
-（`OMP_NUM_THREADS=1` 已经在别处这么做了）加进 `sanitize` 剖面的运行环境。
-在此之前 `sanitize` 剖面对这个二进制是不可用的，出口条件也就无从满足。
+**两者不能互相替代，而 §5.1 的下半要的是后者。** 把"sanitize 绿了"读成"没有泄漏"，
+正是这份设计从头到尾在防的那类记账错误：§5.1.2 第 3 点说的"忘在 `commit_release` 里"
+在 MSan 下**照样全绿**。所以出口条件的判据是 ASan/valgrind 的输出，不是 sanitize 剖面的退出码。
 
-另注：`sanitize` 用的是 `-check uninit`（MemorySanitizer），不是 AddressSanitizer；
-泄漏检测需要另外的 `-fsanitize=address`（含 LeakSanitizer）或 valgrind。
-两者不能互相替代：MSan 查未初始化读，LSan/valgrind 查泄漏，而 §5.1 的下半要的是后者。
+#### 5.4.2 三件事查的是三件不同的东西
 
-### 5.5（v3 新增，lead 处方）Staging 投毒：让"漏写"变成红线
+| 手段 | 查什么 | 今天状态 |
+|---|---|---|
+| `sanitize` 剖面（MSan） | 未初始化内存的读取 | **可用**（`274c1c0`），720/720 |
+| ASan / valgrind | **泄漏**、use-after-free | **NOT PERFORMED** —— 出口条件要的就是它 |
+| §5.1.3 的释放后总体性断言 | "忘在 `commit_release` 里"（release 之后仍 `allocated`/`associated`） | 待实现，属折叠 |
+
+### 5.5（lead 处方）Staging 投毒：让"漏写"变成红线
 
 #### 5.5.1 为什么必须有它：三个剖面全部漏检，实测
 
@@ -746,7 +913,7 @@ lead 指出 `a5a6e15` 的 `np_unode` 守卫抓不到**漏写**，我复现并把
 |---|---|---|
 | `release` | `-O2` | **否** —— `PASS: 720/720`，0 BAD |
 | `strict` | `-init=snan,arrays -fpe0 -check bounds,pointers` | **否** —— `PASS: 720/720`。`-init=snan` 只作用于实型 |
-| `sanitize` | `-check bounds,pointers,uninit`（MemorySanitizer） | **否** —— `KMP_AFFINITY=disabled` 绕过 libiomp 误报后 `PASS: 720/720`，**0 条 MSan 报告** |
+| `sanitize` | `-check bounds,pointers,uninit`（MemorySanitizer） | **否** —— 绕过 libiomp 误报后（当时手工设 `KMP_AFFINITY=disabled`，`274c1c0` 之后 `build.sh` 自动设）`PASS: 720/720`，**0 条 MSan 报告** |
 
 **仓库里没有任何一个现成机制能看见"折叠漏写了一行"。** 这不是推理，是三次实测的排除法。
 对照组（`lineload` 的发布被删）在 `release` 下就是 **BAD**，说明夹具本身没有失灵 ——
@@ -802,7 +969,7 @@ call poison_group(s_group)          ! 每个整型分量 = STAGE_POISON_I, 每�
 
 ---
 
-## 6. 实施顺序（v2 修订：检查点挪到能真跑一次差分的地方）
+## 6. 实施顺序（v4：检查点在 3b 之后；载体与 `.tem` 各占一步）
 
 v1 的步 2 判据"第一次产出完整的 162 行快照"是**假的**（lead 必改项 ②）：步 2 只写 24 个
 确定中止里的 22 个，剩下 2 个（`mesh.elements.nodes`、`sections.material_header`）属 B 类，
@@ -817,24 +984,27 @@ v1 的步 2 判据"第一次产出完整的 162 行快照"是**假的**（lead �
 | **0** | **已完成（`a5a6e15`）**：补上 4 行 `emit = none` 盲区的提交后全局断言 + 每条一个反例（§4.5） | 无 | 581/581 → **720/720**，0 失败 |
 | **0b** | **staging 投毒机制**（§5.5）：`poison_*` 系列 + 三条约束，先只作用于**今天已有**的 staging（不新增任何行）。这一步的验收就是它自己的对照：删掉 `s_group(ig)%unode(i)%np_unode = 0_ink`，`bridge_test` 必须**变红** —— 今天在三个剖面下都是绿的 | 无 | 对照红、正常绿；`720/720` 不降 |
 | **1** | 账本骨架：从 map 生成行清单 + commit 侧出处声明表 + VERIFY 段总体性闸门 + `provenance.txt` 旁挂 + `NOT_MIGRATED` 桶的**封闭**检查（§4.4）；**一个全局都不新写**，全部 120 行先声明为 `COMMIT_NOT_MIGRATED` | 无 | `bridge_test` / `selftest` 逐条与今天相同；`build.sh` 双射与溯源门禁绿 |
-| **2** | 签名改 A，全部调用点跟改（今天 11 个；以 `grep -rn 'call commit_legacy_globals' src/` 当次结果减去 `yl_adapter_bridge_test.f90:18` 的注释为准），**不新增任何写入** | 无 | 同上；差分行为与步 1 相同 |
-| **3** | **C1 类 21 行 + `uinitial`**：8 个可分配全局的 staging / `move_alloc` / `commit_release` / W4 名单 / `check_guard_names_match` 的解析，**五处一起改** | 8 个新全局 | `bridge_test`、`selftest` 全绿；释放后总体性断言（§5.1.3）通过 |
+| **2** | 签名改 A：`commit_legacy_globals(problem, residue, runtime, errors)`。同一步引入 `deck_residue_t`（§3.2，types-only + 闭合性闸门）与适配器的填充，**但 commit 一行都不读它**。全部调用点跟改（今天 11 个；以 `grep -rn 'call commit_legacy_globals' src/` 当次结果减去 `yl_adapter_bridge_test.f90:18` 的注释为准） | 无 | 同上；`deck_residue_t` 的双射闸门绿；差分行为与步 1 相同 |
+| **3** | **C1 类 21 行 + `uinitial`**：8 个可分配全局的 staging / `move_alloc` / `commit_release` / W4 名单 / `check_guard_names_match` 的解析，**五处一起改**。`uinitial` 的**值取自 residue**（§3.2.5 第 2 点），其余 C1 行取自 `problem` | 8 个新全局 | `bridge_test`、`selftest` 全绿；释放后总体性断言（§5.1.3）通过 |
 | **3b** | **把 2 个确定中止的 B 类行提前**：`element%field(1)%lnods_f`（`mesh.elements.nodes`）与 `group%list` + `group%nelgroup`（`sections.material_header`） | 无新全局，新指针目标 2 类 | **这一步才第一次让新路径产出完整的 162 行 `model_ready` 快照** |
 | **★** | **CHECKPOINT —— lead 复核后才继续** | | 见下 |
 | **4** | **B 类其余 35 行**：折进 `element` / `group` / `prescrib` / `tcurves` 循环。**一个记录数组一个提交**，每个之后跑 `bridge_test` | 无新全局，新指针目标 4 类 | 每个记录数组之后 L3-b 的 64 行仍 MATCH=64 / MISMATCH=0；§4.5 的 4 条盲区断言仍绿 |
-| **4b** | **`.tem` 解析器**（§1.7.1）：5 条 title + 4 个计数，形状照抄 `yl_adapter_load.f90` 的 `nedge`/`nplgroup`。属 `src/adapter/**`，需与 dev-l2b 协调所有权 | 无 | 两个 golden deck 上 `adapt_legacy_deck` 仍成功；四个温度计数随即成为 `FROM_GATE` |
-| **5** | **C2 类 46 行 + 13 个 `not_migrated` 标量 + §1.7 的 7 个闸门蕴含行**：一段纯标量 staging。`group_sentinels` 在这一步按设计翻转（§5.2b） | 59 个标量全局 | 影子差分：162 行判据面 MISMATCH=0；`NOT_MIGRATED` 桶**恰好**是 §1.6.3 + §1.7 决定的那 ≤8 行，多一行少一行即失败 |
+| **4b** | **`.tem` 解析器**（§1.7.1、§1.9）：5 条 title + 4 个计数，形状照抄 `yl_adapter_load.f90` 的 `nedge`/`nplgroup`，读出的值填进 `residue`。属 `src/adapter/**`，需与 dev-l2b 协调所有权。**必须排在步 5 之前** | 无 | 两个 golden deck 上 `adapt_legacy_deck` 仍成功；比对面上的 reader 缺口从 4 行降到 0 |
+| **5** | **C2 类 46 行 + 载体的 27 行**：一段纯标量 staging，其中 27 行的值取自 `residue`、并与闸门规则交叉校验（§1.6.2）。`group_sentinels` 在这一步按设计翻转（§5.2b） | 59 个标量全局 | 影子差分：162 行判据面 MISMATCH=0；`NOT_MIGRATED` 桶**为空**，多一行即失败（§4.4） |
 | **6** | **出口条件**：ASan / valgrind 跑 commit→commit→release→commit→release（§5.4） | — | 无泄漏、无 use-after-free；命令与结果入报告 |
 
-**步 5 的前置**：§1.8 的 `nsmat` map note 错误已由 `0646de3` 修好；
-仍待 lead 裁定的是 §1.6.3 的 `stab_matde` 与 §1.7.2 的 `npoinb` / `nsmat`
-（`delgroup` 与四个温度计数已有明确做法：走闸门 / 写 `.tem` 解析器）。
-裁定之前 `NOT_MIGRATED` 桶的期望清单无从入库，步 5 不能收尾。
+**步 5 的前置**：步 4b 的 `.tem` 解析器必须先落地 —— 否则 residue 里那 4 个温度计数没有来源，
+写进去的就是伪造值（§1.7.1）。§1.8 的 `nsmat` map note 已由 `0646de3` 修好；
+载体的三个悬案（`stab_matde` / `npoinb` / `nsmat`）已由 lead 裁定为"带出来"，无待决项。
+`NOT_MIGRATED` 桶的期望清单因此是**空的**（§4.4）。
 
-**每一步的固定动作**（`21a5c98` 之后）：`tools/build.sh runtime-bridge`
-与 `tools/build.sh adapter` **两个都跑**；并行构建时必须加 `--out` 指到自己的目录
-——共用 `build/runtime-bridge/release/obj` 会把 `Global.mod` 写坏，
-并伪装成 legacy `Material.f90` 编译失败。
+**每一步的固定动作**（lead 的实施纪律）：
+
+1. **先立守卫再动被守卫的东西** —— 与第 0 项同一条。步 0b 的投毒机制必须先于它保护的那 89 行落地。
+2. 每步跑 **`tools/build.sh runtime-bridge`**、**`tools/build.sh adapter`**（`21a5c98`）、
+   以及 **`--profile sanitize` 一次**（`274c1c0`）。
+3. 并行构建必须加 `--out` 指到自己的目录 —— 共用 `build/runtime-bridge/release/obj`
+   会把 `Global.mod` 写坏，并伪装成 legacy `Material.f90` 编译失败。
 
 ### 检查点 ★ 上 lead 要复核的六件事
 
@@ -850,7 +1020,9 @@ v1 的步 2 判据"第一次产出完整的 162 行快照"是**假的**（lead �
 5. `group_sentinels` **原样还绿** —— `nmats`/`nblks`/`restart` 要到步 5 才写，
    它在这一步变红就说明写超了范围；`check_guard_names_match` 则**应当**已随名单扩张而改；
 6. extent 仍然只有一个推导源（`grep -n 'problem%mesh%nodes' src/runtime/yl_runtime_commit.f90`
-   应当只在断言里出现）。
+   应当只在断言里出现）；
+7. `deck_residue_t` 的双射闸门在跑，且**载体里没有一行是可算出的**
+   （§3.2.1 的 19 行必须不在载体里 —— 进了就是第二个来源）。
 
 ---
 
@@ -864,10 +1036,14 @@ v1 的步 2 判据"第一次产出完整的 162 行快照"是**假的**（lead �
   不论适配器读得对不对 —— 那是 L2-a/L2-b 和 R27 的事。
 - **§1.6.2 / §1.7 的闸门表读的是 HEAD 的 `src/adapter/**`（`git show`），不是工作树**
   —— dev-l2b 持有 `src/adapter/**` 且处于不可编译状态。若 L2-b 改动了任何一条
-  `reject_*`，`FROM_GATE` 的蕴含关系必须重新逐行核对，本表不自动成立。
+  `reject_*`，§1.6.2 用作交叉校验的那些规则必须重新逐行核对，本表不自动成立。
 - **没有触碰 `phase_ready` / `increment_ready`。** 那 28 行不在 `model_ready`，与本折叠无关。
-- **没有替 map 所有者决定任何事。** §1.6.3 / §1.7 的 8 行给了三条路和推荐，
-  §1.8 的 `nsmat` note 错误由 map 所有者修。
+- **没有替 map 所有者决定任何事。** §1.8 的 `nsmat` note 错误由 map 所有者修（已修，`0646de3`）；
+  载体的三个悬案由 lead 裁定（带出来），本文只执行。
+- **`.tem` 解析器只有设计，没有实现。** §1.7.1 给了形状与依据行号，代码属 `src/adapter/**`
+  （dev-l2b 持有），步 4b。
+- **§1.9 的 reader 枚举缺口只报告了，没有关闭。** 我给了一条可做成闸门的判据，
+  但那条闸门不属于折叠，也不在本设计的实施顺序里。
 - **没有证明折叠之后影子差分会全绿。** 本文只证明了它今天为什么产不出快照，
   以及要产出快照必须写哪些行。
 - **没有推翻 R27。** 判据面仍然只覆盖 map 登记过的状态；折叠做到 100%，也不能说
@@ -931,9 +1107,8 @@ tools/build.sh runtime-bridge sanitize --out build/probe-msan  # 编译后手动
 KMP_AFFINITY=disabled build/probe-msan/yl_runtime_bridge_test  # PASS 720/720，0 条 MSan 报告
 #   对照组：删掉 :353 的 lineload 发布 -> release 下即 BAD ×2
 
-# §5.4 sanitize 剖面在干净树上就跑不起来，且一个环境变量即可绕过
-tools/build.sh runtime-bridge sanitize --out build/base-msan   # rc=6, __kmp_affinity_insert_numa_nodes
-KMP_AFFINITY=disabled build/base-msan/yl_runtime_bridge_test   # PASS: 720/720
+# §5.4 sanitize 现在自己就能跑（274c1c0 起 build.sh 自动设 KMP_AFFINITY=disabled）
+tools/build.sh runtime-bridge sanitize --out build/msan       # PASS: 720/720
 
 # §1.7.1 legacy 在 static_2d 上确实读 .tem
 sed -n '661,662p' legacy/yl/Global.f90     # open(tunit, ... '.tem', status='old')
@@ -945,6 +1120,48 @@ cat cases/golden/static_2d/cooks_membrane/legacy/1.tem
 
 # §1.7.2 npoinb 在 legacy 里从不被消费（只有读/打印/范围检查三处）
 grep -an 'npoinb' legacy/yl/*.f90 | grep -v 'integer'
+
+# §1.9 的枚举：153 个站点、两例 hits 全部 >=1；比对面上的缺口恰好 4 行
+python3 - <<'EOF'
+import tomllib,re,subprocess
+inv=tomllib.load(open('docs/m1/reader-inventory.toml','rb'))['reader']
+m=tomllib.load(open('docs/m2/state-field-map.toml','rb'))['field']
+print('sites',len(inv),'all hits>=1:',all(min(x.get('hits',{}).values() or [0])>=1 for x in inv))
+ids=set()
+for f in ('fem90','model','mesh','material','load','driver','parts'):
+    t=subprocess.run(['git','show',f'HEAD:src/adapter/yl_adapter_{f}.f90'],capture_output=True,text=True).stdout
+    ids |= set(re.findall(r'RD:\s*([A-Za-z0-9_.#]+)', t))
+missing={x['id'] for x in inv} - ids
+for f in m:
+    if f['checkpoint']!='model_ready': continue
+    hit=[str(x) for x in f['source'] if str(x) in missing]
+    if hit and f.get('emit')!='none' and f.get('compare',{}).get('rule')!='ignore':
+        print(' COMPARABLE GAP:', f['id'], hit, f['compare']['rule'])
+EOF
+#   -> 4 行 TEM.boundt.*，外加 amplitudes.points.value（假阳性：适配器在
+#      yl_adapter_load.f90:387 读了它，只是 RD: 标记写成了 curve_points）
+
+# §3.2.1 载体的 27 行（按定义算出，不是手抄）
+python3 - <<'EOF'
+import tomllib
+m=tomllib.load(open('docs/m2/state-field-map.toml','rb'))['field']
+f=[x for x in m if x['checkpoint']=='model_ready' and x.get('emit')!='none'
+   and x['owner'].split('.')[0] in ('derived','not_migrated')]
+obtainable={'derived.counts.npoin','derived.counts.nelem','derived.counts.ngroup',
+ 'derived.counts.nmats','derived.counts.nblks','derived.counts.ntcurve','derived.counts.mdofn',
+ 'derived.counts.nfixsets','derived.counts.nrfields','sections.elset_size','sections.dof_count',
+ 'sections.dof_list','derived.counts.nphase','amplitudes.points.count','derived.dof.cdofn',
+ 'derived.dof.lcdofn','derived.counts.ndofix','derived.counts.nstre','derived.dof.active_flags'}
+res=[x for x in f if x['id'] not in obtainable]
+print('candidates',len(f),'obtainable',len(obtainable),'RESIDUE',len(res))
+EOF
+#   -> candidates 46 / obtainable 19 / RESIDUE 27
+
+# §3.2.2 deck_context_t 已经在扮演这个角色，而且已经携带 ntrans
+git show HEAD:src/adapter/yl_adapter_parts.f90 | sed -n '146,182p'
+
+# §5.4 sanitize 已解封，且它不测泄漏
+git show 274c1c0 -- tools/build.sh | grep -A3 'does NOT detect leaks'
 
 # 实施时的调用点数，以当次结果为准。今天 grep 命中 12 条：
 #   yl_adapter_bridge_test.f90  2 条，其中 :18 是注释 -> 真实调用 1
