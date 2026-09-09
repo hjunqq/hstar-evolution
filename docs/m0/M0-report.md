@@ -68,7 +68,14 @@
 ## 签收
 
 - 必需门是否全部通过：是（B01/B02/B03 PASS，其余 NOT_APPLICABLE 有依据）。
-- 证据能否从干净检出重现：构建与运行可重现（`tools/build.sh release` + `tools/yl_run.py`）；
+- 证据能否从干净检出重现：**签收时记为「可重现」，2026-09-09 查明当时并非如此**——
+  `legacy/yl/libiomp5md.dll` 被 `.gitignore` 的 `*.dll` 通配排除而从未入库，而
+  `legacy/source-manifest.json` 断言了它的 sha256，于是**任何干净检出都 fail-closed 在
+  `source-manifest.json does not verify`，release / runtime-bridge / adapter 三个目标全都拒绝构建**。
+  签收时**从未实测过干净检出**，这一条是按本地工作树的状态填的。已于 `c429def` 修复
+  （该文件入库 + ignore 例外），并以两个对照验证：修复前的检出 manifest FAIL、修复后 PASS。
+  **本条自 `c429def` 起成立；在此之前它是一个未经检验的断言。**
+  构建与运行本身可重现（`tools/build.sh release` + `tools/yl_run.py`）；
   reference 哈希登记于 `repeat-report.json`。
 - 接受的精确范围：仅上表能力组合；不包含现代输入、其他单元/材料/分析类型。
 - 复核结论/负责人接受记录：**负责人 Huijun 于 2026-09-09 签收，结论「接受」。**
