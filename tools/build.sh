@@ -743,6 +743,22 @@ RB_PY
     # because the next person learns to ignore it. (Caught by running the target: the
     # first version of this hook was unconditional and broke `adapter`.)
     if [ "$TARGET" = runtime-bridge ]; then
+        # Every ProblemState leaf the commit staging reads must be checked by
+        # verify_problem_inputs. Source-level and map-independent, but run here because
+        # this is the target that compiles the commit module. The defect it prevents is
+        # the one found at M4-01 step 3b: a staging read whose input was never authored
+        # is published as a default, and neither the staging poison (overwritten by the
+        # fallback) nor the ledger (which records origin, not presence) can see it.
+        log "--- cross-check: commit staging reads vs verify_problem_inputs"
+        set +e
+        python3 "$ROOT/tools/yl_state_map.py" commit-inputs 2>&1 | tee -a "$LOG"
+        RB_IRC=${PIPESTATUS[0]}
+        set -e
+        if [ "$RB_IRC" -ne 0 ]; then
+            log "=== COMMIT-INPUTS CROSS-CHECK FAILED ($TARGET/$PROFILE) rc=$RB_IRC"
+            exit 6
+        fi
+
         log "--- cross-check: commit provenance vs docs/m2/state-field-map.toml (backward bijection)"
         set +e
         python3 "$ROOT/tools/yl_state_map.py" commit-provenance --export "$LOG" 2>&1 | tee -a "$LOG"

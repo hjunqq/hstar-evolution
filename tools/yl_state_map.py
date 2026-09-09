@@ -2246,6 +2246,61 @@ def check_commit_provenance(doc: dict, header: dict, rows: list[dict]) -> list[s
     return problems
 
 
+# --- commit input coverage (M4-01 step 3b follow-up) ---------------------------------------
+COMMIT_SRC = REPO_ROOT / "src" / "runtime" / "yl_runtime_commit.f90"
+VERIFY_SUB = "verify_problem_inputs"
+
+
+def _problem_leaves(text: str) -> set[str]:
+    """Normalised `problem%...` component paths, indices stripped.
+
+    `problem%mesh%elements(ie)%material` and `problem%mesh%elements(i)%material` both
+    become `problem%mesh%elements%material`, so a read and its check compare equal
+    whatever the loop variable is called.
+    """
+    leaves = set()
+    for m in re.finditer(r"problem((?:%[A-Za-z]\w*(?:\([^()]*\))?)+)", text):
+        path = re.sub(r"\([^()]*\)", "", m.group(1))
+        leaves.add("problem" + path)
+    return leaves
+
+
+def commit_input_coverage() -> tuple[set[str], set[str]]:
+    """(leaves the staging reads, leaves verify_problem_inputs checks)."""
+    try:
+        text = COMMIT_SRC.read_text(encoding="utf-8")
+    except OSError:
+        return set(), set()
+    start = text.find("  subroutine " + VERIFY_SUB)
+    end = text.find("  end subroutine " + VERIFY_SUB)
+    if start < 0 or end < 0:
+        return {"<" + VERIFY_SUB + " not found>"}, set()
+    checked = _problem_leaves(text[start:end])
+    # Everything outside the checking routine: the staging pass and the commit's own
+    # signature. Comments are stripped first so prose naming a field cannot masquerade
+    # as coverage -- the defect this whole check exists to prevent, one level up.
+    rest = text[:start] + text[end:]
+    rest = "\n".join(re.sub(r"!.*$", "", ln) for ln in rest.splitlines())
+    read = {leaf for leaf in _problem_leaves(rest) if leaf != "problem"}
+    return read, checked
+
+
+def cmd_commit_inputs(a) -> int:
+    read, checked = commit_input_coverage()
+    problems = []
+    for leaf in sorted(read - checked):
+        problems.append(f"{leaf} is read by the staging pass but {VERIFY_SUB} does not "
+                        f"check it; an unset value would be published as a default")
+    if problems:
+        print(f"FAIL: {len(problems)} problems")
+        for p in problems:
+            print("  " + p)
+        return 1
+    print(f"PASS: every ProblemState leaf the commit staging reads ({len(read)}) is checked "
+          f"by {VERIFY_SUB} ({len(checked)} checked)")
+    return 0
+
+
 def cmd_commit_provenance(a) -> int:
     map_path = Path(a.map)
     try:
@@ -2345,6 +2400,9 @@ def main(argv=None) -> int:
     cp.add_argument("--export", default=None,
                     help="the bridge test's stdout; reads stdin when omitted")
     cp.set_defaults(func=cmd_commit_provenance)
+    ci = sub.add_parser("commit-inputs")
+    ci.add_argument("--map", default=str(MAP_DEFAULT))
+    ci.set_defaults(func=cmd_commit_inputs)
     for name, func in (("check", cmd_check), ("render", cmd_render), ("gen-fortran", cmd_gen_fortran)):
         p = sub.add_parser(name)
         p.add_argument("--map", default=str(MAP_DEFAULT))

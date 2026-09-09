@@ -1269,6 +1269,16 @@ contains
   ! Checked here rather than at each read so the VERIFY/STAGE split holds: a rejection
   ! must happen before any staging local exists, or "a failed commit touches nothing"
   ! becomes a claim about where the return statement is.
+  !
+  ! "EVERY" IS ENFORCED, NOT PROMISED. The first version of this routine said "every" and
+  ! covered 8 of the 13 opt_or reads and none of the allocatables -- the lead enumerated
+  ! the gap and demonstrated it (drop materials[].thermal_expansion from the fixture:
+  ! PASS 841/841, the unauthored value published as 0.0). A hand-kept list beside a
+  ! staging pass that grows is the same defect this task has now hit nine times, so the
+  ! list is no longer hand-kept: `tools/yl_state_map.py commit-inputs` extracts the
+  ! ProblemState leaves the STAGING reads and the leaves THIS ROUTINE checks, and fails
+  ! the build when the first is not contained in the second. Adding a read without a
+  ! check is a build failure, not a review question.
   subroutine verify_problem_inputs(problem, errors, ok)
     type(problem_state_t), intent(in) :: problem
     type(problem_errors_t), intent(inout) :: errors
@@ -1276,6 +1286,48 @@ contains
     integer :: i, k
 
     ok = .false.
+
+    ! (a) the top-level collections. `size()` of an unallocated allocatable is undefined,
+    ! so these come before anything that indexes them -- including the loops below.
+    if (.not. allocated(problem%mesh%nodes) .or. .not. allocated(problem%mesh%elements) .or.   &
+        .not. allocated(problem%mesh%elsets) .or. .not. allocated(problem%materials) .or.      &
+        .not. allocated(problem%sections) .or. .not. allocated(problem%steps)) then
+      call fail(errors, 'a top-level ProblemState collection this commit reads is not '//      &
+                'allocated (mesh.nodes, mesh.elements, mesh.elsets, materials, sections '//    &
+                'or steps)')
+      return
+    end if
+
+    ! (b) the per-entity ALLOCATABLES. Unlike an unset opt_int, reading one of these when
+    ! it is unallocated is undefined behaviour rather than a silent zero -- so this half is
+    ! the more dangerous of the two even though the opt_or half is the one that was found
+    ! first.
+    do i = 1, size(problem%mesh%nodes)
+      if (.not. allocated(problem%mesh%nodes(i)%xyz)) then
+        call fail(errors, 'mesh.nodes['//itoa(i)//'].xyz is not allocated'); return
+      end if
+    end do
+    do i = 1, size(problem%mesh%elements)
+      if (.not. allocated(problem%mesh%elements(i)%nodes)) then
+        call fail(errors, 'mesh.elements['//itoa(i)//'].nodes is not allocated'); return
+      end if
+    end do
+    do i = 1, size(problem%mesh%elsets)
+      if (.not. allocated(problem%mesh%elsets(i)%elements)) then
+        call fail(errors, 'mesh.elsets['//itoa(i)//'].elements is not allocated'); return
+      end if
+    end do
+    if (.not. allocated(problem%steps(1)%output%stress_averaging) .or.                         &
+        .not. allocated(problem%steps(1)%load%gravity%direction) .or.                          &
+        .not. allocated(problem%steps(1)%load%gravity%amplitude)) then
+      call fail(errors, 'steps[0].output.stress_averaging, .load.gravity.direction or '//      &
+                '.load.gravity.amplitude is not allocated')
+      return
+    end if
+
+    ! (c) the SCALARS, every one this module reads through an opt_* fallback. The fallback
+    ! cannot tell "authored as zero" from "never authored", so each one is a place where a
+    ! missing input would be published as 0 / 0.0 / ''.
     do i = 1, size(problem%mesh%elements)
       if (.not. opt_is_set(problem%mesh%elements(i)%material)) then
         call fail(errors, 'mesh.elements['//itoa(i)//'].material is not set; commit will '//   &
@@ -1284,6 +1336,9 @@ contains
       end if
     end do
     do k = 1, size(problem%steps)
+      if (.not. allocated(problem%steps(k)%activation)) then
+        call fail(errors, 'steps['//itoa(k)//'].activation is not allocated'); return
+      end if
       do i = 1, size(problem%steps(k)%activation)
         if (.not. opt_is_set(problem%steps(k)%activation(i)%active) .or.                       &
             .not. opt_is_set(problem%steps(k)%activation(i)%material)) then
@@ -1303,8 +1358,17 @@ contains
     do i = 1, size(problem%materials)
       if (.not. opt_is_set(problem%materials(i)%E) .or.                                        &
           .not. opt_is_set(problem%materials(i)%nu) .or.                                       &
-          .not. opt_is_set(problem%materials(i)%density)) then
-        call fail(errors, 'materials['//itoa(i)//'] has an unset E, nu or density')
+          .not. opt_is_set(problem%materials(i)%density) .or.                                  &
+          .not. opt_is_set(problem%materials(i)%thermal_expansion) .or.                        &
+          .not. opt_is_set(problem%materials(i)%solid_ratio) .or.                              &
+          .not. opt_is_set(problem%materials(i)%creep_model) .or.                              &
+          .not. opt_is_set(problem%materials(i)%liquefaction) .or.                             &
+          .not. opt_is_set(problem%materials(i)%wetting_kind) .or.                             &
+          .not. opt_is_set(problem%materials(i)%name) .or.                                     &
+          .not. opt_is_set(problem%materials(i)%model)) then
+        call fail(errors, 'materials['//itoa(i)//'] has an unset E, nu, density, '//           &
+                  'thermal_expansion, solid_ratio, creep_model, liquefaction, '//              &
+                  'wetting_kind, name or model')
         return
       end if
     end do
