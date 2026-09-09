@@ -1779,26 +1779,43 @@ contains
     character(len=:), allocatable :: body, tmp
     logical :: all_match
 
+    ! THE PRECONDITION, ASSERTED. Everything below parses `message` as the seven-doors
+    ! guard's rejection -- but that message is only what the FIRST error carries when no
+    ! earlier check refused the commit, and verify_registered (which runs verify_problem_
+    ! inputs and verify_residue_inputs) is called BEFORE the foreign-allocation guard. So
+    ! an unset ProblemState field or an unfilled residue component pre-empts this entirely
+    ! and hands the parser an input error to pick names out of.
+    !
+    ! Measured, not supposed: leaving one residue component unfilled produced TWO failures
+    ! here -- 'names exactly 7 globals' and 'names them in order' -- neither of which is
+    ! about the seven doors. A pre-empted check must not read as a failing one, exactly as
+    ! skip_landed exists so a skipped walk does not read as a passing one. So the
+    ! precondition gets ONE named finding and the parse does not run.
     n = 0
     p1 = index(message, 'one of ')
     p2 = index(message, ' is already allocated')
-    if (p1 > 0 .and. p2 > p1) then
-      body = message(p1 + 7:p2 - 1)
-      orpos = index(body, ' or ')
-      if (orpos > 0) body = body(1:orpos - 1)//', '//body(orpos + 4:)
-      tmp = body
-      do while (len_trim(tmp) > 0 .and. n < size(found))
-        pos = index(tmp, ', ')
-        n = n + 1
-        if (pos > 0) then
-          found(n) = adjustl(tmp(1:pos - 1))
-          tmp = tmp(pos + 2:)
-        else
-          found(n) = adjustl(tmp)
-          tmp = ''
-        end if
-      end do
+    if (p1 <= 0 .or. p2 <= p1) then
+      call check('the seven-doors guard was not pre-empted by an earlier input refusal',      &
+                .false.)
+      return
     end if
+    ! Straight-line from here: the precondition above returned if the message was not the
+    ! seven-doors one, so this no longer re-tests a condition that cannot be false.
+    body = message(p1 + 7:p2 - 1)
+    orpos = index(body, ' or ')
+    if (orpos > 0) body = body(1:orpos - 1)//', '//body(orpos + 4:)
+    tmp = body
+    do while (len_trim(tmp) > 0 .and. n < size(found))
+      pos = index(tmp, ', ')
+      n = n + 1
+      if (pos > 0) then
+        found(n) = adjustl(tmp(1:pos - 1))
+        tmp = tmp(pos + 2:)
+      else
+        found(n) = adjustl(tmp)
+        tmp = ''
+      end if
+    end do
 
     call check('the guard message names exactly '//itoa(size(expected))//' globals', &
               n == size(expected))
