@@ -1924,6 +1924,77 @@ def check_runtime_rules(doc: dict, header: dict, rows: list[dict]) -> list[str]:
 PROV_STATES = {"FROM_RUNTIME", "FROM_PROBLEM", "DERIVED", "FROM_DECK", "SYNTHETIC",
                "NOT_MIGRATED"}
 
+# --- the checker's OWN opinion of what each state may contain -----------------------------
+#
+# WHY THESE LISTS ARE HERE AND NOT DERIVED FROM THE LEDGER
+#   The id half of this cross-check (P2/P3/P4) made the ledger's ROW SET answerable to the
+#   map. It left the `state` field answerable to nobody: flipping every NOT_MIGRATED entry
+#   to FROM_RUNTIME changed nothing that any gate could see, and the M4-01 exit condition
+#   -- NOT_MIGRATED = 0 -- was satisfiable by editing 118 words. (Demonstrated by the team
+#   lead, 2026-09-09.) An exit condition a self-report can satisfy is not an exit condition.
+#
+#   So the lists below are deliberately a SECOND, INDEPENDENT statement of the same facts.
+#   That is not the duplication invariant 4 forbids -- which is about one decision being
+#   MADE in two places -- it is the cross-check itself: the ledger says where a value came
+#   from, this file says where it is allowed to have come from, and the build fails when
+#   they disagree. Everything derivable from the map IS derived from the map; only the
+#   irreducible judgements are enumerated, and each carries its reason, because an
+#   exemption must be enumerated rather than computed (L2c-fold-design.md §4.4).
+
+# FROM_RUNTIME, exception class: rows whose value commit takes from the runtime WITHOUT a
+# runtime component behind it, because it is the EXTENT of a runtime collection.
+# yl_runtime_types' own header is why they have no component: "Extents are derived, so a
+# count is never stored as a field". Each entry names the expression commit stages.
+PROV_EXTENT_ROWS = {
+    "mesh.dimension":          "size(runtime%element(1)%field_coordinates, 1)",
+    "derived.counts.npoin":    "size(runtime%dof%node_variables, 2)",
+    "derived.counts.nelem":    "size(runtime%element)",
+    "derived.counts.ngroup":   "size(runtime%activation%section_state)",
+    "derived.counts.mdofn":    "size(runtime%dof%component_to_active)",
+    "derived.counts.ndofix":   "size(runtime%boundary)",
+    "derived.counts.ntcurve":  "size(runtime%amplitudes)",
+}
+
+# SYNTHETIC: the dump builds the value itself and reads no global, so commit has nothing to
+# do. Both rows map to global_var.i0, a scratch scalar legacy reads into and discards; the
+# map's own note says the dump emits the 1..n index sequence. Any third row claiming this
+# state is a review question, not an implementation detail.
+PROV_SYNTHETIC_ROWS = {
+    "mesh.nodes.id":    "dump emits 1..npoin; i0 is a read scratch legacy discards",
+    "mesh.elements.id": "dump emits 1..nelem; i0 is a read scratch legacy discards",
+}
+
+# DERIVED / FROM_DECK boundary: the derived-or-not_migrated rows whose value CAN be
+# recomputed from a ProblemState collection's cardinality or from the runtime. The map's
+# own [shape_symbols] section defines most of them that way (nmats = "count(materials)").
+# Everything else in that owner set has no source but the deck and must travel in
+# deck_residue_t -- so the residue set is COMPUTED as the complement, not transcribed.
+PROV_OBTAINABLE_ROWS = {
+    "derived.counts.npoin", "derived.counts.nelem", "derived.counts.ngroup",
+    "derived.counts.nmats", "derived.counts.nblks", "derived.counts.ntcurve",
+    "derived.counts.mdofn", "derived.counts.nfixsets", "derived.counts.nrfields",
+    "sections.elset_size", "sections.dof_count", "sections.dof_list",
+    "derived.counts.nphase", "amplitudes.points.count", "derived.dof.cdofn",
+    "derived.dof.lcdofn", "derived.counts.ndofix", "derived.counts.nstre",
+    "derived.dof.active_flags",
+}
+
+RUNTIME_TYPES_SRC = REPO_ROOT / "src" / "runtime" / "yl_runtime_types.f90"
+
+
+def runtime_component_rows() -> set[str]:
+    """Map ids that a runtime_state_t component claims via an `@map:` marker.
+
+    An INDEPENDENT artefact: yl_runtime_types.f90 is maintained under its own bijection
+    discipline against the map, so a row that has a component there is a row the runtime
+    genuinely carries -- and the provenance ledger cannot forge that by editing itself.
+    """
+    try:
+        text = RUNTIME_TYPES_SRC.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return set(re.findall(r"@map:\s*([A-Za-z0-9_.]+)", text))
+
 
 def parse_provenance_export(text: str) -> tuple[dict, list[dict], list[str]]:
     """Pull the PROVS| header and the PROV| rows out of a bridge-test log."""
@@ -1991,6 +2062,94 @@ def check_commit_provenance(doc: dict, header: dict, rows: list[dict]) -> list[s
         if fid not in seen:
             problems.append(f"map row {fid} (model_ready, {want[fid]['owner']}) has no "
                             f"provenance entry")
+
+    # ---- P5..P10: the STATE half ---------------------------------------------------------
+    # Everything above checks WHICH ROWS the ledger names. These check WHAT IT CLAIMS ABOUT
+    # THEM, which was answerable to nothing until now. Each state gets a criterion that does
+    # not read the ledger; see the note on the lists at the top of this section.
+    declared = {r["map_id"]: r for r in rows if r["map_id"] in want}
+    component_rows = runtime_component_rows()
+
+    def owner_of(fid: str) -> str:
+        return str(want[fid].get("owner", ""))
+
+    # The residue set, COMPUTED: the derived/not_migrated rows a snapshot carries whose
+    # value is neither a collection cardinality nor obtainable from the runtime.
+    residue = {fid for fid in want
+               if owner_of(fid).split(".")[0] in ("derived", "not_migrated")
+               and fid not in PROV_OBTAINABLE_ROWS}
+
+    # P5 FROM_RUNTIME, forward: a row build_runtime produces IS from the runtime. Declaring
+    # one anything else -- NOT_MIGRATED included -- hides a row that is in fact covered.
+    for fid in want:
+        if owner_of(fid).startswith("RuntimeState.") and fid in declared:
+            if declared[fid]["state"] != "FROM_RUNTIME":
+                problems.append(f"{fid} is owned by {owner_of(fid)} and is produced by "
+                                f"build_runtime, but the ledger declares "
+                                f"{declared[fid]['state']}")
+
+    # P6 FROM_RUNTIME, backward: the claim must be justifiable WITHOUT the ledger. Four
+    # ways, in descending strength; a row satisfying none of them is claiming a source it
+    # does not have. This is the check the lead's "flip 118 entries to FROM_RUNTIME" attack
+    # fails on, once per flipped row.
+    for r in rows:
+        fid = r["map_id"]
+        if r["state"] != "FROM_RUNTIME" or fid not in want:
+            continue
+        if owner_of(fid).startswith("RuntimeState."):
+            continue                                    # the map says so
+        if fid in component_rows:
+            continue                                    # yl_runtime_types carries it
+        sym = str(want[fid].get("legacy_symbol", ""))
+        shared = any(fid != o and owner_of(o).startswith("RuntimeState.")
+                     and str(want[o].get("legacy_symbol", "")) == sym for o in want)
+        if shared:
+            continue                                    # same global as a runtime row
+        if fid in PROV_EXTENT_ROWS:
+            if not r["note"]:
+                problems.append(f"{fid} is FROM_RUNTIME as an extent but carries no note "
+                                f"saying which extent")
+            continue
+        problems.append(f"{fid} claims FROM_RUNTIME but is owned by {owner_of(fid)!r}, has "
+                        f"no runtime component, shares no global with a runtime row, and "
+                        f"is not a declared extent")
+
+    # P7 the extent rows are FROM_RUNTIME and nothing else: the other direction of P6, so
+    # the 42 is pinned from both sides rather than only from above.
+    for fid in PROV_EXTENT_ROWS:
+        if fid in declared and declared[fid]["state"] != "FROM_RUNTIME":
+            problems.append(f"{fid} is an extent of a runtime collection but the ledger "
+                            f"declares {declared[fid]['state']}")
+
+    # P8 SYNTHETIC is exactly the two rows the dump builds itself, both directions.
+    for r in rows:
+        if r["state"] == "SYNTHETIC" and r["map_id"] not in PROV_SYNTHETIC_ROWS:
+            problems.append(f"{r['map_id']} claims SYNTHETIC; only "
+                            f"{sorted(PROV_SYNTHETIC_ROWS)} may")
+    for fid in PROV_SYNTHETIC_ROWS:
+        if fid in declared and declared[fid]["state"] != "SYNTHETIC":
+            problems.append(f"{fid} is synthesised by the dump but the ledger declares "
+                            f"{declared[fid]['state']}")
+
+    # P9 FROM_PROBLEM must name a row the authoring contract actually owns.
+    for r in rows:
+        if r["state"] == "FROM_PROBLEM" and r["map_id"] in want:
+            if not owner_of(r["map_id"]).startswith("ProblemState."):
+                problems.append(f"{r['map_id']} claims FROM_PROBLEM but its owner is "
+                                f"{owner_of(r['map_id'])!r}, not a ProblemState path")
+
+    # P10 DERIVED and FROM_DECK partition the derived/not_migrated rows, and the boundary
+    # is computed above rather than declared. FROM_DECK must be exactly the residue.
+    for r in rows:
+        fid = r["map_id"]
+        if fid not in want:
+            continue
+        if r["state"] == "DERIVED" and fid not in PROV_OBTAINABLE_ROWS:
+            problems.append(f"{fid} claims DERIVED but is not obtainable from a "
+                            f"ProblemState cardinality or the runtime")
+        if r["state"] == "FROM_DECK" and fid not in residue:
+            problems.append(f"{fid} claims FROM_DECK but is not in the computed residue "
+                            f"set ({len(residue)} rows)")
     return problems
 
 
@@ -2022,8 +2181,20 @@ def cmd_commit_provenance(a) -> int:
     shown = ", ".join(f"{k}={tally[k]}" for k in sorted(tally))
     # NOT_MIGRATED is the fold's remaining debt and is printed on its own line so the
     # number is visible in every build log rather than only when someone goes looking.
+    all_rs = [f for f in doc.get("field", [])
+              if f.get("checkpoint") == "model_ready"
+              and str(f.get("owner", "")).startswith("RuntimeState.")]
+    rs_emitted = [f for f in all_rs if emit_of(f) != "none"]
     print(f"PASS: {len(rows)} model_ready provenance entries cover the map's "
           f"{len(rows)} emitted rows (bijection, both directions); {shown}")
+    # The 42-vs-46 reconciliation, printed rather than left for someone to wonder about:
+    # an unexplained number has been a defect three times in this task.
+    print(f"       FROM_RUNTIME={tally.get('FROM_RUNTIME', 0)} = "
+          f"{len(rs_emitted)} emitted RuntimeState rows "
+          f"(of {len(all_rs)}; {len(all_rs) - len(rs_emitted)} carry emit=none and no "
+          f"snapshot shows them) + {len(PROV_EXTENT_ROWS)} extents + "
+          f"{tally.get('FROM_RUNTIME', 0) - len(rs_emitted) - len(PROV_EXTENT_ROWS)} "
+          f"carried by a runtime component or a shared global")
     print(f"       NOT_MIGRATED={tally.get('NOT_MIGRATED', 0)} "
           f"(rows whose value has no recorded source; M4-01 exits when this is 0)")
     return 0
