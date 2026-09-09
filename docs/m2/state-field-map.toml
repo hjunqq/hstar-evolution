@@ -2041,7 +2041,7 @@ compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "control.json"
-note = "Fem.f90:15497 stiffness-reform cadence; 0 on both cases. Other material_class_counts items are unused switches."
+note = "CORRECTED 2026-09-09 (M4-01 L2-c design review): the earlier text claimed this field is 0 on both cases. It is 1 on both. Both golden decks carry NSMAT=1 (1.glb, the record labelled `NMASS NSMAT NHMAT NQMAT NLDFL KGMAT NSWKW UWCPL NGRAV nflow ECWPIPE`, field 2), the frozen model_ready baseline records values=1 for both cases, and it is read at Global.f90:815. The description of what the field IS was right: Fem.f90:15499 `IF (NSMAT.EQ.0 .OR. (istep==inc_step .AND. IITER.EQ.1)) KSMAT=1` is the stiffness-reform cadence. But the wrong value inverted the control-flow conclusion, exactly as the stab_matde defect did: with NSMAT=0 the disjunction is TRUE unconditionally and the stiffness is reformed every time, whereas at the actual NSMAT=1 it is reformed only on the first iteration of inc_step. Other material_class_counts items are unused switches."
 
 [[field]]
 id = "steps0.load.gravity.enabled"
