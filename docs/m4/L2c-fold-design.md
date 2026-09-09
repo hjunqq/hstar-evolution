@@ -657,12 +657,31 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
    溯源行必须由 `tools/build.sh` 校验 —— 提交 `a8d4646` 已经给 `yl_state_dump.f90`
    加了这道 fail-closed 门禁，新表沿用它，不要另起一套。
 
-2. **commit 声明每行的出处**（手写，就在 `yl_runtime_commit`）。取值域（v2 修订）：
+2. **commit 声明每行的出处**（手写，就在 `yl_runtime_commit`）。
+
+   **先定义，再判据**（v5，lead 2026-09-09 要求；定义写死在 `commit_provenance_t` 的类型注释里）：
+
+   > `state` 陈述的是 **commit 这一次从哪里读到这个值**，**不是**这一行归谁所有。
+
+   两种读法都自洽，必须选一个。选"读取处"而不是"所有权"，两条理由：
+   - 所有权已经写在 map 的 `owner` 列里，账本再复述一遍就是不变量 4 禁止的第二来源 ——
+     账本将不携带任何读者查不到的信息；
+   - 更硬的一条：**所有权读法会让六个状态里的两个变成空话**。`FROM_DECK` 行的 owner 是
+     `derived` / `not_migrated`，`DERIVED` 行的 owner 是 `derived` —— 按所有权读，
+     这两个状态什么也没断言。只有"读取处"读法让六个状态同时成立。
+
+   **推论：owner 与 state 相互独立。** 一个 `ProblemState.*` 拥有的行完全可以是
+   `FROM_RUNTIME` —— `mesh.dimension` 就是，因为 commit 把 `ndimn` 当作 runtime 集合的
+   extent 来 staging，而 §5.2 的 extent 规则**禁止**从 ProblemState 那一侧再推一次。
+   把这一行"修正"成 `FROM_PROBLEM` 的人是在套用所有权读法；交叉校验会拦住，
+   而这段话是拦住之后要读的解释。
+
+   取值域：
 
    | 状态 | 含义 | 行数（预期） |
    |---|---|---|
    | `COMMIT_FROM_PROBLEM` | 值取自 `problem_state_t` 的对应 owner 分量 | 84 − 已由 runtime 覆盖的部分 |
-   | `COMMIT_FROM_RUNTIME` | 值取自 `runtime_state_t`（今天的 32 个发出行 + A 类 extent） | 42 |
+   | `COMMIT_FROM_RUNTIME` | 从 `runtime_state_t` 读到：要么是 build_runtime 产出的分量，要么是它某个集合的 extent | 42 = 32 + 10 |
    | `COMMIT_DERIVED` | 从 ProblemState 的集合基数算出（`count(materials)` 一类，见 §1.7） | 17 + 4 |
    | `COMMIT_FROM_DECK` | 值由 `deck_residue_t` 从 deck 带来（§3.2）；条目同时记下**交叉校验用的闸门规则 id**（`F1/restart`、`A-GLB/nlayer-nonzero` …），闸门与带来的值不一致即 `INV-COMMIT-TOTAL` 失败 | **27** |
    | `COMMIT_SYNTHETIC` | dump 侧自行合成，commit 无事可做（D 类） | 2 |
@@ -672,6 +691,23 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
    （值由载体带来、闸门只作交叉校验）取代，**豁免桶随之清空**。
    两个独立来源互相印证，强于从一个推出另一个；这也让 §4.4 的封闭桶检查退化成
    "桶必须是空的"——一条更简单、更硬的判据。
+
+   **每个 state 都必须有一条不读账本的判据**（v5 新增，lead 攻破了旧版本才有这一条：
+   只改 118 个表项就能让 `NOT_MIGRATED=0`、四个门禁全绿，即"出口条件可以被谎言满足"）。
+   判据由上面的定义生成，实现在 `tools/yl_state_map.py`：
+
+   | state | 判据 | 独立来源 |
+   |---|---|---|
+   | `FROM_RUNTIME` | 集合**恰好等于** {emitted ∧ owner=`RuntimeState.*`}（map 算出，今天 32）∪ `PROV_VIA_RUNTIME`（显式列名，今天 10，每行注明"来自哪个 runtime 量"与"为何不走 ProblemState"） | map + 一份短清单 |
+   | `FROM_PROBLEM` | owner 必须是 `ProblemState.*`（单向：反过来不成立，见 `mesh.dimension`） | map |
+   | `DERIVED` | 必须在"可算出"清单里 | 一份清单 |
+   | `FROM_DECK` | 必须落在**算出来的** residue 集合里（候选 − 可算出 = 27） | map + 同一份清单 |
+   | `SYNTHETIC` | 恰好那 2 行，双向 | 显式列名 |
+   | `NOT_MIGRATED` | 是上面几类的补集；上面每条的反方向都会抓到"把已覆盖的行降级" | 以上各条 |
+
+   **为什么用集合相等而不是充分条件**：旧版本接受四种理由中的任意一种，其中最弱的一条
+   （"与某个 runtime 行共用同一个旧全局"）会让错误声明从碰巧成立的那条溜进来。
+   相等式没有这个缝，而且同一段代码顺带覆盖了反方向（把已覆盖的行悄悄降级）。
 
 3. **总体性闸门**，放在 commit 的 VERIFY 段，与 `INV-COMMIT-TOTAL` 同形：
    生成表里的每一个行 id 都必须在声明表里有条目，否则 commit **拒绝提交**。

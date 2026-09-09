@@ -212,16 +212,43 @@ module yl_runtime_commit
   integer, parameter, public :: COMMIT_LEN_MAP_ID = 40
   integer, parameter, public :: COMMIT_LEN_NOTE = 32
 
-  !> Produced by build_runtime and published from the runtime by this module.
+  ! WHAT `state` IS A STATEMENT ABOUT -- the definition, settled 2026-09-09, and every
+  ! criterion in tools/yl_state_map.py is generated from it:
+  !
+  !     `state` says WHERE THIS COMMIT READ THE VALUE FROM. It does NOT say who owns the
+  !     row.
+  !
+  ! The two readings are both self-consistent and they classify rows differently, so one
+  ! had to be chosen. Ownership is the wrong one for two reasons. It is already in the
+  ! map's `owner` column, and restating it here would be the second source invariant 4
+  ! forbids -- the ledger would carry no information a reader could not look up. And it
+  ! does not survive contact with four of the six states: FROM_DECK rows are owned by
+  ! `derived` or `not_migrated` and DERIVED rows by `derived`, so under an ownership
+  ! reading those two states would be asserting nothing at all.
+  !
+  ! The read-site reading is what a snapshot reader actually needs and cannot get
+  ! elsewhere: whether the byte in front of them is a value this module put there on
+  ! purpose, and out of which object.
+  !
+  ! The consequence to keep in view: OWNER AND STATE ARE INDEPENDENT. A row owned by
+  ! ProblemState can legitimately be FROM_RUNTIME -- `mesh.dimension` is exactly that,
+  ! because commit stages `ndimn` as an extent of a runtime collection and the extent rule
+  ! (L2c-fold-design.md §5.2) forbids re-deriving it from the ProblemState side. Anyone
+  ! tempted to "fix" that row to FROM_PROBLEM is applying the ownership reading; the
+  ! cross-check will stop them, and this paragraph is why.
+
+  !> Read out of `runtime_state_t` -- either a component build_runtime produced, or an
+  !> extent of one of its collections.
   integer(int32), parameter, public :: COMMIT_FROM_RUNTIME = 1_int32
-  !> Taken from the finished ProblemState. Unused until M4-01 step 3.
+  !> Read out of the finished `problem_state_t`. Unused until M4-01 step 3.
   integer(int32), parameter, public :: COMMIT_FROM_PROBLEM = 2_int32
-  !> Computed here from a ProblemState collection's cardinality. Unused until step 5.
+  !> Not read from anywhere: computed here from a ProblemState collection's cardinality.
+  !> Unused until step 5.
   integer(int32), parameter, public :: COMMIT_DERIVED = 3_int32
-  !> Carried from the deck by deck_residue_t, with the adapter's rejection rule recorded
-  !> in `note` as an independent cross-check. Unused until step 5.
+  !> Read out of `deck_residue_t`, with the adapter's rejection rule recorded in `note` as
+  !> an independent cross-check. Unused until step 5.
   integer(int32), parameter, public :: COMMIT_FROM_DECK = 4_int32
-  !> The dump synthesises the value and reads no global; nothing to do here.
+  !> Read from nothing and written to nothing: the dump synthesises the value itself.
   integer(int32), parameter, public :: COMMIT_SYNTHETIC = 5_int32
   !> NO SOURCE. The row reaches the globals carrying whatever staging left there, and no
   !> comparison may treat it as evidence. Every occurrence is a debt, and the M4-01 exit
@@ -229,8 +256,14 @@ module yl_runtime_commit
   integer(int32), parameter, public :: COMMIT_NOT_MIGRATED = 6_int32
 
   type, public :: commit_provenance_t
+    !> The M2 map row this entry is about.
     character(len=COMMIT_LEN_MAP_ID) :: map_id = ''
+    !> WHERE COMMIT READ THE VALUE FROM -- see the definition above. Not an ownership
+    !> claim; the map's `owner` column is the ownership claim and this never restates it.
     integer(int32) :: state = COMMIT_NOT_MIGRATED
+    !> Which object or expression, for a state whose source is not implied by the row
+    !> itself: the extent for a FROM_RUNTIME row that is not RuntimeState-owned, the
+    !> adapter's rejection rule id for FROM_DECK.
     character(len=COMMIT_LEN_NOTE) :: note = ''
   end type commit_provenance_t
 
