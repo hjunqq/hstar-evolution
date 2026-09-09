@@ -555,6 +555,15 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     else
         RB_SRC_IDENTITY="external:$SRC"
     fi
+    # The map is prose plus measurements; where its reason/note asserts a value the
+    # frozen baseline can contradict it. Three such defects were found in M4-01 only
+    # by tripping over them. --positive-control makes the checker prove it can still
+    # find one before a clean result is believed.
+    #
+    # BEFORE the dump-provenance check on purpose: any map edit changes its sha256, so
+    # running that first would shadow this one behind "regenerate the dump" whenever
+    # the map is what is wrong. (Found by a control that blocked for the wrong reason.)
+    python3 "$ROOT/tools/yl_map_selfcheck.py" --positive-control || exit 4
     state_dump_provenance_check || exit 4
     for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do
         [ -f "$ROOT/$f" ] || {
@@ -789,6 +798,15 @@ else
     SRC_IDENTITY="external:$SRC"
 fi
 for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}"; do [ -f "$ROOT/$f" ] || { echo "build.sh: missing source $ROOT/$f" >&2; exit 4; }; done
+# The map is prose plus measurements; where its reason/note asserts a value the
+# frozen baseline can contradict it. Three such defects were found in M4-01 only
+# by tripping over them. --positive-control makes the checker prove it can still
+# find one before a clean result is believed.
+#
+# BEFORE the dump-provenance check on purpose: any map edit changes its sha256, so
+# running that first would shadow this one behind "regenerate the dump" whenever
+# the map is what is wrong. (Found by a control that blocked for the wrong reason.)
+python3 "$ROOT/tools/yl_map_selfcheck.py" --positive-control || exit 4
 state_dump_provenance_check || exit 4
 for f in "${SRCS[@]}" "${MAIN_SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing source $SRC/$f" >&2; exit 4; }; done
 [ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }
