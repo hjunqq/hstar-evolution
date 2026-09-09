@@ -2021,13 +2021,36 @@ RUNTIME_TYPES_SRC = REPO_ROOT / "src" / "runtime" / "yl_runtime_types.f90"
 DECK_RESIDUE_SRC = REPO_ROOT / "src" / "problem" / "yl_problem_deck_residue.f90"
 
 
-def deck_residue_rows() -> set[str]:
-    """Map ids claimed by a `deck_residue_t` component via its `@map:` marker."""
+# A component declaration carrying a map marker:
+#     type(opt_int) :: block_stab                        !@map: control.glb.block_stab
+#     integer(int32), allocatable :: uinitial(:)         !@map: control.glb.uinitial
+# The NAME is captured as well as the marker, because the module claims the correspondence
+# runs both ways and a marker-only parse would leave the name unchecked -- see
+# deck_residue_components' docstring.
+DECK_RESIDUE_DECL = re.compile(
+    r"^\s*[^!\n]*?::\s*([A-Za-z]\w*)\s*(?:\(:\))?\s*!@map:\s*([A-Za-z0-9_.]+)\s*$",
+    re.MULTILINE)
+
+
+def deck_residue_components() -> dict[str, str]:
+    """`deck_residue_t`'s components as {map id: component name}.
+
+    Returns the NAME too, not only the marker. The module header says the correspondence
+    between a component's name and its map id is mechanical in both directions; with a
+    marker-only parse that sentence was false -- renaming a component and leaving its
+    marker alone passed every gate (found by the team lead on 87ed3bf). Capturing the name
+    is what makes the sentence true rather than making the sentence weaker.
+    """
     try:
         text = DECK_RESIDUE_SRC.read_text(encoding="utf-8")
     except OSError:
-        return set()
-    return set(re.findall(r"@map:\s*([A-Za-z0-9_.]+)", text))
+        return {}
+    return {mid: name for name, mid in DECK_RESIDUE_DECL.findall(text)}
+
+
+def deck_residue_rows() -> set[str]:
+    """Map ids claimed by a `deck_residue_t` component via its `@map:` marker."""
+    return set(deck_residue_components())
 
 
 def runtime_component_rows() -> set[str]:
@@ -2184,8 +2207,19 @@ def check_commit_provenance(doc: dict, header: dict, rows: list[dict]) -> list[s
     # a gate of its own because `residue` is computed here and a second computation would
     # be the second source invariant 4 forbids -- the carrier and the boundary have to come
     # from the same arithmetic or they can drift apart while both look right.
-    carrier = deck_residue_rows()
+    components = deck_residue_components()
+    carrier = set(components)
     if carrier or DECK_RESIDUE_SRC.exists():
+        # P12 the component NAME is the map id's last segment. The names are legacy slot
+        # names by design (see the module header), so this is the only thing tying a
+        # component to the row it claims other than the marker sitting beside it -- and a
+        # marker alone does not stop a rename from silently detaching the two.
+        for fid, name in sorted(components.items()):
+            want_name = fid.rsplit(".", 1)[-1]
+            if name != want_name:
+                problems.append(f"deck_residue_t component {name!r} claims {fid}, whose "
+                                f"last segment is {want_name!r}; the component name and "
+                                f"the map id must agree")
         for fid in sorted(residue - carrier):
             problems.append(f"map row {fid} is in the residue ({len(residue)} rows: emitted, "
                             f"owned by derived/not_migrated, not obtainable) but no "

@@ -28,9 +28,15 @@
 !   did not happen. These rows have NO owner path -- `nsmat`, `npoinb`, `stab_matde` are
 !   legacy slots and nothing else, which is precisely why they are here rather than there.
 !   Inventing CAE names for them would claim a modelling that does not exist. Each name is
-!   the last segment of the map id and each component carries its own map marker, so the
-!   correspondence is mechanical in both directions and
-!   `tools/yl_state_map.py commit-provenance` asserts it.
+!   the last segment of the map id and each component carries its own map marker.
+!
+!   `tools/yl_state_map.py commit-provenance` asserts BOTH halves of that, and it is worth
+!   saying which two because this header claimed them before they were both true: the
+!   marker set must equal the map's computed residue exactly (P11), AND each component's
+!   NAME must equal the last segment of the id its marker claims (P12). Until P12 existed,
+!   renaming a component and leaving its marker alone passed every gate -- found by the
+!   team lead on 87ed3bf, against this very paragraph. The claim was widened back to the
+!   truth by adding the check, not by narrowing the words.
 !
 ! ABSENCE DISCIPLINE (ADR-0002)
 !   Every scalar is an `opt_int`: unset, an explicit zero and "not read yet" stay three
