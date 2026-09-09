@@ -52,7 +52,7 @@
 !   deallocates the destination ARRAY but does not free the pointer targets still hanging
 !   off it -- so moving onto a foreign allocation instead of releasing it first would
 !   silently LEAK it, not preserve it. `commit_legacy_globals` therefore refuses to run at
-!   all -- reports INV-COMMIT-TOTAL and touches no global -- when it finds ANY of the six
+!   all -- reports INV-COMMIT-TOTAL and touches no global -- when it finds ANY of the seven
 !   record-array globals it moves (element, group, listp_group, prescrib, tcurves, trans)
 !   already allocated while `commit_owned` is still false. That is the only condition
 !   under which this module declines to commit a verified runtime.

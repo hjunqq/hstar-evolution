@@ -926,13 +926,13 @@ contains
   ! section 6: the W4 guard (yl_runtime_commit.f90, "OWNERSHIP, AND WHY A REPEAT
   ! COMMIT DOES NOT LEAK") -- move_alloc onto an already-allocated record array would
   ! silently leak whatever POINTER targets hang off the storage it replaces, so commit
-  ! refuses to run at all when any of the six record arrays it moves is allocated while
+  ! refuses to run at all when any of the seven record arrays it moves is allocated while
   ! commit_owned is false. Round-2 review found this guard's own list once missed one of
   ! the six (`trans`) -- exactly the door the guard exists to close -- and NOTHING in
   ! sections 1-5 exercised it, so a sixth (or seventh) omission would have shipped silent.
   !
-  ! GUARDING THE GUARD, NOT JUST THE SIX DOORS
-  !   NAMES below is this test's own list of what it believes the six doors are. If that
+  ! GUARDING THE GUARD, NOT JUST THE SEVEN DOORS
+  !   NAMES below is this test's own list of what it believes the seven doors are. If that
   !   list and the guard's own list diverge -- a name added to one but not the other --
   !   the two would quietly drift apart the same way the module-under-test just did,
   !   with the coverage looking complete but not being it. So this section does not just
@@ -968,7 +968,7 @@ contains
       call check(trim(NAMES(k))//': commit_owned stays false after the refusal',                &
                 .not. commit_owns_globals())
 
-      ! No OTHER global was touched: every other one of the six stays exactly what a
+      ! No OTHER global was touched: every other one of the seven stays exactly what a
       ! released state left it -- deallocated -- and the one this trial allocated is
       ! still the size-1 foreign allocation this test made, not something move_alloc
       ! swapped in. If the guard fired too late (after staging began, say), one of the
@@ -984,7 +984,7 @@ contains
         end if
       end do
 
-      ! Captured once: the message text is the same for every door (it names all six
+      ! Captured once: the message text is the same for every door (it names all seven
       ! regardless of which one triggered it), so one capture is enough for the
       ! cross-check below.
       if (k == 1) call one_error_message(errors, 1, guard_message)
@@ -1243,6 +1243,14 @@ contains
     ! file keeps running into: a label that says "six" while checking seven is a small
     ! version of the same defect as a guard that covers less than it claims. It said
     ! "six" until the seventh door (props) arrived in M4-01 step 3.
+    !
+    ! TWO ASSERTIONS, NOT ONE, and which one fires tells you what kind of divergence it
+    ! is. Measured on both variants (2026-09-09), after the same control produced 2 for
+    ! one reviewer and 1 for the other and neither had said which divergence they made:
+    !   * a name changed, count preserved (trans -> TRANSPOSED)  -> only the order check
+    !   * a name removed, count changed   (trans dropped)        -> both checks
+    ! Predicting "the guard-names check fires" is therefore not a prediction of a NUMBER
+    ! until the kind of divergence is stated too.
     call check('the guard message names this test''s '//itoa(size(expected))//               &
               ' globals, in order', all_match)
   end subroutine check_guard_names_match
