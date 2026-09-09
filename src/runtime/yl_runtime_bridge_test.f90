@@ -326,8 +326,13 @@ contains
     call opt_set(pt%time, 0.0_real64)
     call opt_set(pt%value, 1.0_real64)
     call builder_amplitude_add_point(b, ab, pt, loc, errors)
+    ! 2.5, not 1.0. time and value land in two different pointer arrays of the same
+    ! record (ttime_curve, dfact_curve), both real, both ntime long -- so a swap between
+    ! their sources is invisible wherever the two happen to be equal. Point 1 already
+    ! separates them (0.0 vs 1.0); giving point 2 a distinct value means the swap fails at
+    ! BOTH points rather than relying on one. V16 constrains only that times increase.
     call opt_set(pt%time, 1.0_real64)
-    call opt_set(pt%value, 1.0_real64)
+    call opt_set(pt%value, 2.5_real64)
     call builder_amplitude_add_point(b, ab, pt, loc, errors)
     call builder_amplitude_finish(b, ab, am, loc, errors)
     call builder_add_amplitude(b, am, loc, errors)
@@ -630,6 +635,42 @@ contains
     do i = 1, size(rt%amplitudes)
       call check('tcurves('//itoa(i)//')%dfact',                                                &
                 tcurves(i)%dfact == real(opt_value_or(rt%amplitudes(i)%factor, 0.0_real64), irk))
+    end do
+
+    ! --- step 4 (tcurves): the three ProblemState-sourced amplitude fields ------------
+    call check('tcurves(:) and amplitudes[] are the same length',                               &
+              size(problem%amplitudes) == size(rt%amplitudes))
+    do i = 1, min(size(rt%amplitudes), size(problem%amplitudes))
+      ! trim() on both sides: type_curve is character(20) and a longer ProblemState value
+      ! would be truncated silently on assignment, which the poison cannot see.
+      call check('tcurves('//itoa(i)//')%type_curve is amplitudes[].type',                      &
+                trim(tcurves(i)%type_curve) ==                                                  &
+                trim(opt_value_or(problem%amplitudes(i)%type, '')))
+      call check('tcurves('//itoa(i)//')%ntime is count(amplitudes[].points)',                  &
+                tcurves(i)%ntime == int(size(problem%amplitudes(i)%points), ink))
+      ! The two pointer targets: associated, right length, right values -- and asserted
+      ! separately, because the fixture gives time and value different numbers at every
+      ! point so that a swap between the two sources cannot pass either one.
+      call check('tcurves('//itoa(i)//')%ttime_curve is allocated at ntime',                    &
+                associated(tcurves(i)%ttime_curve) .and.                                        &
+                size(tcurves(i)%ttime_curve) == size(problem%amplitudes(i)%points))
+      call check('tcurves('//itoa(i)//')%dfact_curve is allocated at ntime',                    &
+                associated(tcurves(i)%dfact_curve) .and.                                        &
+                size(tcurves(i)%dfact_curve) == size(problem%amplitudes(i)%points))
+      ok_all = .true.
+      do n = 1, size(problem%amplitudes(i)%points)
+        if (tcurves(i)%ttime_curve(n) /=                                                        &
+            real(opt_value_or(problem%amplitudes(i)%points(n)%time, 0.0_real64), irk))          &
+          ok_all = .false.
+      end do
+      call check('tcurves('//itoa(i)//')%ttime_curve is amplitudes[].points[].time', ok_all)
+      ok_all = .true.
+      do n = 1, size(problem%amplitudes(i)%points)
+        if (tcurves(i)%dfact_curve(n) /=                                                        &
+            real(opt_value_or(problem%amplitudes(i)%points(n)%value, 0.0_real64), irk))         &
+          ok_all = .false.
+      end do
+      call check('tcurves('//itoa(i)//')%dfact_curve is amplitudes[].points[].value', ok_all)
     end do
 
     ! --- THE SNAPSHOT BLIND SPOTS --------------------------------------------------

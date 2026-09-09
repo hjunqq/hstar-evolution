@@ -342,10 +342,10 @@ module yl_runtime_commit
     commit_provenance_t('sections.dof_list', COMMIT_NOT_MIGRATED, ''),                                                          &
     commit_provenance_t('derived.counts.nstre', COMMIT_NOT_MIGRATED, ''),                                                       &
     commit_provenance_t('derived.counts.ntcurve', COMMIT_FROM_RUNTIME, 'extent ntcurve'),                                       &
-    commit_provenance_t('amplitudes.points.count', COMMIT_NOT_MIGRATED, ''),                                                    &
-    commit_provenance_t('amplitudes.type', COMMIT_NOT_MIGRATED, ''),                                                            &
-    commit_provenance_t('amplitudes.points.time', COMMIT_NOT_MIGRATED, ''),                                                     &
-    commit_provenance_t('amplitudes.points.value', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('amplitudes.points.count', COMMIT_DERIVED, 'size(amplitudes[].points)'),                                                    &
+    commit_provenance_t('amplitudes.type', COMMIT_FROM_PROBLEM, 'amplitudes[].type'),                                                            &
+    commit_provenance_t('amplitudes.points.time', COMMIT_FROM_PROBLEM, 'amplitudes[].points[].time'),                                                     &
+    commit_provenance_t('amplitudes.points.value', COMMIT_FROM_PROBLEM, 'amplitudes[].points[].value'),                                                    &
     commit_provenance_t('runtime.amplitudes.dfact', COMMIT_FROM_RUNTIME, ''),                                                   &
     commit_provenance_t('steps0.procedure', COMMIT_NOT_MIGRATED, ''),                                                           &
     commit_provenance_t('solver.linear', COMMIT_NOT_MIGRATED, ''),                                                              &
@@ -516,7 +516,7 @@ contains
     type(freedom_prescribe), allocatable :: s_prescrib(:)
     type(time_curve), allocatable :: s_tcurves(:)
 
-    integer :: i, ie, ig, n
+    integer :: i, ie, ig, j, n
     logical :: ok
 
     ! ---------------------------------------------------------------- verify
@@ -972,11 +972,47 @@ contains
 
     ! Amplitude records. Only the current factor is a model_ready row; the curve itself
     ! is authored data and belongs to the ProblemState half.
+    ! Amplitude records. The extent is the runtime's, as everywhere else; the ProblemState
+    ! side is only asserted to agree. Unlike prescrib there is no admission step here --
+    ! build_amplitudes sizes itself directly from problem%amplitudes -- so a disagreement
+    ! means the two objects did not come from one deck, not that a record was dropped.
+    if (size(problem%amplitudes) /= int(s_ntcurve)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%amplitudes))//               &
+                ' amplitudes and the runtime numbers '//itoa(int(s_ntcurve))//                  &
+                '; the extent rule makes the runtime the source and this a disagreement')
+      return
+    end if
     allocate (s_tcurves(s_ntcurve))
     do i = 1, int(s_ntcurve)
       call null_tcurve(s_tcurves(i))
-      s_tcurves(i)%dfact = STAGE_POISON_R
+      call poison_tcurve(s_tcurves(i))
       s_tcurves(i)%dfact = real(opt_or_real(runtime%amplitudes(i)%factor), irk)
+
+      ! The three ProblemState-sourced amplitude fields (M4-01 step 4, tcurves).
+      !
+      ! type_curve is character(20) and the map compares it trim()ed, so this is the same
+      ! silent-truncation hazard as the section header strings: the poison cannot see it,
+      ! because a truncated string is a written one. The bridge test's trim() comparison is
+      ! what catches it.
+      s_tcurves(i)%type_curve = opt_text_or(problem%amplitudes(i)%type)
+      ! amplitudes.points.count -> ntime. DERIVED, not FROM_PROBLEM: it is the CARDINALITY
+      ! of a ProblemState collection rather than a value read out of one, and the map owns
+      ! it as `derived` with the rule "= count(amplitudes[].points)". The runtime cannot
+      ! supply it either -- amplitude_state_t carries only `factor` -- so unlike every
+      ! extent in this routine there is no runtime source to prefer.
+      n = size(problem%amplitudes(i)%points)
+      s_tcurves(i)%ntime = int(n, ink)
+      ! ttime_curve / dfact_curve: the two pointer targets this step adds to the record
+      ! array. commit_release grows with them, in the same commit, innermost first.
+      allocate (s_tcurves(i)%ttime_curve(n), s_tcurves(i)%dfact_curve(n))
+      s_tcurves(i)%ttime_curve = STAGE_POISON_R
+      s_tcurves(i)%dfact_curve = STAGE_POISON_R
+      do j = 1, n
+        s_tcurves(i)%ttime_curve(j) =                                                           &
+          real(opt_or_real(problem%amplitudes(i)%points(j)%time), irk)
+        s_tcurves(i)%dfact_curve(j) =                                                           &
+          real(opt_or_real(problem%amplitudes(i)%points(j)%value), irk)
+      end do
     end do
 
     ! ----------------------------------------------------------------- write
@@ -1097,7 +1133,19 @@ contains
       deallocate (prescrib)
     end if
 
-    if (allocated(tcurves)) deallocate (tcurves)
+    ! tcurves grew two pointer targets per curve in M4-01 step 4 (ttime_curve,
+    ! dfact_curve), so this is no longer a bare deallocate. Note what the release-totality
+    ! assertion can and cannot see here: it would catch dropping the `deallocate (tcurves)`
+    ! below, because an unreleased ALLOCATABLE is still allocated afterwards -- but it
+    ! would NOT catch dropping either pointer deallocate, exactly as measured for
+    ! props(i)%mechanical%solid (design 5.1.3). That blind spot closes at step 6, not here.
+    if (allocated(tcurves)) then
+      do i = 1, size(tcurves)
+        if (associated(tcurves(i)%ttime_curve)) deallocate (tcurves(i)%ttime_curve)
+        if (associated(tcurves(i)%dfact_curve)) deallocate (tcurves(i)%dfact_curve)
+      end do
+      deallocate (tcurves)
+    end if
     if (allocated(trans)) deallocate (trans)
 
     ! props: the two-level chain, unwound INNERMOST FIRST. Deallocating props(i)%mechanical
@@ -1385,10 +1433,11 @@ contains
     ! so these come before anything that indexes them -- including the loops below.
     if (.not. allocated(problem%mesh%nodes) .or. .not. allocated(problem%mesh%elements) .or.   &
         .not. allocated(problem%mesh%elsets) .or. .not. allocated(problem%materials) .or.      &
-        .not. allocated(problem%sections) .or. .not. allocated(problem%steps)) then
+        .not. allocated(problem%sections) .or. .not. allocated(problem%steps) .or.       &
+        .not. allocated(problem%amplitudes)) then
       call fail(errors, 'a top-level ProblemState collection this commit reads is not '//      &
-                'allocated (mesh.nodes, mesh.elements, mesh.elsets, materials, sections '//    &
-                'or steps)')
+                'allocated (mesh.nodes, mesh.elements, mesh.elsets, materials, sections, '//   &
+                'steps or amplitudes)')
       return
     end if
 
@@ -1409,6 +1458,13 @@ contains
     do i = 1, size(problem%mesh%elsets)
       if (.not. allocated(problem%mesh%elsets(i)%elements)) then
         call fail(errors, 'mesh.elsets['//itoa(i)//'].elements is not allocated'); return
+      end if
+    end do
+    ! Each amplitude's point list. `ntime` is its SIZE, so an unallocated one is both an
+    ! undefined read and a published count of nothing.
+    do i = 1, size(problem%amplitudes)
+      if (.not. allocated(problem%amplitudes(i)%points)) then
+        call fail(errors, 'amplitudes['//itoa(i)//'].points is not allocated'); return
       end if
     end do
     if (.not. allocated(problem%steps(1)%output%stress_averaging) .or.                         &
@@ -1461,6 +1517,19 @@ contains
                   'commit reads (name, nset, dof, value, amplitude or record_reaction)')
         return
       end if
+    end do
+    do i = 1, size(problem%amplitudes)
+      if (.not. opt_is_set(problem%amplitudes(i)%type)) then
+        call fail(errors, 'amplitudes['//itoa(i)//'].type is not set'); return
+      end if
+      do k = 1, size(problem%amplitudes(i)%points)
+        if (.not. opt_is_set(problem%amplitudes(i)%points(k)%time) .or.                        &
+            .not. opt_is_set(problem%amplitudes(i)%points(k)%value)) then
+          call fail(errors, 'amplitudes['//itoa(i)//'].points['//itoa(k)//                     &
+                    '] has an unset time or value')
+          return
+        end if
+      end do
     end do
     do i = 1, size(problem%sections)
       if (.not. opt_is_set(problem%sections(i)%material) .or.                                  &
@@ -1719,6 +1788,20 @@ contains
     g%sptype = ''
     g%special = ''
   end subroutine poison_group
+
+  ! time_curve: 3 non-pointer components assigned in the amplitude-record loop -- `dfact`
+  ! from the runtime, `ntime` and `type_curve` from ProblemState (M4-01 step 4).
+  ! `nstoch_curve` is NOT assigned and so is NOT poisoned; its map row is not emitted at
+  ! model_ready. `type_curve` gets '' for the reason poison_group states: there is no
+  ! integer sentinel for a character(20), so a missing write to it is caught by the bridge
+  ! test's trim() comparison rather than by the sentinel. The pointer components, including
+  ! the two this step allocates, belong to null_tcurve and must not appear here.
+  subroutine poison_tcurve(c)
+    type(time_curve), intent(inout) :: c
+    c%dfact = STAGE_POISON_R
+    c%ntime = STAGE_POISON_I
+    c%type_curve = ''
+  end subroutine poison_tcurve
 
   ! element_lib: 1 component, `matno`, assigned in the element-record loop since step 3b.
   subroutine poison_element(e)
