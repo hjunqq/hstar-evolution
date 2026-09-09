@@ -1,6 +1,6 @@
 # ADR-0004：M3 延后出口，bridge 状态等价随 M4-01 一并签收
 
-- 状态：接受
+- 状态：接受；举证责任已于 2026-09-09 由 L3-b 履行（见文末「结算」）
 - 日期：2026-09-08
 
 ## 背景
@@ -49,3 +49,21 @@ M3-02 的正向 fixture 是缩到 1 个 Q4、4 节点的**结构等价体**，�
   所依据的同一类理由。
 - **把冻结基线的比对降级为"结构比对"**：只比形状与非零模式、不比值。这会让出口条件名存实亡，
   且与 M2-03 已冻结的逐值基线不相称。
+
+## 结算（2026-09-09）
+
+本 ADR 移交给 M4-01 的「bridge 状态等价」举证责任**已履行**，证据在
+`docs/m4/L3b-bridge-report.md`（含 lead 的独立复核 §9）。
+
+`src/adapter/yl_adapter_bridge_test.f90` 把完整链条跑通并与冻结基线比对：
+适配器 → `build_runtime`（契约 `static-q4-si/1`）→ `commit_legacy_globals` → 回读真实 legacy
+全局 → 对 `cases/golden/<case>/reference/state/model_ready/*.json`。46 个 `model_ready`
+`RuntimeState.*` 行 × 2 个基准算例：**MATCH=64 / MISMATCH=0 / NOT_COMPARABLE=28 /
+UNVERIFIED=0**，停止规则未触发。
+
+**上文「风险登记」段所担心的情形没有发生**：没有任何一个 `build_runtime` 的派生与 legacy
+不等价，缺陷没有在 M3 阶段积压。延后出口这一次没有付出代价。
+
+范围边界（不因本次结算而扩大）：只覆盖 `model_ready` 一个检查点、两个基准算例、
+`static-q4-si/1` 一个契约。`phase_ready`／`increment_ready`、影子进程差分（L3-c）、
+以及 M3-03 自述未做的泄漏/用后释放检测仍然未建立。
