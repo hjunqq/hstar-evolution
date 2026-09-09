@@ -77,16 +77,25 @@ program yl_runtime_bridge_test
   type(runtime_state_t), allocatable :: rt1, rt2
   type(problem_state_t), allocatable :: pr1, pr2
   type(deck_residue_t) :: rs1, rs2
+  logical :: ok1, ok2
 
   write (output_unit, '(a)') 'yl_runtime_bridge_test: M3-03 isolated bridge (commit_legacy_globals)'
 
   write (output_unit, '(a)') '-- 1. commit lands the values (1-element draft)'
-  call build_and_commit(1, rt1, pr1, rs1)
-  call check_landed(pr1, rt1)
+  call build_and_commit(1, rt1, pr1, rs1, ok1)
+  if (ok1) then
+    call check_landed(pr1, rt1)
+  else
+    call skip_landed('1-element draft')
+  end if
 
   write (output_unit, '(a)') '-- 2. commit lands the values (2-element draft)'
-  call build_and_commit(2, rt2, pr2, rs2)
-  call check_landed(pr2, rt2)
+  call build_and_commit(2, rt2, pr2, rs2, ok2)
+  if (ok2) then
+    call check_landed(pr2, rt2)
+  else
+    call skip_landed('2-element draft')
+  end if
 
   write (output_unit, '(a)') '-- 3. no partial commit'
   call group_no_partial(pr2, rs2, rt2)
@@ -120,7 +129,12 @@ contains
   ! sections can re-verify against it.
   ! ==========================================================================
 
-  subroutine build_and_commit(n_elem, rt, problem_out, residue_out)
+  !> `ok` is .true. only when the globals actually carry this runtime afterwards. Every
+  !> caller must consult it before reading a committed global: on any of the three early
+  !> exits below -- and on a REFUSED commit, which is the interesting one -- the globals
+  !> are exactly as commit found them, which on this path means unallocated. See the note
+  !> above check_landed for what reading them anyway actually did.
+  subroutine build_and_commit(n_elem, rt, problem_out, residue_out, ok)
     integer, intent(in) :: n_elem
     type(runtime_state_t), allocatable, intent(out) :: rt
     !> The ProblemState and the deck residue this commit was made with. Handed back
@@ -130,10 +144,15 @@ contains
     !> comparing two different calls.
     type(problem_state_t), allocatable, intent(out) :: problem_out
     type(deck_residue_t), intent(out) :: residue_out
+    logical, intent(out) :: ok
     type(problem_state_t), allocatable :: draft, problem
     type(manifest_t), allocatable :: pmanifest, rmanifest
     type(problem_errors_t) :: errors
     logical :: built
+
+    ! .false. until the commit has actually happened, so every `return` below leaves it
+    ! saying "nothing was committed" without each one having to remember to.
+    ok = .false.
 
     call draft_of(n_elem, draft)
 
@@ -159,8 +178,17 @@ contains
     call check('commit_legacy_globals accepted the '//itoa(n_elem)//'-element runtime',          &
               .not. errors%any())
     built = .not. errors%any()
+    if (.not. built) then
+      ! ONE finding for a refusal, not two: 'commit_owns_globals is true after a
+      ! successful commit' asserts a consequence of a success that did not happen, and
+      ! firing it here would report the same fact a second time under a name that
+      ! presupposes the opposite. That globals stay unowned after a refusal is asserted
+      ! where it belongs -- group_foreign_allocation_guard, on a refusal it provoked.
+      call report_errors('commit_legacy_globals', errors)
+      return
+    end if
     call check('commit_owns_globals is true after a successful commit', commit_owns_globals())
-    if (.not. built) call report_errors('commit_legacy_globals', errors)
+    ok = commit_owns_globals()
   end subroutine build_and_commit
 
   ! A draft structurally like yl_problem_pipeline_selftest's cooks-equivalent good_draft
@@ -463,6 +491,39 @@ contains
   ! section 1 (continued): every committed quantity, read from the REAL legacy
   ! globals, against the runtime that was staged for it.
   ! ==========================================================================
+
+  ! NOTHING BELOW IS DEFINED AFTER A REFUSED COMMIT, and that is not a theoretical worry.
+  ! commit_legacy_globals leaves every global exactly as it found it, which on this path
+  ! means unallocated -- so a value walk dereferences unallocated allocatables. It did.
+  ! The SAME source and the SAME negative control (drop one boundary record so the
+  ! alignment precondition refuses) behaved two different ways in two build trees: one
+  ! segfaulted at the first element assertion, the other ran on into an unallocated
+  ! `prescrib` and printed 17 "failures". Neither number was evidence -- the 17 were
+  ! simply the reads that happened not to fault, and the run that crashed never reached
+  ! the assertions someone then reported as "not failing".
+  !
+  ! So a refusal must produce ONE finding, the refusal, and no value walk at all. This is
+  ! the same shape as the five `n == 0` rows in L2c-fold-design.md 2 -- a failure mode
+  ! that is itself irreproducible -- except here it was in the harness rather than the
+  ! dump, which is why the harness is where it is fixed.
+  subroutine check_landed_guarded(problem, rt, site)
+    type(problem_state_t), intent(in) :: problem
+    type(runtime_state_t), intent(in) :: rt
+    character(len=*), intent(in) :: site
+    if (.not. commit_owns_globals()) then
+      call skip_landed(site)
+      return
+    end if
+    call check_landed(problem, rt)
+  end subroutine check_landed_guarded
+
+  !> Visible, and deliberately NOT a check: a skipped walk must not read as a passing one.
+  !> The suite's total falls, which is the signal that something was not examined.
+  subroutine skip_landed(site)
+    character(len=*), intent(in) :: site
+    write (output_unit, '(a)') '  SKIP check_landed ('//site//'): the commit was refused, '//   &
+      'so no committed global is defined to read'
+  end subroutine skip_landed
 
   subroutine check_landed(problem, rt)
     type(problem_state_t), intent(in) :: problem
@@ -912,6 +973,16 @@ contains
     integer :: bad_npoin, bad_nelem
     real(irk), allocatable :: bad_result_zero(:)
 
+    ! This section's whole method is "compare the globals before and after a rejected
+    ! commit", which presupposes an EARLIER commit succeeded and left them defined. If it
+    ! did not, `result_zero` below is an unallocated allocatable and size() on it is
+    ! undefined -- the same fault this file's check_landed note describes, reached by a
+    ! different road.
+    if (.not. commit_owns_globals()) then
+      call skip_landed('no-partial-commit section')
+      return
+    end if
+
     ! rt_bad's field_status is unallocated (default init, yl_runtime_types.f90), so
     ! runtime_status_count(rt_bad) is 0 against build_rule_produced_count() > 0: the
     ! FIRST check inside verify_registered, before any staging allocation runs. This is
@@ -931,7 +1002,7 @@ contains
     call check('npoin unchanged after the rejected commit', bad_npoin == npoin)
     call check('nelem unchanged after the rejected commit', bad_nelem == nelem)
     call check('result_zero unchanged after the rejected commit', all(bad_result_zero == result_zero))
-    call check_landed(problem, rt_good)
+    call check_landed_guarded(problem, rt_good, 'after the rejected commit')
   end subroutine group_no_partial
 
   subroutine assert_internal_commit_total(errors, tag)
@@ -987,11 +1058,15 @@ contains
     ! --- repeat commit of the SAME runtime: bit-for-bit identical effect ---------
     call commit_legacy_globals(problem, residue, rt, errors)
     call check('repeat commit of the same runtime is accepted', .not. errors%any())
+    if (errors%any()) then
+      call skip_landed('repeat commit')
+      return
+    end if
     call check('npoin identical after a repeat commit', npoin == npoin_1)
     call check('nelem identical after a repeat commit', nelem == nelem_1)
     call check('nodfn bit-for-bit identical after a repeat commit', all(nodfn == nodfn_1))
     call check('fixed bit-for-bit identical after a repeat commit', all(fixed == fixed_1))
-    call check_landed(problem, rt)
+    call check_landed_guarded(problem, rt, 'after a recommit')
 
     ! --- release: total, and idempotent -------------------------------------------
     call check('commit_owns_globals is true before release', commit_owns_globals())
@@ -1037,8 +1112,12 @@ contains
     ! --- a fresh commit after release works again ---------------------------------
     call commit_legacy_globals(problem, residue, rt, errors)
     call check('a fresh commit after release is accepted', .not. errors%any())
+    if (errors%any()) then
+      call skip_landed('fresh commit after release')
+      return
+    end if
     call check('commit_owns_globals is true after the fresh commit', commit_owns_globals())
-    call check_landed(problem, rt)
+    call check_landed_guarded(problem, rt, 'after a recommit')
   end subroutine group_repeat_and_ownership
 
   ! ==========================================================================
@@ -1067,6 +1146,10 @@ contains
 
     call commit_legacy_globals(problem, residue, rt, errors)
     call check('commit for the sentinel check is accepted', .not. errors%any())
+    if (errors%any()) then
+      call skip_landed('sentinel check')
+      return
+    end if
 
     call check('nmats is undisturbed by commit', nmats == SENTINEL_NMATS)
     call check('nblks is undisturbed by commit', nblks == SENTINEL_NBLKS)
@@ -1208,6 +1291,10 @@ contains
     call errors%clear()
     call commit_legacy_globals(problem, residue, rt, errors)
     call check('a fresh commit for the blind-spot trials is accepted', .not. errors%any())
+    if (errors%any()) then
+      call skip_landed('blind-spot trials')
+      return
+    end if
     call check('the blind-spot guards pass on a fresh commit',                                  &
               unode_np_unode_all_zero() .and. unode_patch_pointers_all_null() .and.             &
               lineload == 0_ink .and. linet == 0_ink)
@@ -1260,7 +1347,7 @@ contains
 
     ! Nothing above may have disturbed the rows the other sections assert: the
     ! full landing check runs once more as this section's own exit condition.
-    call check_landed(problem, rt)
+    call check_landed_guarded(problem, rt, 'after a recommit')
   end subroutine group_blind_spot_falsifiability
 
   ! Allocate a single-element "foreign" instance of the named record array and null
