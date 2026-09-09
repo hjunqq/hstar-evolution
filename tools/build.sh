@@ -410,6 +410,33 @@ MAIN_SRCS=(Fem.f90)
 STATE_SRCS=(src/state/yl_state_io.f90 src/state/yl_state_adapters.f90
             src/state/yl_state_dump.f90)
 
+# The generated file records the map's sha256 on its `! Source :` line. That line
+# is the only claim that the observer matches the map it was generated from, and
+# it drifted silently once already: commit cded7f4's own message said it had
+# regenerated the dump so the line matched, and it had not (dump said 8ec26e625672,
+# map was 5224c8aa06f7; found by the L2-c design review, 2026-09-09). The drift was
+# cosmetic that time -- regenerating changed nothing but the line itself -- but
+# "cosmetic this time" is not a property anyone can check by looking at the line.
+# So the check is mechanical and fail-closed, not a convention.
+state_dump_provenance_check() {
+    local dump="$ROOT/src/state/yl_state_dump.f90"
+    local map="$ROOT/docs/m2/state-field-map.toml"
+    local claimed actual
+    claimed=$(grep -m1 -oP '(?<=sha256 )[0-9a-f]+' "$dump" 2>/dev/null || true)
+    actual=$(sha256sum "$map" | cut -c1-12)
+    if [ -z "$claimed" ]; then
+        echo "build.sh: $dump carries no '! Source : ... (sha256 ...)' line" >&2
+        return 1
+    fi
+    if [ "$claimed" != "$actual" ]; then
+        echo "build.sh: yl_state_dump.f90 was generated from a different map:" >&2
+        echo "  the file claims sha256 $claimed, docs/m2/state-field-map.toml is $actual" >&2
+        echo "  regenerate: python3 tools/yl_state_map.py gen-fortran -o src/state/yl_state_dump.f90" >&2
+        return 1
+    fi
+    echo "  ok   yl_state_dump.f90 provenance matches the map (sha256 $actual)"
+}
+
 # --- target: runtime-bridge (M3-03) -------------------------------------------
 # The ISOLATED bridge executable. It links the REAL legacy modules -- the same
 # sources, in the same order, as the solver -- plus src/state (the M2 observers),
@@ -478,6 +505,7 @@ if [ "$TARGET" = runtime-bridge ]; then
     else
         RB_SRC_IDENTITY="external:$SRC"
     fi
+    state_dump_provenance_check || exit 4
     for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do
         [ -f "$ROOT/$f" ] || {
             echo "build.sh: runtime-bridge: missing source $ROOT/$f" >&2
@@ -630,6 +658,7 @@ else
     SRC_IDENTITY="external:$SRC"
 fi
 for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}"; do [ -f "$ROOT/$f" ] || { echo "build.sh: missing source $ROOT/$f" >&2; exit 4; }; done
+state_dump_provenance_check || exit 4
 for f in "${SRCS[@]}" "${MAIN_SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing source $SRC/$f" >&2; exit 4; }; done
 [ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }
 
