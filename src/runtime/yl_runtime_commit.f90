@@ -91,6 +91,7 @@ module yl_runtime_commit
   use variable_types, only: ink, irk
   use elements, only: element_field, gauss_element
   use global_var, only: element, group, listp_group, trans, appear,                             &
+                        coord, appear_process, matno_process, average_appear,                   &
                         lmdofn, lcdofn, nodfn, iffix, fixed,                                    &
                         result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
                         line_load_block, line_temp_block, lineload, linet,                      &
@@ -98,12 +99,13 @@ module yl_runtime_commit
                         element_lib, group_of_elements, group_of_dvide_ipoin,                   &
                         interpolation_group, unode_elements
   use prescribed, only: prescrib, ndofix, freedom_prescribe
-  use applied_load, only: tcurves, ntcurve, time_curve
+  use applied_load, only: tcurves, ntcurve, time_curve, factg, tcurvegravity
   use meshfine, only: ice0
+  use materials, only: props, material_property, mechanical_property, solid_skeleton
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
-  use yl_problem_optional, only: opt_int, opt_real, opt_get
+  use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_get
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
   use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
@@ -287,7 +289,7 @@ module yl_runtime_commit
     commit_provenance_t('derived.counts.ngroup', COMMIT_FROM_RUNTIME, 'extent ngroup'),                                         &
     commit_provenance_t('steps0.output.format', COMMIT_NOT_MIGRATED, ''),                                                       &
     commit_provenance_t('mesh.nodes.id', COMMIT_SYNTHETIC, 'dump emits 1..npoin'),                                              &
-    commit_provenance_t('mesh.nodes.xyz', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('mesh.nodes.xyz', COMMIT_FROM_PROBLEM, 'mesh.nodes[].xyz'),                                                             &
     commit_provenance_t('mesh.elements.id', COMMIT_SYNTHETIC, 'dump emits 1..nelem'),                                           &
     commit_provenance_t('mesh.elements.nodes', COMMIT_NOT_MIGRATED, ''),                                                        &
     commit_provenance_t('mesh.elements.kind', COMMIT_NOT_MIGRATED, ''),                                                         &
@@ -295,21 +297,21 @@ module yl_runtime_commit
     commit_provenance_t('mesh.elements.material', COMMIT_NOT_MIGRATED, ''),                                                     &
     commit_provenance_t('mesh.sets.elset', COMMIT_NOT_MIGRATED, ''),                                                            &
     commit_provenance_t('mesh.sets.nset', COMMIT_NOT_MIGRATED, ''),                                                             &
-    commit_provenance_t('materials.id', COMMIT_NOT_MIGRATED, ''),                                                               &
-    commit_provenance_t('materials.kind', COMMIT_NOT_MIGRATED, ''),                                                             &
-    commit_provenance_t('materials.name', COMMIT_NOT_MIGRATED, ''),                                                             &
-    commit_provenance_t('derived.counts.nphase', COMMIT_NOT_MIGRATED, ''),                                                      &
-    commit_provenance_t('materials.phase', COMMIT_NOT_MIGRATED, ''),                                                            &
-    commit_provenance_t('materials.model', COMMIT_NOT_MIGRATED, ''),                                                            &
-    commit_provenance_t('materials.density', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('materials.ratio', COMMIT_NOT_MIGRATED, ''),                                                            &
-    commit_provenance_t('sections.thickness', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('materials.E', COMMIT_NOT_MIGRATED, ''),                                                                &
-    commit_provenance_t('materials.nu', COMMIT_NOT_MIGRATED, ''),                                                               &
-    commit_provenance_t('materials.thermal_expansion', COMMIT_NOT_MIGRATED, ''),                                                &
-    commit_provenance_t('materials.icreep', COMMIT_NOT_MIGRATED, ''),                                                           &
-    commit_provenance_t('materials.kind_wt', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('materials.jliqu', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('materials.id', COMMIT_FROM_PROBLEM, 'props(:) index 1..nmats'),                                                               &
+    commit_provenance_t('materials.kind', COMMIT_FROM_PROBLEM, 'associated(mechanical)'),                                                             &
+    commit_provenance_t('materials.name', COMMIT_FROM_PROBLEM, 'materials[]'),                                                             &
+    commit_provenance_t('derived.counts.nphase', COMMIT_DERIVED, 'count of associated(solid)'),                                                      &
+    commit_provenance_t('materials.phase', COMMIT_FROM_PROBLEM, 'associated(solid)'),                                                            &
+    commit_provenance_t('materials.model', COMMIT_FROM_PROBLEM, 'materials[]'),                                                            &
+    commit_provenance_t('materials.density', COMMIT_FROM_PROBLEM, 'materials[]'),                                                          &
+    commit_provenance_t('materials.ratio', COMMIT_FROM_PROBLEM, 'materials[]'),                                                            &
+    commit_provenance_t('sections.thickness', COMMIT_FROM_PROBLEM, 'sections[] -> materials[]'),                                                         &
+    commit_provenance_t('materials.E', COMMIT_FROM_PROBLEM, 'materials[]'),                                                                &
+    commit_provenance_t('materials.nu', COMMIT_FROM_PROBLEM, 'materials[]'),                                                               &
+    commit_provenance_t('materials.thermal_expansion', COMMIT_FROM_PROBLEM, 'materials[]'),                                                &
+    commit_provenance_t('materials.icreep', COMMIT_FROM_PROBLEM, 'materials[]'),                                                           &
+    commit_provenance_t('materials.kind_wt', COMMIT_FROM_PROBLEM, 'materials[]'),                                                          &
+    commit_provenance_t('materials.jliqu', COMMIT_FROM_PROBLEM, 'materials[]'),                                                            &
     commit_provenance_t('sections.element', COMMIT_NOT_MIGRATED, ''),                                                           &
     commit_provenance_t('sections.name', COMMIT_NOT_MIGRATED, ''),                                                              &
     commit_provenance_t('sections.element_kind', COMMIT_NOT_MIGRATED, ''),                                                      &
@@ -363,10 +365,10 @@ module yl_runtime_commit
     commit_provenance_t('derived.dof.lcdofn', COMMIT_FROM_RUNTIME, 'lcdofn(1:cdofn)'),                                          &
     commit_provenance_t('runtime.increment.iblks_at_model', COMMIT_FROM_RUNTIME, ''),                                           &
     commit_provenance_t('runtime.increment.lblks_at_model', COMMIT_FROM_RUNTIME, ''),                                           &
-    commit_provenance_t('steps0.activation.active', COMMIT_NOT_MIGRATED, ''),                                                   &
-    commit_provenance_t('steps0.activation.material', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.activation.active', COMMIT_FROM_PROBLEM, 'steps[0].activation[]'),                                                   &
+    commit_provenance_t('steps0.activation.material', COMMIT_FROM_PROBLEM, 'steps[0].activation[]'),                                                 &
     commit_provenance_t('runtime.activation.appear', COMMIT_FROM_RUNTIME, ''),                                                  &
-    commit_provenance_t('steps0.output.stress_averaging', COMMIT_NOT_MIGRATED, ''),                                             &
+    commit_provenance_t('steps0.output.stress_averaging', COMMIT_FROM_PROBLEM, 'steps[0].output'),                                             &
     commit_provenance_t('steps0.output.field.gid_u', COMMIT_NOT_MIGRATED, ''),                                                  &
     commit_provenance_t('steps0.output.field.gid_s', COMMIT_NOT_MIGRATED, ''),                                                  &
     commit_provenance_t('steps0.output.field.gid_ms', COMMIT_NOT_MIGRATED, ''),                                                 &
@@ -404,8 +406,8 @@ module yl_runtime_commit
     commit_provenance_t('runtime.dof.fixed', COMMIT_FROM_RUNTIME, ''),                                                          &
     commit_provenance_t('control.glb.ntrans', COMMIT_NOT_MIGRATED, ''),                                                         &
     commit_provenance_t('steps0.load.gravity.magnitude', COMMIT_NOT_MIGRATED, ''),                                              &
-    commit_provenance_t('steps0.load.gravity.direction', COMMIT_NOT_MIGRATED, ''),                                              &
-    commit_provenance_t('steps0.load.gravity.amplitude', COMMIT_NOT_MIGRATED, ''),                                              &
+    commit_provenance_t('steps0.load.gravity.direction', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity'),                                              &
+    commit_provenance_t('steps0.load.gravity.amplitude', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity'),                                              &
     commit_provenance_t('derived.counts.nplgroup', COMMIT_NOT_MIGRATED, ''),                                                    &
     commit_provenance_t('derived.counts.nedge', COMMIT_NOT_MIGRATED, ''),                                                       &
     commit_provenance_t('derived.counts.edge_load_group', COMMIT_NOT_MIGRATED, ''),                                             &
@@ -486,6 +488,12 @@ contains
     integer(ink) :: s_npoin, s_nelem, s_ngroup, s_ndimn, s_mdofn, s_cdofn, s_ntotv
     integer(ink) :: s_ndofix, s_ntcurve, s_iblks, s_lblks, s_lineload, s_linet
     integer :: nevab, ngaus, ngaus_mass, nnode
+    ! staging: the ProblemState half's plain arrays (M4-01 step 3)
+    real(irk), allocatable :: s_coord(:,:), s_factg(:)
+    integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
+    integer(ink), allocatable :: s_average_appear(:), s_tcurvegravity(:)
+    type(material_property), allocatable :: s_props(:)
+    integer :: nmats, nblks, id_, ib
     ! staging: plain arrays
     integer(ink), allocatable :: s_lmdofn(:), s_lcdofn(:), s_nodfn(:,:), s_iffix(:)
     integer(ink), allocatable :: s_appear(:), s_ice0(:)
@@ -515,19 +523,29 @@ contains
     ! leaking: this module will not run in a process whose legacy globals were populated
     ! by something else.
     if (.not. commit_owned) then
-      ! ALL SIX record-array globals this module move_allocs, not five: `trans` is
+      ! ALL SEVEN record-array globals this module move_allocs, not six: `trans` is
       ! `interpolation_group`, which carries `listf` and `rintf` pointers
       ! (Global.f90:210-214) and is moved at the same unconditional move_alloc as the
       ! rest. Omitting it left the exact leak this guard exists to prevent reachable
-      ! through one of the six doors -- found in M3-03 Round-2 review. If a seventh
-      ! record array is ever committed, it belongs in this list on the same commit that
-      ! adds its move_alloc.
+      ! through one of the doors -- found in M3-03 Round-2 review. The seventh, `props`,
+      ! arrived with M4-01 step 3 and is listed here on the same commit that added its
+      ! move_alloc, which is the rule that paragraph asked for.
+      !
+      ! WHY THE STEP-3 PLAIN ARRAYS ARE **NOT** HERE, deliberately: coord,
+      ! appear_process, matno_process, average_appear, factg and tcurvegravity hold no
+      ! pointer components, so move_alloc over a foreign allocation of one of them
+      ! deallocates it completely and leaks nothing. This guard is about LEAKS, not about
+      ! ownership in general, and widening it to "every global this module moves" would
+      ! make it refuse in cases where there is nothing to prevent -- a guard that fires
+      ! for the wrong reason. `props` is here because props(i)%mechanical%solid is a
+      ! two-level pointer chain and is exactly what would leak.
       if (allocated(element) .or. allocated(group) .or. allocated(listp_group) .or.            &
-          allocated(prescrib) .or. allocated(tcurves) .or. allocated(trans)) then
-        call fail(errors, 'one of element, group, listp_group, prescrib, tcurves or trans '//  &
-                  'is already allocated but commit_owned is false -- committing would '//      &
-                  'silently leak a foreign allocation via move_alloc; refusing to run in a '// &
-                  'process whose legacy globals were populated by something other than '//     &
+          allocated(prescrib) .or. allocated(tcurves) .or. allocated(trans) .or.               &
+          allocated(props)) then
+        call fail(errors, 'one of element, group, listp_group, prescrib, tcurves, trans '//    &
+                  'or props is already allocated but commit_owned is false -- committing '//   &
+                  'would silently leak a foreign allocation via move_alloc; refusing to run '//&
+                  'in a process whose legacy globals were populated by something other than '//&
                   'this module')
         return
       end if
@@ -729,6 +747,105 @@ contains
       s_prescrib(i)%lefdofix = int(runtime%boundary(i)%attached_field, ink)
     end do
 
+    ! ---------------------------------------------------- ProblemState half (step 3)
+    ! The first values this module takes out of `problem` rather than out of `runtime`.
+    ! Extents still come from the runtime (§5.2 of the design gives every extent exactly
+    ! one derivation source); ProblemState supplies only the VALUES, and where both sides
+    ! know a count the ProblemState side is asserted to agree rather than used.
+    nmats = size(problem%materials)
+    nblks = size(problem%steps)
+
+    ! mesh.nodes.xyz -> coord(ndimn, npoin), Fortran order. The extent is the runtime's.
+    if (size(problem%mesh%nodes) /= int(s_npoin)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%mesh%nodes))//              &
+                ' nodes and the runtime numbers '//itoa(int(s_npoin))//                       &
+                '; the extent rule makes the runtime the source and this a disagreement')
+      return
+    end if
+    allocate (s_coord(s_ndimn, s_npoin))
+    s_coord = STAGE_POISON_R
+    do i = 1, int(s_npoin)
+      s_coord(:, i) = real(problem%mesh%nodes(i)%xyz, irk)
+    end do
+
+    ! steps[0].activation[].active -> appear_process(1:ngroup, 0:nblks).
+    ! LOWER BOUND 0 ON THE SECOND DIMENSION, not 1: column 0 is the initial state, zeroed
+    ! at Global.f90:968 and CONSUMED at Fem.f90:1719-1720, and yl_state_adapters.f90:815
+    ! asserts `lbound(...,2) == 0` before emitting. A 1-based allocation here would shift
+    ! every column by one and still look well formed.
+    allocate (s_appear_process(s_ngroup, 0:nblks))
+    s_appear_process = STAGE_POISON_I
+    s_appear_process(:, 0) = 0_ink
+    do ib = 1, nblks
+      do ig = 1, int(s_ngroup)
+        s_appear_process(ig, ib) = int(opt_or(problem%steps(ib)%activation(ig)%active), ink)
+      end do
+    end do
+
+    ! steps[0].activation[].material -> matno_process(ngroup, nblks). 1-based, unlike
+    ! appear_process: Global.f90:965 allocates it (ngroup, nblks).
+    allocate (s_matno_process(s_ngroup, nblks))
+    s_matno_process = STAGE_POISON_I
+    do ib = 1, nblks
+      do ig = 1, int(s_ngroup)
+        s_matno_process(ig, ib) = int(opt_or(problem%steps(ib)%activation(ig)%material), ink)
+      end do
+    end do
+
+    ! steps[0].output.stress_averaging -> average_appear(ngroup)
+    allocate (s_average_appear(s_ngroup))
+    s_average_appear = STAGE_POISON_I
+    s_average_appear = int(problem%steps(1)%output%stress_averaging, ink)
+
+    ! steps[0].load.gravity.{direction,amplitude} -> factg(ndimn), tcurvegravity(ngroup)
+    allocate (s_factg(s_ndimn))
+    s_factg = STAGE_POISON_R
+    s_factg = real(problem%steps(1)%load%gravity%direction, irk)
+
+    allocate (s_tcurvegravity(s_ngroup))
+    s_tcurvegravity = STAGE_POISON_I
+    s_tcurvegravity = int(problem%steps(1)%load%gravity%amplitude, ink)
+
+    ! materials[] -> props(nmats), a TWO-LEVEL POINTER CHAIN: props(i)%mechanical is a
+    ! pointer to a mechanical_property, whose %solid is a pointer to a solid_skeleton.
+    ! yl_state_dump guards both levels (`props(d1)%mechanical is not associated`, then
+    ! `%solid`), and commit_release has to unwind them in the opposite order. This is the
+    ! heaviest ownership this module has taken on, and every allocation here has a matching
+    ! deallocate in commit_release -- see the release path's own comment.
+    allocate (s_props(nmats))
+    do id_ = 1, nmats
+      nullify (s_props(id_)%mechanical, s_props(id_)%heat, s_props(id_)%geometry)
+      s_props(id_)%name = ''
+      allocate (s_props(id_)%mechanical)
+      nullify (s_props(id_)%mechanical%solid, s_props(id_)%mechanical%fluid)
+      allocate (s_props(id_)%mechanical%solid)
+      call null_solid(s_props(id_)%mechanical%solid)
+      call poison_solid(s_props(id_)%mechanical%solid)
+      s_props(id_)%name = opt_text_or(problem%materials(id_)%name)
+      associate (sk => s_props(id_)%mechanical%solid)
+        sk%material = opt_text_or(problem%materials(id_)%model)
+        sk%e = real(opt_or_real(problem%materials(id_)%E), irk)
+        sk%nu = real(opt_or_real(problem%materials(id_)%nu), irk)
+        sk%density = real(opt_or_real(problem%materials(id_)%density), irk)
+        sk%alfa = real(opt_or_real(problem%materials(id_)%thermal_expansion), irk)
+        sk%ratio = real(opt_or_real(problem%materials(id_)%solid_ratio), irk)
+        sk%icreep = int(opt_or(problem%materials(id_)%creep_model), ink)
+        sk%jliqu = int(opt_or(problem%materials(id_)%liquefaction), ink)
+        sk%kind_wt = int(opt_or(problem%materials(id_)%wetting_kind), ink)
+      end associate
+    end do
+    ! sections[].thickness is authored on the SECTION and stored on the MATERIAL
+    ! (Material.f90:319; the map's note on that row records the indirection). Resolved
+    ! section -> material -> props here, which is the same direction yl_adapter_parts
+    ! resolves it when it fills sections[].thickness in the first place.
+    do ig = 1, size(problem%sections)
+      id_ = int(opt_or(problem%sections(ig)%material))
+      if (id_ >= 1 .and. id_ <= nmats) then
+        s_props(id_)%mechanical%solid%thickness =                                             &
+          real(opt_or_real(problem%sections(ig)%thickness), irk)
+      end if
+    end do
+
     ! Amplitude records. Only the current factor is a model_ready row; the curve itself
     ! is authored data and belongs to the ProblemState half.
     allocate (s_tcurves(s_ntcurve))
@@ -770,6 +887,16 @@ contains
     call move_alloc(s_listp, listp_group)
     call move_alloc(s_prescrib, prescrib)
     call move_alloc(s_tcurves, tcurves)
+
+    ! The ProblemState half (step 3). Same phase, same rules: nothing here allocates,
+    ! converts or can fail.
+    call move_alloc(s_coord, coord)
+    call move_alloc(s_appear_process, appear_process)
+    call move_alloc(s_matno_process, matno_process)
+    call move_alloc(s_average_appear, average_appear)
+    call move_alloc(s_factg, factg)
+    call move_alloc(s_tcurvegravity, tcurvegravity)
+    call move_alloc(s_props, props)
 
     commit_owned = .true.
   end subroutine commit_legacy_globals
@@ -846,6 +973,26 @@ contains
 
     if (allocated(tcurves)) deallocate (tcurves)
     if (allocated(trans)) deallocate (trans)
+
+    ! props: the two-level chain, unwound INNERMOST FIRST. Deallocating props(i)%mechanical
+    ! before its %solid would lose the only handle on the solid_skeleton -- the same shape
+    ! as the pointer-before-array rule this whole routine is built on, one level deeper.
+    if (allocated(props)) then
+      do i = 1, size(props)
+        if (associated(props(i)%mechanical)) then
+          if (associated(props(i)%mechanical%solid)) deallocate (props(i)%mechanical%solid)
+          deallocate (props(i)%mechanical)
+        end if
+      end do
+      deallocate (props)
+    end if
+
+    if (allocated(coord)) deallocate (coord)
+    if (allocated(appear_process)) deallocate (appear_process)
+    if (allocated(matno_process)) deallocate (matno_process)
+    if (allocated(average_appear)) deallocate (average_appear)
+    if (allocated(factg)) deallocate (factg)
+    if (allocated(tcurvegravity)) deallocate (tcurvegravity)
 
     if (allocated(lmdofn)) deallocate (lmdofn)
     if (allocated(lcdofn)) deallocate (lcdofn)
@@ -1211,6 +1358,18 @@ contains
              c%NFS, c%order_stoch_parameter)
   end subroutine null_tcurve
 
+  ! solid_skeleton (Material.f90): 18 `pointer` declaration lines beyond the two nulled on
+  ! mechanical_property itself. Nulled for the same reason as every other legacy record
+  ! here -- the type has no default initialisation, so `associated()` on an unset component
+  ! is undefined, and yl_state_dump reaches into props(i)%mechanical%solid.
+  subroutine null_solid(sk)
+    type(solid_skeleton), intent(inout) :: sk
+    nullify (sk%normalstress, sk%normale, sk%gap_define)
+    nullify (sk%ClassicalEP, sk%CamClay, sk%SoilPZ, sk%Concrete, sk%DuncanChang)
+    nullify (sk%Goodman, sk%creep, sk%Elastic_Spring, sk%Elastic_ep, sk%Plane_lowft)
+    nullify (sk%steel_ep, sk%steel_sp, sk%wetting_def, sk%SandPZ, sk%ClayPZ, sk%scycl)
+  end subroutine null_solid
+
   ! ==========================================================================
   ! poisoning helpers
   ! ==========================================================================
@@ -1260,6 +1419,23 @@ contains
     p%ldofix = STAGE_POISON_I
     p%lnefix = STAGE_POISON_I
   end subroutine poison_prescrib
+
+  ! solid_skeleton: the 10 non-pointer components this module assigns. `thickness` is
+  ! assigned in a SECOND pass (section -> material), so poisoning it here is what makes a
+  ! material no section points at show up as a sentinel rather than as a plausible 0.
+  subroutine poison_solid(sk)
+    type(solid_skeleton), intent(inout) :: sk
+    sk%e = STAGE_POISON_R
+    sk%nu = STAGE_POISON_R
+    sk%density = STAGE_POISON_R
+    sk%alfa = STAGE_POISON_R
+    sk%ratio = STAGE_POISON_R
+    sk%thickness = STAGE_POISON_R
+    sk%icreep = STAGE_POISON_I
+    sk%jliqu = STAGE_POISON_I
+    sk%kind_wt = STAGE_POISON_I
+    sk%material = ''
+  end subroutine poison_solid
 
   ! ==========================================================================
   ! small helpers
@@ -1314,6 +1490,15 @@ contains
     call opt_get(x, v, found)
     if (.not. found) v = 0_int32
   end function opt_or
+
+  ! The value of an opt_text, or '' when unset -- the same fallback discipline as opt_or.
+  pure function opt_text_or(x) result(v)
+    type(opt_text), intent(in) :: x
+    character(len=:), allocatable :: v
+    logical :: found
+    call opt_get(x, v, found)
+    if (.not. found) v = ''
+  end function opt_text_or
 
   pure real(real64) function opt_or_real(x) result(v)
     type(opt_real), intent(in) :: x

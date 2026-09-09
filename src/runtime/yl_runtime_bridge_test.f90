@@ -43,9 +43,11 @@ program yl_runtime_bridge_test
                         line_load_block, line_temp_block,                                       &
                         npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
                         lineload, linet,                                                        &
+                        coord, appear_process, matno_process, average_appear,                   &
                         nmats, nblks, restart, ttime
   use prescribed, only: prescrib, ndofix
-  use applied_load, only: tcurves, ntcurve
+  use materials, only: props
+  use applied_load, only: tcurves, ntcurve, factg, tcurvegravity
   use meshfine, only: ice0
 
   use variable_types, only: ink, irk
@@ -80,11 +82,11 @@ program yl_runtime_bridge_test
 
   write (output_unit, '(a)') '-- 1. commit lands the values (1-element draft)'
   call build_and_commit(1, rt1, pr1, rs1)
-  call check_landed(rt1)
+  call check_landed(pr1, rt1)
 
   write (output_unit, '(a)') '-- 2. commit lands the values (2-element draft)'
   call build_and_commit(2, rt2, pr2, rs2)
-  call check_landed(rt2)
+  call check_landed(pr2, rt2)
 
   write (output_unit, '(a)') '-- 3. no partial commit'
   call group_no_partial(pr2, rs2, rt2)
@@ -406,7 +408,9 @@ contains
   ! globals, against the runtime that was staged for it.
   ! ==========================================================================
 
-  subroutine check_landed(rt)
+  subroutine check_landed(problem, rt)
+    type(problem_state_t), intent(in) :: problem
+    logical :: ok_all
     type(runtime_state_t), intent(in) :: rt
     integer :: ie, ig, i, n, ntv, iblk_v, lblk_v
     logical :: found
@@ -579,6 +583,76 @@ contains
               unode_patch_pointers_all_null())
     call check('lineload is 0 (RESERVED: no file offset is claimed)', lineload == 0_ink)
     call check('linet is 0 (RESERVED: no file offset is claimed)', linet == 0_ink)
+
+    ! --- THE ProblemState HALF (M4-01 step 3) --------------------------------------
+    ! Compared against `problem`, not against the runtime: these are the first rows whose
+    ! value this module takes from the ProblemState side, and asserting them against the
+    ! runtime would be asserting nothing (the runtime does not carry them).
+    call check('coord extents', allocated(coord) .and. size(coord, 1) == int(ndimn) .and.       &
+              size(coord, 2) == int(npoin))
+    if (allocated(coord)) then
+      ok_all = .true.
+      do i = 1, size(problem%mesh%nodes)
+        if (.not. all(coord(:, i) == real(problem%mesh%nodes(i)%xyz, irk))) ok_all = .false.
+      end do
+      call check('coord matches ProblemState mesh.nodes[].xyz', ok_all)
+    end if
+
+    ! Column 0 is the initial state and is part of the compared value; a 1-based
+    ! allocation would shift every column and still look well formed.
+    call check('appear_process lower bound of dim 2 is 0',                                      &
+              allocated(appear_process) .and. lbound(appear_process, 2) == 0)
+    call check('appear_process column 0 is zeroed',                                             &
+              allocated(appear_process) .and. all(appear_process(:, 0) == 0_ink))
+    call check('appear_process column 1 matches steps[0].activation[].active',                  &
+              allocated(appear_process) .and.                                                   &
+              all([(appear_process(ig, 1) ==                                                    &
+                    int(opt_value_or(problem%steps(1)%activation(ig)%active, 0_int32), ink),    &
+                    ig=1, size(problem%steps(1)%activation))]))
+    call check('matno_process matches steps[0].activation[].material',                          &
+              allocated(matno_process) .and.                                                    &
+              all([(matno_process(ig, 1) ==                                                     &
+                    int(opt_value_or(problem%steps(1)%activation(ig)%material, 0_int32), ink),  &
+                    ig=1, size(problem%steps(1)%activation))]))
+    call check('average_appear matches steps[0].output.stress_averaging',                       &
+              allocated(average_appear) .and.                                                   &
+              all(average_appear == int(problem%steps(1)%output%stress_averaging, ink)))
+    call check('factg matches steps[0].load.gravity.direction',                                 &
+              allocated(factg) .and.                                                            &
+              all(factg == real(problem%steps(1)%load%gravity%direction, irk)))
+    call check('tcurvegravity matches steps[0].load.gravity.amplitude',                          &
+              allocated(tcurvegravity) .and.                                                     &
+              all(tcurvegravity == int(problem%steps(1)%load%gravity%amplitude, ink)))
+
+    call check('props extent', allocated(props) .and. size(props) == size(problem%materials))
+    if (allocated(props)) then
+      ok_all = .true.
+      do i = 1, size(props)
+        if (.not. associated(props(i)%mechanical)) ok_all = .false.
+        if (.not. associated(props(i)%mechanical)) cycle
+        if (.not. associated(props(i)%mechanical%solid)) ok_all = .false.
+      end do
+      ! Both levels of the chain: yl_state_dump guards each separately, and an
+      ! unassociated %solid under an associated %mechanical would abort the dump at a
+      ! different row than an unassociated %mechanical.
+      call check('props(:)%mechanical and %mechanical%solid are both associated', ok_all)
+      ok_all = .true.
+      do i = 1, size(props)
+        if (props(i)%mechanical%solid%e /=                                                      &
+            real(opt_value_or(problem%materials(i)%E, 0.0_real64), irk)) ok_all = .false.
+        if (props(i)%mechanical%solid%nu /=                                                     &
+            real(opt_value_or(problem%materials(i)%nu, 0.0_real64), irk)) ok_all = .false.
+        if (props(i)%mechanical%solid%density /=                                                &
+            real(opt_value_or(problem%materials(i)%density, 0.0_real64), irk)) ok_all = .false.
+      end do
+      call check('props(:)%mechanical%solid E/nu/density match ProblemState', ok_all)
+      ! thickness is assigned in the SECOND pass (section -> material). Asserted apart
+      ! from the first-pass scalars because a bug that skipped that pass would leave the
+      ! sentinel here and nowhere else.
+      call check('props(1)%mechanical%solid%thickness came from the section',                   &
+                props(1)%mechanical%solid%thickness ==                                          &
+                real(opt_value_or(problem%sections(1)%thickness, 0.0_real64), irk))
+    end if
   end subroutine check_landed
 
   ! --- blind-spot predicates ------------------------------------------------------
@@ -657,7 +731,7 @@ contains
     call check('npoin unchanged after the rejected commit', bad_npoin == npoin)
     call check('nelem unchanged after the rejected commit', bad_nelem == nelem)
     call check('result_zero unchanged after the rejected commit', all(bad_result_zero == result_zero))
-    call check_landed(rt_good)
+    call check_landed(problem, rt_good)
   end subroutine group_no_partial
 
   subroutine assert_internal_commit_total(errors, tag)
@@ -717,7 +791,7 @@ contains
     call check('nelem identical after a repeat commit', nelem == nelem_1)
     call check('nodfn bit-for-bit identical after a repeat commit', all(nodfn == nodfn_1))
     call check('fixed bit-for-bit identical after a repeat commit', all(fixed == fixed_1))
-    call check_landed(rt)
+    call check_landed(problem, rt)
 
     ! --- release: total, and idempotent -------------------------------------------
     call check('commit_owns_globals is true before release', commit_owns_globals())
@@ -740,11 +814,31 @@ contains
     call check('a second release does not crash and stays not-owned', .not. commit_owns_globals())
     call check('element stays deallocated after a second release', .not. allocated(element))
 
+    ! --- RELEASE TOTALITY (docs/m4/L2c-fold-design.md §5.1.3) -----------------------
+    ! Every global this module publishes must be unallocated after a release. The point is
+    ! NOT leak detection -- a process cannot observe its own leaks, and commit's header
+    ! says so. The point is the one release-path defect that IS observable from in here:
+    ! a global added to the staging and the write phase and FORGOTTEN in commit_release
+    ! stays allocated, and until this check existed every test passed in that case
+    ! (§5.1.2 point 3). It grows with the write phase or it stops meaning anything.
+    call check('release is total: no published global is still allocated',                      &
+              .not. (allocated(element) .or. allocated(group) .or. allocated(listp_group) .or.  &
+                     allocated(prescrib) .or. allocated(tcurves) .or. allocated(trans) .or.     &
+                     allocated(props) .or. allocated(lmdofn) .or. allocated(lcdofn) .or.        &
+                     allocated(nodfn) .or. allocated(iffix) .or. allocated(fixed) .or.          &
+                     allocated(appear) .or. allocated(result_zero) .or. allocated(tofor) .or.   &
+                     allocated(stfor) .or. allocated(toforl) .or. allocated(toform) .or.        &
+                     allocated(delitfi) .or. allocated(deltafi) .or. allocated(ice0) .or.       &
+                     allocated(line_load_block) .or. allocated(line_temp_block) .or.            &
+                     allocated(coord) .or. allocated(appear_process) .or.                       &
+                     allocated(matno_process) .or. allocated(average_appear) .or.               &
+                     allocated(factg) .or. allocated(tcurvegravity)))
+
     ! --- a fresh commit after release works again ---------------------------------
     call commit_legacy_globals(problem, residue, rt, errors)
     call check('a fresh commit after release is accepted', .not. errors%any())
     call check('commit_owns_globals is true after the fresh commit', commit_owns_globals())
-    call check_landed(rt)
+    call check_landed(problem, rt)
   end subroutine group_repeat_and_ownership
 
   ! ==========================================================================
@@ -796,7 +890,7 @@ contains
   !   with the coverage looking complete but not being it. So this section does not just
   !   walk NAMES: check_guard_names_match parses the actual "one of ... or ..." clause
   !   out of the guard's own rejection message and asserts it names exactly this test's
-  !   six, in order. Add a seventh global to the guard without adding it to NAMES (or the
+  !   seven, in order. Add an eighth global to the guard without adding it to NAMES (or the
   !   reverse) and that parse -- not a maintainer's memory -- is what fails.
   ! ==========================================================================
 
@@ -804,8 +898,9 @@ contains
     type(problem_state_t), intent(in) :: problem
     type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: good_rt
-    character(len=11), parameter :: NAMES(6) =                                                  &
-      ['element    ', 'group      ', 'listp_group', 'prescrib   ', 'tcurves    ', 'trans      ']
+    character(len=11), parameter :: NAMES(7) =                                                  &
+      ['element    ', 'group      ', 'listp_group', 'prescrib   ', 'tcurves    ',               &
+       'trans      ', 'props      ']
     type(problem_errors_t) :: errors
     character(len=:), allocatable :: guard_message
     integer :: k, j
@@ -965,7 +1060,7 @@ contains
 
     ! Nothing above may have disturbed the rows the other sections assert: the
     ! full landing check runs once more as this section's own exit condition.
-    call check_landed(rt)
+    call check_landed(problem, rt)
   end subroutine group_blind_spot_falsifiability
 
   ! Allocate a single-element "foreign" instance of the named record array and null
@@ -1005,6 +1100,9 @@ contains
     case ('trans')
       allocate (trans(1))
       nullify (trans(1)%listf, trans(1)%rintf)
+    case ('props')
+      allocate (props(1))
+      nullify (props(1)%mechanical, props(1)%heat, props(1)%geometry)
     end select
   end subroutine allocate_foreign
 
@@ -1020,6 +1118,7 @@ contains
     case ('prescrib');    deallocate (prescrib)
     case ('tcurves');     deallocate (tcurves)
     case ('trans');       deallocate (trans)
+    case ('props');       deallocate (props)
     end select
   end subroutine deallocate_foreign
 
@@ -1032,6 +1131,7 @@ contains
     case ('prescrib');    v = allocated(prescrib)
     case ('tcurves');     v = allocated(tcurves)
     case ('trans');       v = allocated(trans)
+    case ('props');       v = allocated(props)
     case default;         v = .false.
     end select
   end function allocated_of
@@ -1045,6 +1145,7 @@ contains
     case ('prescrib');    n = size(prescrib)
     case ('tcurves');     n = size(tcurves)
     case ('trans');       n = size(trans)
+    case ('props');       n = size(props)
     case default;         n = -1
     end select
   end function size_of
