@@ -42,6 +42,7 @@ program yl_runtime_bridge_test
                         result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
                         line_load_block, line_temp_block,                                       &
                         npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
+                        lineload, linet,                                                        &
                         nmats, nblks, restart, ttime
   use prescribed, only: prescrib, ndofix
   use applied_load, only: tcurves, ntcurve
@@ -92,6 +93,9 @@ program yl_runtime_bridge_test
 
   write (output_unit, '(a)') '-- 6. the W4 foreign-allocation guard, one door at a time'
   call group_foreign_allocation_guard(rt2)
+
+  write (output_unit, '(a)') '-- 7. the snapshot blind spots, and that their guards can fail'
+  call group_blind_spot_falsifiability(rt2)
 
   call summary()
 
@@ -519,7 +523,69 @@ contains
       call check('tcurves('//itoa(i)//')%dfact',                                                &
                 tcurves(i)%dfact == real(opt_value_or(rt%amplitudes(i)%factor, 0.0_real64), irk))
     end do
+
+    ! --- THE SNAPSHOT BLIND SPOTS --------------------------------------------------
+    ! Four model_ready rows that commit_legacy_globals WRITES and that no snapshot can
+    ! ever see: runtime.topology.unode_{np_unode,patch_nod} and runtime.cursor.{lineload,
+    ! linet} carry `emit = "none"` in docs/m2/state-field-map.toml, so yl_state_dump never
+    ! emits them and tools/yl_shadow_diff.py is structurally blind to them. Until this
+    ! block existed, NOTHING asserted them either:
+    !
+    !   * `group(ig)%np_unode` IS asserted above -- but that is group_of_elements's own
+    !     np_unode (Global.f90:236), a DIFFERENT COMPONENT that merely shares the name
+    !     with unode_elements%np_unode (Global.f90:265-267);
+    !   * `verify_registered` (yl_runtime_commit.f90) rejects a runtime that allocated
+    !     `patch_nodes` -- but that is the RUNTIME side; it says nothing about what commit
+    !     put into `group%unode%patch_nod`;
+    !   * `yl_adapter_bridge_test.f90`'s check_ledger asserts the LEDGER entry, not the
+    !     committed global.
+    !
+    ! So an M4-01 fold that rewrites the s_group/unode staging loop and drops
+    ! `call null_unode(...)` leaves patch_nod an UNINITIALISED POINTER in a real legacy
+    ! global -- where any `associated()` is undefined behaviour, which is precisely the
+    ! hazard null_group's own comment names -- while this program, yl_runtime_selftest,
+    ! the shadow diff and L3-b all stay green. That is the `trans` defect again: a guard
+    ! whose object is not the object it appears to guard. These four checks are the
+    ! guard; section 7 is the proof that they can fail.
+    call check('unode(:)%np_unode is 0 on every section node', unode_np_unode_all_zero())
+    call check('unode(:)%patch_nod/patch_sta/patch_load are all UNASSOCIATED',                   &
+              unode_patch_pointers_all_null())
+    call check('lineload is 0 (RESERVED: no file offset is claimed)', lineload == 0_ink)
+    call check('linet is 0 (RESERVED: no file offset is claimed)', linet == 0_ink)
   end subroutine check_landed
+
+  ! --- blind-spot predicates ------------------------------------------------------
+  ! Read the REAL globals, never the runtime. Both are written so that an unallocated
+  ! `group` answers .false. rather than crashing: a predicate that cannot be evaluated
+  ! must not report success.
+
+  logical function unode_np_unode_all_zero() result(ok)
+    integer :: ig, i
+    ok = .false.
+    if (.not. allocated(group)) return
+    do ig = 1, size(group)
+      if (.not. associated(group(ig)%unode)) return
+      do i = 1, size(group(ig)%unode)
+        if (group(ig)%unode(i)%np_unode /= 0_ink) return
+      end do
+    end do
+    ok = .true.
+  end function unode_np_unode_all_zero
+
+  logical function unode_patch_pointers_all_null() result(ok)
+    integer :: ig, i
+    ok = .false.
+    if (.not. allocated(group)) return
+    do ig = 1, size(group)
+      if (.not. associated(group(ig)%unode)) return
+      do i = 1, size(group(ig)%unode)
+        if (associated(group(ig)%unode(i)%patch_nod)) return
+        if (associated(group(ig)%unode(i)%patch_sta)) return
+        if (associated(group(ig)%unode(i)%patch_load)) return
+      end do
+    end do
+    ok = .true.
+  end function unode_patch_pointers_all_null
 
   ! ice0(ie): int(opt_or(rt%element(ie)%refinement_skip), ink) -- opt_or's fallback (0)
   ! matches commit's own; since verify_registered already accepted this runtime the
@@ -750,6 +816,94 @@ contains
 
     call check_guard_names_match(guard_message, NAMES)
   end subroutine group_foreign_allocation_guard
+
+  ! ==========================================================================
+  ! section 7: the four snapshot blind spots, and the proof that their guards
+  ! can actually fail.
+  !
+  ! check_landed now asserts them, but an assertion that cannot fail is worse
+  ! than none (the same reasoning yl_runtime_selftest's check_bijection states
+  ! for the forward half of its bijection). So each guard is shown to be
+  ! FALSIFIABLE here: poison the real global, assert the predicate says .false.,
+  ! restore, assert it says .true. again.
+  !
+  ! For the two SCALAR rows there is a second, stronger property available and
+  ! asserted: poison, then commit the same runtime AGAIN, and the value must be
+  ! back -- which separates "commit writes this" from "it happened to be zero".
+  !
+  ! For patch_nod that property is deliberately NOT asserted, and the reason is
+  ! itself a finding: commit_release (yl_runtime_commit.f90) frees only
+  ! `unode%list`, never `patch_nod`, so re-committing over an ASSOCIATED
+  ! patch_nod would move_alloc the group array away and leak the target this
+  ! test allocated. The poison is therefore released here by hand. That gap in
+  ! the release path is real; it is out of this program's scope to fix, and this
+  ! comment is here so the next reader finds it deliberate rather than missed.
+  ! ==========================================================================
+
+  subroutine group_blind_spot_falsifiability(rt)
+    type(runtime_state_t), intent(in) :: rt
+    type(problem_errors_t) :: errors
+    integer(ink), parameter :: POISON = 7_ink
+
+    ! Section 6 ends with every global released and commit_owned false, so this
+    ! section establishes its own committed state before it poisons anything.
+    call errors%clear()
+    call commit_legacy_globals(rt, errors)
+    call check('a fresh commit for the blind-spot trials is accepted', .not. errors%any())
+    call check('the blind-spot guards pass on a fresh commit',                                  &
+              unode_np_unode_all_zero() .and. unode_patch_pointers_all_null() .and.             &
+              lineload == 0_ink .and. linet == 0_ink)
+
+    ! --- runtime.topology.unode_np_unode -----------------------------------
+    group(1)%unode(1)%np_unode = POISON
+    call check('unode np_unode guard FAILS on a poisoned value',                                &
+              .not. unode_np_unode_all_zero())
+    call errors%clear()
+    call commit_legacy_globals(rt, errors)
+    call check('the recommit for np_unode is accepted', .not. errors%any())
+    call check('unode np_unode is restored to 0 by a recommit', unode_np_unode_all_zero())
+
+    ! --- runtime.topology.unode_patch_nod ----------------------------------
+    ! One door at a time, as in section 6: patch_sta and patch_load are the same
+    ! hazard through different components, and a predicate that only looked at
+    ! patch_nod would be the "covers less than it says" defect all over again.
+    allocate (group(1)%unode(1)%patch_nod(1))
+    call check('unode patch guard FAILS on an associated patch_nod',                            &
+              .not. unode_patch_pointers_all_null())
+    deallocate (group(1)%unode(1)%patch_nod)
+    nullify (group(1)%unode(1)%patch_nod)
+    call check('unode patch guard passes again once patch_nod is released',                     &
+              unode_patch_pointers_all_null())
+
+    allocate (group(1)%unode(1)%patch_sta(1, 1))
+    call check('unode patch guard FAILS on an associated patch_sta',                            &
+              .not. unode_patch_pointers_all_null())
+    deallocate (group(1)%unode(1)%patch_sta)
+    nullify (group(1)%unode(1)%patch_sta)
+
+    allocate (group(1)%unode(1)%patch_load(1))
+    call check('unode patch guard FAILS on an associated patch_load',                           &
+              .not. unode_patch_pointers_all_null())
+    deallocate (group(1)%unode(1)%patch_load)
+    nullify (group(1)%unode(1)%patch_load)
+    call check('unode patch guard passes again once all three are released',                    &
+              unode_patch_pointers_all_null())
+
+    ! --- runtime.cursor.lineload / runtime.cursor.linet ---------------------
+    lineload = POISON
+    linet = POISON
+    call check('the lineload guard FAILS on a poisoned value', .not. (lineload == 0_ink))
+    call check('the linet guard FAILS on a poisoned value', .not. (linet == 0_ink))
+    call errors%clear()
+    call commit_legacy_globals(rt, errors)
+    call check('the recommit for the cursors is accepted', .not. errors%any())
+    call check('lineload is restored to 0 by a recommit', lineload == 0_ink)
+    call check('linet is restored to 0 by a recommit', linet == 0_ink)
+
+    ! Nothing above may have disturbed the rows the other sections assert: the
+    ! full landing check runs once more as this section's own exit condition.
+    call check_landed(rt)
+  end subroutine group_blind_spot_falsifiability
 
   ! Allocate a single-element "foreign" instance of the named record array and null
   ! exactly the pointer components yl_runtime_commit.f90 itself nulls before staging one
