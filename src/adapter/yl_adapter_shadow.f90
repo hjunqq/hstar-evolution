@@ -99,7 +99,7 @@ program yl_adapter_shadow
     'commit_legacy_globals -> yl_state_dump), cwd is the deck directory.'
   write (output_unit, '(a)') 'yl_adapter_shadow: dump dir = '//trim(yl_dump_dir)
 
-  call adapt_legacy_deck('.', problem, pmanifest, errors)
+  call adapt_legacy_deck('.', problem, residue, pmanifest, errors)
   if (errors%any() .or. .not. allocated(problem)) then
     call print_findings('adapt_legacy_deck', errors)
     call exit_with(4)
@@ -113,9 +113,8 @@ program yl_adapter_shadow
   end if
   write (output_unit, '(a)') 'yl_adapter_shadow: build_runtime ok (contract '//CONTRACT_TAG//')'
 
-  ! The residue is default-initialised: every component unset. No parser fills it
-  ! yet (M4-01 step 5) and commit reads nothing out of it; passing it now keeps the
-  ! signature change separate from the semantic steps.
+  ! `.tem` fills four of the residue's 27 components (M4-01 step 4b); the other 23 are
+  ! still unset and commit still reads none of them until step 5.
   call commit_legacy_globals(problem, residue, rt, errors)
   if (errors%any()) then
     call print_findings('commit_legacy_globals', errors)

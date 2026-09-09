@@ -168,6 +168,8 @@ module yl_adapter_driver
   use yl_adapter_mesh, only: parse_cor, parse_ele
   use yl_adapter_material, only: parse_mat, parse_sol
   use yl_adapter_load, only: parse_loa, parse_pre
+  use yl_adapter_temper, only: parse_tem
+  use yl_problem_deck_residue, only: deck_residue_t
 
   implicit none
   private
@@ -188,13 +190,17 @@ contains
   ! Opens every deck unit this build parses, drives the five parser modules in the order
   ! the module header derives, assembles steps[0]/solver exactly once, and hands the
   ! finished draft to prepare_problem. See the module header for the full rationale.
-  subroutine adapt_legacy_deck(dir, problem, manifest, errors)
+  subroutine adapt_legacy_deck(dir, problem, residue, manifest, errors)
     character(len=*), intent(in) :: dir
     type(problem_state_t), allocatable, intent(inout) :: problem
+    !> The values legacy reads from the deck and leaves in its globals that ADR-0003 does
+    !> not model. Returned beside `problem` because commit needs both and neither is
+    !> derivable from the other (L2c-fold-design.md 3.2). Only `.tem` fills it so far.
+    type(deck_residue_t), intent(out) :: residue
     type(manifest_t), allocatable, intent(inout) :: manifest
     type(problem_errors_t), intent(inout) :: errors
 
-    integer :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man
+    integer :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem
     character(len=:), allocatable :: prefix
     type(problem_builder_t) :: b
     type(deck_context_t) :: ctx
@@ -211,6 +217,7 @@ contains
 
     u_inp = UNSET_UNIT; u_glb = UNSET_UNIT; u_cor = UNSET_UNIT; u_ele = UNSET_UNIT
     u_mat = UNSET_UNIT; u_sol = UNSET_UNIT; u_loa = UNSET_UNIT; u_pre = UNSET_UNIT
+    u_tem = UNSET_UNIT
     u_man = UNSET_UNIT
 
     call deck_context_reset(ctx)
@@ -244,6 +251,10 @@ contains
       call open_deck_unit(join_path(dir, prefix//'.sol'), '.sol', errors, u_sol, ok) ! Global.f90:644
       if (.not. ok) exit parse_all
       call open_deck_unit(join_path(dir, prefix//'.man'), '.man', errors, u_man, ok) ! Global.f90:646
+      if (.not. ok) exit parse_all
+      ! .tem is opened UNCONDITIONALLY by legacy, not behind a thermal switch, so a deck
+      ! without one is a deck legacy would refuse too.
+      call open_deck_unit(join_path(dir, prefix//'.tem'), '.tem', errors, u_tem, ok) ! Global.f90:661
       if (.not. ok) exit parse_all
 
       ! -- inp: no ctx dependency (see module header); called first, matching Fem.f90 --
@@ -283,6 +294,13 @@ contains
 
       mark = errors%count()
       call parse_man(u_man, ctx, b, parts, errors)
+      if (errors%count() > mark) exit parse_all
+
+      ! Last, and into the residue rather than the builder: these four counts have no
+      ! ProblemState home (their map owner is `derived`), which is the whole reason the
+      ! carrier exists.
+      mark = errors%count()
+      call parse_tem(u_tem, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       ! -- publish sections[] exactly once, from the shared section_parts_t (contract SS2.4) --
@@ -384,7 +402,7 @@ contains
       exit parse_all
     end do parse_all
 
-    call close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man)
+    call close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem)
 
     ! Transactional: any finding raised above (from a parser or from this routine) means
     ! `problem`/`manifest` must stay exactly as the caller passed them in.
@@ -499,11 +517,13 @@ contains
   ! never opened. Called exactly once, on every exit path (contract SS2's unit lifetime
   ! belongs to this driver alone; a unit left open on a failure branch would be this
   ! module's own defect, not a deck's).
-  subroutine close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man)
+  subroutine close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem)
     integer, intent(inout) :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man
+    integer, intent(inout) :: u_tem
     call close_if_open(u_man)
     call close_if_open(u_pre)
     call close_if_open(u_loa)
+    call close_if_open(u_tem)
     call close_if_open(u_sol)
     call close_if_open(u_mat)
     call close_if_open(u_ele)

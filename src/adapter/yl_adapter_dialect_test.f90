@@ -58,6 +58,8 @@ program yl_adapter_dialect_test
   use yl_adapter_mesh, only: parse_cor, parse_ele
   use yl_adapter_material, only: parse_mat, parse_sol
   use yl_adapter_load, only: parse_loa, parse_pre
+  use yl_adapter_temper, only: parse_tem
+  use yl_problem_deck_residue, only: deck_residue_t
 
   implicit none
 
@@ -185,6 +187,15 @@ program yl_adapter_dialect_test
     call run_case('A5', 'pressure-load-unsupported', 'loa', 12, '  1  0', 'W')
     call run_case('A6', 'beam-load-unsupported', 'loa', 18, '  1', 'W')
     call run_case('A7', 'plate-load-unsupported', 'loa', 20, '  1', 'W')
+    ! The four `.tem` counts (M4-01 step 4b). Line numbers are the golden 1.tem's, which
+    ! is ten records: title, count, title, count, title, title, count, title, title,
+    ! count. Each case must fire its own row ALONE, and for these that is the load-bearing
+    ! half -- the counts are read in sequence, so a case whose line number had drifted
+    ! onto a neighbouring count would still be refused, just by the wrong rule.
+    call run_case('A12', 'temp-surface-unsupported', 'tem', 2, '  1', 'W')
+    call run_case('A13', 'temp-edge-unsupported', 'tem', 4, '  1', 'W')
+    call run_case('A14', 'temp-elgroup-unsupported', 'tem', 7, '  1', 'W')
+    call run_case('A15', 'pipe-cooling-unsupported', 'tem', 10, '  1  3', 'W')
     call run_case('A8', 'restart-linked-boundary-unsupported', 'pre', 0, '', 'BACKDT2')
     call run_case('A9', 'mif-boundary-unsupported', 'pre', 0, '', 'MIF')
     call run_case('A10', 'extrapolation-record-unsupported', 'pre', 3, &
@@ -433,6 +444,7 @@ contains
     character(len=:), allocatable :: src, dst, key
     integer :: unit, ios, j, target_row, hits, first_hit
     logical :: found
+    type(deck_residue_t) :: residue
 
     key = trim(rule_id)//'/'//trim(condition)
     target_row = dialect_find(rule_id, condition)
@@ -471,6 +483,7 @@ contains
     case ('sol'); call parse_sol(unit, ctx, b, sparts, errs)
     case ('loa'); call parse_loa(unit, ctx, b, parts, errs)
     case ('pre'); call parse_pre(unit, ctx, b, parts, errs)
+    case ('tem'); call parse_tem(unit, residue, errs)
     case default
       call check('C   '//key//': unknown deck kind '//deck, .false.)
     end select

@@ -542,6 +542,7 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
                        src/adapter/yl_adapter_model.f90
                        src/adapter/yl_adapter_material.f90
                        src/adapter/yl_adapter_load.f90
+                       src/adapter/yl_adapter_temper.f90
                        src/adapter/yl_adapter_fem90.f90
                        src/adapter/yl_adapter_harvest.f90
                        src/adapter/yl_adapter_driver.f90)

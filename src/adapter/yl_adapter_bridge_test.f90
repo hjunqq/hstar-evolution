@@ -183,7 +183,7 @@ contains
     end if
 
     ! -- 1. legacy deck -> problem_state_t -----------------------------------------
-    call adapt_legacy_deck(trim(scratch), problem, pmanifest, errors)
+    call adapt_legacy_deck(trim(scratch), problem, residue, pmanifest, errors)
     if (errors%any() .or. .not. allocated(problem)) then
       write (output_unit, '(a)') '  ABORT: adapt_legacy_deck reported a finding; every row UNVERIFIED.'
       call report_errors('adapt_legacy_deck', errors)
@@ -203,9 +203,8 @@ contains
     write (output_unit, '(a)') '  build_runtime: ok'
 
     ! -- 3. runtime_state_t -> real legacy globals ----------------------------------
-    ! The residue is default-initialised: every component unset. No parser fills it
-    ! yet (M4-01 step 5) and commit reads nothing out of it; passing it now keeps the
-    ! signature change separate from the semantic steps.
+    ! `.tem` fills four of the residue's 27 components (M4-01 step 4b); the other 23 are
+    ! still unset and commit still reads none of them until step 5.
     call commit_legacy_globals(problem, residue, rt, errors)
     if (errors%any()) then
       write (output_unit, '(a)') '  ABORT: commit_legacy_globals reported a finding; every row UNVERIFIED.'

@@ -553,6 +553,26 @@ module yl_problem_profile
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
                       message='nplgroup /= 0: point loads (Load.f90:246-333) are outside the static-q4/1 '//   &
                               'whitelist'),                                                                         &
+    capability_item_t(rule_id='A12', condition='temp-surface-unsupported',                                          &
+                      item='tem.ntemp_surface', object_path='derived.counts',                                       &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='ntemp_surface /= 0: prescribed surface temperatures '//                              &
+                              '(Temper.f90:128-149) are outside the static-q4/1 whitelist'),                        &
+    capability_item_t(rule_id='A13', condition='temp-edge-unsupported',                                             &
+                      item='tem.ntedge', object_path='derived.counts',                                              &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='ntedge /= 0: surface convection edges (Temper.f90:161-242) are outside '//            &
+                              'the static-q4/1 whitelist'),                                                         &
+    capability_item_t(rule_id='A14', condition='temp-elgroup-unsupported',                                          &
+                      item='tem.ntelgroup', object_path='derived.counts',                                           &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='ntelgroup /= 0: convection element groups (Temper.f90:250-305) are outside '//        &
+                              'the static-q4/1 whitelist'),                                                         &
+    capability_item_t(rule_id='A15', condition='pipe-cooling-unsupported',                                          &
+                      item='tem.npipe', object_path='derived.counts',                                               &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='npipe /= 0: pipe cooling (Temper.f90:316 onwards) is outside the '//                 &
+                              'static-q4/1 whitelist'),                                                             &
     capability_item_t(rule_id='A4', condition='edge-definition-unsupported',                                        &
                       item='loa.nedge', object_path='steps[0].load',                                                &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
