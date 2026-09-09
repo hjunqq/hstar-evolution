@@ -6,6 +6,13 @@ build-*/
 *.mod
 *.exe
 *.dll
+# ...but legacy/yl/libiomp5md.dll is a SOURCE file, not a build artefact: it ships
+# in the vendor snapshot and legacy/source-manifest.json asserts its sha256. The
+# generic *.dll pattern above was meant for build output and caught it by accident,
+# leaving the manifest claiming a file the repository did not contain -- so a clean
+# clone failed `source-manifest.json does not verify` and NO target could build.
+# Found while building the M2/M3 acceptance matrices, 2026-09-09.
+!legacy/yl/*.dll
 *.so
 
 # Solver runtime products
