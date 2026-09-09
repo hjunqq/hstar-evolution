@@ -235,7 +235,8 @@ contains
     ! publishing a 0 (verify_problem_inputs). The fixture left it unset until M4-01 step
     ! 3b, which made element%matno 0 through opt_or's fallback and sections.material_header
     ! -- reconstructed from it -- silently wrong.
-    call opt_set(el%material, 1_int32)
+    ! elements[].material IS the header value: both map rows resolve to element%matno.
+    call opt_set(el%material, 2_int32)
     call opt_set(el%id, 1_int32)
     if (allocated(el%nodes)) deallocate (el%nodes)
     allocate (el%nodes(4))
@@ -281,6 +282,15 @@ contains
     call opt_set(mt%liquefaction, 0_int32)
     call opt_set(mt%wetting_kind, 0_int32)
     call builder_add_material(b, mt, loc, errors)
+    ! A SECOND material exists only so sections[].material and sections[].material_header
+    ! can hold DIFFERENT values. They are equal on both golden decks (the map says so), and
+    ! that equality made the fixture unable to tell the two apart: swapping commit's source
+    ! for group%matno from .material to .material_header left the suite at rc=0 with zero
+    ! failures. A fixture whose job is to catch a source swap must therefore differ where
+    ! the real decks agree.
+    call opt_set(mt%id, 2_int32)
+    call opt_set(mt%name, 'concrete2')
+    call builder_add_material(b, mt, loc, errors)
 
     call opt_set(sc%name, 'g1')
     call opt_set(sc%element, 'Q4')
@@ -289,8 +299,12 @@ contains
     call opt_set(sc%fields, 'U')
     call opt_set(sc%formulation, 'PE')
     call opt_set(sc%special, 'ST')
+    ! DIFFERENT ON PURPOSE. sections[].material is the EFFECTIVE material (legacy
+    ! overwrites the .glb header slot in place at Fem.f90:1717); sections[].material_header
+    ! is the value as READ, and it is what element%matno carries. Keeping them equal --
+    ! which is what the golden decks happen to do -- makes a swap between them invisible.
     call opt_set(sc%material, 1_int32)
-    call opt_set(sc%material_header, 1_int32)
+    call opt_set(sc%material_header, 2_int32)
     ! thickness likewise: unset until M4-01 step 3b's verify_problem_inputs made an
     ! unauthored ProblemState scalar a rejection instead of a published 0.0. The value is
     ! the one the .mat elastic_isotropic record supplies on a real deck.
@@ -671,6 +685,43 @@ contains
           int(opt_value_or(problem%sections(ig)%material_header, 0_int32), ink)) ok_all = .false.
     end do
     call check('element(group(:)%list(1))%matno reconstructs sections[].material_header', ok_all)
+
+    ! --- step 4 (group): the 15 section header fields ------------------------------
+    ! trim() on BOTH sides. Legacy's slots are short -- class is character(2), fieldid
+    ! character(5) -- and a longer ProblemState value is truncated silently on assignment.
+    ! The staging poison cannot see that (a truncated string IS a written value), so this
+    ! comparison is the only thing standing between a too-long section name and a
+    ! plausible-looking prefix in the snapshot.
+    ok_all = .true.
+    do ig = 1, size(problem%sections)
+      if (trim(group(ig)%kname) /= trim(opt_value_or(problem%sections(ig)%name, ''))) ok_all = .false.
+      if (trim(group(ig)%name) /= trim(opt_value_or(problem%sections(ig)%element, ''))) ok_all = .false.
+      if (trim(group(ig)%class) /= trim(opt_value_or(problem%sections(ig)%class, ''))) ok_all = .false.
+      if (trim(group(ig)%fieldid) /= trim(opt_value_or(problem%sections(ig)%fields, ''))) ok_all = .false.
+      if (trim(group(ig)%sptype) /= trim(opt_value_or(problem%sections(ig)%formulation, ''))) ok_all = .false.
+      if (trim(group(ig)%special) /= trim(opt_value_or(problem%sections(ig)%special, ''))) ok_all = .false.
+    end do
+    call check('group(:) character fields match sections[] without truncation', ok_all)
+    ok_all = .true.
+    do ig = 1, size(problem%sections)
+      if (group(ig)%index /= int(opt_value_or(problem%sections(ig)%element_kind, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%matno /= int(opt_value_or(problem%sections(ig)%material, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%ilayer /= int(opt_value_or(problem%sections(ig)%layer, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%liquj /= int(opt_value_or(problem%sections(ig)%liquefaction, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%uplift_ic /= int(opt_value_or(problem%sections(ig)%uplift, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%type_nalgo /= int(opt_value_or(problem%sections(ig)%algorithm, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%type_stiff /= int(opt_value_or(problem%sections(ig)%stiffness_kind, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%type_ecoint /= int(opt_value_or(problem%sections(ig)%stress_recovery, 0_int32), ink)) ok_all = .false.
+      if (group(ig)%elcod_local /= real(opt_value_or(problem%sections(ig)%local_axes, 0.0_real64), irk)) ok_all = .false.
+    end do
+    call check('group(:) numeric header fields match sections[]', ok_all)
+    ! matno is the EFFECTIVE material and material_header the pre-overwrite one. Asserted
+    ! as a PAIR against their two different ProblemState fields, because they are equal on
+    ! the golden decks and a swap would be invisible to either check alone.
+    call check('group(:)%matno is sections[].material, not .material_header',                   &
+              all([(group(ig)%matno ==                                                          &
+                    int(opt_value_or(problem%sections(ig)%material, 0_int32), ink),             &
+                    ig=1, size(problem%sections))]))
 
     call check('props extent', allocated(props) .and. size(props) == size(problem%materials))
     if (allocated(props)) then

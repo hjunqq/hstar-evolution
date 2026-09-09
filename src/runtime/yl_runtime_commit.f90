@@ -315,24 +315,24 @@ module yl_runtime_commit
     commit_provenance_t('materials.icreep', COMMIT_FROM_PROBLEM, 'materials[]'),                                                           &
     commit_provenance_t('materials.kind_wt', COMMIT_FROM_PROBLEM, 'materials[]'),                                                          &
     commit_provenance_t('materials.jliqu', COMMIT_FROM_PROBLEM, 'materials[]'),                                                            &
-    commit_provenance_t('sections.element', COMMIT_NOT_MIGRATED, ''),                                                           &
-    commit_provenance_t('sections.name', COMMIT_NOT_MIGRATED, ''),                                                              &
-    commit_provenance_t('sections.element_kind', COMMIT_NOT_MIGRATED, ''),                                                      &
-    commit_provenance_t('sections.class', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('sections.element', COMMIT_FROM_PROBLEM, 'sections[].element'),                                                           &
+    commit_provenance_t('sections.name', COMMIT_FROM_PROBLEM, 'sections[].name'),                                                              &
+    commit_provenance_t('sections.element_kind', COMMIT_FROM_PROBLEM, 'sections[].element_kind'),                                                      &
+    commit_provenance_t('sections.class', COMMIT_FROM_PROBLEM, 'sections[].class'),                                                             &
     commit_provenance_t('derived.counts.nrfields', COMMIT_NOT_MIGRATED, ''),                                                    &
-    commit_provenance_t('sections.fields', COMMIT_NOT_MIGRATED, ''),                                                            &
-    commit_provenance_t('sections.special', COMMIT_NOT_MIGRATED, ''),                                                           &
-    commit_provenance_t('sections.formulation', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('sections.fields', COMMIT_FROM_PROBLEM, 'sections[].fields'),                                                            &
+    commit_provenance_t('sections.special', COMMIT_FROM_PROBLEM, 'sections[].special'),                                                           &
+    commit_provenance_t('sections.formulation', COMMIT_FROM_PROBLEM, 'sections[].formulation'),                                                       &
     commit_provenance_t('sections.elset_size', COMMIT_DERIVED, 'size(mesh.elsets[].elements)'),                                                        &
     commit_provenance_t('sections.material_header', COMMIT_FROM_PROBLEM, 'element%matno reconstruct'),                                                   &
-    commit_provenance_t('sections.material', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('sections.type_nalgo', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('sections.type_stiff', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('sections.type_ecoint', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('sections.ilayer', COMMIT_NOT_MIGRATED, ''),                                                            &
-    commit_provenance_t('sections.elcod_local', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('sections.uplift_ic', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('sections.liquj', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('sections.material', COMMIT_FROM_PROBLEM, 'sections[].material (effective)'),                                                          &
+    commit_provenance_t('sections.type_nalgo', COMMIT_FROM_PROBLEM, 'sections[].algorithm'),                                                        &
+    commit_provenance_t('sections.type_stiff', COMMIT_FROM_PROBLEM, 'sections[].stiffness_kind'),                                                        &
+    commit_provenance_t('sections.type_ecoint', COMMIT_FROM_PROBLEM, 'sections[].stress_recovery'),                                                       &
+    commit_provenance_t('sections.ilayer', COMMIT_FROM_PROBLEM, 'sections[].layer'),                                                            &
+    commit_provenance_t('sections.elcod_local', COMMIT_FROM_PROBLEM, 'sections[].local_axes'),                                                       &
+    commit_provenance_t('sections.uplift_ic', COMMIT_FROM_PROBLEM, 'sections[].uplift'),                                                         &
+    commit_provenance_t('sections.liquj', COMMIT_FROM_PROBLEM, 'sections[].liquefaction'),                                                             &
     commit_provenance_t('sections.dof_count', COMMIT_NOT_MIGRATED, ''),                                                         &
     commit_provenance_t('sections.dof_list', COMMIT_NOT_MIGRATED, ''),                                                          &
     commit_provenance_t('derived.counts.nstre', COMMIT_NOT_MIGRATED, ''),                                                       &
@@ -728,6 +728,34 @@ contains
       allocate (s_group(ig)%list(n))
       s_group(ig)%list = STAGE_POISON_I
       s_group(ig)%list = int(problem%mesh%elsets(ig)%elements, ink)
+
+      ! The 15 ProblemState-owned section header fields (M4-01 step 4, group).
+      ! CHARACTER TRUNCATION IS THE HAZARD HERE, not absence: legacy's slots are short
+      ! (class is character(2), fieldid character(5), name character(10)) and Fortran
+      ! truncates a longer right-hand side silently. The staging poison cannot see that --
+      ! a truncated string is a written value -- so yl_runtime_bridge_test compares each
+      ! committed field against trim() of its ProblemState source, which is what a
+      ! truncation breaks.
+      s_group(ig)%kname = opt_text_or(problem%sections(ig)%name)
+      s_group(ig)%name = opt_text_or(problem%sections(ig)%element)
+      s_group(ig)%class = opt_text_or(problem%sections(ig)%class)
+      s_group(ig)%fieldid = opt_text_or(problem%sections(ig)%fields)
+      s_group(ig)%sptype = opt_text_or(problem%sections(ig)%formulation)
+      s_group(ig)%special = opt_text_or(problem%sections(ig)%special)
+      s_group(ig)%index = int(opt_or(problem%sections(ig)%element_kind), ink)
+      ! matno is the EFFECTIVE material, not the .glb header slot: legacy overwrites the
+      ! header value in place at Fem.f90:1717, so what is observable at model_ready is
+      ! sections[].material. sections[].material_header is the pre-overwrite value and is
+      ! reconstructed from element%matno instead (step 3b) -- two rows, two sources, and
+      ! they are identical only by accident on the golden decks.
+      s_group(ig)%matno = int(opt_or(problem%sections(ig)%material), ink)
+      s_group(ig)%ilayer = int(opt_or(problem%sections(ig)%layer), ink)
+      s_group(ig)%liquj = int(opt_or(problem%sections(ig)%liquefaction), ink)
+      s_group(ig)%uplift_ic = int(opt_or(problem%sections(ig)%uplift), ink)
+      s_group(ig)%type_nalgo = int(opt_or(problem%sections(ig)%algorithm), ink)
+      s_group(ig)%type_stiff = int(opt_or(problem%sections(ig)%stiffness_kind), ink)
+      s_group(ig)%type_ecoint = int(opt_or(problem%sections(ig)%stress_recovery), ink)
+      s_group(ig)%elcod_local = real(opt_or_real(problem%sections(ig)%local_axes), irk)
 
       n = size(runtime%topology%sections(ig)%nodes)
       s_group(ig)%np_unode = int(n, ink)
@@ -1366,8 +1394,25 @@ contains
     end do
     do i = 1, size(problem%sections)
       if (.not. opt_is_set(problem%sections(i)%material) .or.                                  &
-          .not. opt_is_set(problem%sections(i)%thickness)) then
-        call fail(errors, 'sections['//itoa(i)//'] has an unset material or thickness')
+          .not. opt_is_set(problem%sections(i)%thickness) .or.                                 &
+          .not. opt_is_set(problem%sections(i)%name) .or.                                      &
+          .not. opt_is_set(problem%sections(i)%element) .or.                                   &
+          .not. opt_is_set(problem%sections(i)%class) .or.                                     &
+          .not. opt_is_set(problem%sections(i)%fields) .or.                                    &
+          .not. opt_is_set(problem%sections(i)%formulation) .or.                               &
+          .not. opt_is_set(problem%sections(i)%special) .or.                                   &
+          .not. opt_is_set(problem%sections(i)%element_kind) .or.                              &
+          .not. opt_is_set(problem%sections(i)%layer) .or.                                     &
+          .not. opt_is_set(problem%sections(i)%liquefaction) .or.                              &
+          .not. opt_is_set(problem%sections(i)%uplift) .or.                                    &
+          .not. opt_is_set(problem%sections(i)%algorithm) .or.                                 &
+          .not. opt_is_set(problem%sections(i)%stiffness_kind) .or.                            &
+          .not. opt_is_set(problem%sections(i)%stress_recovery) .or.                           &
+          .not. opt_is_set(problem%sections(i)%local_axes)) then
+        call fail(errors, 'sections['//itoa(i)//'] has an unset field this commit reads '//    &
+                  '(material, thickness, name, element, class, fields, formulation, '//        &
+                  'special, element_kind, layer, liquefaction, uplift, algorithm, '//          &
+                  'stiffness_kind, stress_recovery or local_axes)')
         return
       end if
     end do
@@ -1584,6 +1629,25 @@ contains
     type(group_of_elements), intent(inout) :: g
     g%np_unode = STAGE_POISON_I
     g%nelgroup = STAGE_POISON_I
+    ! The 15 section header fields (step 4). Characters get '' rather than a numeric
+    ! sentinel -- there is no integer to put in a character(2) -- so for those the
+    ! detection of a missing write is the bridge test's trim() comparison, not the value
+    ! itself. Stated here because it is the one place the poison is weaker than elsewhere.
+    g%index = STAGE_POISON_I
+    g%matno = STAGE_POISON_I
+    g%ilayer = STAGE_POISON_I
+    g%liquj = STAGE_POISON_I
+    g%uplift_ic = STAGE_POISON_I
+    g%type_nalgo = STAGE_POISON_I
+    g%type_stiff = STAGE_POISON_I
+    g%type_ecoint = STAGE_POISON_I
+    g%elcod_local = STAGE_POISON_R
+    g%kname = ''
+    g%name = ''
+    g%class = ''
+    g%fieldid = ''
+    g%sptype = ''
+    g%special = ''
   end subroutine poison_group
 
   ! element_lib: 1 component, `matno`, assigned in the element-record loop since step 3b.
