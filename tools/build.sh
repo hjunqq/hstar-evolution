@@ -7,6 +7,7 @@
 #   tools/build.sh runtime        [--profile ...] [--out DIR] [--label NAME]
 #                                [--allow-external-out]
 #   tools/build.sh runtime-bridge [--profile ...] [--src DIR] [--out DIR] [--label NAME]
+#   tools/build.sh adapter        [--profile ...] [--src DIR] [--out DIR] [--label NAME]
 #                                [--allow-external-out]
 #
 # Profiles:
@@ -29,8 +30,17 @@
 #   OUT/build-manifest.json  compiler/flags/deps/hashes/ldd; fail-closed
 #
 # Targets `problem-types` (M3-01, extended by M3-02), `runtime` and
-# `runtime-bridge` (M3-03) are SEPARATE targets, not solver profiles. None of
-# their objects is an input to build/<profile>/hstar.
+# `runtime-bridge` (M3-03) and `adapter` (M4-01) are SEPARATE targets, not solver
+# profiles. None of their objects is an input to build/<profile>/hstar.
+#
+# `adapter` is `runtime-bridge`'s link surface plus the eight src/adapter modules,
+# and it builds three programs instead of one: yl_adapter_bridge_test (L3-b, run
+# here), yl_adapter_dialect_test (L2-b, run here on BOTH golden decks), and
+# yl_adapter_shadow (L3-c, built here but driven by tools/yl_shadow_diff.py, which
+# needs two child processes in two directories). It exists because until it did,
+# all three were built by throwaway scratch scripts, and a suite with no build
+# target is not a gate however green it runs by hand. It also refuses to finish if
+# anything under cases/ changed during the run.
 #
 # `runtime` compiles the problem modules and then src/runtime/yl_runtime_{types,
 # contract,rules,build}.f90 and links src/runtime/yl_runtime_selftest.f90. It does
@@ -97,6 +107,7 @@ while [ $# -gt 0 ]; do
         problem-types) TARGET=problem-types;;
         runtime) TARGET=runtime;;
         runtime-bridge) TARGET=runtime-bridge;;
+        adapter) TARGET=adapter;;
         --profile)
             case "$2" in
                 release|trace|debug|strict|sanitize) PROFILE="$2";;
@@ -113,7 +124,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 case "$TARGET" in
-    problem-types|runtime|runtime-bridge)
+    problem-types|runtime|runtime-bridge|adapter)
         [ -z "$OUT" ] && OUT="$ROOT/build/$TARGET/$PROFILE${LABEL:+-$LABEL}";;
     *)
         [ -z "$OUT" ] && OUT="$ROOT/build/$PROFILE${LABEL:+-$LABEL}";;
@@ -461,7 +472,7 @@ state_dump_provenance_check() {
 #   real types, and that the existing observers read them back. It does NOT prove
 #   the solver is satisfied by them: no solver consumer runs in this binary. Any
 #   conclusion drawn from it must be labelled PARTIAL.
-if [ "$TARGET" = runtime-bridge ]; then
+if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     RB_OUT_ABS="$(realpath -m "$OUT")"
     RB_ROOT_ABS="$(realpath -m "$ROOT")"
     rb_covers() { [ "$2" = "$1" ] || case "$2" in "$1"/*) return 0;; *) return 1;; esac; }
@@ -497,6 +508,34 @@ if [ "$TARGET" = runtime-bridge ]; then
                   src/runtime/yl_runtime_build.f90
                   src/runtime/yl_runtime_commit.f90)
     RB_MAIN=src/runtime/yl_runtime_bridge_test.f90
+    RB_EXTRA_RUN=()
+
+    # --- target: adapter (M4-01) ----------------------------------------------
+    # The same link surface as runtime-bridge plus the eight adapter modules, and
+    # THREE programs instead of one. It exists because until it did, all three
+    # adapter test programs were built by throwaway scratch scripts: a suite with
+    # no build target is not a gate, however green it runs by hand.
+    #   yl_adapter_bridge_test  L3-b -- adapter -> build_runtime -> commit, read
+    #                           back from the real legacy globals, compared to
+    #                           cases/golden/*/reference/state/model_ready
+    #   yl_adapter_dialect_test L2-b -- 58 dialect counter-examples, one per row
+    #   yl_adapter_shadow       L3-c -- the new-path child process; it is BUILT
+    #                           here but not run here, because the differential is
+    #                           driven by tools/yl_shadow_diff.py, which manages
+    #                           two processes in two directories.
+    if [ "$TARGET" = adapter ]; then
+        RB_REPO_SRCS+=(src/adapter/yl_adapter_parts.f90
+                       src/adapter/yl_adapter_mesh.f90
+                       src/adapter/yl_adapter_model.f90
+                       src/adapter/yl_adapter_material.f90
+                       src/adapter/yl_adapter_load.f90
+                       src/adapter/yl_adapter_fem90.f90
+                       src/adapter/yl_adapter_harvest.f90
+                       src/adapter/yl_adapter_driver.f90)
+        RB_MAIN=src/adapter/yl_adapter_bridge_test.f90
+        RB_EXTRA_RUN=(src/adapter/yl_adapter_dialect_test.f90
+                      src/adapter/yl_adapter_shadow.f90)
+    fi
 
     if [ "$SRC" = "$ROOT/legacy/yl" ]; then
         python3 "$ROOT/tools/yl_manifest.py" check "$ROOT/legacy/source-manifest.json" >/dev/null \
@@ -506,11 +545,11 @@ if [ "$TARGET" = runtime-bridge ]; then
         RB_SRC_IDENTITY="external:$SRC"
     fi
     state_dump_provenance_check || exit 4
-    for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do
+    for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do
         [ -f "$ROOT/$f" ] || {
             echo "build.sh: runtime-bridge: missing source $ROOT/$f" >&2
             echo "build.sh: this target needs, in this order:" >&2
-            for g in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do
+            for g in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do
                 [ -f "$ROOT/$g" ] && echo "            ok      $g" >&2 || echo "            MISSING $g" >&2
             done
             echo "build.sh: (the M3-03 commit module and its isolated bridge program)." >&2
@@ -564,6 +603,13 @@ if [ "$TARGET" = runtime-bridge ]; then
     rb_run "compiling $RB_MAIN" "$HSTAR_FC" -c "${RB_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" -I "$MKL_INC" "$ROOT/$RB_MAIN" -o "$OUT/obj/$RB_STEM.o"
     RB_EXE="$OUT/$RB_STEM"
     rb_run "linking $RB_STEM" "$HSTAR_FC" "${FFLAGS[@]}" "${RB_OBJS[@]}" "$OUT/obj/$RB_STEM.o" -o "$RB_EXE" "${LDFLAGS[@]}"
+    RB_EXTRA_EXES=()
+    for f in "${RB_EXTRA_RUN[@]}"; do
+        b="$(basename "$f")"; st="${b%.*}"
+        rb_run "compiling $f" "$HSTAR_FC" -c "${RB_FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" -I "$MKL_INC" "$ROOT/$f" -o "$OUT/obj/$st.o"
+        rb_run "linking $st" "$HSTAR_FC" "${FFLAGS[@]}" "${RB_OBJS[@]}" "$OUT/obj/$st.o" -o "$OUT/$st" "${LDFLAGS[@]}"
+        RB_EXTRA_EXES+=("$OUT/$st")
+    done
     T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
     RB_WARNINGS=$(grep -c -iE "warning #|remark #" "$LOG" || true)
@@ -572,9 +618,9 @@ if [ "$TARGET" = runtime-bridge ]; then
     RB_ENTRIES=()
     for f in "${DIAG_SRCS[@]}"; do RB_ENTRIES+=("$f|$ROOT/$f"); done
     for f in "${SRCS[@]}"; do RB_ENTRIES+=("$f|$SRC/$f"); done
-    for f in "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN"; do RB_ENTRIES+=("$f|$ROOT/$f"); done
-    python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$RB_WARNINGS" "runtime-bridge" \
-        "${RB_FFLAGS[*]}" "${LDFLAGS[*]}" "$RB_SRC_IDENTITY" "${RB_ENTRIES[@]}" -- "$RB_EXE" <<'RB_PY'
+    for f in "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do RB_ENTRIES+=("$f|$ROOT/$f"); done
+    python3 - "$OUT" "$PROFILE" "$ROOT" "$T0" "$T1" "$RB_WARNINGS" "$TARGET" \
+        "${RB_FFLAGS[*]}" "${LDFLAGS[*]}" "$RB_SRC_IDENTITY" "${RB_ENTRIES[@]}" -- "$RB_EXE" "${RB_EXTRA_EXES[@]}" <<'RB_PY'
 import hashlib, json, os, platform, re, subprocess, sys
 out, profile, root, t0, t1, warnings, target, fflags, ldflags, identity, *rest = sys.argv[1:]
 sep = rest.index('--')
@@ -627,7 +673,7 @@ manifest = {
     'warnings_or_remarks': int(warnings),
     'unresolved_runtime_deps': unresolved,
 }
-json.dump(manifest, open(os.path.join(out, 'runtime-bridge-manifest.json'), 'w'), indent=2)
+json.dump(manifest, open(os.path.join(out, target + '-manifest.json'), 'w'), indent=2)
 if unresolved:
     print('build.sh: unresolved runtime dependencies:', unresolved, file=sys.stderr)
     sys.exit(5)
@@ -642,9 +688,43 @@ RB_PY
     RB_RC=${PIPESTATUS[0]}
     set -e
     if [ "$RB_RC" -ne 0 ]; then
-        log "=== BRIDGE SUITE FAILED (runtime-bridge/$PROFILE) rc=$RB_RC"
+        log "=== BRIDGE SUITE FAILED ($TARGET/$PROFILE) rc=$RB_RC"
         exit 6
     fi
+
+    if [ "$TARGET" = adapter ]; then
+        # The dialect suite takes a deck directory and a scratch directory; it is run
+        # on BOTH golden decks because a counter-example that only fires on one deck
+        # is evidence about that deck, not about the rule. The scratch directory is
+        # under $OUT so nothing is written next to the golden inputs.
+        DT="$OUT/yl_adapter_dialect_test"
+        DT_SCRATCH="$OUT/dialect-scratch"
+        mkdir -p "$DT_SCRATCH"
+        for c in cooks_membrane lame_cylinder; do
+            log "--- running the dialect suite on $c"
+            set +e
+            "$DT" "$ROOT/cases/golden/static_2d/$c/legacy" "$DT_SCRATCH" 2>&1 | tee -a "$LOG"
+            DT_RC=${PIPESTATUS[0]}
+            set -e
+            if [ "$DT_RC" -ne 0 ]; then
+                log "=== DIALECT SUITE FAILED ($c) rc=$DT_RC"
+                exit 6
+            fi
+        done
+        rm -rf "$DT_SCRATCH"
+        # yl_adapter_shadow is built, not run: the L3-c differential needs two child
+        # processes in two directories and is driven by tools/yl_shadow_diff.py.
+        log "--- yl_adapter_shadow built (not run here; see tools/yl_shadow_diff.py)"
+        # Nothing this target does may write into the golden inputs.
+        if [ -n "$(git -C "$ROOT" status --porcelain cases/ 2>/dev/null)" ]; then
+            log "=== FAILED: this target modified cases/; that is never allowed"
+            git -C "$ROOT" status --porcelain cases/ | tee -a "$LOG"
+            exit 6
+        fi
+        log "=== BUILD OK (adapter/$PROFILE) $T0 -> $T1: bridge + dialect suites passed on both golden decks"
+        exit 0
+    fi
+
     log "=== BUILD OK (runtime-bridge/$PROFILE) $T0 -> $T1: bridge suite passed (PARTIAL evidence)"
     exit 0
 fi
