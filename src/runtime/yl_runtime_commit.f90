@@ -274,10 +274,15 @@ module yl_runtime_commit
     character(len=COMMIT_LEN_NOTE) :: note = ''
   end type commit_provenance_t
 
-  ! 162 entries, in state-field-map.toml order. Today: 42 FROM_RUNTIME (the 32 emitted
-  ! RuntimeState rows plus the 10 whose value is an extent or a reconstruction of one),
-  ! 2 SYNTHETIC, 118 NOT_MIGRATED. The 118 are the fold's remaining work and the count is
-  ! the honest headline of M4-01's progress -- it is meant to fall to zero.
+  ! 162 entries, in state-field-map.toml order.
+  !
+  ! THE PER-STATE TALLY IS DELIBERATELY NOT WRITTEN HERE. It was, and it rotted: the
+  ! comment went on saying "118 NOT_MIGRATED" while the number fell to 97, then 92, then 77,
+  ! because nothing checks a count that only a human reads (docs/04-quality-gates.md, the
+  ! recurring defect shape, item 7). `commit_provenance_export` prints the live tally and
+  ! `tools/yl_state_map.py commit-provenance` puts it in every build log, including the
+  ! NOT_MIGRATED line -- the count that is the honest headline of M4-01's progress, and
+  ! whose fall to zero is the exit condition. Read it there, where it cannot be stale.
   type(commit_provenance_t), parameter :: COMMIT_PROVENANCE(*) = [                              &
     commit_provenance_t('case.name', COMMIT_NOT_MIGRATED, ''),                                                                  &
     commit_provenance_t('control.run.restart', COMMIT_NOT_MIGRATED, ''),                                                        &
@@ -299,7 +304,7 @@ module yl_runtime_commit
     commit_provenance_t('mesh.elements.group', COMMIT_NOT_MIGRATED, ''),                                                        &
     commit_provenance_t('mesh.elements.material', COMMIT_FROM_PROBLEM, 'mesh.elements[].material'),                                                     &
     commit_provenance_t('mesh.sets.elset', COMMIT_FROM_PROBLEM, 'mesh.elsets[].elements'),                                                            &
-    commit_provenance_t('mesh.sets.nset', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('mesh.sets.nset', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].nset (dump regroups)'),                                                             &
     commit_provenance_t('materials.id', COMMIT_FROM_PROBLEM, 'props(:) index 1..nmats'),                                                               &
     commit_provenance_t('materials.kind', COMMIT_FROM_PROBLEM, 'associated(mechanical)'),                                                             &
     commit_provenance_t('materials.name', COMMIT_FROM_PROBLEM, 'materials[]'),                                                             &
@@ -394,12 +399,12 @@ module yl_runtime_commit
     commit_provenance_t('steps0.output.field.gid_bcs', COMMIT_NOT_MIGRATED, ''),                                                &
     commit_provenance_t('derived.counts.nfixsets', COMMIT_NOT_MIGRATED, ''),                                                    &
     commit_provenance_t('derived.counts.ndofix', COMMIT_FROM_RUNTIME, 'extent ndofix'),                                         &
-    commit_provenance_t('steps0.boundary.set', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('steps0.boundary.dof', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('steps0.boundary.amplitude', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.boundary.nodes', COMMIT_NOT_MIGRATED, ''),                                                      &
-    commit_provenance_t('steps0.boundary.value', COMMIT_NOT_MIGRATED, ''),                                                      &
-    commit_provenance_t('steps0.boundary.record_reaction', COMMIT_NOT_MIGRATED, ''),                                            &
+    commit_provenance_t('steps0.boundary.set', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].name'),                                                        &
+    commit_provenance_t('steps0.boundary.dof', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].dof'),                                                        &
+    commit_provenance_t('steps0.boundary.amplitude', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].amplitude'),                                                  &
+    commit_provenance_t('steps0.boundary.nodes', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].nset'),                                                      &
+    commit_provenance_t('steps0.boundary.value', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].value'),                                                      &
+    commit_provenance_t('steps0.boundary.record_reaction', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].record_reaction'),                                            &
     commit_provenance_t('runtime.boundary.ldofix', COMMIT_FROM_RUNTIME, ''),                                                    &
     commit_provenance_t('runtime.boundary.lnefix', COMMIT_FROM_RUNTIME, ''),                                                    &
     commit_provenance_t('runtime.boundary.leldofix', COMMIT_FROM_RUNTIME, ''),                                                  &
@@ -792,10 +797,55 @@ contains
     end do
 
     ! Prescription records.
+    !
+    ! PRECONDITION, ASSERTED RATHER THAN ASSUMED. Record k of `prescrib` is record k of
+    ! `problem%steps(1)%boundary` only if build_runtime admitted every one of them:
+    ! build_boundary drops a record whose resolved variable index is 0 (contract
+    ! `boundary.skip_unnumbered_record`, yl_runtime_build.f90:871), and one drop shifts the
+    ! source of every later record by one -- publishing the wrong node, component and value
+    ! for each of them, all of them individually plausible.
+    !
+    ! commit cannot recover the correspondence itself. Recomputing the admission decision
+    ! means recomputing `node_variables(component_to_active(dof), node_index(nset))`, which
+    ! is the DOF numbering build_runtime owns, and a second derivation of it here is what
+    ! invariant 4 forbids. So the alignment is stated as a condition and REFUSED when it
+    ! does not hold: widening the capability gate to a deck that can skip a record fails at
+    ! this line -- the line that makes the assumption -- rather than at some later value
+    ! comparison, or not at all.
+    if (size(problem%steps(1)%boundary) /= int(s_ndofix)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%steps(1)%boundary))//        &
+                ' boundary records and build_runtime admitted '//itoa(int(s_ndofix))//          &
+                '; commit reads the two positionally and cannot recover which record was '//    &
+                'skipped without re-deriving the dof numbering')
+      return
+    end if
     allocate (s_prescrib(s_ndofix))
     do i = 1, int(s_ndofix)
       call null_prescrib(s_prescrib(i))
       call poison_prescrib(s_prescrib(i))
+      ! The six ProblemState-owned constraint fields (M4-01 step 4, prescrib). A
+      ! field-by-field copy and not a regrouping: the adapter already emits one
+      ! steps[0].boundary[] row per admitted (set, node) pair (yl_adapter_load.f90:271-289),
+      ! which is one legacy prescrib record.
+      !
+      ! FIVE OF THE SIX ARE SMALL INTEGERS OUT OF ONE RECORD, so a source mix-up between
+      ! them is a value swap and not a type error. They are equal to each other on the
+      ! golden decks often enough that the bridge fixture had to be made able to tell them
+      ! apart -- see the note beside the fixture's boundary records.
+      s_prescrib(i)%ifixset = int(opt_or(problem%steps(1)%boundary(i)%name), ink)
+      ! nodfix carries TWO map rows, and only one of them is read from here in the obvious
+      ! sense. steps0.boundary.nodes is the record's node. mesh.sets.nset is owned by
+      ! ProblemState.mesh.nsets[].nodes, and the dump RECONSTRUCTS it as the distinct nodfix
+      ! of each ifixset in first-occurrence order (yl_state_adapters.f90:399-433) -- which is
+      ! the same arithmetic finalize_problem uses to build mesh.nsets[] out of these very
+      ! records (derive_node_sets, yl_problem_pipeline.f90:1394). So both rows are FROM_
+      ! PROBLEM and both are read HERE; committing from mesh.nsets[] instead would be a
+      ! second path to the same value, which is what invariant 4 forbids.
+      s_prescrib(i)%nodfix = int(opt_or(problem%steps(1)%boundary(i)%nset), ink)
+      s_prescrib(i)%ifixvar = int(opt_or(problem%steps(1)%boundary(i)%dof), ink)
+      s_prescrib(i)%itcurve = int(opt_or(problem%steps(1)%boundary(i)%amplitude), ink)
+      s_prescrib(i)%outfix = int(opt_or(problem%steps(1)%boundary(i)%record_reaction), ink)
+      s_prescrib(i)%vdofix = real(opt_or_real(problem%steps(1)%boundary(i)%value), irk)
       s_prescrib(i)%ldofix = int(opt_or(runtime%boundary(i)%dof_index), ink)
       s_prescrib(i)%lnefix = int(opt_or(runtime%boundary(i)%element_count), ink)
       n = size(runtime%boundary(i)%attached_element)
@@ -1368,6 +1418,11 @@ contains
                 '.load.gravity.amplitude is not allocated')
       return
     end if
+    ! The staging pass both SIZES itself from this collection (the record-alignment
+    ! precondition) and indexes it, so an unallocated one is undefined behaviour twice over.
+    if (.not. allocated(problem%steps(1)%boundary)) then
+      call fail(errors, 'steps[0].boundary is not allocated'); return
+    end if
 
     ! (c) the SCALARS, every one this module reads through an opt_* fallback. The fallback
     ! cannot tell "authored as zero" from "never authored", so each one is a place where a
@@ -1391,6 +1446,21 @@ contains
           return
         end if
       end do
+    end do
+    ! The six constraint fields. `value` is the one real among them, and it is the one an
+    ! unset field would publish most quietly: 0.0 is the value both golden decks carry, so
+    ! an unauthored displacement and an authored zero are the same byte in the snapshot.
+    do i = 1, size(problem%steps(1)%boundary)
+      if (.not. opt_is_set(problem%steps(1)%boundary(i)%name) .or.                             &
+          .not. opt_is_set(problem%steps(1)%boundary(i)%nset) .or.                             &
+          .not. opt_is_set(problem%steps(1)%boundary(i)%dof) .or.                              &
+          .not. opt_is_set(problem%steps(1)%boundary(i)%value) .or.                            &
+          .not. opt_is_set(problem%steps(1)%boundary(i)%amplitude) .or.                        &
+          .not. opt_is_set(problem%steps(1)%boundary(i)%record_reaction)) then
+        call fail(errors, 'steps[0].boundary['//itoa(i)//'] has an unset field this '//        &
+                  'commit reads (name, nset, dof, value, amplitude or record_reaction)')
+        return
+      end if
     end do
     do i = 1, size(problem%sections)
       if (.not. opt_is_set(problem%sections(i)%material) .or.                                  &
@@ -1668,13 +1738,23 @@ contains
     u%np_unode = STAGE_POISON_I
   end subroutine poison_unode
 
-  ! freedom_prescribe: 2 components, `ldofix` and `lnefix`, both assigned in the
-  ! prescription-record loop. The rest of this type's scalars (itcurve, ifixvar, vdofix,
-  ! nodfix, outfix, ifixset, ...) are the ProblemState half -- not assigned here yet.
+  ! freedom_prescribe: 8 components, all assigned in the prescription-record loop --
+  ! `ldofix` and `lnefix` from the runtime, and `ifixset`, `nodfix`, `ifixvar`, `itcurve`,
+  ! `outfix`, `vdofix` from ProblemState (M4-01 step 4).
+  ! The type's remaining scalars (mfixset, ifixvar0, jfixvar, gamaw, rdofix, bfrecoord) are
+  ! NOT assigned here and are deliberately NOT poisoned: their map rows are not emitted at
+  ! model_ready, so a sentinel in them would reach a global for no reader's benefit. Rule 1
+  ! of the STAGE_POISON note -- poison covers exactly the assigned set.
   subroutine poison_prescrib(p)
     type(freedom_prescribe), intent(inout) :: p
     p%ldofix = STAGE_POISON_I
     p%lnefix = STAGE_POISON_I
+    p%ifixset = STAGE_POISON_I
+    p%nodfix = STAGE_POISON_I
+    p%ifixvar = STAGE_POISON_I
+    p%itcurve = STAGE_POISON_I
+    p%outfix = STAGE_POISON_I
+    p%vdofix = STAGE_POISON_R
   end subroutine poison_prescrib
 
   ! solid_skeleton: the 10 non-pointer components this module assigns. `thickness` is

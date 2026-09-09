@@ -401,15 +401,43 @@ contains
     ou%stress_averaging = [2_int32]
     call builder_step_set_output(b, sb, ou, loc, errors)
 
-    do k = 1, 2
-      call opt_set(bd%name, int(k, int32))
-      call opt_set(bd%nset, int(k, int32))
-      call opt_set(bd%dof, int(k, int32))
-      call opt_set(bd%value, 0.0_real64)
-      call opt_set(bd%amplitude, 1_int32)
-      call opt_set(bd%record_reaction, 0_int32)
-      call builder_step_add_boundary(b, sb, bd, loc, errors)
-    end do
+    ! SIX FIELDS THAT MUST BE ABLE TO TELL EACH OTHER APART. Every one of these lands in a
+    ! different scalar of the same `prescrib` record, and five of the six are small
+    ! integers, so commit reading the wrong one is a value swap rather than a type error.
+    ! The fixture used to set name = nset = dof = k and amplitude = 1, record_reaction = 0
+    ! for both records; under that fixture a swap of name against nset, or of nset against
+    ! dof, changed nothing at all and every assertion below would have passed. That is the
+    ! defect docs/04-quality-gates.md records as the test-side subspecies -- an assertion
+    ! whose name claims a discrimination its fixture cannot make -- and the fix belongs
+    ! here, in the fixture, not in the assertions.
+    !
+    ! The values are chosen so that for EVERY pair of these fields at least one record
+    ! gives them different values, which is what makes a swap of that pair observable:
+    !
+    !   record 1: name 1, nset 4, dof 2, value  0.25, amplitude 0, record_reaction 1
+    !   record 2: name 2, nset 1, dof 1, value -0.50, amplitude 1, record_reaction 0
+    !
+    ! (name vs record_reaction is the only pair that agrees in record 1; record 2 separates
+    ! them.) Every value is inside the gates: V24 needs the set ordinals to run 1..n with no
+    ! gap, V17 needs dof in 1..ndimn, V18 needs amplitude in 0..n_amplitudes with 0 meaning
+    ! "no curve", and B1/B6 need each node to be attached to an element and each
+    ! (node, component) pair to appear once. Nodes 1 and 4 are corners of element 1 in both
+    ! mesh sizes. `value` is non-zero on purpose: 0.0 is what both golden decks carry, so a
+    ! zero here would make an unwritten vdofix indistinguishable from a written one.
+    call opt_set(bd%name, 1_int32)
+    call opt_set(bd%nset, 4_int32)
+    call opt_set(bd%dof, 2_int32)
+    call opt_set(bd%value, 0.25_real64)
+    call opt_set(bd%amplitude, 0_int32)
+    call opt_set(bd%record_reaction, 1_int32)
+    call builder_step_add_boundary(b, sb, bd, loc, errors)
+    call opt_set(bd%name, 2_int32)
+    call opt_set(bd%nset, 1_int32)
+    call opt_set(bd%dof, 1_int32)
+    call opt_set(bd%value, -0.5_real64)
+    call opt_set(bd%amplitude, 1_int32)
+    call opt_set(bd%record_reaction, 0_int32)
+    call builder_step_add_boundary(b, sb, bd, loc, errors)
 
     call opt_set(ac%material, 1_int32)
     call opt_set(ac%active, 1_int32)
@@ -564,6 +592,38 @@ contains
                 all(prescrib(i)%levdofix == int(rt%boundary(i)%attached_local_position, ink)))
       call check('prescrib('//itoa(i)//')%lefdofix',                                            &
                 all(prescrib(i)%lefdofix == int(rt%boundary(i)%attached_field, ink)))
+    end do
+
+    ! --- step 4 (prescrib): the six ProblemState-owned constraint fields --------------
+    ! The precondition first, because every comparison after it is positional and means
+    ! nothing if the two collections are not aligned. commit REFUSES a misalignment rather
+    ! than guessing; asserting it here says the fixture is on the supported side of that
+    ! refusal, so a failure below is a wrong value and not a wrong row.
+    call check('prescrib(:) and steps[0].boundary[] are aligned one-to-one',                    &
+              size(problem%steps(1)%boundary) == size(rt%boundary))
+    ! Field by field, against a fixture built so that no two of these six hold the same
+    ! value in every record (see the note beside the fixture's boundary records). A swap of
+    ! any pair therefore fails at least one of these, which is the property the earlier
+    ! all-equal fixture did not have.
+    do i = 1, min(size(rt%boundary), size(problem%steps(1)%boundary))
+      call check('prescrib('//itoa(i)//')%ifixset is steps[0].boundary[].name',                 &
+                prescrib(i)%ifixset ==                                                          &
+                int(opt_value_or(problem%steps(1)%boundary(i)%name, 0_int32), ink))
+      call check('prescrib('//itoa(i)//')%nodfix is steps[0].boundary[].nset',                  &
+                prescrib(i)%nodfix ==                                                           &
+                int(opt_value_or(problem%steps(1)%boundary(i)%nset, 0_int32), ink))
+      call check('prescrib('//itoa(i)//')%ifixvar is steps[0].boundary[].dof',                  &
+                prescrib(i)%ifixvar ==                                                          &
+                int(opt_value_or(problem%steps(1)%boundary(i)%dof, 0_int32), ink))
+      call check('prescrib('//itoa(i)//')%itcurve is steps[0].boundary[].amplitude',            &
+                prescrib(i)%itcurve ==                                                          &
+                int(opt_value_or(problem%steps(1)%boundary(i)%amplitude, 0_int32), ink))
+      call check('prescrib('//itoa(i)//')%outfix is steps[0].boundary[].record_reaction',       &
+                prescrib(i)%outfix ==                                                           &
+                int(opt_value_or(problem%steps(1)%boundary(i)%record_reaction, 0_int32), ink))
+      call check('prescrib('//itoa(i)//')%vdofix is steps[0].boundary[].value',                 &
+                prescrib(i)%vdofix ==                                                           &
+                real(opt_value_or(problem%steps(1)%boundary(i)%value, 0.0_real64), irk))
     end do
 
     ! --- tcurves(:)%dfact ----------------------------------------------------------
