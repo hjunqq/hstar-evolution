@@ -94,7 +94,7 @@ program yl_runtime_bridge_test
   write (output_unit, '(a)') '-- 6. the W4 foreign-allocation guard, one door at a time'
   call group_foreign_allocation_guard(rt2)
 
-  write (output_unit, '(a)') '-- 7. the snapshot blind spots, and that their guards can fail'
+  write (output_unit, '(a)') '-- 7. the snapshot blind spots, and how far their guards reach'
   call group_blind_spot_falsifiability(rt2)
 
   call summary()
@@ -545,8 +545,14 @@ contains
     ! global -- where any `associated()` is undefined behaviour, which is precisely the
     ! hazard null_group's own comment names -- while this program, yl_runtime_selftest,
     ! the shadow diff and L3-b all stay green. That is the `trans` defect again: a guard
-    ! whose object is not the object it appears to guard. These four checks are the
-    ! guard; section 7 is the proof that they can fail.
+    ! whose object is not the object it appears to guard.
+    !
+    ! These four close the "wrote the WRONG value" half only. The np_unode and
+    ! patch_* guards cannot see a write that was deleted outright: commit
+    ! reallocates their storage, so the poison is erased and undefined memory
+    ! reads back as 0. Measured under three profiles -- see section 7's header.
+    ! The staging-poison mechanism that closes that half belongs to
+    ! yl_runtime_commit (docs/m4/L2c-fold-design.md §5.5), not to this program.
     call check('unode(:)%np_unode is 0 on every section node', unode_np_unode_all_zero())
     call check('unode(:)%patch_nod/patch_sta/patch_load are all UNASSOCIATED',                   &
               unode_patch_pointers_all_null())
@@ -818,25 +824,51 @@ contains
   end subroutine group_foreign_allocation_guard
 
   ! ==========================================================================
-  ! section 7: the four snapshot blind spots, and the proof that their guards
-  ! can actually fail.
+  ! section 7: the four snapshot blind spots, and exactly how far their guards
+  ! reach.
   !
-  ! check_landed now asserts them, but an assertion that cannot fail is worse
-  ! than none (the same reasoning yl_runtime_selftest's check_bijection states
-  ! for the forward half of its bijection). So each guard is shown to be
-  ! FALSIFIABLE here: poison the real global, assert the predicate says .false.,
-  ! restore, assert it says .true. again.
+  ! check_landed asserts them, but an assertion that cannot fail is worse than
+  ! none (the same reasoning yl_runtime_selftest's check_bijection states for the
+  ! forward half of its bijection). So each guard is shown to be FALSIFIABLE
+  ! here: poison the real global, assert the predicate says .false., restore.
   !
-  ! For the two SCALAR rows there is a second, stronger property available and
-  ! asserted: poison, then commit the same runtime AGAIN, and the value must be
-  ! back -- which separates "commit writes this" from "it happened to be zero".
+  ! WHAT THESE GUARDS PROVE, AND WHAT THEY DO NOT. Read this before trusting
+  ! them; the two halves are not the same strength, and the difference is the
+  ! storage form, not the care taken writing them.
   !
-  ! For patch_nod that property is deliberately NOT asserted, and the reason is
-  ! itself a finding: commit_release (yl_runtime_commit.f90) frees only
+  !   lineload / linet are PERSISTENT SCALAR globals. A poison stays where it was
+  !   put, so "poison, commit again, the value must be back" is a real property:
+  !   deleting commit's write of them makes this section go red. These two guards
+  !   DO cover a missing write.
+  !
+  !   unode%np_unode is a component of a derived-type array that commit
+  !   REALLOCATES on every commit: move_alloc swaps in a brand-new s_group, and
+  !   the reallocation itself erases the poison. unode_elements
+  !   (Global.f90:263-271) has no default initialisation, so undefined memory
+  !   reads back as 0 and the restore check passes with NO WRITE AT ALL.
+  !   Measured, not reasoned: deleting `s_group(ig)%unode(i)%np_unode = 0_ink`
+  !   from yl_runtime_commit leaves this whole suite green at 720/720 -- under
+  !   release, under `strict` (-init=snan,arrays only touches reals), and even
+  !   under `sanitize` (-check uninit / MemorySanitizer, run with
+  !   KMP_AFFINITY=disabled to get past a libiomp false positive). Writing the
+  !   WRONG value is caught; writing NOTHING is not.
+  !
+  !   patch_nod / patch_sta / patch_load are worse still: once null_unode is
+  !   dropped, associated() on them is undefined behaviour, so the predicate
+  !   cannot even be evaluated safely and neither answer is evidence.
+  !
+  ! So: these guards turn "wrote the wrong value" from silent into red. They do
+  ! NOT turn "never wrote it" from silent into red, and the M4-01 fold's dominant
+  ! failure mode is the second one. The mechanism that closes it is poisoning the
+  ! STAGING buffer at allocation (docs/m4/L2c-fold-design.md §5.5) -- that belongs
+  ! to yl_runtime_commit, not here. Do not read this section as covering it.
+  !
+  ! For patch_nod the recommit property is deliberately NOT asserted, and the
+  ! reason is itself a finding: commit_release (yl_runtime_commit.f90) frees only
   ! `unode%list`, never `patch_nod`, so re-committing over an ASSOCIATED
-  ! patch_nod would move_alloc the group array away and leak the target this
-  ! test allocated. The poison is therefore released here by hand. That gap in
-  ! the release path is real; it is out of this program's scope to fix, and this
+  ! patch_nod would move_alloc the group array away and leak the target this test
+  ! allocated. The poison is therefore released here by hand. That gap in the
+  ! release path is real; it is out of this program's scope to fix, and this
   ! comment is here so the next reader finds it deliberate rather than missed.
   ! ==========================================================================
 

@@ -1,4 +1,4 @@
-> **状态：v2 已按复核与 lead 裁定修订（2026-09-09），待 lead 复核数字后批准实施。**
+> **状态：v3（2026-09-09）。v2 的四项必改已完成，v3 处理 lead 对第 0 项守卫的对照发现。**
 >
 > 独立对抗性复核：`docs/m4/L2c-fold-review.md`。主干四条（方案 A、折叠不能分批、
 > 账本轴取「出处」、最大风险在释放路径）经复核未被推翻，保留。v1 被证伪的部分逐条处置：
@@ -13,11 +13,21 @@
 > | 实施前须先补盲区守卫 | **已完成**：提交 `a5a6e15`，4 条断言 + 5 个反例，581/581 → **720/720** |
 > | §5.1 的「构造」并不能锁死三处 | §5.1 重写：承认只覆盖可分配全局那一半，指针目标那一半**没有仓库内机制**；§5.4 把 ASan/valgrind 定为**出口条件**；§5.1.3 新增一条能机检「忘在 release 里」的释放后总体性断言 |
 >
-> **v2 自己新增、需要 lead 裁定的两件事：**
-> 1. **需要决定的不是 1 行，是 8 行**（§1.7）：`derived` 里还有 7 行同样既不能重算、也没有闸门，
->    其中 4 个温度计数在产品路径上**根本没有读取者**。
-> 2. **`derived.counts.nsmat` 的 map note 是错的**（§1.8）：note 说 0，冻结基线与 deck 都说 1。
->    与 `a8d4646` 修掉的那处同类，须由 map 所有者修，且**阻塞步 5**。
+> **v3 相对 v2 的改动：**
+>
+> | lead 指出 | v3 的处置 |
+> |---|---|
+> | `np_unode` 守卫抓不到「漏写」 | §4.5.1 如实写明三个守卫**能证明什么、不能证明什么**（复现了 lead 的对照，并把范围扩到 `strict` / `sanitize`：**三个剖面全部漏检**）；`yl_runtime_bridge_test.f90` 的注释同步更正，不再声称覆盖漏写 |
+> | 通用解法：staging 分配后立即投毒 | **§5.5 新增**，作为机制与 §5.1.3、§5.4 并列；含哨兵取值、三条约束（尤其"哨兵绝不能被 legacy 看见"与 RESERVED 行的例外必须由账本说了算） |
+> | 四个温度计数按"legacy 读不读"定，不按"deck 上是 0"定 | **§1.7.1 查实**：`.tem` 在 `Global.f90:661` 无条件打开，`boundt` 在 `Fem.f90:1899` 无条件调用，四个计数在 `Temper.f90:126/154/246/310` 被 `read` 赋值。**legacy 确实读**，所以写 0 是伪造读取结果 → 必须写 `.tem` 解析器；解析器一旦存在，这四行自动成为 `FROM_GATE`，**载体问题随之消失** |
+> | `npoinb`/`nsmat`/`delgroup` 同理 | **§1.7.2**：legacy 读了并留在全局。`delgroup` 可以干净走闸门；`npoinb`/`nsmat` 确实需要一个不破坏双射的承载方式 —— 按你的话，报你决定 |
+> | `nsmat` map 缺陷（`0646de3`）、`build.sh adapter` 目标（`21a5c98`） | 已采纳；§1.8 改记为**已修**，§6 的两个构建目标都跑 |
+>
+> **v3 新增、需要 lead 决定的一件事**：`sanitize` 剖面**今天跑不起来**
+> —— 干净工作树上 rc=6，死在 libiomp 内部的 MSan 误报，进不了仓库代码。
+> `KMP_AFFINITY=disabled` 即可绕过（实测 `PASS: 720/720`）。
+> `tools/build.sh` 现在是你的，请决定是否把它加进 `sanitize` 剖面的运行环境 ——
+> 在此之前 §5.4 的出口条件无从满足。
 
 # M4 L2-c：把 ProblemState 那一半折叠进 `commit_legacy_globals` 的单次 staging —— 设计提案
 
@@ -259,15 +269,61 @@ lead 要我优先评估 (i-a)"让适配器真的去读它们"。**逐行查完�
 | `derived.counts.npipe` | `temperature.npipe` | 同上 | 0 / 0 |
 
 （`src/adapter/yl_adapter_harvest.f90:303` 确实 `call boundt`，但它的模块头写明
-"THIS IS AN ORACLE, NOT A PRODUCT PATH"，`adapt_legacy_deck` 不经过它。所以产品路径上
-这四个温度计数**没有读取者**。）
+"THIS IS AN ORACLE, NOT A PRODUCT PATH"，`adapt_legacy_deck` 不经过它
+（`git show HEAD:src/adapter/yl_adapter_driver.f90 | grep -c harvest` → 0）。
+所以产品路径上这四个温度计数**没有读取者**。）
 
 **所以需要 lead 决定的不是 1 行，是 8 行**：`stab_matde` + 上表 7 行。
-三条路与 §1.6.3 相同。对上表 7 行，`npoinb` / `nsmat` / `delgroup` 走 (a) 最便宜
-（三处各加一个 `reject_*`，代价是声明式收窄）；四个温度计数走 (b) 最诚实
-（新路径确实没读 `.tem`，硬写 0 是在假装读过）。
 
-### 1.8 一处必须先修的 map 事实错误：`derived.counts.nsmat`
+#### 1.7.1 legacy 在 static_2d 上**确实读 `.tem`** —— 所以写 0 是伪造读取结果
+
+lead 给的判据不是"0 对不对"，而是"legacy 在这条路径上写不写它们、从哪写"。**查实了，逐条：**
+
+| 事实 | 位置 |
+|---|---|
+| `.tem` 在 `global_data` 里**无条件**打开 | `legacy/yl/Global.f90:661`（`open(tunit, file=probn(1:len1)//'.tem', status='old')`），紧接着 `diag_check_open` |
+| `boundt` 被**无条件**调用（块循环内，无 guard） | `legacy/yl/Fem.f90:1899` `call boundt !! temperature` |
+| `ntemp_surface` 在 `if(iblks==1)` 下从 `tunit` 读入（本路径 `iblks==1`） | `legacy/yl/Temper.f90:126` |
+| `ntedge` / `ntelgroup` / `npipe` 同样从 `tunit` 读入 | `Temper.f90:154` / `:246` / `:310` |
+| M1 的 reader 清单登记了这些站点 | `docs/m1/reader-inventory.toml`：`TEM.boundt.{temp_surface_count,temp_edge_count,temp_elgroup_count,pipe_count}` |
+| golden deck 里 `1.tem` 真实存在且有记录 | `cases/golden/static_2d/*/legacy/1.tem`（四个计数都是 0，但**是读出来的 0**） |
+
+**结论（按 lead 的规则第二条）：legacy 在这条路径上确实读了 `.tem`，
+所以折叠往这四个全局写 0 就是伪造读取结果，不得这么做。**
+它们不是"停在零初始化"——它们是被 `read` 语句赋的值。
+
+**正确做法**：写一个 `.tem` 解析器。它很小 —— M1 清单里就是 5 条 title + 4 个计数，
+形状与 `yl_adapter_load.f90` 已经在做的 `nplgroup`/`nedge`/`nbeamload`/`nplateload`
+完全一样：读记录、非 0 即 `reject_dialect`。lead 已确认 M4-01 的解析器扩展不再被阻塞
+（L3-a 已验收）。
+
+**解析器一旦存在，载体问题自动消失**：这四行随即与 `nedge` 同类，成为
+`COMMIT_FROM_GATE`（值由拒绝规则唯一蕴含），**不需要 ProblemState 承载它们**，
+也就不触碰 §3.1 的双射闸门。
+"伪造"与"闸门蕴含"的分界线，正好是**新路径有没有真的读过那条记录**。
+
+#### 1.7.2 `npoinb` / `nsmat` / `delgroup`：读了却丢弃，legacy 把它们留在全局里
+
+同一条规则应用到这三行，答案与温度计数不同：
+
+- legacy **读了并留在全局**：`npoinb` / `nsmat` 由 `Global.f90:694` / `:815` 的 `read` 赋值给
+  `global_var` 的模块变量；`delgroup` 由 `Load.f90:754` 赋值给 `applied_load` 的模块变量。
+- 新路径的适配器**也读了**（§1.7 表），只是读完丢弃、不校验。
+
+所以按 lead 的规则，它们"既然被读了，就应当被带出来"。可带出的方式有两种，
+而**载体问题在这里是真的**（它们是 `derived` 行，无 `ProblemState.*` owner，§3.1）：
+
+| 行 | legacy 是否消费它 | 建议 |
+|---|---|---|
+| `derived.counts.npoinb` | **从不消费**：全仓库只有 `Global.f90:694` 读、`:696` 打印、`:699` 范围检查，无其他引用 | 需要载体或闸门。加 `reject` 会拒绝 legacy 能正常处理的 deck，而这个值 legacy 自己都不用 —— 我倾向**需要一个不破坏双射的承载方式**，这正是 lead 说的架构决定 |
+| `derived.counts.nsmat` | **消费**：`Fem.f90:15499` 的刚度重组节奏（见 `0646de3` 的更正） | 同上，且更强：它影响控制流，钉死等于替 deck 做决定 |
+| `derived.counts.delgroup` | 只在 `edge_load_group /= 0` 的块内有意义，而该分支已被拒 | 三者中唯一可以干净地走闸门：在 `edge_load_group == 0` 时要求 `delgroup == 0`，代价接近零 |
+
+**报给 lead 的结论**：`delgroup` 走闸门；`npoinb` 与 `nsmat` 需要一个承载方式 ——
+按你的话，这是架构决定，我不自行选。`stab_matde` 与它们同类（§1.6.3），
+三者一起决定比分开决定省事。
+
+### 1.8 一处 map 事实错误：`derived.counts.nsmat`（**已由 `0646de3` 修复**）
 
 `derived.counts.nsmat` 的 map note 写着 **"0 on both cases"**。
 **冻结的 M2-03 基线和 deck 本身都说是 1。**
@@ -280,7 +336,11 @@ legacy deck 1.glb 第 10-11 行:  NMASS NSMAT NHMAT ... ->  1  1  1  1  0  0  1 
 
 这与 lead 已在 `a8d4646` 修好的 `restart` / `stab_matde` 错位是同一类：
 **map 的 note 不能当作取值来源**。这正是本节把取值来源从"note"改成"闸门规则"的第二个理由。
-本行归 map 所有者修；在修好之前，任何按 note 取值的实现都会写错一个数。
+
+**已由 `0646de3` 修复**（lead）。值得记下的是后果的量级：note 说 0 而实际是 1，
+把控制流结论整个倒转 —— `Fem.f90:15499` 的 `IF (NSMAT.EQ.0 .OR. ...)` 在 0 时析取恒真、
+每次都重组刚度，而实际的 1 只在 `inc_step` 首迭代重组。
+**一个 note 里的错值，改变的是"legacy 在这条路径上到底做了什么"的答案。**
 
 ---
 
@@ -502,11 +562,35 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
 这与模块头记录的 `trans` 缺陷同类：**一道守卫覆盖的对象不是它声称覆盖的对象。**
 
 `a5a6e15` 补上了这 4 行的断言，并为每一条配了一个能让它变红的反例
-（毒化真实全局 → 断言谓词返回 `.false.` → 复原）。两个标量行还断言了更强的性质：
-毒化后**重新提交**，值必须回来 —— 这把"commit 写了它"与"它碰巧是 0"分开。
-`patch_nod` 故意**不**断言这条性质，理由本身是一个发现：`commit_release` 只释放
-`unode%list`、从不碰 `patch_nod`，在一个已关联的 `patch_nod` 上重新提交会把 group 数组
-`move_alloc` 走并泄漏它。毒化因此是手工释放的，缺口被写进注释而不是被抹平。
+（毒化真实全局 → 断言谓词返回 `.false.` → 复原）。
+
+#### 4.5.1 这四个守卫**能证明什么、不能证明什么**（v3 更正）
+
+lead 独立做了一次我没做的对照：**不是改错值，而是把 commit 里的写入整行删掉**
+（`yl_runtime_commit.f90:307`）。结果我已复现：
+
+| 对照 | 结果 |
+|---|---|
+| `s_group(ig)%unode(i)%np_unode = 7_ink`（**写错值**） | **BAD**，守卫响 |
+| 整行删除（**漏写**） | **全绿 720/720**，连"restored to 0 by a recommit"也过 |
+| 去掉 `lineload` 的发布（`:353`） | **BAD** ×2，守卫响 |
+
+**根因不是漏加检查，是这两类行的存储形态不同：**
+
+- `lineload` / `linet` 是**持久的标量全局**。毒化留在原地，漏写就恢复不了 →
+  "投毒→重提交→值必须回来"是一条真性质。**这两个守卫覆盖漏写。**
+- `unode%np_unode` 是**每次提交都重新分配**的派生类型数组分量。commit 用 `move_alloc`
+  换上全新的 `s_group`，**重分配本身抹掉了投毒**；`unode_elements`（`Global.f90:263-271`）
+  没有默认初值，未定义内存恰好读作 0，于是在**毫无写入**的情况下恢复检查照样通过。
+  **这个守卫只覆盖"写错值"，不覆盖"漏写"。**
+- `patch_nod` / `patch_sta` / `patch_load` 同理，而且更糟：漏掉 `null_unode` 之后
+  `associated()` 本身就是未定义行为，**守卫连安全求值都做不到**，它的 `.false.` 与 `.true.`
+  都不构成证据。
+
+所以这三个守卫的准确表述是：**它们把"写错了"从静默变成红线，不能把"根本没写"从静默变成红线。**
+后者需要 §5.5 的机制，而那属于折叠本身，不属于测试。这一段是本设计对
+"`a5a6e15` 已经把盲区补上了"这个说法的自我更正 —— 它补上了一半。
+
 测试从 581/581 变为 720/720，0 失败。
 
 ## 5. 会出什么问题，怎么被发现
@@ -617,20 +701,104 @@ v1 建议"把待发布的全局收进一张显式清单，守卫/`move_alloc`/`c
 
 ---
 
-### 5.4 出口条件（不是建议）：外部内存工具
+### 5.4 出口条件（不是建议）：外部内存工具 —— 以及它今天跑不起来
 
 §5.1.2 已经说明：释放路径的下半（嵌套指针目标）在仓库内**没有**检查手段，
 而 `props(i)%mechanical%solid` 这条两级链把这块面积放大了一个量级。
-`legacy/yl/sanitizer_guide.md` 已有条目，M3-03 把这一项记为 NOT PERFORMED。
 
-**本设计把它从"待办/建议"提升为 M4-01 折叠的出口条件**：
+**本设计把外部内存工具定为 M4-01 折叠的出口条件**：
 
-> 在两个 golden 算例上，以 `-fsanitize=address`（或 valgrind）运行
-> commit → commit → release → commit → release 序列，**无泄漏、无 use-after-free**，
-> 结果与命令入报告。这一条不通过，折叠不算完成。
+> 在两个 golden 算例上，跑 commit → commit → release → commit → release 序列，
+> **无泄漏、无 use-after-free**，结果与命令入报告。这一条不通过，折叠不算完成。
 
-理由不是谨慎，是记账：没有它，`commit_release` 是否覆盖了新增的 8 类指针目标
-这个问题，在仓库里**无法被回答**——所有测试都会通过。
+**但它今天跑不起来，原因已查明并可一行修复。** 在**干净工作树**上实测：
+
+```
+tools/build.sh runtime-bridge sanitize   ->  rc=6
+SUMMARY: MemorySanitizer: use-of-uninitialized-value
+         ... in __kmp_affinity_insert_numa_nodes(kmp_topology_t*)
+```
+
+这是 Intel OpenMP 运行时（libiomp）内部的 MSan 误报，发生在进入仓库任何一行代码**之前**，
+与被测代码无关。加一个环境变量即可绕过：
+
+```
+KMP_AFFINITY=disabled build/<out>/yl_runtime_bridge_test   ->  PASS: 720/720
+```
+
+**请 lead 决定**（`tools/build.sh` 现在是你的）：把 `KMP_AFFINITY=disabled`
+（`OMP_NUM_THREADS=1` 已经在别处这么做了）加进 `sanitize` 剖面的运行环境。
+在此之前 `sanitize` 剖面对这个二进制是不可用的，出口条件也就无从满足。
+
+另注：`sanitize` 用的是 `-check uninit`（MemorySanitizer），不是 AddressSanitizer；
+泄漏检测需要另外的 `-fsanitize=address`（含 LeakSanitizer）或 valgrind。
+两者不能互相替代：MSan 查未初始化读，LSan/valgrind 查泄漏，而 §5.1 的下半要的是后者。
+
+### 5.5（v3 新增，lead 处方）Staging 投毒：让"漏写"变成红线
+
+#### 5.5.1 为什么必须有它：三个剖面全部漏检，实测
+
+lead 指出 `a5a6e15` 的 `np_unode` 守卫抓不到**漏写**，我复现并把范围扩到了整个工具链。
+对照方式是把 `yl_runtime_commit.f90:307` 的写入整行删掉，然后逐剖面跑
+（每次跑完还原，`git status` 干净）：
+
+| 剖面 | 编译选项要点 | 漏写被抓到吗 |
+|---|---|---|
+| `release` | `-O2` | **否** —— `PASS: 720/720`，0 BAD |
+| `strict` | `-init=snan,arrays -fpe0 -check bounds,pointers` | **否** —— `PASS: 720/720`。`-init=snan` 只作用于实型 |
+| `sanitize` | `-check bounds,pointers,uninit`（MemorySanitizer） | **否** —— `KMP_AFFINITY=disabled` 绕过 libiomp 误报后 `PASS: 720/720`，**0 条 MSan 报告** |
+
+**仓库里没有任何一个现成机制能看见"折叠漏写了一行"。** 这不是推理，是三次实测的排除法。
+对照组（`lineload` 的发布被删）在 `release` 下就是 **BAD**，说明夹具本身没有失灵 ——
+区别在存储形态，见 §4.5.1。
+
+#### 5.5.2 处方
+
+**staging 缓冲在分配之后立刻投毒，真实赋值再覆盖它。**
+
+```fortran
+allocate (s_group(s_ngroup))
+call poison_group(s_group)          ! 每个整型分量 = STAGE_POISON_I, 每个实型 = NaN
+...                                 ! 真实赋值覆盖
+```
+
+- 赋值在 → 发布出去的是真值 → 绿；
+- 赋值被漏掉 → 发布出去的是哨兵 → 影子差分、`bridge_test` 的逐值断言**立刻红**。
+
+这把"未定义内存恰好读作 0"变成"已定义的哨兵"，于是**每一个**新增行的漏写都可检测，
+不必逐行手写守卫去追。折叠要新增 **89 行**"未定义值"（§2），它们全部共享这个性质，
+所以这条是**机制**，不是逐行守卫的替代品可以省掉的优化。
+
+**哨兵取值**：整型用 `huge(0_ink)`，实型用 signalling NaN（与 `strict` 剖面的
+`-init=snan` 同一个约定），字符用一个不可能出现的填充。选 `huge` 而不是 0 或 −1，
+理由与 ADR-0002 的绝对值哨兵禁令一致：它必须是一个**任何合法路径都产生不了**的值，
+而 0 和 −1 都可能是合法的。
+
+**三条约束，缺一不可：**
+
+1. **哨兵绝不能被 legacy 看见。** 它只存在于 staging 局部量里；
+   到 write 段之前必须已被真实赋值全部覆盖。**覆盖不全本身就是缺陷**，
+   这正是这个机制要暴露的东西。
+2. **RESERVED 行是例外，而且必须显式列出。** `element%field%tload/eload/rload`、
+   `delitfi`/`deltafi` 按账本就是"已分配、内容未定义、不许读"。它们**应当**带着哨兵发布
+   —— 那比带着 0 发布更诚实（0 会被误读成一个值）——
+   但每一个这样的行都要在出处账本里是 `RESERVED`，且不在任何比对里。
+   **哪一行带哨兵出门，必须是账本说了算，不是遗漏说了算。**
+3. **投毒函数与 `null_*` 系列必须同源。** 现在的 `null_element` / `null_element_field` /
+   `null_gauss` / `null_group` / `null_unode` / `null_prescrib` / `null_tcurve`
+   已经逐类型枚举了指针分量并在注释里记了数目；投毒函数要枚举**非指针**分量，
+   写在同一个位置、同一套注释纪律下。一个 legacy 类型新增分量时，
+   两边一起暴露缺口，而不是只暴露一边。
+
+#### 5.5.3 它与 §5.1.3 的分工
+
+两条机制盖的是**不同**的洞，都要：
+
+| 机制 | 盖住什么 | 盖不住什么 |
+|---|---|---|
+| staging 投毒（§5.5） | **漏写**一个 staging 分量 | 释放路径漏项、泄漏 |
+| 释放后总体性断言（§5.1.3） | **忘在 `commit_release` 里**（release 之后仍 `associated`/`allocated`） | 真正的泄漏（进程看不见） |
+| 外部工具（§5.4） | 泄漏、use-after-free | 语义错误 |
 
 ---
 
@@ -647,18 +815,26 @@ v1 的步 2 判据"第一次产出完整的 162 行快照"是**假的**（lead �
 | 步 | 内容 | 触碰的全局 | 通过判据 |
 |---|---|---|---|
 | **0** | **已完成（`a5a6e15`）**：补上 4 行 `emit = none` 盲区的提交后全局断言 + 每条一个反例（§4.5） | 无 | 581/581 → **720/720**，0 失败 |
+| **0b** | **staging 投毒机制**（§5.5）：`poison_*` 系列 + 三条约束，先只作用于**今天已有**的 staging（不新增任何行）。这一步的验收就是它自己的对照：删掉 `s_group(ig)%unode(i)%np_unode = 0_ink`，`bridge_test` 必须**变红** —— 今天在三个剖面下都是绿的 | 无 | 对照红、正常绿；`720/720` 不降 |
 | **1** | 账本骨架：从 map 生成行清单 + commit 侧出处声明表 + VERIFY 段总体性闸门 + `provenance.txt` 旁挂 + `NOT_MIGRATED` 桶的**封闭**检查（§4.4）；**一个全局都不新写**，全部 120 行先声明为 `COMMIT_NOT_MIGRATED` | 无 | `bridge_test` / `selftest` 逐条与今天相同；`build.sh` 双射与溯源门禁绿 |
 | **2** | 签名改 A，全部调用点跟改（今天 11 个；以 `grep -rn 'call commit_legacy_globals' src/` 当次结果减去 `yl_adapter_bridge_test.f90:18` 的注释为准），**不新增任何写入** | 无 | 同上；差分行为与步 1 相同 |
 | **3** | **C1 类 21 行 + `uinitial`**：8 个可分配全局的 staging / `move_alloc` / `commit_release` / W4 名单 / `check_guard_names_match` 的解析，**五处一起改** | 8 个新全局 | `bridge_test`、`selftest` 全绿；释放后总体性断言（§5.1.3）通过 |
 | **3b** | **把 2 个确定中止的 B 类行提前**：`element%field(1)%lnods_f`（`mesh.elements.nodes`）与 `group%list` + `group%nelgroup`（`sections.material_header`） | 无新全局，新指针目标 2 类 | **这一步才第一次让新路径产出完整的 162 行 `model_ready` 快照** |
 | **★** | **CHECKPOINT —— lead 复核后才继续** | | 见下 |
 | **4** | **B 类其余 35 行**：折进 `element` / `group` / `prescrib` / `tcurves` 循环。**一个记录数组一个提交**，每个之后跑 `bridge_test` | 无新全局，新指针目标 4 类 | 每个记录数组之后 L3-b 的 64 行仍 MATCH=64 / MISMATCH=0；§4.5 的 4 条盲区断言仍绿 |
+| **4b** | **`.tem` 解析器**（§1.7.1）：5 条 title + 4 个计数，形状照抄 `yl_adapter_load.f90` 的 `nedge`/`nplgroup`。属 `src/adapter/**`，需与 dev-l2b 协调所有权 | 无 | 两个 golden deck 上 `adapt_legacy_deck` 仍成功；四个温度计数随即成为 `FROM_GATE` |
 | **5** | **C2 类 46 行 + 13 个 `not_migrated` 标量 + §1.7 的 7 个闸门蕴含行**：一段纯标量 staging。`group_sentinels` 在这一步按设计翻转（§5.2b） | 59 个标量全局 | 影子差分：162 行判据面 MISMATCH=0；`NOT_MIGRATED` 桶**恰好**是 §1.6.3 + §1.7 决定的那 ≤8 行，多一行少一行即失败 |
 | **6** | **出口条件**：ASan / valgrind 跑 commit→commit→release→commit→release（§5.4） | — | 无泄漏、无 use-after-free；命令与结果入报告 |
 
-**步 5 的前置**：§1.8 的 `nsmat` map note 错误必须先由 map 所有者修好，
-且 §1.6.3 / §1.7 的 8 行必须先有 lead 的裁定 —— 否则步 5 会写错至少一个数，
-并且 `NOT_MIGRATED` 桶的期望清单无从入库。
+**步 5 的前置**：§1.8 的 `nsmat` map note 错误已由 `0646de3` 修好；
+仍待 lead 裁定的是 §1.6.3 的 `stab_matde` 与 §1.7.2 的 `npoinb` / `nsmat`
+（`delgroup` 与四个温度计数已有明确做法：走闸门 / 写 `.tem` 解析器）。
+裁定之前 `NOT_MIGRATED` 桶的期望清单无从入库，步 5 不能收尾。
+
+**每一步的固定动作**（`21a5c98` 之后）：`tools/build.sh runtime-bridge`
+与 `tools/build.sh adapter` **两个都跑**；并行构建时必须加 `--out` 指到自己的目录
+——共用 `build/runtime-bridge/release/obj` 会把 `Global.mod` 写坏，
+并伪装成 legacy `Material.f90` 编译失败。
 
 ### 检查点 ★ 上 lead 要复核的六件事
 
@@ -746,6 +922,29 @@ grep -n "runtime_status_count(runtime) /= build_rule_produced_count"   \
 grep -n "unode_np_unode_all_zero\|unode_patch_pointers_all_null\|group_blind_spot" \
      src/runtime/yl_runtime_bridge_test.f90
 tools/build.sh runtime-bridge   # PASS: 720/720（此前 581/581）
+
+# §4.5.1 / §5.5.1 三剖面漏检的对照（每次跑完还原 yl_runtime_commit.f90）
+#   删掉 src/runtime/yl_runtime_commit.f90:307 的 `s_group(ig)%unode(i)%np_unode = 0_ink`
+tools/build.sh runtime-bridge          --out build/probe-rel   # PASS 720/720（漏检）
+tools/build.sh runtime-bridge strict   --out build/probe-str   # PASS 720/720（漏检）
+tools/build.sh runtime-bridge sanitize --out build/probe-msan  # 编译后手动跑：
+KMP_AFFINITY=disabled build/probe-msan/yl_runtime_bridge_test  # PASS 720/720，0 条 MSan 报告
+#   对照组：删掉 :353 的 lineload 发布 -> release 下即 BAD ×2
+
+# §5.4 sanitize 剖面在干净树上就跑不起来，且一个环境变量即可绕过
+tools/build.sh runtime-bridge sanitize --out build/base-msan   # rc=6, __kmp_affinity_insert_numa_nodes
+KMP_AFFINITY=disabled build/base-msan/yl_runtime_bridge_test   # PASS: 720/720
+
+# §1.7.1 legacy 在 static_2d 上确实读 .tem
+sed -n '661,662p' legacy/yl/Global.f90     # open(tunit, ... '.tem', status='old')
+sed -n '1899p'    legacy/yl/Fem.f90        # call boundt   -- 无 guard
+sed -n '126p;154p;246p;310p' legacy/yl/Temper.f90   # 四个计数的 read 语句
+grep -n 'TEM.boundt.\(temp_surface_count\|temp_edge_count\|temp_elgroup_count\|pipe_count\)' \
+     docs/m1/reader-inventory.toml
+cat cases/golden/static_2d/cooks_membrane/legacy/1.tem
+
+# §1.7.2 npoinb 在 legacy 里从不被消费（只有读/打印/范围检查三处）
+grep -an 'npoinb' legacy/yl/*.f90 | grep -v 'integer'
 
 # 实施时的调用点数，以当次结果为准。今天 grep 命中 12 条：
 #   yl_adapter_bridge_test.f90  2 条，其中 :18 是注释 -> 真实调用 1
