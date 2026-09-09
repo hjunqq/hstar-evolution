@@ -115,6 +115,8 @@ module yl_runtime_commit
   private
 
   public :: commit_legacy_globals, commit_release, commit_owns_globals
+  public :: commit_provenance_count, commit_provenance_row, commit_provenance_of
+  public :: commit_provenance_export
 
   ! .true. exactly while the legacy globals hold storage THIS module allocated. The
   ! release path frees nothing unless this is set, so a process whose globals were filled
@@ -166,6 +168,240 @@ module yl_runtime_commit
   ! flag, and every real is a coordinate, a force or a Jacobian.
   integer(ink), parameter :: STAGE_POISON_I = huge(0_ink)
   real(irk), parameter :: STAGE_POISON_R = huge(0.0_irk)
+
+  ! ==========================================================================
+  ! THE PROVENANCE LEDGER -- where every snapshot row's value came from
+  ! ==========================================================================
+  !
+  ! One entry per `model_ready` row of docs/m2/state-field-map.toml with
+  ! `emit /= "none"`: the 162 rows a shadow snapshot actually carries. The entry does
+  ! not say WHETHER this module wrote the row -- writing is not a free variable, because
+  ! yl_state_dump aborts on an unallocated target and emits undefined memory for an
+  ! unassigned scalar, so every one of the 162 is written or the snapshot does not exist
+  ! (docs/m4/L2c-fold-design.md §2). It says WHERE THE VALUE CAME FROM, which is the only
+  ! question a reader of the snapshot cannot answer for themselves.
+  !
+  ! WHY THAT IS THE USEFUL QUESTION
+  !   L3-c found five rows that reached a differential as MISMATCH while carrying nothing
+  !   but Fortran's default initialisation (docs/m4/L3c-shadow-report.md §5.3). The defect
+  !   was not the values; it was that a snapshot row and a provenance-free byte were
+  !   indistinguishable downstream. A row whose entry says COMMIT_NOT_MIGRATED is evidence
+  !   of nothing and must not be compared; a row that says COMMIT_FROM_RUNTIME is a claim
+  !   this module is making and is answerable for.
+  !
+  ! THE BACKWARD HALF IS NOT CHECKED HERE, AND CANNOT BE
+  !   Fortran cannot enumerate the map, so "does every emitted model_ready row have an
+  !   entry?" is not answerable in this file -- exactly the split yl_runtime_rules already
+  !   lives with for the rule table. commit_provenance_export prints the table as PROV|
+  !   lines and `tools/yl_state_map.py commit-provenance` answers the other direction
+  !   against the map itself. A row added to the map with no entry here therefore fails
+  !   the BUILD, not a later reviewer's memory.
+  !
+  !   That is deliberately NOT the generated row list docs/m4/L2c-fold-design.md §4.3
+  !   first proposed. A generated list would need its own `! Source : ... sha256` line and
+  !   its own gate to keep that line honest -- and that exact provenance line has already
+  !   drifted once in this repository (cded7f4, found by the L2-c review). Exporting the
+  !   one hand-held table and checking it against the map removes the second copy instead
+  !   of adding a second thing to keep in step. The deviation is reported, not silent.
+  !
+  ! WHAT THIS LEDGER STRUCTURALLY CANNOT COVER
+  !   The 14 model_ready RuntimeState rows with `emit = "none"`. They are written by this
+  !   module and no snapshot ever carries them, so a table built over emitted rows cannot
+  !   name them. Their only guard is yl_runtime_bridge_test's assertions on the committed
+  !   globals; four of them had none until a5a6e15. See L2c-fold-design.md §4.5.
+  integer, parameter, public :: COMMIT_LEN_MAP_ID = 40
+  integer, parameter, public :: COMMIT_LEN_NOTE = 32
+
+  !> Produced by build_runtime and published from the runtime by this module.
+  integer(int32), parameter, public :: COMMIT_FROM_RUNTIME = 1_int32
+  !> Taken from the finished ProblemState. Unused until M4-01 step 3.
+  integer(int32), parameter, public :: COMMIT_FROM_PROBLEM = 2_int32
+  !> Computed here from a ProblemState collection's cardinality. Unused until step 5.
+  integer(int32), parameter, public :: COMMIT_DERIVED = 3_int32
+  !> Carried from the deck by deck_residue_t, with the adapter's rejection rule recorded
+  !> in `note` as an independent cross-check. Unused until step 5.
+  integer(int32), parameter, public :: COMMIT_FROM_DECK = 4_int32
+  !> The dump synthesises the value and reads no global; nothing to do here.
+  integer(int32), parameter, public :: COMMIT_SYNTHETIC = 5_int32
+  !> NO SOURCE. The row reaches the globals carrying whatever staging left there, and no
+  !> comparison may treat it as evidence. Every occurrence is a debt, and the M4-01 exit
+  !> condition is that this state does not appear in the table at all.
+  integer(int32), parameter, public :: COMMIT_NOT_MIGRATED = 6_int32
+
+  type, public :: commit_provenance_t
+    character(len=COMMIT_LEN_MAP_ID) :: map_id = ''
+    integer(int32) :: state = COMMIT_NOT_MIGRATED
+    character(len=COMMIT_LEN_NOTE) :: note = ''
+  end type commit_provenance_t
+
+  ! 162 entries, in state-field-map.toml order. Today: 42 FROM_RUNTIME (the 32 emitted
+  ! RuntimeState rows plus the 10 whose value is an extent or a reconstruction of one),
+  ! 2 SYNTHETIC, 118 NOT_MIGRATED. The 118 are the fold's remaining work and the count is
+  ! the honest headline of M4-01's progress -- it is meant to fall to zero.
+  type(commit_provenance_t), parameter :: COMMIT_PROVENANCE(*) = [                              &
+    commit_provenance_t('case.name', COMMIT_NOT_MIGRATED, ''),                                                                  &
+    commit_provenance_t('control.run.restart', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('control.run.relis', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('control.run.adina', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('derived.counts.runblks', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('derived.counts.npoin', COMMIT_FROM_RUNTIME, 'extent npoin'),                                           &
+    commit_provenance_t('derived.counts.npoinb', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('derived.counts.nelem', COMMIT_FROM_RUNTIME, 'extent nelem'),                                           &
+    commit_provenance_t('mesh.dimension', COMMIT_FROM_RUNTIME, 'extent ndimn'),                                                 &
+    commit_provenance_t('derived.counts.nmats', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('derived.counts.ngroup', COMMIT_FROM_RUNTIME, 'extent ngroup'),                                         &
+    commit_provenance_t('steps0.output.format', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('mesh.nodes.id', COMMIT_SYNTHETIC, 'dump emits 1..npoin'),                                              &
+    commit_provenance_t('mesh.nodes.xyz', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('mesh.elements.id', COMMIT_SYNTHETIC, 'dump emits 1..nelem'),                                           &
+    commit_provenance_t('mesh.elements.nodes', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('mesh.elements.kind', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('mesh.elements.group', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('mesh.elements.material', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('mesh.sets.elset', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('mesh.sets.nset', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('materials.id', COMMIT_NOT_MIGRATED, ''),                                                               &
+    commit_provenance_t('materials.kind', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('materials.name', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('derived.counts.nphase', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('materials.phase', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('materials.model', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('materials.density', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('materials.ratio', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('sections.thickness', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('materials.E', COMMIT_NOT_MIGRATED, ''),                                                                &
+    commit_provenance_t('materials.nu', COMMIT_NOT_MIGRATED, ''),                                                               &
+    commit_provenance_t('materials.thermal_expansion', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('materials.icreep', COMMIT_NOT_MIGRATED, ''),                                                           &
+    commit_provenance_t('materials.kind_wt', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('materials.jliqu', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('sections.element', COMMIT_NOT_MIGRATED, ''),                                                           &
+    commit_provenance_t('sections.name', COMMIT_NOT_MIGRATED, ''),                                                              &
+    commit_provenance_t('sections.element_kind', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('sections.class', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('derived.counts.nrfields', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('sections.fields', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('sections.special', COMMIT_NOT_MIGRATED, ''),                                                           &
+    commit_provenance_t('sections.formulation', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('sections.elset_size', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('sections.material_header', COMMIT_NOT_MIGRATED, ''),                                                   &
+    commit_provenance_t('sections.material', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('sections.type_nalgo', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('sections.type_stiff', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('sections.type_ecoint', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('sections.ilayer', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('sections.elcod_local', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('sections.uplift_ic', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('sections.liquj', COMMIT_NOT_MIGRATED, ''),                                                             &
+    commit_provenance_t('sections.dof_count', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('sections.dof_list', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('derived.counts.nstre', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('derived.counts.ntcurve', COMMIT_FROM_RUNTIME, 'extent ntcurve'),                                       &
+    commit_provenance_t('amplitudes.points.count', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('amplitudes.type', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('amplitudes.points.time', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('amplitudes.points.value', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('runtime.amplitudes.dfact', COMMIT_FROM_RUNTIME, ''),                                                   &
+    commit_provenance_t('steps0.procedure', COMMIT_NOT_MIGRATED, ''),                                                           &
+    commit_provenance_t('solver.linear', COMMIT_NOT_MIGRATED, ''),                                                              &
+    commit_provenance_t('steps0.load_mode', COMMIT_NOT_MIGRATED, ''),                                                           &
+    commit_provenance_t('steps0.controls.nonlinear_type', COMMIT_NOT_MIGRATED, ''),                                             &
+    commit_provenance_t('control.glb.nlayer', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('control.glb.block_stab', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('control.glb.nbackf', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('control.glb.ebody', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('control.glb.ninit', COMMIT_NOT_MIGRATED, ''),                                                          &
+    commit_provenance_t('control.glb.uinitial', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('control.glb.state_change', COMMIT_NOT_MIGRATED, ''),                                                   &
+    commit_provenance_t('control.glb.bparameter', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('control.glb.stab_matde', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('derived.counts.nblks', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('control.glb.nlinks', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('solver.symmetric', COMMIT_NOT_MIGRATED, ''),                                                           &
+    commit_provenance_t('interactions.absorbing.type', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('derived.counts.nsmat', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('steps0.load.gravity.enabled', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('derived.counts.mdofn', COMMIT_FROM_RUNTIME, 'extent mdofn'),                                           &
+    commit_provenance_t('derived.dof.active_flags', COMMIT_FROM_RUNTIME, 'reconstructed from lmdofn'),                          &
+    commit_provenance_t('runtime.dof.lmdofn', COMMIT_FROM_RUNTIME, ''),                                                         &
+    commit_provenance_t('derived.dof.cdofn', COMMIT_FROM_RUNTIME, 'extent cdofn'),                                              &
+    commit_provenance_t('derived.dof.lcdofn', COMMIT_FROM_RUNTIME, 'lcdofn(1:cdofn)'),                                          &
+    commit_provenance_t('runtime.increment.iblks_at_model', COMMIT_FROM_RUNTIME, ''),                                           &
+    commit_provenance_t('runtime.increment.lblks_at_model', COMMIT_FROM_RUNTIME, ''),                                           &
+    commit_provenance_t('steps0.activation.active', COMMIT_NOT_MIGRATED, ''),                                                   &
+    commit_provenance_t('steps0.activation.material', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('runtime.activation.appear', COMMIT_FROM_RUNTIME, ''),                                                  &
+    commit_provenance_t('steps0.output.stress_averaging', COMMIT_NOT_MIGRATED, ''),                                             &
+    commit_provenance_t('steps0.output.field.gid_u', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_s', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_ms', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_f', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_rot', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('steps0.output.field.gid_v', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_a', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_T', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_P', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_Pv', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_ep', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Y', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.output.field.gid_FC', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Ns', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Ss', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Mxy', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('steps0.output.field.gid_bem', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('steps0.output.field.gid_wh', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_wv', COMMIT_NOT_MIGRATED, ''),                                                 &
+    commit_provenance_t('steps0.output.field.gid_bcs', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('derived.counts.nfixsets', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('derived.counts.ndofix', COMMIT_FROM_RUNTIME, 'extent ndofix'),                                         &
+    commit_provenance_t('steps0.boundary.set', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('steps0.boundary.dof', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('steps0.boundary.amplitude', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('steps0.boundary.nodes', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('steps0.boundary.value', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('steps0.boundary.record_reaction', COMMIT_NOT_MIGRATED, ''),                                            &
+    commit_provenance_t('runtime.boundary.ldofix', COMMIT_FROM_RUNTIME, ''),                                                    &
+    commit_provenance_t('runtime.boundary.lnefix', COMMIT_FROM_RUNTIME, ''),                                                    &
+    commit_provenance_t('runtime.boundary.leldofix', COMMIT_FROM_RUNTIME, ''),                                                  &
+    commit_provenance_t('runtime.boundary.levdofix', COMMIT_FROM_RUNTIME, ''),                                                  &
+    commit_provenance_t('runtime.boundary.lefdofix', COMMIT_FROM_RUNTIME, ''),                                                  &
+    commit_provenance_t('runtime.dof.iffix', COMMIT_FROM_RUNTIME, ''),                                                          &
+    commit_provenance_t('runtime.dof.fixed', COMMIT_FROM_RUNTIME, ''),                                                          &
+    commit_provenance_t('control.glb.ntrans', COMMIT_NOT_MIGRATED, ''),                                                         &
+    commit_provenance_t('steps0.load.gravity.magnitude', COMMIT_NOT_MIGRATED, ''),                                              &
+    commit_provenance_t('steps0.load.gravity.direction', COMMIT_NOT_MIGRATED, ''),                                              &
+    commit_provenance_t('steps0.load.gravity.amplitude', COMMIT_NOT_MIGRATED, ''),                                              &
+    commit_provenance_t('derived.counts.nplgroup', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('derived.counts.nedge', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('derived.counts.edge_load_group', COMMIT_NOT_MIGRATED, ''),                                             &
+    commit_provenance_t('derived.counts.delgroup', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('derived.counts.nbeamload', COMMIT_NOT_MIGRATED, ''),                                                   &
+    commit_provenance_t('derived.counts.nplateload', COMMIT_NOT_MIGRATED, ''),                                                  &
+    commit_provenance_t('derived.counts.ntemp_surface', COMMIT_NOT_MIGRATED, ''),                                               &
+    commit_provenance_t('derived.counts.ntedge', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('derived.counts.ntelgroup', COMMIT_NOT_MIGRATED, ''),                                                   &
+    commit_provenance_t('derived.counts.npipe', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('runtime.dof.nodfn', COMMIT_FROM_RUNTIME, ''),                                                          &
+    commit_provenance_t('runtime.dof.ntotv', COMMIT_FROM_RUNTIME, ''),                                                          &
+    commit_provenance_t('runtime.dof.ldofs', COMMIT_FROM_RUNTIME, ''),                                                          &
+    commit_provenance_t('runtime.dof.ldofs_f', COMMIT_FROM_RUNTIME, ''),                                                        &
+    commit_provenance_t('runtime.dof.trans_nintf', COMMIT_FROM_RUNTIME, ''),                                                    &
+    commit_provenance_t('runtime.topology.listp_group_mgroup', COMMIT_FROM_RUNTIME, ''),                                        &
+    commit_provenance_t('runtime.topology.listp_group_listg', COMMIT_FROM_RUNTIME, ''),                                         &
+    commit_provenance_t('runtime.topology.listp_group_listp', COMMIT_FROM_RUNTIME, ''),                                         &
+    commit_provenance_t('runtime.topology.unode_ipoin', COMMIT_FROM_RUNTIME, ''),                                               &
+    commit_provenance_t('runtime.topology.unode_ne_unode', COMMIT_FROM_RUNTIME, ''),                                            &
+    commit_provenance_t('runtime.topology.unode_list', COMMIT_FROM_RUNTIME, ''),                                                &
+    commit_provenance_t('runtime.gauss.djacb', COMMIT_FROM_RUNTIME, ''),                                                        &
+    commit_provenance_t('runtime.gauss.gpcod', COMMIT_FROM_RUNTIME, ''),                                                        &
+    commit_provenance_t('runtime.gauss.cartd', COMMIT_FROM_RUNTIME, ''),                                                        &
+    commit_provenance_t('runtime.vectors.result_zero', COMMIT_FROM_RUNTIME, ''),                                                &
+    commit_provenance_t('runtime.vectors.tofor', COMMIT_FROM_RUNTIME, ''),                                                      &
+    commit_provenance_t('runtime.vectors.stfor', COMMIT_FROM_RUNTIME, ''),                                                      &
+    commit_provenance_t('runtime.vectors.toforl', COMMIT_FROM_RUNTIME, ''),                                                     &
+    commit_provenance_t('runtime.vectors.toform', COMMIT_FROM_RUNTIME, ''),                                                     &
+    commit_provenance_t('runtime.element.ice0', COMMIT_FROM_RUNTIME, '')                                                        &
+    ]
 
 contains
 
@@ -571,6 +807,89 @@ contains
   end subroutine commit_release
 
   ! ==========================================================================
+  ! the provenance ledger: accessors and export
+  ! ==========================================================================
+
+  !> How many snapshot rows the table declares.
+  pure integer function commit_provenance_count() result(n)
+    n = size(COMMIT_PROVENANCE)
+  end function commit_provenance_count
+
+  !> Row `i` of the table. `found` is .false. for an out-of-range index rather than an
+  !> error, so a walker can be written as a plain loop over 1 .. count.
+  pure subroutine commit_provenance_row(i, map_id, state, note, found)
+    integer, intent(in) :: i
+    character(len=:), allocatable, intent(out) :: map_id, note
+    integer(int32), intent(out) :: state
+    logical, intent(out) :: found
+    map_id = ''
+    note = ''
+    state = COMMIT_NOT_MIGRATED
+    found = .false.
+    if (i < 1 .or. i > size(COMMIT_PROVENANCE)) return
+    map_id = trim(COMMIT_PROVENANCE(i)%map_id)
+    note = trim(COMMIT_PROVENANCE(i)%note)
+    state = COMMIT_PROVENANCE(i)%state
+    found = .true.
+  end subroutine commit_provenance_row
+
+  !> The declared provenance of one map row. `found` is .false. when the row is not in
+  !> the table at all, which is a DIFFERENT answer from COMMIT_NOT_MIGRATED recorded
+  !> deliberately -- the same distinction runtime_status_get draws for the value ledger.
+  pure subroutine commit_provenance_of(map_id, state, found)
+    character(len=*), intent(in) :: map_id
+    integer(int32), intent(out) :: state
+    logical, intent(out) :: found
+    integer :: i
+    state = COMMIT_NOT_MIGRATED
+    found = .false.
+    do i = 1, size(COMMIT_PROVENANCE)
+      if (trim(COMMIT_PROVENANCE(i)%map_id) == trim(map_id)) then
+        state = COMMIT_PROVENANCE(i)%state
+        found = .true.
+        return
+      end if
+    end do
+  end subroutine commit_provenance_of
+
+  !> Print the table as PROV| lines for the Python cross-check to read.
+  !>
+  !> This is an EXPORT, not an assertion: it makes no claim and counts towards no
+  !> PASS/FAIL total, for the same reason yl_runtime_selftest's export_rule_table does.
+  !> The table then exists exactly ONCE in the repository -- as the parameter array above
+  !> -- and `tools/yl_state_map.py commit-provenance` parses these lines instead of
+  !> keeping a second copy that can drift against it.
+  subroutine commit_provenance_export(unit)
+    integer, intent(in) :: unit
+    integer :: i
+    character(len=32) :: n
+    write (n, '(i0)') size(COMMIT_PROVENANCE)
+    write (unit, '(a)') 'PROVS|checkpoint=model_ready|rows='//trim(adjustl(n))
+    do i = 1, size(COMMIT_PROVENANCE)
+      write (unit, '(a)') 'PROV|'//trim(COMMIT_PROVENANCE(i)%map_id)//'|'//                      &
+        trim(commit_provenance_state_name(COMMIT_PROVENANCE(i)%state))//'|'//                   &
+        trim(COMMIT_PROVENANCE(i)%note)
+    end do
+  end subroutine commit_provenance_export
+
+  !> The spelling the export uses. Kept next to the parameters so a new state cannot be
+  !> added without a name -- an unnamed state would export as `?` and fail the parse
+  !> rather than pass as something.
+  pure function commit_provenance_state_name(state) result(name)
+    integer(int32), intent(in) :: state
+    character(len=:), allocatable :: name
+    select case (state)
+    case (COMMIT_FROM_RUNTIME); name = 'FROM_RUNTIME'
+    case (COMMIT_FROM_PROBLEM); name = 'FROM_PROBLEM'
+    case (COMMIT_DERIVED);      name = 'DERIVED'
+    case (COMMIT_FROM_DECK);    name = 'FROM_DECK'
+    case (COMMIT_SYNTHETIC);    name = 'SYNTHETIC'
+    case (COMMIT_NOT_MIGRATED); name = 'NOT_MIGRATED'
+    case default;               name = '?'
+    end select
+  end function commit_provenance_state_name
+
+  ! ==========================================================================
   ! verification
   ! ==========================================================================
 
@@ -590,6 +909,16 @@ contains
     logical :: found
     character(len=:), allocatable :: map_id
 
+    ok = .false.
+
+    ! The provenance ledger's own well-formedness, checked before anything else because a
+    ! malformed table would make every later answer meaningless. Only the half Fortran can
+    ! see is here -- non-empty ids, a nameable state, no id claimed twice. The other half
+    ! ("does every emitted model_ready map row have an entry?") needs the map itself and
+    ! is `tools/yl_state_map.py commit-provenance`, run from tools/build.sh against the
+    ! PROV| export; see the ledger's header for why the split is where it is.
+    call verify_provenance_table(errors, ok)
+    if (.not. ok) return
     ok = .false.
 
     if (runtime_status_count(runtime) /= build_rule_produced_count()) then
@@ -671,6 +1000,46 @@ contains
 
     ok = .true.
   end subroutine verify_registered
+
+  ! INV-COMMIT-TOTAL, provenance half: the table above must be well formed. An entry with
+  ! an empty id names no row; an entry with an unnameable state exports as `?` and would
+  ! fail the Python parse rather than the commit, which is later and further from the
+  ! cause; two entries claiming one row means the ledger answers one question twice and
+  ! `commit_provenance_of` silently keeps the first. None of the three is reachable today,
+  ! and all three are checked anyway -- the same discipline as check_bijection asserting a
+  ! forward half that is true by construction, because an assertion that cannot fail is
+  ! cheaper than the review that would otherwise have to notice.
+  subroutine verify_provenance_table(errors, ok)
+    type(problem_errors_t), intent(inout) :: errors
+    logical, intent(out) :: ok
+    integer :: i, j
+
+    ok = .false.
+    if (size(COMMIT_PROVENANCE) < 1) then
+      call fail(errors, 'the provenance ledger is empty')
+      return
+    end if
+    do i = 1, size(COMMIT_PROVENANCE)
+      if (len_trim(COMMIT_PROVENANCE(i)%map_id) == 0) then
+        call fail(errors, 'provenance entry '//itoa(i)//' names no map row')
+        return
+      end if
+      if (commit_provenance_state_name(COMMIT_PROVENANCE(i)%state) == '?') then
+        call fail(errors, 'the provenance entry for '//trim(COMMIT_PROVENANCE(i)%map_id)//     &
+                  ' carries a state with no exported name')
+        return
+      end if
+      do j = i + 1, size(COMMIT_PROVENANCE)
+        if (trim(COMMIT_PROVENANCE(i)%map_id) == trim(COMMIT_PROVENANCE(j)%map_id)) then
+          call fail(errors, 'the provenance ledger claims '//                                  &
+                    trim(COMMIT_PROVENANCE(i)%map_id)//' twice, at entries '//itoa(i)//        &
+                    ' and '//itoa(j))
+          return
+        end if
+      end do
+    end do
+    ok = .true.
+  end subroutine verify_provenance_table
 
   ! ==========================================================================
   ! nulling helpers

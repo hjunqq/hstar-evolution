@@ -713,6 +713,36 @@ RB_PY
         exit 6
     fi
 
+    # The BACKWARD half of the commit provenance ledger (M4-01 step 1). The bridge test
+    # exports yl_runtime_commit's table as PROVS|/PROV| lines and asserts the half Fortran
+    # can see (well-formed, injective, every state nameable); only Python can read
+    # docs/m2/state-field-map.toml and answer the other direction -- "does every row a
+    # model_ready snapshot carries have a recorded source?".
+    #
+    # It runs HERE, inside the target, for the same reason the rule-table cross-check does:
+    # the failure it catches is invisible from inside the binary. A map row that no ledger
+    # entry names still passes every in-binary assertion, and the export is self-consistent
+    # whether or not it is complete. This is also where the fold's remaining debt gets
+    # counted out loud -- the NOT_MIGRATED tally is printed on every build.
+    #
+    # Only for `runtime-bridge`: the PROV| export is printed by yl_runtime_bridge_test,
+    # and the `adapter` target's main program is yl_adapter_bridge_test, which does not
+    # print it. Running the check there would fail on a missing export rather than on a
+    # missing entry -- a gate that fires for the wrong reason, which is worse than no gate
+    # because the next person learns to ignore it. (Caught by running the target: the
+    # first version of this hook was unconditional and broke `adapter`.)
+    if [ "$TARGET" = runtime-bridge ]; then
+        log "--- cross-check: commit provenance vs docs/m2/state-field-map.toml (backward bijection)"
+        set +e
+        python3 "$ROOT/tools/yl_state_map.py" commit-provenance --export "$LOG" 2>&1 | tee -a "$LOG"
+        RB_XRC=${PIPESTATUS[0]}
+        set -e
+        if [ "$RB_XRC" -ne 0 ]; then
+            log "=== COMMIT-PROVENANCE CROSS-CHECK FAILED ($TARGET/$PROFILE) rc=$RB_XRC"
+            exit 6
+        fi
+    fi
+
     if [ "$TARGET" = adapter ]; then
         # The dialect suite takes a deck directory and a scratch directory; it is run
         # on BOTH golden decks because a counter-example that only fires on one deck

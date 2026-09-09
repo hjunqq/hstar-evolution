@@ -1916,6 +1916,119 @@ def check_runtime_rules(doc: dict, header: dict, rows: list[dict]) -> list[str]:
     return problems
 
 
+# --- commit provenance cross-check (M4-01 step 1) -----------------------------------------
+# The BACKWARD half of the provenance ledger, and the reason this command exists: Fortran
+# cannot enumerate the map, so a map row that no ledger entry names is invisible from
+# inside the binary -- yl_runtime_commit's own table is self-consistent whether or not it
+# is complete. Exactly the split cmd_runtime_rules already lives with for the rule table.
+PROV_STATES = {"FROM_RUNTIME", "FROM_PROBLEM", "DERIVED", "FROM_DECK", "SYNTHETIC",
+               "NOT_MIGRATED"}
+
+
+def parse_provenance_export(text: str) -> tuple[dict, list[dict], list[str]]:
+    """Pull the PROVS| header and the PROV| rows out of a bridge-test log."""
+    problems: list[str] = []
+    header: dict = {}
+    rows: list[dict] = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.startswith("PROVS|"):
+            for piece in line[len("PROVS|"):].split("|"):
+                k, _, v = piece.partition("=")
+                header[k] = v
+        elif line.startswith("PROV|"):
+            parts = line[len("PROV|"):].split("|")
+            if len(parts) < 2:
+                problems.append(f"malformed PROV| line: {line!r}")
+                continue
+            rows.append({"map_id": parts[0], "state": parts[1],
+                         "note": parts[2] if len(parts) > 2 else ""})
+    if not header:
+        problems.append("no PROVS| header line in the export")
+    return header, rows, problems
+
+
+def check_commit_provenance(doc: dict, header: dict, rows: list[dict]) -> list[str]:
+    problems: list[str] = []
+
+    # The map side: the rows a model_ready snapshot actually carries. Taken from the map
+    # and never written down here.
+    want = {f["id"]: f for f in doc.get("field", [])
+            if f.get("checkpoint") == "model_ready" and emit_of(f) != "none"}
+
+    # P1 the header's own count describes the block that follows it: a truncated export
+    # would otherwise pass every set comparison below by simply containing less.
+    try:
+        n = int(header.get("rows", ""))
+    except ValueError:
+        problems.append("PROVS| header has no usable rows=")
+        n = None
+    if n is not None and n != len(rows):
+        problems.append(f"PROVS| header says rows={n} but {len(rows)} PROV| lines follow")
+
+    # P2 every entry names a real emitted model_ready row, and carries a known state.
+    for r in rows:
+        if r["map_id"] not in want:
+            problems.append(f"provenance entry {r['map_id']} is not a model_ready row with "
+                            f"emit != none")
+        if r["state"] not in PROV_STATES:
+            problems.append(f"provenance entry {r['map_id']} carries unknown state "
+                            f"{r['state']!r}")
+
+    # P3 injective. Fortran checks this too; checked here as well because the export is
+    # what every downstream consumer reads, and a duplicate there is a different fault
+    # from a duplicate in the table.
+    seen: set[str] = set()
+    for r in rows:
+        if r["map_id"] in seen:
+            problems.append(f"map row {r['map_id']} appears twice in the export")
+        seen.add(r["map_id"])
+
+    # P4 THE BACKWARD HALF. A row the snapshot carries and the ledger never names is a row
+    # whose value has no recorded origin -- which is the exact defect L3-c reported as
+    # five rows arriving in a differential carrying nothing but default initialisation.
+    for fid in want:
+        if fid not in seen:
+            problems.append(f"map row {fid} (model_ready, {want[fid]['owner']}) has no "
+                            f"provenance entry")
+    return problems
+
+
+def cmd_commit_provenance(a) -> int:
+    map_path = Path(a.map)
+    try:
+        doc = load_map(map_path)
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        print(f"FAIL: 1 problems\n  {map_path}: {e}")
+        return 1
+    try:
+        text = Path(a.export).read_text(encoding="utf-8") if a.export else sys.stdin.read()
+    except OSError as e:
+        print(f"FAIL: 1 problems\n  {a.export}: {e}")
+        return 1
+
+    header, rows, problems = parse_provenance_export(text)
+    if not problems:
+        problems = check_commit_provenance(doc, header, rows)
+    if problems:
+        print(f"FAIL: {len(problems)} problems")
+        for p in problems[:200]:
+            print("  " + p)
+        return 1
+
+    tally: dict[str, int] = {}
+    for r in rows:
+        tally[r["state"]] = tally.get(r["state"], 0) + 1
+    shown = ", ".join(f"{k}={tally[k]}" for k in sorted(tally))
+    # NOT_MIGRATED is the fold's remaining debt and is printed on its own line so the
+    # number is visible in every build log rather than only when someone goes looking.
+    print(f"PASS: {len(rows)} model_ready provenance entries cover the map's "
+          f"{len(rows)} emitted rows (bijection, both directions); {shown}")
+    print(f"       NOT_MIGRATED={tally.get('NOT_MIGRATED', 0)} "
+          f"(rows whose value has no recorded source; M4-01 exits when this is 0)")
+    return 0
+
+
 def cmd_runtime_rules(a) -> int:
     map_path = Path(a.map)
     try:
@@ -1958,6 +2071,11 @@ def main(argv=None) -> int:
     rr.add_argument("--export", default=None,
                     help="the runtime self-test's stdout; reads stdin when omitted")
     rr.set_defaults(func=cmd_runtime_rules)
+    cp = sub.add_parser("commit-provenance")
+    cp.add_argument("--map", default=str(MAP_DEFAULT))
+    cp.add_argument("--export", default=None,
+                    help="the bridge test's stdout; reads stdin when omitted")
+    cp.set_defaults(func=cmd_commit_provenance)
     for name, func in (("check", cmd_check), ("render", cmd_render), ("gen-fortran", cmd_gen_fortran)):
         p = sub.add_parser(name)
         p.add_argument("--map", default=str(MAP_DEFAULT))

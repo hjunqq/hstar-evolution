@@ -64,7 +64,8 @@ program yl_runtime_bridge_test
   use yl_runtime_types, only: runtime_state_t
   use yl_runtime_contract, only: CONTRACT_TAG
   use yl_runtime_build, only: build_runtime
-  use yl_runtime_commit, only: commit_legacy_globals, commit_release, commit_owns_globals
+  use yl_runtime_commit, only: commit_legacy_globals, commit_release, commit_owns_globals,   &
+                               commit_provenance_export
   use yl_runtime_rules, only: build_rule_count, build_rule_id, build_rule_key
 
   implicit none
@@ -96,6 +97,13 @@ program yl_runtime_bridge_test
 
   write (output_unit, '(a)') '-- 7. the snapshot blind spots, and how far their guards reach'
   call group_blind_spot_falsifiability(rt2)
+
+  ! The provenance ledger, exported for the Python cross-check (yl_runtime_commit's
+  ! ledger header). Deliberately printed AFTER the suite and outside the PASS/FAIL
+  ! accounting: it asserts nothing, it hands tools/yl_state_map.py the one copy of the
+  ! table so no second copy has to exist. Same arrangement as yl_runtime_selftest's
+  ! export_rule_table.
+  call commit_provenance_export(output_unit)
 
   call summary()
 
