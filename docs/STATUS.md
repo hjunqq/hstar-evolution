@@ -24,6 +24,7 @@
 | M3-01 ProblemState 类型 | DONE | `src/problem/` 最小类型（24 个类型 / 100 字段，98 项对应 M2 映射表，2 项 M5-only）；`opt_*` 包装区分 unset/zero/empty；独立 `problem-types` 构建目标不入求解器链接链（build-id 不变）；`yl_problem_check.py` 双向核对 + 槽位名黑名单；映射表 6 项缺陷修正 + `legacy_only`(47) |
 | M3-02 输入流水线 | DONE | normalize/validate/capability gate/finalize 四阶段，仅 `prepare_problem` 公开、阶段间失败即止、阶段内累积；错误累积器为纯内存（不触 `diag_*`，保证同进程重试）；manifest 记派生/默认/核对三类；反例矩阵 485/485 覆盖每条已实现规则的每个条件，能力表 15 行由套件遍历断言（计数与源码哈希冻结于 `docs/m3/evidence/M3-02-selftest.json`）；5 条无反例规则明确不实现 |
 | M3-03 build_runtime / commit | DONE | `src/runtime/` 七个模块。`build_runtime` 产出 46 个 `model_ready` 行 + 值状态账本（DEFINED/RESERVED/ABSENT 35/9/2）+ 派生 manifest，无部分提交由结构保证（局部 candidate，末尾两个 `move_alloc`），12 个注入点由 T01 遍历；`commit_legacy_globals` 为迁移期唯一旧全局写入口，VERIFY+STAGE/WRITE 两段、`commit_release` 幂等、记录数组全局的外来分配一律拒绝（交付时六个；M4-01 步 3 加入 `props` 后为七个）；规则表 60 行（5 check/46 derive/6 inv/3 net），`condition` 列与账本状态 1:1 且受检，两张兜底网走账本而非点名行（未接线的 map 行 = 构建失败）；反向双射由 `yl_state_map.py runtime-rules` 消费自检导出行断言；自检 108/108 + 隔离桥接通过（结论标注 PARTIAL；该计数随 M4-01 折叠增长至 1292，**不再登记具体数字**，以当次运行为准）；求解器 build-id 不变。**与冻结基线的逐值比对未执行**——需 deck→ProblemState 适配器（M4-01），见 `docs/m3/M3-03-runtime.md` §8 |
+| M4-01 静力 Legacy Adapter | **DONE，待签收** | 九个 `src/adapter/` 模块把两个 golden deck 解析为 `problem_state_t`；L2-b 方言拒绝并入 M3-02 能力表（58 行，每行一个反例，317/317 ×2）；L2-c 折叠把 ProblemState 那一半并入 `commit_legacy_globals` 的同一次 staging，出处账本 `NOT_MIGRATED` **162 → 0**；**M4-01 自身判据（影子差分）**：`MATCH=324 MISMATCH=0 NOT_COMPARABLE=158 UNVERIFIED=56`——**仅覆盖 `model_ready`**，另两个检查点新路径不跑求解故到不了；L3-b 冻结基线对拍 `MATCH=64 MISMATCH=0`（红线，折叠十七步未动）；步 6 泄漏可检出性：**21 个内层释放站点中 6 处**（每记录数组一处）由 ASan/LeakSanitizer 阳性对照证明可报出——**工具是 ASan 不是 valgrind**（本机无法安装），且**第一次阳性对照什么都没报**（Intel OpenMP 运行时静默关闭 LeakSanitizer）。**未闭合**：R29（无门禁能验证适配器覆盖了哪些读取站点）、R30（`PROV_VIA_RUNTIME` 的来源是散文、无对账）。报告 `docs/m4/M4-01-report.md`；验收矩阵编制中 |
 | M1～M5 实现及验收 | TODO | 尚无 checked I/O、状态比较器、现代初始化或可运行 TOML |
 | M6～M9 | BACKLOG | 按真实需求逐能力启动 |
 
@@ -31,8 +32,16 @@
 本轮核实了环境（ifx 2025.3、MKL 2026.1、无 gfortran）、原仓库脏树差异、两例 deck 内容与输出路径，
 并据此修正文档；没有更改求解器或算例输入。
 
-M3 阶段**延后出口**（ADR-0004）：三个任务各自 DONE，但出口条件「bridge 状态等价」需要 M4 的适配器，与 M4-01 一并签收。
+M3 阶段**延后出口**（ADR-0004）：三个任务各自 DONE，出口条件「bridge 状态等价」需要 M4 的适配器。**该债已于 2026-09-09 由 M4-01 的 L3-b 结清**（`MATCH=64 MISMATCH=0`，见 `docs/m4/L3b-bridge-report.md` 与 ADR-0004 文末「结算」）；按 **ADR-0005**，M2 与 M3 在 M4-01 结束后一并签收，三份验收矩阵已备/编制中。
 
-下一步：进入 M4-01（静力 Legacy Adapter）。M4-01 需一并解决：deck→ProblemState 通路（M3-03 的基线比对顺延于此），
-以及把 commit 的 ProblemState 那一半**折叠进同一次 staging**（不得新增第二个 writer）。
-另登记独立任务：为 Fortran 配置真实质量/安全门禁——CCG 现有门禁对 `src/runtime` 扫描 0 文件，不识别 `.f90`。
+下一步：**M4-01 的实现已于 2026-09-09 完成**（见上表 M4-01 行与 `docs/m4/M4-01-report.md`），
+当前处在 Layer 4：验收矩阵编制、文档与复核。此后按 **ADR-0005** 将 M2、M3 与 M4-01 一并签收。
+
+**签收前已知的三处缺口，均不因签收而消失**：
+
+- **判据 18 的一半结构性缺席**——单人项目无独立于实现人的复核人。M0 已按此签收并如实记录（R28），
+  M2/M3/M4-01 的矩阵签字页同样留空。**不得因为前面这样签过就淡化。**
+- **R28 判据 13**：跨路径容差是量纲估算（`status="provisional"`），**必须先于 M4-02 的跨路径数值比对定案**，
+  而定案需要同一二进制在不同线程数/环境下的重复噪声分布——**那批数据尚不存在**。
+- **R29 / R30 未闭合**：前者是「没有门禁能验证适配器覆盖了哪些读取站点」，
+  后者是「出处账本的 runtime 来源是散文、无机械对账」。二者都使某类断言不成立，已各自登记关闭条件。
