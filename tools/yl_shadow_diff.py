@@ -81,6 +81,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -165,9 +166,12 @@ def run_new(case: str, binary: Path, work: Path, timeout: float) -> tuple[int, s
     return p.returncode, p.stdout, p.stderr
 
 
-def normalize(raw: Path, out: Path, map_path: Path) -> tuple[int, str]:
+def normalize(raw: Path, out: Path, map_path: Path,
+              expect: list | None = None) -> tuple[int, str]:
     cmd = [sys.executable, str(REPO_ROOT / "tools" / "yl_state.py"), "normalize",
            str(raw), "-o", str(out), "--map", str(map_path)]
+    if expect is not None:
+        cmd += ["--expect-checkpoints", ",".join(expect)]
     p = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True)
     return p.returncode, (p.stdout + p.stderr)
 
@@ -395,12 +399,49 @@ def main(argv=None) -> int:
                 for line in rec["new_stderr_tail"]:
                     print(f"    stderr: {line}")
                 act_tree = work.parent / "state-normalized"
-                nrc, nout = normalize(work / "state", act_tree, map_path)
+                # Which checkpoints the new path actually wrote, asked of the tree rather
+                # than declared anywhere: `yl_state.py normalize` writes NOTHING on
+                # failure, and it fails by construction for a producer that emits a
+                # subset, so a complete model_ready snapshot was being discarded whole.
+                # Narrowing the presence check to what is there keeps every content check
+                # intact; an absent checkpoint is then UNVERIFIED below, never MATCH.
+                raw_state = work / "state"
+                present = [cp for cp in covered
+                           if (raw_state / cp / "state.txt").is_file()]
+                absent = [cp for cp in covered if cp not in present]
+                nrc, nout = normalize(raw_state, act_tree, map_path, expect=present)
                 rec["normalize_returncode"] = nrc
                 rec["normalize_output"] = nout.strip().splitlines()[-6:]
                 print(f"  normalize(new) exit={nrc}")
                 for line in rec["normalize_output"]:
                     print(f"    {line}")
+                # WHY A NON-ZERO normalize IS NOT AUTOMATICALLY "NO SNAPSHOT"
+                #   yl_adapter_shadow emits model_ready and, by design, neither of the
+                #   other two: it runs no solve, so there is no point in its execution at
+                #   which they exist, and emitting an empty one would be manufacturing
+                #   evidence. normalize therefore ALWAYS exits non-zero for this binary.
+                #   Treating that as "no usable snapshot" discarded a complete 162-row
+                #   model_ready snapshot that was sitting on disk, and made the per-
+                #   checkpoint branch below dead code that had never once executed. It was
+                #   invisible while the new path aborted at `coord`, because then the
+                #   snapshot really was absent and the message was true; the M4-01 fold
+                #   made it false with nothing going red. (dev-fold2, 2026-09-09.)
+                #
+                # THE DISCRIMINATION, AND WHY IT IS DERIVED RATHER THAN DECLARED
+                #   A list of "checkpoints the new path cannot produce" would be one more
+                #   declaration to keep in step with the binary. Instead the raw tree is
+                #   asked which checkpoints actually carry a state.txt, and normalize's
+                #   complaints are required to be exactly the ones that do not, all of them
+                #   `problem=missing`. So the rule adapts if the new path later emits more,
+                #   and it stays strict in the direction that matters: a MISSING model_ready
+                #   puts model_ready in the absent set and it is reported UNVERIFIED, and a
+                #   MALFORMED checkpoint produces a problem that is not `missing`, which
+                #   fails the match and leaves everything UNVERIFIED. Absence never becomes
+                #   evidence -- "missing evidence is never MATCH" is this harness's own rule
+                #   and the permissive direction is exactly what would break it.
+                if absent:
+                    print(f"  normalize(new): presence narrowed to {', '.join(present)}; "
+                          f"{', '.join(absent)} carry no state.txt and are UNVERIFIED below")
                 if nrc != 0 or not act_tree.is_dir():
                     for cp in covered:
                         unreached[cp] = (f"the new path produced no usable snapshot: its child "

@@ -656,21 +656,46 @@ def fingerprint_of(blobs: dict[str, bytes]) -> tuple[str, dict[str, dict[str, st
     return sha256_bytes(joined.encode("utf-8")), per
 
 
-def normalize(raw_dir, out_dir, map_path=None, quiet: bool = True) -> dict:
+def normalize(raw_dir, out_dir, map_path=None, quiet: bool = True,
+              expect_checkpoints: list | None = None) -> dict:
     """Parse `raw_dir`, write the canonical tree into `out_dir`; nothing is written on failure."""
     raw_dir, out_dir = Path(raw_dir), Path(out_dir)
     mp = map_path if isinstance(map_path, MapIndex) else MapIndex.load(map_path or MAP_DEFAULT)
     problems = Problems()
     tree, counts, raws = {}, {}, {}
     base = None
+    # `expect_checkpoints` narrows WHICH checkpoints must be present; it changes nothing
+    # else. Default (None) is every covered checkpoint, exactly as before.
+    #
+    # WHY IT EXISTS. "All covered checkpoints must be present" is a property of the
+    # PRODUCER, not of the format. It is right for the solver, which emits all three. It
+    # is wrong by construction for M4-01's shadow binary, which runs no solve and so
+    # emits model_ready alone -- emitting an empty phase_ready would be manufacturing
+    # evidence, and its module header says so. Because normalize writes nothing on
+    # failure, that binary's complete 162-row model_ready snapshot was being discarded
+    # and yl_shadow_diff reported all 380 rows UNVERIFIED. (Found by dev-fold2 the first
+    # time the fold made a full snapshot producible, 2026-09-09.)
+    #
+    # THE NARROWING IS SAFE ONLY BECAUSE IT MOVES A CHECK, NOT BECAUSE IT DROPS ONE.
+    # The caller that narrows must still decide what a missing checkpoint means; in
+    # yl_shadow_diff the absent ones become UNVERIFIED, never MATCH. Every malformed-
+    # content check below is untouched: a checkpoint that IS present is parsed exactly as
+    # strictly as before, whether or not it was named here.
+    want = list(mp.order) if expect_checkpoints is None else list(expect_checkpoints)
+    unknown = [cp for cp in want if cp not in mp.order]
+    if unknown:
+        for cp in unknown:
+            problems.add(cp, "unknown-checkpoint", expected="a covered checkpoint of the map",
+                         actual="not in the map", detail=f"--expect names {cp!r}")
     for cp in mp.order:
         d = raw_dir / sanitize(cp)
         if not d.is_dir():
             d = raw_dir / cp
         path = d / "state.txt"
         if not path.is_file():
-            problems.add(cp, "missing", file=str(path.name), expected="present", actual="absent",
-                         detail=f"no state.txt under {d}")
+            if cp in want:
+                problems.add(cp, "missing", file=str(path.name), expected="present",
+                             actual="absent", detail=f"no state.txt under {d}")
             continue
         body = path.read_bytes()
         text = body.decode("latin-1")
@@ -724,7 +749,9 @@ def cmd_normalize(a) -> int:
         return 3
     raw = Path(a.raw_dir)
     out = Path(a.output) if a.output else raw.parent.parent / "state"
-    res = normalize(raw, out, mp)
+    expect = [c.strip() for c in a.expect_checkpoints.split(",")] \
+        if a.expect_checkpoints else None
+    res = normalize(raw, out, mp, expect_checkpoints=expect)
     if not res["ok"]:
         if not a.quiet:
             for p in res["problems"][:200]:
@@ -1100,6 +1127,13 @@ def main(argv=None) -> int:
     p.add_argument("-o", "--output", default=None, help="output tree (default RAW_DIR/../../state)")
     p.add_argument("--case-id", default=None, help="recorded by the caller; not part of any digest")
     p.add_argument("--quiet", action="store_true", help="only the PASS/FAIL line")
+    p.add_argument("--expect-checkpoints", default=None, metavar="A,B",
+                   help="comma-separated checkpoints that MUST be present. Default: every "
+                        "covered checkpoint of the map. Narrows only the presence check -- a "
+                        "checkpoint that IS present is parsed exactly as strictly either way. "
+                        "For a producer that by design emits a subset (M4-01's shadow binary "
+                        "runs no solve and emits model_ready alone); the CALLER then owns what "
+                        "an absent checkpoint means, and yl_shadow_diff makes it UNVERIFIED.")
     p.set_defaults(func=cmd_normalize)
     p = sub.add_parser("fingerprint", help="fingerprint of a normalized (or raw) state tree")
     p.add_argument("dir")
