@@ -44,11 +44,20 @@ program yl_runtime_bridge_test
                         npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
                         lineload, linet,                                                        &
                         coord, appear_process, matno_process, average_appear,                   &
-                        nmats, nblks, restart, ttime
-  use prescribed, only: prescrib, ndofix
+                        nmats, nblks, restart, ttime,                                            &
+                        uinitial, probn, outplot, type_problem, type_solver, type_load,         &
+                        type_ABC, type_nl, nonsym, NGRAV, gid_u, gid_s, gid_ms, gid_f,          &
+                        gid_rot, gid_v, gid_a, gid_T, gid_P, gid_Pv, gid_ep, gid_Y, gid_FC,     &
+                        gid_Ns, gid_Ss, gid_Mxy, gid_bem, gid_wh, gid_wv, gid_bcs,              &
+                        relis, ADINA, runblks, npoinb, nlayer, block_stab, nbackf, ebody,       &
+                        ninit, state_change, Bparameter, stab_matde, nlinks, nsmat, ntrans
+  use prescribed, only: prescrib, ndofix, nfixsets
   use materials, only: props
-  use applied_load, only: tcurves, ntcurve, factg, tcurvegravity
+  use applied_load, only: tcurves, ntcurve, factg, tcurvegravity, gravy,                &
+                          nplgroup, nedge, edge_load_group, delgroup, nbeamload,        &
+                          nplateload
   use meshfine, only: ice0
+  use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
 
   use variable_types, only: ink, irk
 
@@ -84,7 +93,7 @@ program yl_runtime_bridge_test
   write (output_unit, '(a)') '-- 1. commit lands the values (1-element draft)'
   call build_and_commit(1, rt1, pr1, rs1, ok1)
   if (ok1) then
-    call check_landed(pr1, rt1)
+    call check_landed(pr1, rs1, rt1)
   else
     call skip_landed('1-element draft')
   end if
@@ -92,7 +101,7 @@ program yl_runtime_bridge_test
   write (output_unit, '(a)') '-- 2. commit lands the values (2-element draft)'
   call build_and_commit(2, rt2, pr2, rs2, ok2)
   if (ok2) then
-    call check_landed(pr2, rt2)
+    call check_landed(pr2, rs2, rt2)
   else
     call skip_landed('2-element draft')
   end if
@@ -624,15 +633,16 @@ contains
   ! the same shape as the five `n == 0` rows in L2c-fold-design.md 2 -- a failure mode
   ! that is itself irreproducible -- except here it was in the harness rather than the
   ! dump, which is why the harness is where it is fixed.
-  subroutine check_landed_guarded(problem, rt, site)
+  subroutine check_landed_guarded(problem, residue, rt, site)
     type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: rt
     character(len=*), intent(in) :: site
     if (.not. commit_owns_globals()) then
       call skip_landed(site)
       return
     end if
-    call check_landed(problem, rt)
+    call check_landed(problem, residue, rt)
   end subroutine check_landed_guarded
 
   !> Visible, and deliberately NOT a check: a skipped walk must not read as a passing one.
@@ -643,8 +653,9 @@ contains
       'so no committed global is defined to read'
   end subroutine skip_landed
 
-  subroutine check_landed(problem, rt)
+  subroutine check_landed(problem, residue, rt)
     type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     logical :: ok_all
     type(runtime_state_t), intent(in) :: rt
     integer :: ie, ig, i, n, ntv, iblk_v, lblk_v
@@ -1058,6 +1069,92 @@ contains
                     int(opt_value_or(problem%sections(ig)%material, 0_int32), ink),             &
                     ig=1, size(problem%sections))]))
 
+    ! --- step 5b: the C2 scalars and the residue's 27 -------------------------------
+    ! Characters compared trim()ed on both sides: legacy's slots are short (outplot is
+    ! character(20), type_* character(50), probn character(200)) and a longer value is
+    ! truncated silently on assignment, which the staging poison cannot see.
+    call check('probn is case.name', trim(probn) == trim(opt_value_or(problem%case%name, '')))
+    call check('outplot is steps[0].output.format',                                             &
+              trim(outplot) == trim(opt_value_or(problem%steps(1)%output%format, '')))
+    call check('type_problem is steps[0].procedure',                                            &
+              trim(type_problem) == trim(opt_value_or(problem%steps(1)%procedure, '')))
+    call check('type_solver is solver.linear',                                                  &
+              trim(type_solver) == trim(opt_value_or(problem%solver%linear, '')))
+    call check('type_load is steps[0].load_mode',                                               &
+              trim(type_load) == trim(opt_value_or(problem%steps(1)%load_mode, '')))
+    call check('type_ABC is interactions.absorbing.type',                                       &
+              trim(type_ABC) == trim(opt_value_or(problem%interactions%absorbing%type, '')))
+    call check('type_nl is steps[0].controls.nonlinear_type',                                   &
+              type_nl == int(opt_value_or(problem%steps(1)%controls%nonlinear_type, 0_int32), ink))
+    call check('NGRAV is steps[0].load.gravity.enabled',                                        &
+              NGRAV == int(opt_value_or(problem%steps(1)%load%gravity%enabled, 0_int32), ink))
+    call check('gravy is steps[0].load.gravity.magnitude',                                      &
+              gravy == real(opt_value_or(problem%steps(1)%load%gravity%magnitude, 0.0_real64), irk))
+    ! THE INVERSION, asserted as an inversion: the fixture authors symmetric = .true., so
+    ! nonsym must be 0 and a bridge that forgot to invert would write 1.
+    call check('nonsym is the INVERSE of solver.symmetric',                                     &
+              nonsym == merge(0_ink, 1_ink, opt_value_or(problem%solver%symmetric, .false.)))
+    ! The three derived counts, against the cardinalities they are derived from.
+    call check('nmats is count(materials)', nmats == int(size(problem%materials), ink))
+    call check('nblks is count(steps)', nblks == int(size(problem%steps), ink))
+    call check('nfixsets is count(mesh.nsets)', nfixsets == int(size(problem%mesh%nsets), ink))
+    ! The 20 GiD switches, one assertion each. A single all() over an array would pass on a
+    ! transposition, which is the only error shape that matters here: they are all 0 or 1.
+    ok_all = .true.
+    if (gid_u /= int(opt_value_or(problem%steps(1)%output%field%u, 0_int32), ink)) ok_all = .false.
+    if (gid_s /= int(opt_value_or(problem%steps(1)%output%field%s, 0_int32), ink)) ok_all = .false.
+    if (gid_ms /= int(opt_value_or(problem%steps(1)%output%field%ms, 0_int32), ink)) ok_all = .false.
+    if (gid_f /= int(opt_value_or(problem%steps(1)%output%field%f, 0_int32), ink)) ok_all = .false.
+    if (gid_rot /= int(opt_value_or(problem%steps(1)%output%field%rot, 0_int32), ink)) ok_all = .false.
+    if (gid_v /= int(opt_value_or(problem%steps(1)%output%field%v, 0_int32), ink)) ok_all = .false.
+    if (gid_a /= int(opt_value_or(problem%steps(1)%output%field%a, 0_int32), ink)) ok_all = .false.
+    if (gid_T /= int(opt_value_or(problem%steps(1)%output%field%T, 0_int32), ink)) ok_all = .false.
+    if (gid_P /= int(opt_value_or(problem%steps(1)%output%field%P, 0_int32), ink)) ok_all = .false.
+    if (gid_Pv /= int(opt_value_or(problem%steps(1)%output%field%Pv, 0_int32), ink)) ok_all = .false.
+    if (gid_ep /= int(opt_value_or(problem%steps(1)%output%field%ep, 0_int32), ink)) ok_all = .false.
+    if (gid_Y /= int(opt_value_or(problem%steps(1)%output%field%Y, 0_int32), ink)) ok_all = .false.
+    if (gid_FC /= int(opt_value_or(problem%steps(1)%output%field%FC, 0_int32), ink)) ok_all = .false.
+    if (gid_Ns /= int(opt_value_or(problem%steps(1)%output%field%Ns, 0_int32), ink)) ok_all = .false.
+    if (gid_Ss /= int(opt_value_or(problem%steps(1)%output%field%Ss, 0_int32), ink)) ok_all = .false.
+    if (gid_Mxy /= int(opt_value_or(problem%steps(1)%output%field%Mxy, 0_int32), ink)) ok_all = .false.
+    if (gid_bem /= int(opt_value_or(problem%steps(1)%output%field%bem, 0_int32), ink)) ok_all = .false.
+    if (gid_wh /= int(opt_value_or(problem%steps(1)%output%field%wh, 0_int32), ink)) ok_all = .false.
+    if (gid_wv /= int(opt_value_or(problem%steps(1)%output%field%wv, 0_int32), ink)) ok_all = .false.
+    if (gid_bcs /= int(opt_value_or(problem%steps(1)%output%field%bcs, 0_int32), ink)) ok_all = .false.
+    call check('the 20 gid_* switches match steps[0].output.field[] one for one', ok_all)
+    ! The residue's 27, each against the carrier it came from.
+    ok_all = .true.
+    if (restart /= int(opt_value_or(residue%restart, 0_int32), ink)) ok_all = .false.
+    if (relis /= int(opt_value_or(residue%relis, 0_int32), ink)) ok_all = .false.
+    if (ADINA /= int(opt_value_or(residue%adina, 0_int32), ink)) ok_all = .false.
+    if (runblks /= int(opt_value_or(residue%runblks, 0_int32), ink)) ok_all = .false.
+    if (npoinb /= int(opt_value_or(residue%npoinb, 0_int32), ink)) ok_all = .false.
+    if (nlayer /= int(opt_value_or(residue%nlayer, 0_int32), ink)) ok_all = .false.
+    if (block_stab /= int(opt_value_or(residue%block_stab, 0_int32), ink)) ok_all = .false.
+    if (nbackf /= int(opt_value_or(residue%nbackf, 0_int32), ink)) ok_all = .false.
+    if (ebody /= int(opt_value_or(residue%ebody, 0_int32), ink)) ok_all = .false.
+    if (ninit /= int(opt_value_or(residue%ninit, 0_int32), ink)) ok_all = .false.
+    if (state_change /= int(opt_value_or(residue%state_change, 0_int32), ink)) ok_all = .false.
+    if (Bparameter /= int(opt_value_or(residue%bparameter, 0_int32), ink)) ok_all = .false.
+    if (stab_matde /= int(opt_value_or(residue%stab_matde, 0_int32), ink)) ok_all = .false.
+    if (nlinks /= int(opt_value_or(residue%nlinks, 0_int32), ink)) ok_all = .false.
+    if (nsmat /= int(opt_value_or(residue%nsmat, 0_int32), ink)) ok_all = .false.
+    if (ntrans /= int(opt_value_or(residue%ntrans, 0_int32), ink)) ok_all = .false.
+    if (nplgroup /= int(opt_value_or(residue%nplgroup, 0_int32), ink)) ok_all = .false.
+    if (nedge /= int(opt_value_or(residue%nedge, 0_int32), ink)) ok_all = .false.
+    if (edge_load_group /= int(opt_value_or(residue%edge_load_group, 0_int32), ink)) ok_all = .false.
+    if (delgroup /= int(opt_value_or(residue%delgroup, 0_int32), ink)) ok_all = .false.
+    if (nbeamload /= int(opt_value_or(residue%nbeamload, 0_int32), ink)) ok_all = .false.
+    if (nplateload /= int(opt_value_or(residue%nplateload, 0_int32), ink)) ok_all = .false.
+    if (ntemp_surface /= int(opt_value_or(residue%ntemp_surface, 0_int32), ink)) ok_all = .false.
+    if (ntedge /= int(opt_value_or(residue%ntedge, 0_int32), ink)) ok_all = .false.
+    if (ntelgroup /= int(opt_value_or(residue%ntelgroup, 0_int32), ink)) ok_all = .false.
+    if (npipe /= int(opt_value_or(residue%npipe, 0_int32), ink)) ok_all = .false.
+    call check('the 26 residue scalars reach their globals', ok_all)
+    call check('uinitial is allocated at nblks and carries the residue values',                 &
+              allocated(uinitial) .and. size(uinitial) == size(residue%uinitial) .and.          &
+              all(uinitial == int(residue%uinitial, ink)))
+
     call check('props extent', allocated(props) .and. size(props) == size(problem%materials))
     if (allocated(props)) then
       ok_all = .true.
@@ -1291,7 +1388,7 @@ contains
     ! state is the 2-ELEMENT commit, so this compares against problem_2/rt_2 -- comparing
     ! against the 1-element pair the arms above used would assert the wrong model and fail
     ! for a reason that has nothing to do with the refusals.
-    call check_landed_guarded(problem_2, rt_2, 'after the agreement refusals')
+    call check_landed_guarded(problem_2, residue, rt_2, 'after the agreement refusals')
   end subroutine group_extent_agreement
 
   subroutine group_no_partial(problem, residue, rt_good)
@@ -1332,7 +1429,7 @@ contains
     call check('npoin unchanged after the rejected commit', bad_npoin == npoin)
     call check('nelem unchanged after the rejected commit', bad_nelem == nelem)
     call check('result_zero unchanged after the rejected commit', all(bad_result_zero == result_zero))
-    call check_landed_guarded(problem, rt_good, 'after the rejected commit')
+    call check_landed_guarded(problem, residue, rt_good, 'after the rejected commit')
   end subroutine group_no_partial
 
   subroutine assert_internal_commit_total(errors, tag)
@@ -1396,7 +1493,7 @@ contains
     call check('nelem identical after a repeat commit', nelem == nelem_1)
     call check('nodfn bit-for-bit identical after a repeat commit', all(nodfn == nodfn_1))
     call check('fixed bit-for-bit identical after a repeat commit', all(fixed == fixed_1))
-    call check_landed_guarded(problem, rt, 'after a recommit')
+    call check_landed_guarded(problem, residue, rt, 'after a recommit')
 
     ! --- release: total, and idempotent -------------------------------------------
     call check('commit_owns_globals is true before release', commit_owns_globals())
@@ -1437,7 +1534,8 @@ contains
                      allocated(line_load_block) .or. allocated(line_temp_block) .or.            &
                      allocated(coord) .or. allocated(appear_process) .or.                       &
                      allocated(matno_process) .or. allocated(average_appear) .or.               &
-                     allocated(factg) .or. allocated(tcurvegravity)))
+                     allocated(factg) .or. allocated(tcurvegravity) .or.            &
+                     allocated(uinitial)))
 
     ! --- a fresh commit after release works again ---------------------------------
     call commit_legacy_globals(problem, residue, rt, errors)
@@ -1447,7 +1545,7 @@ contains
       return
     end if
     call check('commit_owns_globals is true after the fresh commit', commit_owns_globals())
-    call check_landed_guarded(problem, rt, 'after a recommit')
+    call check_landed_guarded(problem, residue, rt, 'after a recommit')
   end subroutine group_repeat_and_ownership
 
   ! ==========================================================================
@@ -1463,12 +1561,18 @@ contains
     real(irk), parameter :: SENTINEL_TTIME = 1.234567e8_irk
     type(problem_errors_t) :: errors
 
-    ! nmats, nblks, restart, ttime (Global.f90:153-184) are plain global_var scalars
-    ! commit_legacy_globals's own "WHAT IS WRITTEN" list never names: they belong to the
-    ! ProblemState half (material count, block count, restart flag, elapsed time) that
-    ! is out of scope until M4-01. Recognisable, out-of-range values make an accidental
-    ! write (or an accidental read that then gets clobbered by something else in this
-    ! program) visible rather than silently matching a real value by coincidence.
+    ! FLIPPED IN M4-01 STEP 5b, BY DESIGN (L2c-fold-design.md 5.2b point 1 predicted it).
+    ! Three of these four were "commit never writes them" scalars; step 5b writes all
+    ! three, so the assertions below now demand the COMMITTED value where they used to
+    ! demand the sentinel. `ttime` is the one that does not move: it is not a model_ready
+    ! row and nothing in the fold touches it, so it stays the control that says this
+    ! section still detects an accidental write at all.
+    !
+    ! The sentinels earn their keep twice over. Seeding out-of-range values is what made
+    ! step 5b's first attempt visible: `nmats = s_nmats` in the write phase assigned a
+    ! LOCAL of that name inside commit_legacy_globals -- shadowing the use-associated
+    ! global -- so nmats and nblks kept their sentinels while restart did not. Two of
+    ! three assertions passing was the shape of the finding.
     nmats = SENTINEL_NMATS
     nblks = SENTINEL_NBLKS
     restart = SENTINEL_RESTART
@@ -1481,9 +1585,14 @@ contains
       return
     end if
 
-    call check('nmats is undisturbed by commit', nmats == SENTINEL_NMATS)
-    call check('nblks is undisturbed by commit', nblks == SENTINEL_NBLKS)
-    call check('restart is undisturbed by commit', restart == SENTINEL_RESTART)
+    ! Written now, and against their sources rather than against a literal.
+    call check('nmats is the ProblemState material count after commit',                        &
+              nmats == int(size(problem%materials), ink))
+    call check('nblks is the ProblemState step count after commit',                            &
+              nblks == int(size(problem%steps), ink))
+    call check('restart is the residue value after commit',                                    &
+              restart == int(opt_value_or(residue%restart, 0_int32), ink))
+    ! Still untouched, and still the reason this section can tell "written" from "not".
     call check('ttime is undisturbed by commit', ttime == SENTINEL_TTIME)
   end subroutine group_sentinels
 
@@ -1677,7 +1786,7 @@ contains
 
     ! Nothing above may have disturbed the rows the other sections assert: the
     ! full landing check runs once more as this section's own exit condition.
-    call check_landed_guarded(problem, rt, 'after a recommit')
+    call check_landed_guarded(problem, residue, rt, 'after a recommit')
   end subroutine group_blind_spot_falsifiability
 
   ! Allocate a single-element "foreign" instance of the named record array and null

@@ -97,15 +97,25 @@ module yl_runtime_commit
                         line_load_block, line_temp_block, lineload, linet,                      &
                         npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
                         element_lib, group_of_elements, group_of_dvide_ipoin,                   &
-                        interpolation_group, unode_elements
-  use prescribed, only: prescrib, ndofix, freedom_prescribe
-  use applied_load, only: tcurves, ntcurve, time_curve, factg, tcurvegravity
+                        interpolation_group, unode_elements,                                    &
+                        probn, outplot, type_problem, type_solver, type_load, type_ABC,         &
+                        type_nl, nonsym, NGRAV, nmats, nblks, uinitial,                         &
+                        gid_u, gid_s, gid_ms, gid_f, gid_rot, gid_v, gid_a, gid_T, gid_P,       &
+                        gid_Pv, gid_ep, gid_Y, gid_FC, gid_Ns, gid_Ss, gid_Mxy, gid_bem,        &
+                        gid_wh, gid_wv, gid_bcs,                                                &
+                        restart, relis, ADINA, runblks, npoinb, nlayer, block_stab, nbackf,     &
+                        ebody, ninit, state_change, Bparameter, stab_matde, nlinks, nsmat,      &
+                        ntrans
+  use prescribed, only: prescrib, ndofix, freedom_prescribe, nfixsets
+  use applied_load, only: tcurves, ntcurve, time_curve, factg, tcurvegravity, gravy,          &
+                          nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload
   use meshfine, only: ice0
+  use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
-  use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_get, opt_is_set
+  use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_logical, opt_get, opt_is_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
   use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
@@ -284,18 +294,18 @@ module yl_runtime_commit
   ! NOT_MIGRATED line -- the count that is the honest headline of M4-01's progress, and
   ! whose fall to zero is the exit condition. Read it there, where it cannot be stale.
   type(commit_provenance_t), parameter :: COMMIT_PROVENANCE(*) = [                              &
-    commit_provenance_t('case.name', COMMIT_NOT_MIGRATED, ''),                                                                  &
-    commit_provenance_t('control.run.restart', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('control.run.relis', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('control.run.adina', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('derived.counts.runblks', COMMIT_NOT_MIGRATED, ''),                                                     &
+    commit_provenance_t('case.name', COMMIT_FROM_PROBLEM, 'case.name'),                                                                  &
+    commit_provenance_t('control.run.restart', COMMIT_FROM_DECK, 'F1/restart'),                                                        &
+    commit_provenance_t('control.run.relis', COMMIT_FROM_DECK, 'F1/relis'),                                                          &
+    commit_provenance_t('control.run.adina', COMMIT_FROM_DECK, 'F1/adina'),                                                          &
+    commit_provenance_t('derived.counts.runblks', COMMIT_FROM_DECK, 'F1/runblks'),                                                     &
     commit_provenance_t('derived.counts.npoin', COMMIT_FROM_RUNTIME, 'extent npoin'),                                           &
-    commit_provenance_t('derived.counts.npoinb', COMMIT_NOT_MIGRATED, ''),                                                      &
+    commit_provenance_t('derived.counts.npoinb', COMMIT_FROM_DECK, 'no gate: read+discarded'),                                                      &
     commit_provenance_t('derived.counts.nelem', COMMIT_FROM_RUNTIME, 'extent nelem'),                                           &
     commit_provenance_t('mesh.dimension', COMMIT_FROM_RUNTIME, 'extent ndimn'),                                                 &
-    commit_provenance_t('derived.counts.nmats', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('derived.counts.nmats', COMMIT_DERIVED, 'count(materials)'),                                                       &
     commit_provenance_t('derived.counts.ngroup', COMMIT_FROM_RUNTIME, 'extent ngroup'),                                         &
-    commit_provenance_t('steps0.output.format', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('steps0.output.format', COMMIT_FROM_PROBLEM, 'steps[0].output.format'),                                                       &
     commit_provenance_t('mesh.nodes.id', COMMIT_SYNTHETIC, 'dump emits 1..npoin'),                                              &
     commit_provenance_t('mesh.nodes.xyz', COMMIT_FROM_PROBLEM, 'mesh.nodes[].xyz'),                                                             &
     commit_provenance_t('mesh.elements.id', COMMIT_SYNTHETIC, 'dump emits 1..nelem'),                                           &
@@ -347,25 +357,25 @@ module yl_runtime_commit
     commit_provenance_t('amplitudes.points.time', COMMIT_FROM_PROBLEM, 'amplitudes[].points[].time'),                                                     &
     commit_provenance_t('amplitudes.points.value', COMMIT_FROM_PROBLEM, 'amplitudes[].points[].value'),                                                    &
     commit_provenance_t('runtime.amplitudes.dfact', COMMIT_FROM_RUNTIME, ''),                                                   &
-    commit_provenance_t('steps0.procedure', COMMIT_NOT_MIGRATED, ''),                                                           &
-    commit_provenance_t('solver.linear', COMMIT_NOT_MIGRATED, ''),                                                              &
-    commit_provenance_t('steps0.load_mode', COMMIT_NOT_MIGRATED, ''),                                                           &
-    commit_provenance_t('steps0.controls.nonlinear_type', COMMIT_NOT_MIGRATED, ''),                                             &
-    commit_provenance_t('control.glb.nlayer', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('control.glb.block_stab', COMMIT_NOT_MIGRATED, ''),                                                     &
-    commit_provenance_t('control.glb.nbackf', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('control.glb.ebody', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('control.glb.ninit', COMMIT_NOT_MIGRATED, ''),                                                          &
-    commit_provenance_t('control.glb.uinitial', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('control.glb.state_change', COMMIT_NOT_MIGRATED, ''),                                                   &
-    commit_provenance_t('control.glb.bparameter', COMMIT_NOT_MIGRATED, ''),                                                     &
-    commit_provenance_t('control.glb.stab_matde', COMMIT_NOT_MIGRATED, ''),                                                     &
-    commit_provenance_t('derived.counts.nblks', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('control.glb.nlinks', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('solver.symmetric', COMMIT_NOT_MIGRATED, ''),                                                           &
-    commit_provenance_t('interactions.absorbing.type', COMMIT_NOT_MIGRATED, ''),                                                &
-    commit_provenance_t('derived.counts.nsmat', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('steps0.load.gravity.enabled', COMMIT_NOT_MIGRATED, ''),                                                &
+    commit_provenance_t('steps0.procedure', COMMIT_FROM_PROBLEM, 'steps[0].procedure'),                                                           &
+    commit_provenance_t('solver.linear', COMMIT_FROM_PROBLEM, 'solver.linear'),                                                              &
+    commit_provenance_t('steps0.load_mode', COMMIT_FROM_PROBLEM, 'steps[0].load_mode'),                                                           &
+    commit_provenance_t('steps0.controls.nonlinear_type', COMMIT_FROM_PROBLEM, 'steps[0].controls.nonlinear_type'),                                             &
+    commit_provenance_t('control.glb.nlayer', COMMIT_FROM_DECK, 'A-GLB/nlayer-nonzero'),                                                         &
+    commit_provenance_t('control.glb.block_stab', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                     &
+    commit_provenance_t('control.glb.nbackf', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                         &
+    commit_provenance_t('control.glb.ebody', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                          &
+    commit_provenance_t('control.glb.ninit', COMMIT_FROM_DECK, 'A-GLB/ninit-nonzero'),                                                          &
+    commit_provenance_t('control.glb.uinitial', COMMIT_FROM_DECK, 'A-GLB/pinned all-zero'),                                                       &
+    commit_provenance_t('control.glb.state_change', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                   &
+    commit_provenance_t('control.glb.bparameter', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                     &
+    commit_provenance_t('control.glb.stab_matde', COMMIT_FROM_DECK, 'A-GLB/interval > nblks'),                                                     &
+    commit_provenance_t('derived.counts.nblks', COMMIT_DERIVED, 'count(steps)'),                                                       &
+    commit_provenance_t('control.glb.nlinks', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                         &
+    commit_provenance_t('solver.symmetric', COMMIT_FROM_PROBLEM, 'solver.symmetric'),                                                           &
+    commit_provenance_t('interactions.absorbing.type', COMMIT_FROM_PROBLEM, 'interactions.absorbing.type'),                                                &
+    commit_provenance_t('derived.counts.nsmat', COMMIT_FROM_DECK, 'no gate: read+discarded'),                                                       &
+    commit_provenance_t('steps0.load.gravity.enabled', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity.enabled'),                                                &
     commit_provenance_t('derived.counts.mdofn', COMMIT_FROM_RUNTIME, 'extent mdofn'),                                           &
     commit_provenance_t('derived.dof.active_flags', COMMIT_FROM_RUNTIME, 'reconstructed from lmdofn'),                          &
     commit_provenance_t('runtime.dof.lmdofn', COMMIT_FROM_RUNTIME, ''),                                                         &
@@ -377,27 +387,27 @@ module yl_runtime_commit
     commit_provenance_t('steps0.activation.material', COMMIT_FROM_PROBLEM, 'steps[0].activation[]'),                                                 &
     commit_provenance_t('runtime.activation.appear', COMMIT_FROM_RUNTIME, ''),                                                  &
     commit_provenance_t('steps0.output.stress_averaging', COMMIT_FROM_PROBLEM, 'steps[0].output'),                                             &
-    commit_provenance_t('steps0.output.field.gid_u', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_s', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_ms', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_f', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_rot', COMMIT_NOT_MIGRATED, ''),                                                &
-    commit_provenance_t('steps0.output.field.gid_v', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_a', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_T', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_P', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_Pv', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_ep', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_Y', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('steps0.output.field.gid_FC', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_Ns', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_Ss', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_Mxy', COMMIT_NOT_MIGRATED, ''),                                                &
-    commit_provenance_t('steps0.output.field.gid_bem', COMMIT_NOT_MIGRATED, ''),                                                &
-    commit_provenance_t('steps0.output.field.gid_wh', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_wv', COMMIT_NOT_MIGRATED, ''),                                                 &
-    commit_provenance_t('steps0.output.field.gid_bcs', COMMIT_NOT_MIGRATED, ''),                                                &
-    commit_provenance_t('derived.counts.nfixsets', COMMIT_NOT_MIGRATED, ''),                                                    &
+    commit_provenance_t('steps0.output.field.gid_u', COMMIT_FROM_PROBLEM, 'steps[0].output.field.u'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_s', COMMIT_FROM_PROBLEM, 'steps[0].output.field.s'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_ms', COMMIT_FROM_PROBLEM, 'steps[0].output.field.ms'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_f', COMMIT_FROM_PROBLEM, 'steps[0].output.field.f'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_rot', COMMIT_FROM_PROBLEM, 'steps[0].output.field.rot'),                                                &
+    commit_provenance_t('steps0.output.field.gid_v', COMMIT_FROM_PROBLEM, 'steps[0].output.field.v'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_a', COMMIT_FROM_PROBLEM, 'steps[0].output.field.a'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_T', COMMIT_FROM_PROBLEM, 'steps[0].output.field.T'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_P', COMMIT_FROM_PROBLEM, 'steps[0].output.field.P'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_Pv', COMMIT_FROM_PROBLEM, 'steps[0].output.field.Pv'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_ep', COMMIT_FROM_PROBLEM, 'steps[0].output.field.ep'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Y', COMMIT_FROM_PROBLEM, 'steps[0].output.field.Y'),                                                  &
+    commit_provenance_t('steps0.output.field.gid_FC', COMMIT_FROM_PROBLEM, 'steps[0].output.field.FC'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Ns', COMMIT_FROM_PROBLEM, 'steps[0].output.field.Ns'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Ss', COMMIT_FROM_PROBLEM, 'steps[0].output.field.Ss'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_Mxy', COMMIT_FROM_PROBLEM, 'steps[0].output.field.Mxy'),                                                &
+    commit_provenance_t('steps0.output.field.gid_bem', COMMIT_FROM_PROBLEM, 'steps[0].output.field.bem'),                                                &
+    commit_provenance_t('steps0.output.field.gid_wh', COMMIT_FROM_PROBLEM, 'steps[0].output.field.wh'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_wv', COMMIT_FROM_PROBLEM, 'steps[0].output.field.wv'),                                                 &
+    commit_provenance_t('steps0.output.field.gid_bcs', COMMIT_FROM_PROBLEM, 'steps[0].output.field.bcs'),                                                &
+    commit_provenance_t('derived.counts.nfixsets', COMMIT_DERIVED, 'count(mesh.nsets)'),                                                    &
     commit_provenance_t('derived.counts.ndofix', COMMIT_FROM_RUNTIME, 'extent ndofix'),                                         &
     commit_provenance_t('steps0.boundary.set', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].name'),                                                        &
     commit_provenance_t('steps0.boundary.dof', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].dof'),                                                        &
@@ -412,20 +422,20 @@ module yl_runtime_commit
     commit_provenance_t('runtime.boundary.lefdofix', COMMIT_FROM_RUNTIME, ''),                                                  &
     commit_provenance_t('runtime.dof.iffix', COMMIT_FROM_RUNTIME, ''),                                                          &
     commit_provenance_t('runtime.dof.fixed', COMMIT_FROM_RUNTIME, ''),                                                          &
-    commit_provenance_t('control.glb.ntrans', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('steps0.load.gravity.magnitude', COMMIT_NOT_MIGRATED, ''),                                              &
+    commit_provenance_t('control.glb.ntrans', COMMIT_FROM_DECK, 'A-GLB/ntrans-nonzero'),                                                         &
+    commit_provenance_t('steps0.load.gravity.magnitude', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity.magnitude'),                                              &
     commit_provenance_t('steps0.load.gravity.direction', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity'),                                              &
     commit_provenance_t('steps0.load.gravity.amplitude', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity'),                                              &
-    commit_provenance_t('derived.counts.nplgroup', COMMIT_NOT_MIGRATED, ''),                                                    &
-    commit_provenance_t('derived.counts.nedge', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('derived.counts.edge_load_group', COMMIT_NOT_MIGRATED, ''),                                             &
-    commit_provenance_t('derived.counts.delgroup', COMMIT_NOT_MIGRATED, ''),                                                    &
-    commit_provenance_t('derived.counts.nbeamload', COMMIT_NOT_MIGRATED, ''),                                                   &
-    commit_provenance_t('derived.counts.nplateload', COMMIT_NOT_MIGRATED, ''),                                                  &
-    commit_provenance_t('derived.counts.ntemp_surface', COMMIT_NOT_MIGRATED, ''),                                               &
-    commit_provenance_t('derived.counts.ntedge', COMMIT_NOT_MIGRATED, ''),                                                      &
-    commit_provenance_t('derived.counts.ntelgroup', COMMIT_NOT_MIGRATED, ''),                                                   &
-    commit_provenance_t('derived.counts.npipe', COMMIT_NOT_MIGRATED, ''),                                                       &
+    commit_provenance_t('derived.counts.nplgroup', COMMIT_FROM_DECK, 'A3/point-load'),                                                    &
+    commit_provenance_t('derived.counts.nedge', COMMIT_FROM_DECK, 'A4/edge-definition'),                                                       &
+    commit_provenance_t('derived.counts.edge_load_group', COMMIT_FROM_DECK, 'A5/pressure-load'),                                             &
+    commit_provenance_t('derived.counts.delgroup', COMMIT_FROM_DECK, 'no gate: shares A5 read'),                                                    &
+    commit_provenance_t('derived.counts.nbeamload', COMMIT_FROM_DECK, 'A6/beam-load'),                                                   &
+    commit_provenance_t('derived.counts.nplateload', COMMIT_FROM_DECK, 'A7/plate-load'),                                                  &
+    commit_provenance_t('derived.counts.ntemp_surface', COMMIT_FROM_DECK, 'A12/temp-surface'),                                               &
+    commit_provenance_t('derived.counts.ntedge', COMMIT_FROM_DECK, 'A13/temp-edge'),                                                      &
+    commit_provenance_t('derived.counts.ntelgroup', COMMIT_FROM_DECK, 'A14/temp-elgroup'),                                                   &
+    commit_provenance_t('derived.counts.npipe', COMMIT_FROM_DECK, 'A15/pipe-cooling'),                                                       &
     commit_provenance_t('runtime.dof.nodfn', COMMIT_FROM_RUNTIME, ''),                                                          &
     commit_provenance_t('runtime.dof.ntotv', COMMIT_FROM_RUNTIME, ''),                                                          &
     commit_provenance_t('runtime.dof.ldofs', COMMIT_FROM_RUNTIME, ''),                                                          &
@@ -501,7 +511,32 @@ contains
     integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
     integer(ink), allocatable :: s_average_appear(:), s_tcurvegravity(:)
     type(material_property), allocatable :: s_props(:)
-    integer :: nmats, nblks, id_, ib
+    ! n_materials / n_steps, NOT nmats / nblks. Those two names are use-associated from
+    ! global_var, and a local of the same name silently shadows the global: step 5b's
+    ! `nmats = s_nmats` assigned the LOCAL and the legacy global kept its old value, with
+    ! nothing to show for it. group_sentinels caught that -- it seeds nmats/nblks with
+    ! out-of-range values precisely so an accidental write, or in this case an absent one,
+    ! is visible. The locals are renamed so the write phase can only mean the global.
+    integer :: n_materials, n_steps, id_, ib
+    ! staging: the C2 scalars and the residue's 27 (M4-01 step 5b). Declared with the
+    ! LEGACY kinds so a character that does not fit is truncated HERE, in staging, where
+    ! the bridge test's trim() comparison can see it -- not in the write phase, where the
+    ! whole point is that nothing can go wrong.
+    character(len=200) :: s_probn
+    character(len=20) :: s_outplot
+    character(len=50) :: s_type_problem, s_type_solver, s_type_load, s_type_abc
+    integer(ink) :: s_type_nl, s_nonsym, s_ngrav, s_nmats, s_nblks, s_nfixsets
+    integer(ink) :: s_gid_u, s_gid_s, s_gid_ms, s_gid_f, s_gid_rot, s_gid_v, s_gid_a
+    integer(ink) :: s_gid_t, s_gid_p, s_gid_pv, s_gid_ep, s_gid_y, s_gid_fc, s_gid_ns
+    integer(ink) :: s_gid_ss, s_gid_mxy, s_gid_bem, s_gid_wh, s_gid_wv, s_gid_bcs
+    real(irk) :: s_gravy
+    integer(ink) :: s_restart, s_relis, s_adina, s_runblks, s_npoinb, s_nlayer
+    integer(ink) :: s_block_stab, s_nbackf, s_ebody, s_ninit, s_state_change
+    integer(ink) :: s_bparameter, s_stab_matde, s_nlinks, s_nsmat, s_ntrans
+    integer(ink) :: s_nplgroup, s_nedge, s_edge_load_group, s_delgroup
+    integer(ink) :: s_nbeamload, s_nplateload
+    integer(ink) :: s_ntemp_surface, s_ntedge, s_ntelgroup, s_npipe
+    integer(ink), allocatable :: s_uinitial(:)
     ! staging: plain arrays
     integer(ink), allocatable :: s_lmdofn(:), s_lcdofn(:), s_nodfn(:,:), s_iffix(:)
     integer(ink), allocatable :: s_appear(:), s_ice0(:)
@@ -988,8 +1023,8 @@ contains
     ! Extents still come from the runtime (§5.2 of the design gives every extent exactly
     ! one derivation source); ProblemState supplies only the VALUES, and where both sides
     ! know a count the ProblemState side is asserted to agree rather than used.
-    nmats = size(problem%materials)
-    nblks = size(problem%steps)
+    n_materials = size(problem%materials)
+    n_steps = size(problem%steps)
 
     ! mesh.nodes.xyz -> coord(ndimn, npoin), Fortran order. The extent is the runtime's,
     ! and the two are asserted to agree in the agreement gate above.
@@ -1017,10 +1052,10 @@ contains
     ! at Global.f90:968 and CONSUMED at Fem.f90:1719-1720, and yl_state_adapters.f90:815
     ! asserts `lbound(...,2) == 0` before emitting. A 1-based allocation here would shift
     ! every column by one and still look well formed.
-    allocate (s_appear_process(s_ngroup, 0:nblks))
+    allocate (s_appear_process(s_ngroup, 0:n_steps))
     s_appear_process = STAGE_POISON_I
     s_appear_process(:, 0) = 0_ink
-    do ib = 1, nblks
+    do ib = 1, n_steps
       do ig = 1, int(s_ngroup)
         s_appear_process(ig, ib) = int(opt_or(problem%steps(ib)%activation(ig)%active), ink)
       end do
@@ -1028,9 +1063,9 @@ contains
 
     ! steps[0].activation[].material -> matno_process(ngroup, nblks). 1-based, unlike
     ! appear_process: Global.f90:965 allocates it (ngroup, nblks).
-    allocate (s_matno_process(s_ngroup, nblks))
+    allocate (s_matno_process(s_ngroup, n_steps))
     s_matno_process = STAGE_POISON_I
-    do ib = 1, nblks
+    do ib = 1, n_steps
       do ig = 1, int(s_ngroup)
         s_matno_process(ig, ib) = int(opt_or(problem%steps(ib)%activation(ig)%material), ink)
       end do
@@ -1056,8 +1091,8 @@ contains
     ! `%solid`), and commit_release has to unwind them in the opposite order. This is the
     ! heaviest ownership this module has taken on, and every allocation here has a matching
     ! deallocate in commit_release -- see the release path's own comment.
-    allocate (s_props(nmats))
-    do id_ = 1, nmats
+    allocate (s_props(n_materials))
+    do id_ = 1, n_materials
       nullify (s_props(id_)%mechanical, s_props(id_)%heat, s_props(id_)%geometry)
       s_props(id_)%name = ''
       allocate (s_props(id_)%mechanical)
@@ -1084,7 +1119,7 @@ contains
     ! resolves it when it fills sections[].thickness in the first place.
     do ig = 1, size(problem%sections)
       id_ = int(opt_or(problem%sections(ig)%material))
-      if (id_ >= 1 .and. id_ <= nmats) then
+      if (id_ >= 1 .and. id_ <= n_materials) then
         s_props(id_)%mechanical%solid%thickness =                                             &
           real(opt_or_real(problem%sections(ig)%thickness), irk)
       end if
@@ -1127,6 +1162,119 @@ contains
       end do
     end do
 
+    ! ---------------------------------------------- the C2 scalars (M4-01 step 5b)
+    ! Poisoned first, as everywhere else, so a deleted assignment publishes a sentinel
+    ! rather than whatever the stack held. Characters get '' for the reason poison_group
+    ! states: there is no integer sentinel for a character(20), so for those the detection
+    ! of a missing write is the bridge test's trim() comparison.
+    s_type_nl = STAGE_POISON_I;   s_nonsym = STAGE_POISON_I;   s_ngrav = STAGE_POISON_I
+    s_nmats = STAGE_POISON_I;     s_nblks = STAGE_POISON_I;    s_nfixsets = STAGE_POISON_I
+    s_gravy = STAGE_POISON_R
+    s_probn = '';  s_outplot = '';  s_type_problem = '';  s_type_solver = ''
+    s_type_load = '';  s_type_abc = ''
+
+    s_probn = opt_text_or(problem%case%name)
+    s_outplot = opt_text_or(problem%steps(1)%output%format)
+    s_type_problem = opt_text_or(problem%steps(1)%procedure)
+    s_type_solver = opt_text_or(problem%solver%linear)
+    s_type_load = opt_text_or(problem%steps(1)%load_mode)
+    s_type_abc = opt_text_or(problem%interactions%absorbing%type)
+    s_type_nl = int(opt_or(problem%steps(1)%controls%nonlinear_type), ink)
+    s_ngrav = int(opt_or(problem%steps(1)%load%gravity%enabled), ink)
+    s_gravy = real(opt_or_real(problem%steps(1)%load%gravity%magnitude), irk)
+
+    ! nonsym IS INVERTED, and the map says so: solver.symmetric is a logical, the legacy
+    ! slot is a 0/1 flag "whose sense is inverted; the inversion is the bridge's job"
+    ! (yl_problem_types.f90:179-182). symmetric = .true. therefore means nonsym = 0.
+    ! Both golden decks are symmetric, so the right answer is 0 and getting the direction
+    ! backwards yields 1 -- visible on the decks we have, unlike most of the swaps this
+    ! file has had to build fixtures for.
+    s_nonsym = merge(0_ink, 1_ink, opt_logical_or(problem%solver%symmetric))
+
+    ! The 20 GiD output switches. One line each, named on both sides, because a
+    ! transposition inside a 20-element list is exactly the kind of thing no count check
+    ! would catch and no golden deck would show (they are all 0 or 1).
+    s_gid_u = int(opt_or(problem%steps(1)%output%field%u), ink)
+    s_gid_s = int(opt_or(problem%steps(1)%output%field%s), ink)
+    s_gid_ms = int(opt_or(problem%steps(1)%output%field%ms), ink)
+    s_gid_f = int(opt_or(problem%steps(1)%output%field%f), ink)
+    s_gid_rot = int(opt_or(problem%steps(1)%output%field%rot), ink)
+    s_gid_v = int(opt_or(problem%steps(1)%output%field%v), ink)
+    s_gid_a = int(opt_or(problem%steps(1)%output%field%a), ink)
+    s_gid_t = int(opt_or(problem%steps(1)%output%field%T), ink)
+    s_gid_p = int(opt_or(problem%steps(1)%output%field%P), ink)
+    s_gid_pv = int(opt_or(problem%steps(1)%output%field%Pv), ink)
+    s_gid_ep = int(opt_or(problem%steps(1)%output%field%ep), ink)
+    s_gid_y = int(opt_or(problem%steps(1)%output%field%Y), ink)
+    s_gid_fc = int(opt_or(problem%steps(1)%output%field%FC), ink)
+    s_gid_ns = int(opt_or(problem%steps(1)%output%field%Ns), ink)
+    s_gid_ss = int(opt_or(problem%steps(1)%output%field%Ss), ink)
+    s_gid_mxy = int(opt_or(problem%steps(1)%output%field%Mxy), ink)
+    s_gid_bem = int(opt_or(problem%steps(1)%output%field%bem), ink)
+    s_gid_wh = int(opt_or(problem%steps(1)%output%field%wh), ink)
+    s_gid_wv = int(opt_or(problem%steps(1)%output%field%wv), ink)
+    s_gid_bcs = int(opt_or(problem%steps(1)%output%field%bcs), ink)
+
+    ! The three DERIVED counts: cardinalities of ProblemState collections, computed here
+    ! rather than read from anywhere. n_materials and n_steps were already being computed for
+    ! extent checks above; nfixsets is the node-set count finalize_problem derived from
+    ! the boundary records' distinct set ordinals (derive_node_sets).
+    s_nmats = int(n_materials, ink)
+    s_nblks = int(n_steps, ink)
+    s_nfixsets = int(size(problem%mesh%nsets), ink)
+
+    ! ---------------------------------------- the residue's 27 (M4-01 step 5b)
+    ! Every one of these is READ FROM THE CARRIER and then CROSS-CHECKED against the gate
+    ! rule that admitted it. Two independent sources that must agree is stronger than
+    ! deriving one from the other (L2c-fold-design.md 1.6.2): the adapter's rejection
+    ! proves what the value must be, the carrier says what the deck actually held, and a
+    ! disagreement means one of the two is broken rather than that the deck is unusual.
+    s_restart = int(opt_or(residue%restart), ink)
+    s_relis = int(opt_or(residue%relis), ink)
+    s_adina = int(opt_or(residue%adina), ink)
+    s_runblks = int(opt_or(residue%runblks), ink)
+    s_npoinb = int(opt_or(residue%npoinb), ink)
+    s_nlayer = int(opt_or(residue%nlayer), ink)
+    s_block_stab = int(opt_or(residue%block_stab), ink)
+    s_nbackf = int(opt_or(residue%nbackf), ink)
+    s_ebody = int(opt_or(residue%ebody), ink)
+    s_ninit = int(opt_or(residue%ninit), ink)
+    s_state_change = int(opt_or(residue%state_change), ink)
+    s_bparameter = int(opt_or(residue%bparameter), ink)
+    s_stab_matde = int(opt_or(residue%stab_matde), ink)
+    s_nlinks = int(opt_or(residue%nlinks), ink)
+    s_nsmat = int(opt_or(residue%nsmat), ink)
+    s_ntrans = int(opt_or(residue%ntrans), ink)
+    s_nplgroup = int(opt_or(residue%nplgroup), ink)
+    s_nedge = int(opt_or(residue%nedge), ink)
+    s_edge_load_group = int(opt_or(residue%edge_load_group), ink)
+    s_delgroup = int(opt_or(residue%delgroup), ink)
+    s_nbeamload = int(opt_or(residue%nbeamload), ink)
+    s_nplateload = int(opt_or(residue%nplateload), ink)
+    s_ntemp_surface = int(opt_or(residue%ntemp_surface), ink)
+    s_ntedge = int(opt_or(residue%ntedge), ink)
+    s_ntelgroup = int(opt_or(residue%ntelgroup), ink)
+    s_npipe = int(opt_or(residue%npipe), ink)
+
+    ! uinitial is the carrier's only array, and the only NEW allocatable global this step
+    ! adds: staged here, move_alloc'd below, released in commit_release, and named in the
+    ! release-totality assertion -- the four places design 5.1 says must move together.
+    ! Its extent is n_steps, which is a ProblemState cardinality, so the length and the
+    ! values come from two different objects and are required to agree.
+    if (size(residue%uinitial) /= n_steps) then
+      call fail(errors, 'the deck residue carries '//itoa(size(residue%uinitial))//           &
+                ' uinitial values and ProblemState has '//itoa(n_steps)//                       &
+                ' steps; the carrier and the model disagree about how many blocks '//         &
+                'this deck has')
+      return
+    end if
+    allocate (s_uinitial(n_steps))
+    s_uinitial = STAGE_POISON_I
+    s_uinitial = int(residue%uinitial, ink)
+
+    call verify_residue_against_gates(residue, errors, ok)
+    if (.not. ok) return
+
     ! ----------------------------------------------------------------- write
     ! From here on nothing allocates, converts or can fail.
     call commit_release()
@@ -1136,6 +1284,28 @@ contains
     ndofix = s_ndofix; ntcurve = s_ntcurve
     iblks = s_iblks;  lblks = s_lblks
     lineload = s_lineload; linet = s_linet
+    ! The C2 scalars and the residue's 26 (M4-01 step 5b). Assignment only, from staged
+    ! locals of the legacy kinds -- no conversion, no read of `problem` or `residue`, and
+    ! nothing here that can fail.
+    probn = s_probn;  outplot = s_outplot
+    type_problem = s_type_problem;  type_solver = s_type_solver
+    type_load = s_type_load;  type_ABC = s_type_abc
+    type_nl = s_type_nl;  nonsym = s_nonsym;  NGRAV = s_ngrav
+    nmats = s_nmats;  nblks = s_nblks;  nfixsets = s_nfixsets;  gravy = s_gravy
+    gid_u = s_gid_u;  gid_s = s_gid_s;  gid_ms = s_gid_ms;  gid_f = s_gid_f
+    gid_rot = s_gid_rot;  gid_v = s_gid_v;  gid_a = s_gid_a;  gid_T = s_gid_t
+    gid_P = s_gid_p;  gid_Pv = s_gid_pv;  gid_ep = s_gid_ep;  gid_Y = s_gid_y
+    gid_FC = s_gid_fc;  gid_Ns = s_gid_ns;  gid_Ss = s_gid_ss;  gid_Mxy = s_gid_mxy
+    gid_bem = s_gid_bem;  gid_wh = s_gid_wh;  gid_wv = s_gid_wv;  gid_bcs = s_gid_bcs
+    restart = s_restart;  relis = s_relis;  ADINA = s_adina;  runblks = s_runblks
+    npoinb = s_npoinb;  nlayer = s_nlayer;  block_stab = s_block_stab
+    nbackf = s_nbackf;  ebody = s_ebody;  ninit = s_ninit
+    state_change = s_state_change;  Bparameter = s_bparameter
+    stab_matde = s_stab_matde;  nlinks = s_nlinks;  nsmat = s_nsmat;  ntrans = s_ntrans
+    nplgroup = s_nplgroup;  nedge = s_nedge;  edge_load_group = s_edge_load_group
+    delgroup = s_delgroup;  nbeamload = s_nbeamload;  nplateload = s_nplateload
+    ntemp_surface = s_ntemp_surface;  ntedge = s_ntedge
+    ntelgroup = s_ntelgroup;  npipe = s_npipe
 
     call move_alloc(s_lmdofn, lmdofn)
     call move_alloc(s_lcdofn, lcdofn)
@@ -1169,6 +1339,7 @@ contains
     call move_alloc(s_factg, factg)
     call move_alloc(s_tcurvegravity, tcurvegravity)
     call move_alloc(s_props, props)
+    call move_alloc(s_uinitial, uinitial)
 
     commit_owned = .true.
   end subroutine commit_legacy_globals
@@ -1265,6 +1436,7 @@ contains
     ! below, because an unreleased ALLOCATABLE is still allocated afterwards -- but it
     ! would NOT catch dropping either pointer deallocate, exactly as measured for
     ! props(i)%mechanical%solid (design 5.1.3). That blind spot closes at step 6, not here.
+    if (allocated(uinitial)) deallocate (uinitial)
     if (allocated(tcurves)) then
       do i = 1, size(tcurves)
         if (associated(tcurves(i)%ttime_curve)) deallocate (tcurves(i)%ttime_curve)
@@ -1689,6 +1861,54 @@ contains
         return
       end if
     end do
+    ! The C2 scalars (step 5b). Every one is read through an opt_* fallback in staging, so
+    ! every one has to be here or commit publishes a default for a value no deck supplied.
+    if (.not. opt_is_set(problem%case%name) .or.                                              &
+        .not. opt_is_set(problem%solver%linear) .or.                                          &
+        .not. opt_is_set(problem%solver%symmetric) .or.                                       &
+        .not. opt_is_set(problem%interactions%absorbing%type) .or.                            &
+        .not. opt_is_set(problem%steps(1)%procedure) .or.                                     &
+        .not. opt_is_set(problem%steps(1)%load_mode) .or.                                     &
+        .not. opt_is_set(problem%steps(1)%output%format) .or.                                 &
+        .not. opt_is_set(problem%steps(1)%controls%nonlinear_type) .or.                       &
+        .not. opt_is_set(problem%steps(1)%load%gravity%enabled) .or.                          &
+        .not. opt_is_set(problem%steps(1)%load%gravity%magnitude)) then
+      call fail(errors, 'an unset top-level control this commit reads (case.name, '//         &
+                'solver.linear, solver.symmetric, interactions.absorbing.type, '//            &
+                'steps[0].procedure, .load_mode, .output.format, '//                          &
+                '.controls.nonlinear_type, .load.gravity.enabled or .magnitude)')
+      return
+    end if
+    ! The 20 GiD switches, named individually for the same reason they are staged
+    ! individually: a list that silently covers 19 of 20 is this task's signature defect.
+    if (.not. opt_is_set(problem%steps(1)%output%field%u) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%s) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%ms) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%f) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%rot) .or.                              &
+        .not. opt_is_set(problem%steps(1)%output%field%v) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%a) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%T) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%P) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%Pv) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%ep) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%Y) .or.                                &
+        .not. opt_is_set(problem%steps(1)%output%field%FC) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%Ns) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%Ss) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%Mxy) .or.                              &
+        .not. opt_is_set(problem%steps(1)%output%field%bem) .or.                              &
+        .not. opt_is_set(problem%steps(1)%output%field%wh) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%wv) .or.                               &
+        .not. opt_is_set(problem%steps(1)%output%field%bcs)) then
+      call fail(errors, 'steps[0].output.field has an unset GiD switch; all 20 are read '//   &
+                'by the staging pass')
+      return
+    end if
+    if (.not. allocated(problem%mesh%nsets)) then
+      call fail(errors, 'mesh.nsets is not allocated; nfixsets is its cardinality'); return
+    end if
+
     do i = 1, size(problem%materials)
       if (.not. opt_is_set(problem%materials(i)%E) .or.                                        &
           .not. opt_is_set(problem%materials(i)%nu) .or.                                       &
@@ -1708,6 +1928,98 @@ contains
     end do
     ok = .true.
   end subroutine verify_problem_inputs
+
+  ! INV-COMMIT-TOTAL, residue CROSS-CHECK: the carried value must agree with the gate that
+  ! let the deck through.
+  !
+  ! The adapter refuses every one of these unless it holds the value named below, so by
+  ! the time commit runs there are TWO independent statements about each: what the gate
+  ! proved, and what the carrier says the deck actually held. This asserts they agree.
+  ! That is deliberately stronger than deriving one from the other -- v3 of the design
+  ! proposed writing the gate's value as a constant and the lead overruled it, because a
+  ! constant makes the two indistinguishable and a disagreement then has nowhere to show
+  ! (L2c-fold-design.md 1.6.2). A mismatch here means the adapter's gate and its carrier
+  ! have drifted apart, which is a defect in this repository, not an unusual deck.
+  !
+  ! WHAT IS NOT CROSS-CHECKED, and why, because a list that quietly covers less than it
+  ! claims is this task's most-repeated defect:
+  !   * `stab_matde` has an INTERVAL for a gate (`> nblks` disables), not a value, so the
+  !     check is that it lands in the admitted interval -- 1.6.3.
+  !   * `npoinb`, `nsmat` and `delgroup` have NO gate at all: the adapter reads them and
+  !     discards them (1.7.1's table). There is nothing to agree with, and inventing an
+  !     expectation here would be exactly the "second source of truth" the carrier exists
+  !     to avoid. They are carried unchecked, and that is the honest state.
+  !   * `runblks` is gated to 1, not 0.
+  subroutine verify_residue_against_gates(residue, errors, ok)
+    type(deck_residue_t), intent(in) :: residue
+    type(problem_errors_t), intent(inout) :: errors
+    logical, intent(out) :: ok
+
+    ok = .false.
+
+    if (opt_or(residue%restart) /= 0 .or. opt_or(residue%relis) /= 0 .or.                     &
+        opt_or(residue%adina) /= 0) then
+      call fail(errors, 'the deck residue carries a non-zero restart, relis or adina, '//     &
+                'but the adapter rejects any deck that does (F1); the gate and the '//        &
+                'carrier disagree')
+      return
+    end if
+    if (opt_or(residue%runblks) /= 1) then
+      call fail(errors, 'the deck residue carries runblks /= 1, but the adapter rejects '//   &
+                'any deck that does; the gate and the carrier disagree')
+      return
+    end if
+    if (opt_or(residue%ninit) /= 0 .or. opt_or(residue%nlinks) /= 0 .or.                      &
+        opt_or(residue%block_stab) /= 0 .or. opt_or(residue%nbackf) /= 0 .or.                 &
+        opt_or(residue%ebody) /= 0 .or. opt_or(residue%nlayer) /= 0 .or.                      &
+        opt_or(residue%state_change) /= 0 .or. opt_or(residue%bparameter) /= 0 .or.           &
+        opt_or(residue%ntrans) /= 0) then
+      call fail(errors, 'the deck residue carries a non-zero .glb control value (ninit, '//   &
+                'nlinks, block_stab, nbackf, ebody, nlayer, state_change, bparameter or '//   &
+                'ntrans), but the adapter rejects any deck that does; the gate and the '//    &
+                'carrier disagree')
+      return
+    end if
+    if (any(residue%uinitial /= 0_int32)) then
+      call fail(errors, 'the deck residue carries a non-zero uinitial, but the adapter '//    &
+                'rejects any deck that does; the gate and the carrier disagree')
+      return
+    end if
+    if (opt_or(residue%nplgroup) /= 0 .or. opt_or(residue%nedge) /= 0 .or.                    &
+        opt_or(residue%edge_load_group) /= 0 .or. opt_or(residue%nbeamload) /= 0 .or.         &
+        opt_or(residue%nplateload) /= 0) then
+      call fail(errors, 'the deck residue carries a non-zero .loa count (nplgroup, nedge, '// &
+                'edge_load_group, nbeamload or nplateload), but the adapter rejects any '//   &
+                'deck that does; the gate and the carrier disagree')
+      return
+    end if
+    if (opt_or(residue%ntemp_surface) /= 0 .or. opt_or(residue%ntedge) /= 0 .or.              &
+        opt_or(residue%ntelgroup) /= 0 .or. opt_or(residue%npipe) /= 0) then
+      call fail(errors, 'the deck residue carries a non-zero .tem count (ntemp_surface, '//   &
+                'ntedge, ntelgroup or npipe), but the adapter rejects any deck that does '//  &
+                '(A12..A15); the gate and the carrier disagree')
+      return
+    end if
+    ! An interval, not a value: stab_matde > nblks is what disables it, and a compliant
+    ! third deck could carry 5 where both goldens carry 99999.
+    if (opt_or(residue%stab_matde) <= int(size_of_blocks(residue))) then
+      call fail(errors, 'the deck residue carries stab_matde inside the range the '//         &
+                'adapter rejects; the gate and the carrier disagree')
+      return
+    end if
+
+    ok = .true.
+  end subroutine verify_residue_against_gates
+
+  !> nblks as the carrier itself implies it: uinitial is [nblks] long by construction.
+  !> Used only by the stab_matde interval check, and taken from the carrier rather than
+  !> from ProblemState so that the cross-check compares the gate against the CARRIER
+  !> alone, without a third object joining in.
+  pure integer function size_of_blocks(residue) result(n)
+    type(deck_residue_t), intent(in) :: residue
+    n = 0
+    if (allocated(residue%uinitial)) n = size(residue%uinitial)
+  end function size_of_blocks
 
   ! INV-COMMIT-TOTAL, residue half: every component of the carrier must be SET.
   !
@@ -2135,6 +2447,16 @@ contains
     call opt_get(x, v, found)
     if (.not. found) v = ''
   end function opt_text_or
+
+  ! The value of an opt_logical, or .false. when unset. Same fallback discipline as
+  ! opt_or, and same caveat: verify_problem_inputs is what stops an unset one reaching
+  ! here, because .false. is a legitimate answer this cannot distinguish from silence.
+  pure logical function opt_logical_or(x) result(v)
+    type(opt_logical), intent(in) :: x
+    logical :: found
+    call opt_get(x, v, found)
+    if (.not. found) v = .false.
+  end function opt_logical_or
 
   pure real(real64) function opt_or_real(x) result(v)
     type(opt_real), intent(in) :: x
