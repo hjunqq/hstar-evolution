@@ -77,22 +77,19 @@ module yl_adapter_load
   use yl_problem_types, only: boundary_t, amplitude_t, amplitude_point_t
   use yl_problem_optional, only: opt_set
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, PE_INTERNAL
+                                make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
+                                PE_STAGE_ADAPT
   use yl_problem_builder, only: problem_builder_t, amplitude_builder_t, &
                                 builder_amplitude_begin, builder_amplitude_set_name, &
                                 builder_amplitude_set_type, builder_amplitude_add_point, &
                                 builder_amplitude_finish, builder_add_amplitude
-  use yl_adapter_parts, only: step_parts_t, deck_context_t, TYPE_ABC_MIF
+  use yl_adapter_parts, only: step_parts_t, deck_context_t, TYPE_ABC_MIF, reject_dialect
 
   implicit none
   private
 
   public :: parse_loa, parse_pre
 
-  ! PE_STAGE_ADAPT is not yet defined in yl_problem_errors (contract SS4: "L2-b
-  ! 负责新增此常量"). Literal value the constant is expected to hold; switch to
-  ! the real constant once it lands so this module has one place to change.
-  character(len=*), parameter :: STAGE_ADAPT = 'adapt'
 
   character(len=*), parameter :: SRC_LOA = 'Load.f90'
   character(len=*), parameter :: SRC_PRE = 'Prescrib.f90'
@@ -180,9 +177,8 @@ contains
     ! golden decks carry nbackdT=0). Not reproduced.
     if (ctx%nbackdt == 2) then
       loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.set_count', line=213_int32)
-      call reject_unsupported(errors, 'A8/restart-linked-boundary-unsupported', 'steps[0].boundary', &
-           'nbackdT == 2: the Prescrib.f90:184-201 record shape is a restart-linked dialect ' // &
-           'outside the static-q4/1 whitelist and is not reproduced', loc)
+      call reject_dialect(errors, 'A8', 'restart-linked-boundary-unsupported', loc, &
+                          actual=itoa(int(ctx%nbackdt)), expected='0 or 1')
       return
     end if
 
@@ -201,9 +197,8 @@ contains
     if (trim(ctx%type_abc) == TYPE_ABC_MIF) then
       loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.reached_only_Prescrib_213', &
                                   line=218_int32)
-      call reject_unsupported(errors, 'A9/mif-boundary-unsupported', 'steps[0].boundary', &
-           "type_abc == 'MIF': only fixed/prescribed displacement is in the static-q4/1 " // &
-           'whitelist; the 9-field MIF/VIE record shape (Prescrib.f90:218) is not reproduced', loc)
+      call reject_dialect(errors, 'A9', 'mif-boundary-unsupported', loc, &
+                          actual=trim(ctx%type_abc), expected='not '//TYPE_ABC_MIF)
       return
     end if
 
@@ -223,9 +218,8 @@ contains
       if (nextr /= 0) then
         loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.set_header', line=220_int32, &
                                     record=int(ifixset, int32))
-        call reject_unsupported(errors, 'A10/extrapolation-record-unsupported', 'steps[0].boundary', &
-             'nextr /= 0: the per-node extrapolation list (Prescrib.f90:261-266) is not reproduced', &
-             loc, index=int(ifixset, int32))
+        call reject_dialect(errors, 'A10', 'extrapolation-record-unsupported', loc, &
+                            actual=itoa(nextr), expected='0', idx=int(ifixset, int32))
         return
       end if
 
@@ -246,9 +240,9 @@ contains
       if (ctx%ntrans > 0 .and. ifixvar <= ctx%ndimn) then
         loc = make_source_location(file=SRC_PRE, reader='PRE.prescrib_set.set_nodes', line=244_int32, &
                                     record=int(ifixset, int32))
-        call reject_unsupported(errors, 'A11/mif-coordinate-record-unsupported', 'steps[0].boundary', &
-             'ntrans > 0 and ifixvar <= ndimn: the MIF free-face coordinate record ' // &
-             '(Prescrib.f90:248-249) is not reproduced', loc, index=int(ifixset, int32))
+        call reject_dialect(errors, 'A11', 'mif-coordinate-record-unsupported', loc, &
+                            actual='ntrans='//itoa(int(ctx%ntrans))//' ifixvar='//itoa(ifixvar), &
+                            expected='ntrans=0', idx=int(ifixset, int32))
         deallocate (list_fix)
         return
       end if
@@ -354,9 +348,8 @@ contains
       ! Load.f90:169-172 -- nstoch_curve/=0 reads a stochastic-parameter-order
       ! record here; not reproduced (not in the static-q4/1 whitelist).
       if (nstoch_curve /= 0) then
-        call reject_unsupported(errors, 'A1/stochastic-curve-modifier-unsupported', 'amplitudes', &
-             'nstoch_curve /= 0: the stochastic curve parameter record (Load.f90:171) is not ' // &
-             'reproduced', loc, index=int(itcurve, int32))
+        call reject_dialect(errors, 'A1', 'stochastic-curve-modifier-unsupported', loc, &
+                            actual=itoa(nstoch_curve), expected='0', idx=int(itcurve, int32))
         return
       end if
 
@@ -365,10 +358,8 @@ contains
       ! HARMONIC/FOURIERSERIES/WATERLEVEL/SEISMIC/EXTRAPOLATION/ARCLENGTH each
       ! read different fields and are outside the static-q4/1 whitelist.
       if (trim(type_curve) /= 'LINEAR') then
-        call reject_unsupported(errors, 'A2/curve-type-unsupported', 'amplitudes', &
-             "type_curve = '" // trim(type_curve) // "': only 'LINEAR' (Load.f90:218-222) is in " // &
-             'the static-q4/1 whitelist; every other named case (Load.f90:175-217) reads a ' // &
-             'different record shape that is not reproduced', loc, index=int(itcurve, int32))
+        call reject_dialect(errors, 'A2', 'curve-type-unsupported', loc, &
+                            actual=trim(type_curve), expected='LINEAR', idx=int(itcurve, int32))
         return
       end if
 
@@ -439,8 +430,8 @@ contains
     if (nplgroup /= 0) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.point_load_count', &
                                   line=241_int32)
-      call reject_unsupported(errors, 'A3/point-load-unsupported', 'steps[0].load', &
-           'nplgroup /= 0: point loads (Load.f90:246-333) are outside the static-q4/1 whitelist', loc)
+      call reject_dialect(errors, 'A3', 'point-load-unsupported', loc, &
+                          actual=itoa(nplgroup), expected='0')
       return
     end if
 
@@ -458,9 +449,8 @@ contains
     ! attaches pressure loads to; out of the static-q4/1 whitelist.
     if (nedge /= 0) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.edge_count', line=365_int32)
-      call reject_unsupported(errors, 'A4/edge-definition-unsupported', 'steps[0].load', &
-           'nedge /= 0: edge definitions (Load.f90:369-465) feed only pressure loads, which ' // &
-           'are outside the static-q4/1 whitelist', loc)
+      call reject_dialect(errors, 'A4', 'edge-definition-unsupported', loc, &
+                          actual=itoa(nedge), expected='0')
       return
     end if
 
@@ -516,9 +506,8 @@ contains
     if (edge_load_group /= 0) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.edge_load_groups', &
                                   line=754_int32)
-      call reject_unsupported(errors, 'A5/pressure-load-unsupported', 'steps[0].load', &
-           'edge_load_group /= 0: edge / water-pressure loads (Load.f90:757-908) are outside ' // &
-           'the static-q4/1 whitelist', loc)
+      call reject_dialect(errors, 'A5', 'pressure-load-unsupported', loc, &
+                          actual=itoa(edge_load_group), expected='0')
       return
     end if
 
@@ -583,8 +572,8 @@ contains
     if (nbeamload /= 0) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.beam_load_count', &
                                   line=933_int32)
-      call reject_unsupported(errors, 'A6/beam-load-unsupported', 'steps[0].load', &
-           'nbeamload /= 0: beam loads (Load.f90:936-1004) are outside the static-q4/1 whitelist', loc)
+      call reject_dialect(errors, 'A6', 'beam-load-unsupported', loc, &
+                          actual=itoa(nbeamload), expected='0')
       return
     end if
 
@@ -605,9 +594,8 @@ contains
     if (nplateload /= 0) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.plate_load_count', &
                                   line=1014_int32)
-      call reject_unsupported(errors, 'A7/plate-load-unsupported', 'steps[0].load', &
-           'nplateload /= 0: plate/water-pressure loads (Load.f90:1017-1080) are outside the ' // &
-           'static-q4/1 whitelist', loc)
+      call reject_dialect(errors, 'A7', 'plate-load-unsupported', loc, &
+                          actual=itoa(nplateload), expected='0')
       return
     end if
 
@@ -629,7 +617,7 @@ contains
 
     ok = ctx%filled
     if (ok) return
-    call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                                        rule_id='A0/deck-context-not-filled', &
                                        object_path='steps[0]', &
                                        message='parse_loa/parse_pre called with an unfilled ' // &
@@ -653,22 +641,10 @@ contains
     if (ok) return
     loc = make_source_location(file=source_file, reader=reader_id, line=int(source_line, int32), &
                                 record=record)
-    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                                        rule_id='A-IO/'//trim(reader_id), object_path=object_path, &
                                        message='I/O error reading '//trim(reader_id), source=loc))
   end subroutine check_io
-
-  !> Raises PE_UNSUPPORTED for a deck record outside the static-q4/1 whitelist.
-  subroutine reject_unsupported(errors, rule_id, object_path, message, loc, index)
-    type(problem_errors_t), intent(inout) :: errors
-    character(len=*), intent(in) :: rule_id, object_path, message
-    type(source_location_t), intent(in) :: loc
-    integer(int32), intent(in), optional :: index
-
-    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, rule_id=rule_id, &
-                                       object_path=object_path, message=message, source=loc, &
-                                       index=index))
-  end subroutine reject_unsupported
 
   !> Appends to a geometrically-grown boundary_t buffer, mirroring the
   !> SEED_CAPACITY-then-double growth yl_problem_builder uses for its own

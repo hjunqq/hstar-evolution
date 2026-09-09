@@ -86,20 +86,15 @@ module yl_adapter_material
   use yl_problem_builder, only: problem_builder_t, builder_add_material, &
                                  builder_materials_empty, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, &
-                                PE_INTERNAL
-  use yl_adapter_parts, only: deck_context_t, solver_parts_t, section_parts_t
+                                make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
+                                PE_STAGE_ADAPT
+  use yl_adapter_parts, only: deck_context_t, solver_parts_t, section_parts_t, reject_dialect
 
   implicit none
   private
 
   public :: parse_mat, parse_sol
 
-  ! L2-b has not yet landed PE_STAGE_ADAPT (adapter-contract.md §4). This literal is
-  ! this module's best guess at that constant's eventual value, spelled the same way
-  ! as the four stage names already in yl_problem_errors.f90. Replace with
-  ! PE_STAGE_ADAPT once L2-b adds it.
-  character(len=*), parameter :: STAGE_ADAPT = 'adapt'
 
 contains
 
@@ -142,7 +137,7 @@ contains
 
     if (.not. ctx%filled) then
       loc = make_source_location(file='.mat', reader='material_set', line=243_int32)
-      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                       rule_id='A-MAT/context-not-filled', object_path='materials', &
                       message='parse_mat was called before parse_glb filled deck_context_t', &
                       source=loc))
@@ -157,10 +152,7 @@ contains
     read (unit, *, iostat=ios, iomsg=iomsg_buf) nscurve
     if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.curve_count', 245_int32)) return
     if (nscurve /= 0_int32) then
-      call mat_reject(errors, 'A-MAT/curve-count', 245_int32, &
-                      'property curves (nscurve/=0) read npoints/type_curve/strain_curve/' &
-                      //'stress_curve records this parser cannot shape (Material.f90:250-257)', &
-                      itoa(nscurve))
+      call mat_reject(errors, 'curve-count', 245_int32, itoa(nscurve))
       return
     end if
 
@@ -216,7 +208,7 @@ contains
       if (imat < 1_int32 .or. imat > mmats) then
         loc = make_source_location(file='.mat', reader='material_set', line=283_int32, &
                                     record=jmat)
-        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                         rule_id='A-MAT/material-id-range', object_path='materials', &
                         index=jmat, field='id', &
                         message='imat must address the 1..nmats props(:) slot ' &
@@ -226,9 +218,7 @@ contains
         return
       end if
       if (trim(property) /= 'MECHANICAL') then
-        call mat_reject(errors, 'A-MAT/property', 294_int32, &
-                        'property_select (Material.f90:294) has a branch per property; only ' &
-                        //'MECHANICAL is whitelisted', trim(property), rec=jmat, field='kind')
+        call mat_reject(errors, 'property', 294_int32, trim(property), rec=jmat)
         return
       end if
 
@@ -237,9 +227,7 @@ contains
       if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.material_nphase', &
                             298_int32, rec=jmat)) return
       if (nphase /= 1_int32) then
-        call mat_reject(errors, 'A-MAT/phase-count', 298_int32, &
-                        'the phase loop (Material.f90:300) reads one phase record per nphase; ' &
-                        //'only a single SOLID phase is whitelisted', itoa(nphase), rec=jmat)
+        call mat_reject(errors, 'phase-count', 298_int32, itoa(nphase), rec=jmat)
         return
       end if
 
@@ -248,10 +236,7 @@ contains
       if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.material_phase', &
                             302_int32, rec=jmat)) return
       if (trim(phase) /= 'SOLID') then
-        call mat_reject(errors, 'A-MAT/phase', 305_int32, &
-                        'phase_select (Material.f90:305) also has a FLUID branch reading ' &
-                        //'different fields; only SOLID is whitelisted', trim(phase), &
-                        rec=jmat, field='phase')
+        call mat_reject(errors, 'phase', 305_int32, trim(phase), rec=jmat)
         return
       end if
 
@@ -272,43 +257,27 @@ contains
                             313_int32, rec=jmat)) return
 
       if (icreep /= 0_int32) then
-        call mat_reject(errors, 'A-MAT/creep', 357_int32, &
-                        'icreep>0 reads a creep-model record shaped by icreep itself ' &
-                        //'(Material.f90:357-398); not whitelisted', itoa(icreep), &
-                        rec=jmat, field='creep_model')
+        call mat_reject(errors, 'creep', 357_int32, itoa(icreep), rec=jmat)
         return
       end if
       if (kind_wt /= 0_int32) then
-        call mat_reject(errors, 'A-MAT/wetting', 402_int32, &
-                        'kind_wt>0 reads a wetting-deformation record (Material.f90:402-418); ' &
-                        //'not whitelisted', itoa(kind_wt), rec=jmat, field='wetting_kind')
+        call mat_reject(errors, 'wetting', 402_int32, itoa(kind_wt), rec=jmat)
         return
       end if
       if (jliqu /= 0_int32) then
-        call mat_reject(errors, 'A-MAT/liquefaction', 330_int32, &
-                        'jliqu/=0 reads anti-liquefaction cyclic records (Material.f90:330-345); ' &
-                        //'not whitelisted', itoa(jliqu), rec=jmat, field='liquefaction')
+        call mat_reject(errors, 'liquefaction', 330_int32, itoa(jliqu), rec=jmat)
         return
       end if
       if (trim(name) == 'CONTACT') then
-        call mat_reject(errors, 'A-MAT/contact-material', 419_int32, &
-                        'name==CONTACT reads a gap/friction record (Material.f90:419-423); ' &
-                        //'not whitelisted', trim(name), rec=jmat, field='name')
+        call mat_reject(errors, 'contact-material', 419_int32, trim(name), rec=jmat)
         return
       end if
       if (trim(name) == 'NOLINORMK') then
-        call mat_reject(errors, 'A-MAT/nonlinear-normal-stiffness', 450_int32, &
-                        'name==NOLINORMK reads a piecewise-normal-stiffness record ' &
-                        //'(Material.f90:450-456); not whitelisted', trim(name), rec=jmat, &
-                        field='name')
+        call mat_reject(errors, 'nonlinear-normal-stiffness', 450_int32, trim(name), rec=jmat)
         return
       end if
       if (trim(material) /= 'ELASTIC_ISOTROPIC') then
-        call mat_reject(errors, 'A-MAT/model', 457_int32, &
-                        'material_select (Material.f90:457) has a branch per constitutive ' &
-                        //'model, each with its own extra records; only ELASTIC_ISOTROPIC is ' &
-                        //'whitelisted (capability row G3 material.model)', trim(material), &
-                        rec=jmat, field='model')
+        call mat_reject(errors, 'model', 457_int32, trim(material), rec=jmat)
         return
       end if
 
@@ -376,7 +345,7 @@ contains
       matno = ctx%group_matno(igroup)
       if (matno < 1_int32 .or. matno > size(mat_thickness)) then
         loc = make_source_location(file='.mat', reader='material_set', line=283_int32)
-        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                         rule_id='A-MAT/section-material-range', object_path='sections[]', &
                         index=igroup, field='material', &
                         message='section references a material id .mat never defined', &
@@ -389,7 +358,7 @@ contains
         if (seen_matno(j) /= matno) cycle
         if (seen_thickness(j) /= mat_thickness(matno)) then
           loc = make_source_location(file='.mat', reader='material_set', line=319_int32)
-          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                           rule_id='A-MAT/thickness-conflict', object_path='sections[]', &
                           index=igroup, field='thickness', &
                           message='this section''s material already resolved to a ' &
@@ -446,7 +415,7 @@ contains
 
     if (.not. ctx%filled) then
       loc = make_source_location(file='.sol', reader='PROFILE', line=6829_int32)
-      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                       rule_id='A-SOL/context-not-filled', object_path='solver', &
                       message='parse_sol was called before parse_glb filled deck_context_t', &
                       source=loc))
@@ -464,12 +433,7 @@ contains
 
     if (iafile /= 0_int32) then
       loc = make_source_location(file='.sol', reader='PROFILE', line=6833_int32)
-      call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, &
-                      rule_id='A-SOL/pivot-file', object_path='solver', &
-                      field='profile.pivot_file', &
-                      message='iafile/=0 opens a separate unformatted pivot file ' &
-                      //'(Solver.f90:6833, the PARDISO/pivot-capture variant); not whitelisted', &
-                      actual=itoa(iafile), source=loc))
+      call reject_dialect(errors, 'A-SOL', 'pivot-file', loc, actual=itoa(iafile))
       return
     end if
 
@@ -502,7 +466,7 @@ contains
     ok = (ios == 0_int32)
     if (ok) return
     loc = make_source_location(file='.mat', reader='material_set', line=site, record=rec)
-    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                     rule_id='A-MAT/malformed-record', object_path='materials', index=rec, &
                     message='malformed .mat record ('//trim(id)//'): '//trim(iomsg_buf), &
                     source=loc))
@@ -517,25 +481,26 @@ contains
     ok = (ios == 0_int32)
     if (ok) return
     loc = make_source_location(file='.sol', reader='PROFILE', line=site)
-    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                     rule_id='A-SOL/malformed-record', object_path='solver', &
                     message='malformed .sol record ('//trim(id)//'): '//trim(iomsg_buf), &
                     source=loc))
   end function sol_read_ok
 
-  ! One place to raise a whitelist-departure finding for .mat, so every reject above
-  ! carries the same object_path and the same PE_UNSUPPORTED/STAGE_ADAPT pair.
-  subroutine mat_reject(errors, rule_id, site, message, actual, rec, field)
+  ! Every .mat whitelist departure, through the ONE adapter-wide dialect raiser (L2-b,
+  ! yl_adapter_parts). This wrapper survives it because it still carries something the
+  ! raiser cannot know: every A-MAT row is read from '.mat' by 'material_set', so a
+  ! call site names only the legacy line and the record ordinal. object_path, field and
+  ! the wording now come from the row and are no longer arguments -- passing them is
+  ! what let a call site disagree with its own declaration.
+  subroutine mat_reject(errors, condition, site, actual, rec)
     type(problem_errors_t), intent(inout) :: errors
-    character(len=*), intent(in) :: rule_id, message, actual
+    character(len=*), intent(in) :: condition, actual
     integer(int32), intent(in) :: site
     integer(int32), intent(in), optional :: rec
-    character(len=*), intent(in), optional :: field
     type(source_location_t) :: loc
     loc = make_source_location(file='.mat', reader='material_set', line=site, record=rec)
-    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, &
-                    rule_id=rule_id, object_path='materials', index=rec, field=field, &
-                    message=message, actual=actual, source=loc))
+    call reject_dialect(errors, 'A-MAT', condition, loc, actual=actual, idx=rec)
   end subroutine mat_reject
 
   ! Minimal integer-to-text helper for `actual=`. Private and local, same rationale

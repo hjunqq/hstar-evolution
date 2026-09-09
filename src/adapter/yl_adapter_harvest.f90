@@ -115,8 +115,15 @@ module yl_adapter_harvest
 
   public :: harvest_problem_state
 
-  ! Stage name for findings raised by this module. L2-b has not yet landed
-  ! PE_STAGE_ADAPT (adapter-contract.md §4); see yl_adapter_mesh.f90 for the same note.
+  ! Stage name for findings raised by this module. DELIBERATELY NOT PE_STAGE_ADAPT, which
+  ! M4-01 L2-b added to yl_problem_errors for the product parsers: this module is the
+  ! ORACLE (see the module header), so a finding it raises is a statement about what the
+  ! ORACLE implements, never about the user's deck. Its one PE_UNSUPPORTED guard
+  ! (`oracle.path_not_implemented`) is for the same reason absent from L2-b's
+  ! CAP_STAGE_ADAPT dialect table: a row there is a legacy dialect the PRODUCT refuses,
+  ! and putting an oracle gap beside those would (a) let an oracle limitation read as a
+  ! verdict on the deck, and (b) give the dialect coverage walk a row only the oracle can
+  ! trigger. See docs/m4/L2b-dialect-report.md for the full classification.
   character(len=*), parameter :: STAGE_ORACLE = 'oracle'
 
   ! The ten rows fed only by STATIC_U's .man readers -- see module header. Named here so

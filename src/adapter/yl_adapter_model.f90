@@ -145,18 +145,15 @@ module yl_adapter_model
   use yl_problem_builder, only: problem_builder_t, builder_set_mesh_dimension, &
                                  builder_set_interactions, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED
+                                make_problem_error, PE_INVALID_INPUT, PE_STAGE_ADAPT
   use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, section_parts_t, &
-                               LEN_TYPE_ABC
+                               LEN_TYPE_ABC, reject_dialect
 
   implicit none
   private
 
   public :: parse_glb
 
-  ! L2-b has not yet landed PE_STAGE_ADAPT (adapter-contract.md SS4). Spelled the same
-  ! way as yl_adapter_mesh.f90's own placeholder; replace both together once it lands.
-  character(len=*), parameter :: STAGE_ADAPT = 'adapt'
 
   character(len=*), parameter :: SITE_FILE = '.glb'
 
@@ -316,39 +313,33 @@ contains
     ! header note): pinning it here makes that branch unreachable, which is this
     ! parser's way of reproducing rather than skipping the guard.
     if (rmesh /= 0_int32) then
-      call fail_unsupported(errors, loc, 'A-GLB/rmesh-nonzero', 'mesh', 'rmesh', &
-        'remeshing (rmesh/=0) is outside static-q4/1 and this parser does not know the ' // &
-        'format of the valv1/valv2 record it would gate (Global.f90:722)', '0', itoa(rmesh))
+      call reject_dialect(errors, 'A-GLB', 'rmesh-nonzero', loc, actual=itoa(rmesh), expected='0')
       return
     end if
     if (ntlink /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.ntlink', 'ntlink', ntlink); return
+      call reject_pinned(errors, loc, 'ntlink-nonzero', ntlink); return
     end if
     if (mat_curve /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.mat_curve', 'mat_curve', mat_curve); return
+      call reject_pinned(errors, loc, 'mat_curve-nonzero', mat_curve); return
     end if
     if (meshc /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.meshc', 'meshc', meshc); return
+      call reject_pinned(errors, loc, 'meshc-nonzero', meshc); return
     end if
     if (level_set_problem /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.level_set_problem', 'level_set_problem', &
-        level_set_problem); return
+      call reject_pinned(errors, loc, 'level_set_problem-nonzero', level_set_problem); return
     end if
     if (ljdp /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.ljdp', 'ljdp', ljdp); return
+      call reject_pinned(errors, loc, 'ljdp-nonzero', ljdp); return
     end if
     ! stab_matde is NOT checked here (module header note below on the correction): its
     ! meaning depends on nblks, read only at seq 7 (init_and_blocks). Checked there.
     if (abs(kstab) > 0.0_real64) then
-      call fail_unsupported(errors, loc, 'A-GLB/kstab-nonzero', 'control.glb.kstab', 'kstab', &
-        'kstab is a pinned-zero unused switch on static-q4/1', '0.0', rtoa(kstab))
+      call reject_dialect(errors, 'A-GLB', 'kstab-nonzero', loc, actual=rtoa(kstab), expected='0.0')
       return
     end if
     if (trim(outplot) /= 'GIDR') then
-      call fail_unsupported(errors, loc, 'A-GLB/outplot-not-gidr', 'steps[0].output', 'format', &
-        'only the GIDR text flavia writer is reproduced; GIDA (append) and any other ' // &
-        'value select a different .glb.flavia.res open discipline (Global.f90:736-737) ' // &
-        'this build does not implement', 'GIDR', trim(outplot))
+      call reject_dialect(errors, 'A-GLB', 'outplot-not-gidr', loc, actual=trim(outplot), &
+                          expected='GIDR')
       return
     end if
     ! mesh.dimension: a real ProblemState field. Stored as read; the M3 capability gate
@@ -391,10 +382,7 @@ contains
       call fail_read(errors, loc, 'solver', 'init_and_blocks', iomsg_buf); return
     end if
     if (nblks /= 1_int32) then
-      call fail_unsupported(errors, loc, 'A-GLB/multiple-blocks', 'steps', 'nblks', &
-        'this parser assembles exactly one steps[0] (adapter-contract.md SS2.1); a ' // &
-        'multi-block deck needs a step_parts_t per block, which does not exist yet', &
-        '1', itoa(nblks))
+      call reject_dialect(errors, 'A-GLB', 'multiple-blocks', loc, actual=itoa(nblks), expected='1')
       return
     end if
     ! stab_matde (read at seq 2, sizes_and_switches): CORRECTED 2026-09-08 -- an earlier
@@ -407,27 +395,24 @@ contains
     ! `stab_matde<=nblks` is the unsupported case: it would run stab_initialize, which
     ! this build does not reproduce.
     if (stab_matde <= nblks) then
-      call fail_unsupported(errors, loc, 'A-GLB/stab-matde-enabled', 'control.glb', &
-        'stab_matde', &
-        'stab_matde<=nblks would run stab_initialize (Fem.f90:2441), which this ' // &
-        'build does not reproduce; a disable sentinel (e.g. 99999) is required', &
-        '> '//itoa(nblks), itoa(stab_matde))
+      call reject_dialect(errors, 'A-GLB', 'stab-matde-enabled', loc, actual=itoa(stab_matde), &
+                          expected='> '//itoa(nblks))
       return
     end if
     if (nlinks /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.nlinks', 'nlinks', nlinks); return
+      call reject_pinned(errors, loc, 'nlinks-nonzero', nlinks); return
     end if
     if (block_stab /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.block_stab', 'block_stab', block_stab); return
+      call reject_pinned(errors, loc, 'block_stab-nonzero', block_stab); return
     end if
     if (nbackf /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.nbackf', 'nbackf', nbackf); return
+      call reject_pinned(errors, loc, 'nbackf-nonzero', nbackf); return
     end if
     if (ebody /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.ebody', 'ebody', ebody); return
+      call reject_pinned(errors, loc, 'ebody-nonzero', ebody); return
     end if
     if (ninit /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.ninit', 'ninit', ninit); return
+      call reject_pinned(errors, loc, 'ninit-nonzero', ninit); return
     end if
     ! solver.symmetric: legacy `nonsym` is a 0/1 flag with INVERTED sense
     ! (yl_problem_types.f90: "type(opt_logical) :: symmetric ... nonsym is a 0/1 flag with
@@ -439,9 +424,8 @@ contains
     ! set_header record shape (state-field-map.toml note) that .pre's own parser (a
     ! different module) does not implement.
     if (trim(type_ABC) /= 'FIX') then
-      call fail_unsupported(errors, loc, 'A-GLB/absorbing-not-fix', 'interactions.absorbing', &
-        'type', 'MIF changes the .pre set_header shape, which this build does not parse', &
-        'FIX', trim(type_ABC))
+      call reject_dialect(errors, 'A-GLB', 'absorbing-not-fix', loc, actual=trim(type_ABC), &
+                          expected='FIX')
       return
     end if
     call opt_set(inter%absorbing%type, trim(type_ABC))
@@ -461,28 +445,23 @@ contains
       call fail_read(errors, loc, 'steps[0]', 'problem_type', iomsg_buf); return
     end if
     if (nlayer /= 0_int32) then
-      call fail_unsupported(errors, loc, 'A-GLB/nlayer-nonzero', 'control.glb.nlayer', &
-        'nlayer', 'nlayer==2 would also read three more scalars at Global.f90:810, a ' // &
-        'branch this parser does not implement; static-q4/1 has no layered element', &
-        '0', itoa(nlayer))
+      call reject_dialect(errors, 'A-GLB', 'nlayer-nonzero', loc, actual=itoa(nlayer), expected='0')
       return
     end if
     if (state_change /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.state_change', 'state_change', state_change)
+      call reject_pinned(errors, loc, 'state_change-nonzero', state_change)
       return
     end if
     if (Bparameter /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.bparameter', 'Bparameter', Bparameter); return
+      call reject_pinned(errors, loc, 'Bparameter-nonzero', Bparameter); return
     end if
     ! type_nl: no capability-gate row (checked). ALGORT's kresl=1-at-first-iteration path
     ! (state-field-map.toml note, Fem.f90:15451) is only confirmed for the value 5; any
     ! other value changes iteration control this build's ProblemState.controls does not
     ! model narrowly enough to trust.
     if (type_nl /= 5_int32) then
-      call fail_unsupported(errors, loc, 'A-GLB/nonlinear-type-not-5', &
-        'steps[0].controls', 'nonlinear_type', &
-        'only the ALGORT fixed-iteration static path (type_nl=5) is reproduced', &
-        '5', itoa(type_nl))
+      call reject_dialect(errors, 'A-GLB', 'nonlinear-type-not-5', loc, actual=itoa(type_nl), &
+                          expected='5')
       return
     end if
     call opt_set(parts%procedure_, trim(type_problem))
@@ -560,9 +539,8 @@ contains
     ! larger mdofn means an extra field (temperature, pore pressure, ...) this build does
     ! not carry.
     if (mdofn /= ndimn) then
-      call fail_unsupported(errors, loc, 'A-GLB/mdofn-mismatch', 'derived.counts', 'mdofn', &
-        'static-q4/1 is a single displacement field: total dofs must equal mesh.dimension', &
-        itoa(ndimn), itoa(mdofn))
+      call reject_dialect(errors, 'A-GLB', 'mdofn-mismatch', loc, actual=itoa(mdofn), &
+                          expected=itoa(ndimn))
       return
     end if
     allocate (lmdofn(mdofn), order_time_mdofn(mdofn))
@@ -768,10 +746,8 @@ contains
       call fail_read(errors, loc, 'control.glb', 'crack_and_beam', iomsg_buf); return
     end if
     if (nlocalbeam /= 0_int32 .or. ndimnrt /= 0_int32) then
-      call fail_unsupported(errors, loc, 'A-GLB/crack-beam-nonzero', 'control.glb', &
-        'nlocalbeam/ndimnrt', &
-        'concrete crack / beam local-axes elements are outside static-q4/1 isotropic ' // &
-        'linear-elastic', '0,0', itoa(nlocalbeam)//','//itoa(ndimnrt))
+      call reject_dialect(errors, 'A-GLB', 'crack-beam-nonzero', loc, &
+                          actual=itoa(nlocalbeam)//','//itoa(ndimnrt), expected='0,0')
       return
     end if
 
@@ -790,7 +766,7 @@ contains
       call fail_read(errors, loc, 'control.glb', 'transform_and_mif', iomsg_buf); return
     end if
     if (ntrans /= 0_int32) then
-      call reject_pinned(errors, loc, 'control.glb.ntrans', 'ntrans', ntrans); return
+      call reject_pinned(errors, loc, 'ntrans-nonzero', ntrans); return
     end if
 
     ! seq 45 -- RD: GLB.global_data.title#23 (Global.f90:1077)
@@ -853,7 +829,7 @@ contains
       call fail_read(errors, loc, 'control.glb', 'uinitial', iomsg_buf); return
     end if
     if (any(uinitial(1:nblks) /= 0_int32)) then
-      call reject_pinned(errors, loc, 'control.glb.uinitial', 'uinitial', uinitial(1)); return
+      call reject_pinned(errors, loc, 'uinitial-nonzero', uinitial(1)); return
     end if
 
     ! seq 53 -- RD: GLB.global_data.title#27 (Global.f90:1099) -- backf() title; nbackf=0
@@ -1171,34 +1147,27 @@ contains
     type(source_location_t), intent(in) :: loc
     character(len=*), intent(in) :: object_path, field, iomsg_buf
     integer(int32), intent(in), optional :: index
-    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                     rule_id='A-GLB/malformed-record', object_path=object_path, field=field, &
                     index=index, message='malformed .glb record: '//trim(iomsg_buf), &
                     source=loc))
   end subroutine fail_read
 
-  ! One whitelist-rejection finding.
-  subroutine fail_unsupported(errors, loc, rule_id, object_path, field, message, expected, &
-                              actual)
-    type(problem_errors_t), intent(inout) :: errors
-    type(source_location_t), intent(in) :: loc
-    character(len=*), intent(in) :: rule_id, object_path, field, message, expected, actual
-    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, &
-                    rule_id=rule_id, object_path=object_path, field=field, message=message, &
-                    expected=expected, actual=actual, source=loc))
-  end subroutine fail_unsupported
-
   ! Shorthand for the many "pinned guard: value 0 keeps control flow on static_2d path"
   ! switches (module header, case (b)): every one of them is pinned to 0 in
-  ! docs/m2/state-field-map.toml.
-  subroutine reject_pinned(errors, loc, object_path, field, actual)
+  ! docs/m2/state-field-map.toml, so the expected value is the literal '0' every time
+  ! and only the observed value differs between call sites.
+  !
+  ! `condition` is passed in full and spelled out at each call site rather than built
+  ! here from the field name. Deriving it would put a run-time string in the position
+  ! of a table key: a renamed field would then miss its row and surface as L2-b's
+  ! "dialect the table does not declare" INTERNAL fault instead of failing to compile.
+  subroutine reject_pinned(errors, loc, condition, actual)
     type(problem_errors_t), intent(inout) :: errors
     type(source_location_t), intent(in) :: loc
-    character(len=*), intent(in) :: object_path, field
+    character(len=*), intent(in) :: condition
     integer(int32), intent(in) :: actual
-    call fail_unsupported(errors, loc, 'A-GLB/'//trim(field)//'-nonzero', object_path, field, &
-      'pinned guard: value 0 keeps control flow on static_2d path (docs/m2/' // &
-      'state-field-map.toml, '//trim(object_path)//')', '0', itoa(actual))
+    call reject_dialect(errors, 'A-GLB', condition, loc, actual=itoa(actual), expected='0')
   end subroutine reject_pinned
 
   pure function itoa(v) result(s)

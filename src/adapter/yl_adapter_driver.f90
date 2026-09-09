@@ -127,6 +127,17 @@
 !   parser call here is closer to a barrier than to a stage: a `.glb` failure leaves `ctx`
 !   unfilled, and calling `.cor`/`.ele`/... anyway would only add secondary "ctx not filled"
 !   noise (PE_INTERNAL, each parser's own guard) on top of the real, primary defect.
+! THE OUTWARD VERDICT (M4-01 L2-b)
+!   This routine is the adapter's boundary, so it is where a caller asks whether the deck
+!   was refused as a legacy dialect. The answer is ONE call, `dialect_verdict_of(errors)`
+!   (yl_adapter_parts), which returns `UNSUPPORTED_LEGACY_DIALECT` -- the spelling
+!   docs/02-migration-plan.md M4 asks for -- when any finding in the accumulator is a
+!   PE_UNSUPPORTED raised at PE_STAGE_ADAPT, and the empty string otherwise. A caller must
+!   NOT test for PE_UNSUPPORTED alone: `prepare_problem`, which this routine calls at the
+!   end, raises exactly that code from the capability gate for a different reason -- a
+!   draft that parsed fine but describes a model this build cannot run. The stage is what
+!   separates "this deck is a dialect we do not read" from "this model is out of
+!   whitelist", and both are exit class 3.
 module yl_adapter_driver
 
   use iso_fortran_env, only: int32
@@ -135,7 +146,8 @@ module yl_adapter_driver
   use yl_problem_manifest, only: manifest_t
   use yl_problem_profile, only: PROFILE_TAG
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_INTERNAL
+                                make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
+                                PE_STAGE_ADAPT
   use yl_problem_builder, only: problem_builder_t, step_builder_t, &
                                 builder_begin, builder_finish, builder_failed, &
                                 builder_note_failure, builder_add_step, builder_set_solver, &
@@ -162,9 +174,6 @@ module yl_adapter_driver
 
   public :: adapt_legacy_deck
 
-  ! L2-b has not yet landed PE_STAGE_ADAPT (adapter-contract.md SS4). Same stand-in every
-  ! parser module already carries; replace with the real constant once it lands.
-  character(len=*), parameter :: STAGE_ADAPT = 'adapt'
 
   ! This module's own rule-id namespace (contract SS4's "A<n>/<condition>" shape, scoped
   ! locally the same way yl_adapter_load.f90's "A-IO/*" is): failures that belong to
@@ -413,7 +422,7 @@ contains
     open (newunit=u, file=join_path(dir, 'inp'), status='old', action='read', &
           iostat=ios, iomsg=iomsg_buf)
     if (ios /= 0) then
-      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
         rule_id='D0/open-failed', object_path='(deck)', field='inp', &
         message='cannot open "inp" to learn the deck file-name prefix: '//trim(iomsg_buf), &
         source=make_source_location(reader=SITE//'.derive_deck_prefix', file='inp')))
@@ -454,7 +463,7 @@ contains
     good = (ios == 0)
     if (.not. good) then
       close (u)
-      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
         rule_id='D0/prefix-read-failed', object_path='(deck)', field=rd_id, &
         message='cannot read "inp" while learning the deck file-name prefix ('//rd_id// &
                 ', Fem.f90:'//itoa(line)//'): '//trim(iomsg_buf), &
@@ -479,7 +488,7 @@ contains
     ok = (ios == 0)
     if (.not. ok) then
       unit = UNSET_UNIT
-      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
         rule_id='D0/open-failed', object_path='(deck)', field=kind_label, &
         message='cannot open deck file "'//trim(path)//'": '//trim(iomsg_buf), &
         source=make_source_location(reader=SITE, file=path)))

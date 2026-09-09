@@ -105,6 +105,14 @@ module yl_problem_errors
   character(len=*), parameter, public :: PE_STAGE_CAPABILITY = 'capability'
   character(len=*), parameter, public :: PE_STAGE_FINALIZE = 'finalize'
 
+  ! The legacy adapter's stage, which runs BEFORE all four of the above: it is what
+  ! produces the draft they then judge. Named here rather than in the adapter for
+  ! the reason the four above are named here at all -- eight adapter modules each
+  ! carried their own `character(len=*), parameter :: STAGE_ADAPT = 'adapt'`
+  ! stand-in, which is eight places for the spelling to drift. Added by M4-01 L2-b,
+  ! which docs/m4/adapter-contract.md SS4 makes responsible for it.
+  character(len=*), parameter, public :: PE_STAGE_ADAPT = 'adapt'
+
   integer, parameter :: INITIAL_CAPACITY = 8
 
   ! --- source location --------------------------------------------------------

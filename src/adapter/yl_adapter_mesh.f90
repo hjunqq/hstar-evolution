@@ -86,20 +86,16 @@ module yl_adapter_mesh
                                  builder_add_element, builder_elements_empty, &
                                  builder_add_elset, builder_elsets_empty, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, PE_INTERNAL
+                                make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
+                                PE_STAGE_ADAPT
   use yl_problem_profile, only: capability_expect_int
-  use yl_adapter_parts, only: deck_context_t
+  use yl_adapter_parts, only: deck_context_t, reject_dialect
 
   implicit none
   private
 
   public :: parse_cor, parse_ele
 
-  ! L2-b has not yet landed PE_STAGE_ADAPT (adapter-contract.md §4). This literal is
-  ! this module's best guess at that constant's eventual value, spelled the same way
-  ! as the four stage names already in yl_problem_errors.f90 ('normalize', 'validate',
-  ! 'capability', 'finalize'). Replace with PE_STAGE_ADAPT once L2-b adds it.
-  character(len=*), parameter :: STAGE_ADAPT = 'adapt'
 
 contains
 
@@ -121,7 +117,7 @@ contains
 
     if (.not. ctx%filled) then
       loc = make_source_location(file='.cor', reader='global_data', line=1176_int32)
-      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                       rule_id='A-COR/context-not-filled', object_path='mesh.nodes', &
                       message='parse_cor was called before parse_glb filled deck_context_t', &
                       source=loc))
@@ -139,7 +135,7 @@ contains
       loc = make_source_location(file='.cor', reader='global_data', line=1176_int32, &
                                   record=irec)
       if (ios /= 0) then
-        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                         rule_id='A-COR/malformed-record', object_path='mesh.nodes', &
                         index=irec, &
                         message='malformed .cor record: '//trim(iomsg_buf), source=loc))
@@ -193,7 +189,7 @@ contains
 
     if (.not. ctx%filled) then
       loc = make_source_location(file='.ele', reader='read_element', line=1087_int32)
-      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                       rule_id='A-ELE/context-not-filled', object_path='mesh.elements', &
                       message='parse_ele was called before parse_glb filled deck_context_t', &
                       source=loc))
@@ -202,7 +198,7 @@ contains
     if (.not. allocated(ctx%nelgroup) .or. .not. allocated(ctx%group_matno) &
         .or. .not. allocated(ctx%group_kind)) then
       loc = make_source_location(file='.ele', reader='read_element', line=1087_int32)
-      call errors%add(make_problem_error(code=PE_INTERNAL, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                       rule_id='A-ELE/context-incomplete', object_path='mesh.elements', &
                       message='deck_context_t is marked filled but nelgroup/group_matno/' &
                       //'group_kind were never allocated', source=loc))
@@ -233,7 +229,7 @@ contains
           return
         end if
         if (ios /= 0) then
-          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                           rule_id='A-ELE/malformed-record', object_path='mesh.elements', &
                           index=irec, &
                           message='malformed .ele record: '//trim(iomsg_buf), source=loc))
@@ -268,13 +264,13 @@ contains
     loc = make_source_location(file='.ele', reader='read_element', line=1087_int32, &
                                 record=total + 1_int32)
     if (ios /= 0) then
-      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+      call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                       rule_id='A-ELE/malformed-record', object_path='mesh.elements', &
                       index=total + 1_int32, &
                       message='malformed .ele record: '//trim(iomsg_buf), source=loc))
       return
     end if
-    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                     rule_id='A-ELE/count-mismatch', object_path='mesh.elements', &
                     message='.ele has more records than sum(ctx%nelgroup) declares', &
                     actual='> '//itoa(total), expected=itoa(total), source=loc))
@@ -304,12 +300,8 @@ contains
 
     ok = .false.
     loc = make_source_location(file='.glb', reader='global_data', line=694_int32)
-    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, &
-                    rule_id='A-COR/dimension', object_path='mesh', field='dimension', &
-                    message='only the capability table''s analysis.dimension is whitelisted; ' &
-                    //'a different ndimn would build a draft the capability gate rejects later ' &
-                    //'anyway, so this parser stops before spending the read', &
-                    actual=itoa(ndimn), expected=itoa(expected), source=loc))
+    call reject_dialect(errors, 'A-COR', 'dimension', loc, actual=itoa(ndimn), &
+                        expected=itoa(expected))
   end function dimension_ok
 
   ! G1 element.kind_code (yl_problem_profile.f90) is the single source of truth for
@@ -336,12 +328,8 @@ contains
 
     ok = .false.
     loc = make_source_location(file='.glb', reader='global_data', line=1216_int32)
-    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=STAGE_ADAPT, &
-                    rule_id='A-ELE/element-kind', object_path='sections[]', &
-                    field='element_kind', index=igroup, &
-                    message='only the capability table''s element.kind_code (Q4) is ' &
-                    //'whitelisted; this parser only knows how to shape a Q4 connectivity ' &
-                    //'record', actual=itoa(element_kind), expected=itoa(expected), source=loc))
+    call reject_dialect(errors, 'A-ELE', 'element-kind', loc, actual=itoa(element_kind), &
+                        expected=itoa(expected), idx=igroup)
   end function element_kind_ok
 
   ! .ele ran out of records before sum(ctx%nelgroup) was consumed. The symmetric
@@ -351,7 +339,7 @@ contains
     type(problem_errors_t), intent(inout) :: errors
     type(source_location_t), intent(in) :: loc
     integer(int32), intent(in) :: actual_count, expected_count
-    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
                     rule_id='A-ELE/count-mismatch', object_path='mesh.elements', &
                     message='.ele ran out of records before sum(ctx%nelgroup) was consumed', &
                     actual=itoa(actual_count), expected=itoa(expected_count), source=loc))

@@ -1,8 +1,10 @@
 ! yl_adapter_parts -- the adapter's cross-file scaffolding.
 !
-! Three types, one purpose: the legacy deck splits across nine files objects that
-! ProblemState keeps whole, so something has to carry a fact or a fragment from the
-! file that supplies it to the file that needs it.
+! Three types and one raiser. The types exist because the legacy deck splits across
+! nine files objects that ProblemState keeps whole, so something has to carry a fact
+! or a fragment from the file that supplies it to the file that needs it; the raiser
+! exists because all six parsers refuse the same KIND of thing and must refuse it the
+! same way (M4-01 L2-b, below).
 !
 !   deck_context_t   READ  facts established by `.glb` that later parsers need in order
 !                          to size a read or take a branch. Filled by parse_glb only.
@@ -56,6 +58,31 @@
 !     load%gravity%magnitude/direction/amplitude   .loa
 !     boundary(:)       .pre
 !
+! THE DIALECT RAISER (M4-01 L2-b)
+!   `reject_dialect` is the ONE place an adapter says "this is valid legacy that this
+!   build does not cover". Before L2-b each parser built that finding itself, so the
+!   code, the stage, the rule-id shape and the wording were spelled in five modules
+!   and 58 places; docs/m4/adapter-contract.md SS4 assigns the unification here and
+!   docs/02-migration-plan.md M4 names the outward verdict UNSUPPORTED_LEGACY_DIALECT.
+!
+!   A parser now passes only what it observed: the row's two id halves, the source
+!   location, and the value it read. Everything else -- code, stage, rule-id
+!   composition, object_path, field, wording -- comes from the CAP_STAGE_ADAPT row in
+!   yl_problem_profile. A raise site therefore CANNOT drift from its declaration,
+!   because it no longer carries a copy of it.
+!
+!   THE COMPOSED KEY. The row's stable id is `rule_id/condition` and reject_dialect
+!   composes it, from the row it just looked up, after the lookup succeeded. This is
+!   deliberate and it is the shape yl_runtime_build's raise_row already uses: passing
+!   a bare rule id where a composed key is expected is a bug this project has shipped
+!   once, and the only durable fix is to make the joined string un-passable. A caller
+!   here passes two arguments; there is nothing to join and nothing to get wrong.
+!
+!   A KEY THE TABLE DOES NOT DECLARE is reported as PE_INTERNAL, not silently
+!   downgraded -- same reasoning as raise_row: the alternative is a finding whose rule
+!   id no coverage walk will ever match, which is precisely the decay this mechanism
+!   exists to prevent, reappearing as a typo.
+!
 ! WHAT THIS TYPE IS NOT
 !   It is not part of `ProblemState` and never will be. It is adapter scaffolding
 !   with the lifetime of one parse, and it exists only because the deck splits an
@@ -64,9 +91,14 @@
 module yl_adapter_parts
 
   use iso_fortran_env, only: int32
-  use yl_problem_optional, only: opt_text
+  use yl_problem_optional, only: opt_text, opt_value_or
   use yl_problem_types, only: controls_t, load_t, output_t, boundary_t, activation_t,          &
                               solver_t, profile_t, section_t
+  use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,           &
+                               make_problem_error, PE_UNSUPPORTED, PE_INTERNAL,                &
+                               PE_STAGE_ADAPT, PE_EXIT_INTERNAL
+  use yl_problem_profile, only: capability_item_t, dialect_count, dialect_row, dialect_find,   &
+                                dialect_key, DIALECT_VERDICT
 
   implicit none
   private
@@ -76,6 +108,8 @@ module yl_adapter_parts
   public :: section_parts_t, section_parts_reset
   public :: deck_context_t, deck_context_reset
   public :: LEN_TYPE_ABC, TYPE_ABC_MIF
+  public :: reject_dialect, dialect_verdict_of
+  public :: dialect_row_exercised, dialect_first_uncovered
 
   type :: step_parts_t
     ! Scalars and aggregates, filled leaf by leaf per the ownership table above.
@@ -209,5 +243,145 @@ contains
     type(deck_context_t) :: fresh
     ctx = fresh
   end subroutine deck_context_reset
+
+  ! ==========================================================================
+  ! the dialect raiser -- see the module header
+  ! ==========================================================================
+
+  !> Raise the CAP_STAGE_ADAPT row named by (`rule_id`, `condition`).
+  !>
+  !> The caller supplies ONLY run-time facts:
+  !>   loc       where in the legacy deck the value was read (mandatory: a dialect
+  !>             finding without a site sends its reader back to 125 read sites)
+  !>   actual    the value that was actually read, rendered by the caller
+  !>   expected  the whitelisted value, when it is a run-time comparand (e.g.
+  !>             `> `//nblks). Omit it when the row's message already states it;
+  !>             the table never holds it, because for most rows it is a sentence
+  !>             rather than a value.
+  !>   idx       the record ordinal, for a row raised inside a per-record loop.
+  !>
+  !> Everything that identifies the rule comes from the row. There is deliberately
+  !> no `message` argument: a caller able to pass wording is a caller able to make
+  !> the table's wording wrong without failing anything.
+  subroutine reject_dialect(errors, rule_id, condition, loc, actual, expected, idx)
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), intent(in) :: rule_id, condition
+    type(source_location_t), intent(in) :: loc
+    character(len=*), intent(in), optional :: actual, expected
+    integer(int32), intent(in), optional :: idx
+
+    type(capability_item_t) :: row
+    logical :: found
+    integer :: j
+
+    j = dialect_find(rule_id, condition)
+    if (j == 0) then
+      ! Not a dialect this build declares. Reported as an INTERNAL fault at exit
+      ! class 6, never as an UNSUPPORTED verdict at class 3: the deck may be
+      ! perfectly ordinary and it is this program that is wrong.
+      call errors%add(make_problem_error(PE_INTERNAL, PE_STAGE_ADAPT,                          &
+                      trim(rule_id)//'/'//trim(condition), 'adapter', field='*',               &
+                      message='the adapter raised a legacy dialect the capability table '//    &
+                      'does not declare: '//trim(rule_id)//'/'//trim(condition),               &
+                      exit_class=PE_EXIT_INTERNAL, source=loc))
+      return
+    end if
+
+    call dialect_row(j, row, found)
+    if (.not. found) return
+
+    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage=PE_STAGE_ADAPT,              &
+                    rule_id=dialect_key(j), object_path=trim(row%object_path),                 &
+                    index=idx, field=field_or_absent(row), message=trim(row%message),          &
+                    actual=actual, expected=expected, source=loc))
+  end subroutine reject_dialect
+
+  !> The row's `field`, or the string the caller must NOT pass when the row has none.
+  !>
+  !> A blank `field` and an absent `field` are different findings: absent means the
+  !> row binds to the object as a whole, blank would mean it binds to a component
+  !> whose name is the empty string. make_problem_error distinguishes them by
+  !> presence, and a function result cannot be absent -- so this returns a
+  !> zero-length string and the ONE caller above passes it through unconditionally.
+  !> The consequence is recorded here rather than hidden: nineteen dialect rows have
+  !> no field, and their findings carry `field` set to ''. dialect_row_exercised
+  !> compares against the row's own trimmed field, so the two agree by construction.
+  pure function field_or_absent(row) result(f)
+    type(capability_item_t), intent(in) :: row
+    character(len=:), allocatable :: f
+    f = trim(row%field)
+  end function field_or_absent
+
+  !> The adapter's single outward verdict. DIALECT_VERDICT
+  !> ('UNSUPPORTED_LEGACY_DIALECT', docs/02-migration-plan.md M4) when `errors`
+  !> holds at least one dialect finding, the empty string otherwise.
+  !>
+  !> This is what "L2-b unifies the outward expression" means concretely: a caller
+  !> at the adapter boundary asks ONE question and gets ONE answer, instead of
+  !> pattern-matching on 58 rule ids or on a PE_UNSUPPORTED that the capability gate
+  !> also raises for an entirely different reason (a draft that exists but is out of
+  !> whitelist, at a later stage). The stage is what separates them, which is why
+  !> this predicate tests the stage and not just the code.
+  pure function dialect_verdict_of(errors) result(verdict)
+    type(problem_errors_t), intent(in) :: errors
+    character(len=:), allocatable :: verdict
+    type(problem_error_t) :: finding
+    logical :: found
+    integer :: k
+    verdict = ''
+    do k = 1, errors%count()
+      call errors%get(k, finding, found)
+      if (.not. found) cycle
+      if (opt_value_or(finding%code, '') /= PE_UNSUPPORTED) cycle
+      if (opt_value_or(finding%stage, '') /= PE_STAGE_ADAPT) cycle
+      verdict = DIALECT_VERDICT
+      return
+    end do
+  end function dialect_verdict_of
+
+  !> Did any finding in `errors` come from dialect row `j`?
+  !>
+  !> The binding unit is (key, object_path, field) with the key already carrying the
+  !> condition, so it is the QUAD yl_runtime_rules argues for and not the M3-02
+  !> triple. Lives here, next to the raiser, for the reason the capability version
+  !> lives in yl_problem_pipeline: whoever chose the finding's spelling answers the
+  !> question about it, so there is no second copy of that knowledge in a test.
+  pure logical function dialect_row_exercised(errors, j) result(hit)
+    type(problem_errors_t), intent(in) :: errors
+    integer, intent(in) :: j
+    type(capability_item_t) :: row
+    type(problem_error_t) :: finding
+    logical :: found
+    integer :: k
+
+    hit = .false.
+    call dialect_row(j, row, found)
+    if (.not. found) return
+
+    do k = 1, errors%count()
+      call errors%get(k, finding, found)
+      if (.not. found) cycle
+      if (opt_value_or(finding%rule_id, '') /= dialect_key(j)) cycle
+      if (opt_value_or(finding%field, '') /= trim(row%field)) cycle
+      if (opt_value_or(finding%object_path, '') /= trim(row%object_path)) cycle
+      hit = .true.
+      return
+    end do
+  end function dialect_row_exercised
+
+  !> The first dialect row no finding in `errors` exercised, or 0 when every row is
+  !> covered. An INDEX, not a logical, for the reason capability_first_uncovered is:
+  !> "row 41, A-MAT/creep, has no counter-example" is actionable, "coverage
+  !> incomplete" is not.
+  pure integer function dialect_first_uncovered(errors) result(j)
+    type(problem_errors_t), intent(in) :: errors
+    integer :: k
+    j = 0
+    do k = 1, dialect_count()
+      if (dialect_row_exercised(errors, k)) cycle
+      j = k
+      return
+    end do
+  end function dialect_first_uncovered
 
 end module yl_adapter_parts

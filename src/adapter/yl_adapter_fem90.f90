@@ -134,19 +134,15 @@ module yl_adapter_fem90
   use yl_problem_types, only: case_t
   use yl_problem_builder, only: problem_builder_t, builder_set_case, builder_note_failure
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                PE_INVALID_INPUT, PE_UNSUPPORTED, PE_INTERNAL
+                                PE_INVALID_INPUT, PE_INTERNAL
   use yl_problem_optional, only: opt_set
-  use yl_adapter_parts, only: step_parts_t, deck_context_t
+  use yl_adapter_parts, only: step_parts_t, deck_context_t, reject_dialect
 
   implicit none
   private
 
   public :: parse_inp, parse_man
 
-  ! docs/m4/adapter-contract.md S4 names `PE_STAGE_ADAPT` as a constant L2-b still has to add
-  ! to yl_problem_errors. Until it exists this module names its own stage locally rather than
-  ! block on a file it does not own; swap this literal for the real constant when it lands.
-  character(len=*), parameter :: STAGE_ADAPT = 'adapt'
 
   ! See the module header note "WHY WHITELIST_MDOFN = 2 IS NOT AN INVENTED VALUE".
   integer(int32), parameter :: WHITELIST_MDOFN = 2_int32
@@ -200,24 +196,12 @@ contains
     ! control.run.{restart,relis,sysrelis,adina,uopt_r,gamamax}: "pinned guard: value 0 keeps
     ! control flow on static_2d path"). See the module header for what each nonzero value
     ! actually triggers in legacy.
-    if (.not. reject_nonzero(b, errors, restart, 'control.run.restart', 'F1/restart', loc, &
-        'restart/=0 resumes a prior run (Fem.f90:277-309); this build only reads a fresh ' // &
-        'deck')) return
-    if (.not. reject_nonzero(b, errors, relis, 'control.run.relis', 'F1/relis', loc, &
-        'relis/=0 enables the reliability-analysis branch (STATIC_U_reli, Fem.f90:1921), ' // &
-        'not read by this module')) return
-    if (.not. reject_nonzero(b, errors, sysrelis, 'control.run.sysrelis', 'F1/sysrelis', loc, &
-        'sysrelis/=0 enables the system-reliability branch (Fem.f90:5380,6230), not read ' // &
-        'by this module')) return
-    if (.not. reject_nonzero(b, errors, adina, 'control.run.adina', 'F1/adina', loc, &
-        'ADINA/=0 diverts to the ADINA export path and stops the run (Fem.f90:1900-1902)')) &
-        return
-    if (.not. reject_nonzero(b, errors, uopt_r, 'control.run.uopt_r', 'F1/uopt_r', loc, &
-        'Uopt_R==1 reads an entire extra optimisation-coordinate deck (Fem.f90:120-142) ' // &
-        'that has no reader-inventory entry')) return
-    if (.not. reject_nonzero(b, errors, gamamax, 'control.run.gamamax', 'F1/gamamax', loc, &
-        'gamamax/=0 opens an equivalent-linearisation soil-constitutive file ' // &
-        '(Fem.f90:1724-1730)')) return
+    if (.not. reject_nonzero(errors, restart, 'F1', 'restart', loc)) return
+    if (.not. reject_nonzero(errors, relis, 'F1', 'relis', loc)) return
+    if (.not. reject_nonzero(errors, sysrelis, 'F1', 'sysrelis', loc)) return
+    if (.not. reject_nonzero(errors, adina, 'F1', 'adina', loc)) return
+    if (.not. reject_nonzero(errors, uopt_r, 'F1', 'uopt_r', loc)) return
+    if (.not. reject_nonzero(errors, gamamax, 'F1', 'gamamax', loc)) return
 
     ! RD: INP.FEM90.title#2 (Fem.f90:101)
     ! read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) text
@@ -246,9 +230,7 @@ contains
     ! "= len(steps) executed; equals nblks=1 on both cases" -- a runblks other than 1 asks for
     ! a `steps` array this capability slice does not cover.
     if (runblks /= 1_int32) then
-      call builder_note_failure(b, PE_UNSUPPORTED, 'F1/runblks', 'derived.counts.runblks', &
-        '', 'runblks must be 1 under static-q4/1 (single-stage static); this build cannot ' // &
-        'represent a multi-block analysis', loc, errors)
+      call reject_dialect(errors, 'F1', 'runblks', loc, actual=itoa(int(runblks)), expected='1')
       return
     end if
   end subroutine parse_inp
@@ -329,11 +311,8 @@ contains
     ! increment's values -- rejected here, before the loop runs, rather than discovered by
     ! watching it iterate more than once.
     if (nincs /= 1_int32) then
-      call builder_note_failure(b, PE_UNSUPPORTED, 'F2/multi-increment', &
-        'steps0.controls.increments', '', &
-        'nincs must be 1: ProblemState.steps[0].controls has no per-increment array, so ' // &
-        'more than one increment cannot be represented without silently dropping data', &
-        loc, errors)
+      call reject_dialect(errors, 'F2', 'multi-increment', loc, actual=itoa(int(nincs)), &
+                          expected='1')
       return
     end if
 
@@ -383,12 +362,8 @@ contains
       ! owner (state-field-map.toml: both `not_migrated`). Nonzero enables branches
       ! (Fem.f90:3636-3650 water-coupling; Qstatic-specific reads further down STATIC_U) this
       ! whitelist slice does not cover.
-      if (.not. reject_nonzero(b, errors, cwater, 'not_migrated.cwater', 'F2/cwater', loc, &
-          'cwater/=0 enables the water-coupling coefficient branch (Fem.f90:3636-3641), ' // &
-          'not read by this module')) return
-      if (.not. reject_nonzero(b, errors, qstatic, 'not_migrated.qstatic', 'F2/qstatic', loc, &
-          'Qstatic/=0 enables the quasi-static-force reads further down STATIC_U, not read ' // &
-          'by this module')) return
+      if (.not. reject_nonzero(errors, cwater, 'F2', 'cwater', loc)) return
+      if (.not. reject_nonzero(errors, qstatic, 'F2', 'qstatic', loc)) return
 
       ! RD: MAN.STATIC_U.tolerances (Fem.f90:3633) -- guard loop iincs
       ! read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)toler_force,toler_var(1:mdofn)
@@ -443,19 +418,31 @@ contains
     end if
   end function check_read
 
-  !> Rejects a nonzero flag as PE_UNSUPPORTED, naming `rule_id` and explaining in `why` (see
-  !> the module header) what branch of legacy the flag would have taken. Returns .true. (and
+  !> Rejects a nonzero flag as the dialect row (`rule_id`, `condition`). Returns .true. (and
   !> emits nothing) when the flag is 0, matching this build's static-q4/1 pinned-guard values.
-  function reject_nonzero(b, errors, value, object_path, rule_id, loc, why) result(ok)
-    type(problem_builder_t), intent(inout) :: b
+  !>
+  !> WHAT `object_path` AND `why` USED TO DO, AND WHY THEY ARE GONE (M4-01 L2-b)
+  !> Both were arguments, spelled at each call site. They are now columns of the row and are
+  !> read from it, so a call site can no longer describe its own rejection differently from
+  !> the table that declares it.
+  !>
+  !> WHAT CHANGED IN BEHAVIOUR, STATED RATHER THAN GLOSSED
+  !> The old raise went through `builder_note_failure`, which ALSO set `b%failed` -- and
+  !> stamped the finding `stage='builder'`, not `'adapt'`, which contradicted
+  !> docs/m4/adapter-contract.md SS4. The unified raiser stamps PE_STAGE_ADAPT and does not
+  !> touch the builder. `b` is therefore no longer read here, and both callers of parse_inp /
+  !> parse_man (yl_adapter_driver and yl_adapter_fidelity) stop on `errors%count()` growing,
+  !> not on `builder_failed`, so the fail-fast is unchanged; the two parsers themselves
+  !> so the `b` dummy is gone too rather than kept as an argument nothing reads.
+  function reject_nonzero(errors, value, rule_id, condition, loc) result(ok)
     type(problem_errors_t), intent(inout) :: errors
     integer(int32), intent(in) :: value
-    character(len=*), intent(in) :: object_path, rule_id, why
+    character(len=*), intent(in) :: rule_id, condition
     type(source_location_t), intent(in) :: loc
     logical :: ok
     ok = (value == 0_int32)
     if (.not. ok) then
-      call builder_note_failure(b, PE_UNSUPPORTED, rule_id, object_path, '', why, loc, errors)
+      call reject_dialect(errors, rule_id, condition, loc, actual=itoa(int(value)), expected='0')
     end if
   end function reject_nonzero
 
