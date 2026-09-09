@@ -33,6 +33,20 @@
 #            run. Note also that this profile is MemorySanitizer (use of
 #            uninitialised memory); it does NOT detect leaks. Leak evidence needs
 #            -fsanitize=address or valgrind and is still NOT PERFORMED.
+#   asan     -O1 -g -fsanitize=address: AddressSanitizer, and with it
+#            LeakSanitizer, which is on by default. THE CONVERSE OF `sanitize`,
+#            not a stronger version of it: `sanitize` is MemorySanitizer and
+#            finds reads of uninitialised memory but NOT leaks; this profile
+#            finds leaks and use-after-free but NOT uninitialised reads. Neither
+#            substitutes for the other, and M4-01 step 6 needs this one.
+#            WHAT LEAKSANITIZER CANNOT SEE: it reports blocks that are
+#            UNREACHABLE at exit. Memory still referenced by a live module
+#            variable is not a leak to it, however wrong holding it may be. That
+#            is why the leak controls must release the OWNER (so the inner
+#            target becomes unreachable) rather than simply skip a deallocate
+#            while the global still points at it -- measured on a deliberate
+#            leak before any of this was built: a pointer left live in the main
+#            program is reported as nothing at all.
 #   Only `release` is the M0 reference build; the checking profiles are kept
 #   so that the recorded evidence can be reproduced (docs/build-linux.md).
 #
@@ -114,14 +128,14 @@ PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""; TARGET=solver
 SRC_GIVEN=0; ALLOW_EXTERNAL_OUT=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        release|trace|debug|strict|sanitize) PROFILE="$1";;
+        release|trace|debug|strict|sanitize|asan) PROFILE="$1";;
         problem-types) TARGET=problem-types;;
         runtime) TARGET=runtime;;
         runtime-bridge) TARGET=runtime-bridge;;
         adapter) TARGET=adapter;;
         --profile)
             case "$2" in
-                release|trace|debug|strict|sanitize) PROFILE="$2";;
+                release|trace|debug|strict|sanitize|asan) PROFILE="$2";;
                 *) echo "build.sh: unknown profile: $2" >&2; exit 2;;
             esac
             shift;;
@@ -144,6 +158,8 @@ esac
 hstar_env_check || { echo "build.sh: toolchain check failed" >&2; exit 3; }
 
 STUB="$ROOT/legacy/stubs/gidpost_stub.c"
+# asan only; see its header for why it is here and not under legacy/stubs/.
+OMP_STUB="$ROOT/tools/asan/omp_stub.c"
 MKL_INC="$HSTAR_MKLROOT/include"
 MKL_LIB="$HSTAR_MKLROOT/lib"
 
@@ -153,10 +169,42 @@ case "$PROFILE" in
     debug)    FFLAGS=(-O0 -g -traceback -check bounds,pointers);;
     strict)   FFLAGS=(-O0 -g -traceback -check bounds,pointers -init=snan,arrays -fpe0);;
     sanitize) FFLAGS=(-O0 -g -traceback -check bounds,pointers,uninit -init=snan,arrays -fpe0);;
+    asan)     FFLAGS=(-O1 -g -fsanitize=address);;
 esac
 LDFLAGS=(-qopenmp "-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
          "-L$HSTAR_IOMP_LIBDIR" -liomp5 -lpthread -lm -ldl
          "-Wl,--disable-new-dtags" "-Wl,-rpath,$MKL_LIB" "-Wl,-rpath,$HSTAR_IOMP_LIBDIR")
+
+# asan LINKS WITHOUT -qopenmp, AND THAT IS NOT A TIDY-UP -- IT IS THE WHOLE PROFILE.
+# MEASURED: the same deliberate leak (a pointer array allocated in a procedure and
+# nullified) is reported by LeakSanitizer when linked plainly, and reported as NOTHING
+# when `-qopenmp` is on the link line. Bisected: MKL alone still reports it; -qopenmp
+# alone silences it. The Intel OpenMP runtime disables LSan, with no diagnostic --
+# ASan itself stays fully active, so the binary looks instrumented and reports clean.
+#
+# That is why this override exists rather than a note: with -qopenmp the leak half of
+# this profile is silently off, and M4-01 step 6's entire exit condition is "valgrind or
+# ASan must REPORT a deliberately reintroduced leak". A profile that cannot fail its own
+# positive control would have certified the release path clean while detecting nothing.
+# It was caught by running the positive control first, which is the only reason this
+# comment is here and not a false all-clear in the report.
+#
+# The sequential MKL layer replaces the threaded one because the threaded layer is what
+# needs iomp5. Nothing this profile builds runs the solver's threaded numerics: it exists
+# to exercise commit -> release -> commit and count what was not freed.
+if [ "$PROFILE" = asan ]; then
+    # $HSTAR_IOMP_LIBDIR stays on the line: it is the Intel COMPILER library directory and
+    # resolves libimf/libintlc as well as libiomp5. Only the OpenMP runtime itself is
+    # dropped -- removing the whole -L took libimf.so with it and build.sh's own
+    # runtime-dependency check caught that immediately.
+    LDFLAGS=("-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_sequential -lmkl_core
+             "-L$HSTAR_IOMP_LIBDIR" -lpthread -lm -ldl
+             "-Wl,--disable-new-dtags" "-Wl,-rpath,$MKL_LIB" "-Wl,-rpath,$HSTAR_IOMP_LIBDIR")
+fi
+# Dropping the OpenMP runtime leaves exactly two undefined references in the legacy tree
+# (omp_get_max_threads, omp_get_thread_num, both Stiff.f90). tools/asan/omp_stub.c
+# supplies them, for this profile only -- its header carries the measurements that force
+# the whole arrangement.
 # --disable-new-dtags emits RPATH instead of RUNPATH: RPATH also resolves the
 # transitive Intel runtime libraries (libintlc, libimf) that MKL itself needs,
 # so the binary runs without LD_LIBRARY_PATH.
@@ -607,6 +655,10 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
 
     rb_run "compiling the gidpost stub" "$HSTAR_CC" -c "$STUB" -o "$OUT/obj/gidpost_stub.o"
     RB_OBJS=("$OUT/obj/gidpost_stub.o")
+    if [ "$PROFILE" = asan ]; then
+        rb_run "compiling the OpenMP stub (asan only)" "$HSTAR_CC" -c "$OMP_STUB" -o "$OUT/obj/omp_stub.o"
+        RB_OBJS+=("$OUT/obj/omp_stub.o")
+    fi
     for f in "${DIAG_SRCS[@]}"; do
         b="$(basename "$f")"; obj="$OUT/obj/${b%.*}.o"
         rb_run "compiling $f" "$HSTAR_FC" -c "${FFLAGS[@]}" -module "$OUT/obj" -I "$OUT/obj" "$ROOT/$f" -o "$obj"
