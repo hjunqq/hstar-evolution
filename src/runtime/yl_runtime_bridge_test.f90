@@ -205,15 +205,25 @@ contains
   ! square (4 nodes) and two unit squares sharing an edge (6 nodes, CCW node order in
   ! both elements). Only the mesh is parameterised; every other authored field is the
   ! same combination in both cases.
-  subroutine draft_of(n_elem, draft, two_amplitudes)
+  subroutine draft_of(n_elem, draft, two_amplitudes, spare_nodes, two_sections)
     integer, intent(in) :: n_elem
     type(problem_state_t), allocatable, intent(out) :: draft
+    !> Keep the 6-node mesh but author only ONE element, leaving nodes 5 and 6 attached to
+    !> nothing. Same node count as the 2-element draft, different element count -- which is
+    !> what makes the ELEMENTS arm of the agreement gate reachable at all: the 1- and
+    !> 2-element drafts differ in BOTH counts, so pairing them fires the nodes arm first and
+    !> the elements arm is never the thing under test. Only n_elem == 1 uses it.
+    logical, intent(in), optional :: spare_nodes
+    !> Split the 2-element mesh across TWO element sets and two sections instead of one.
+    !> Same nodes, same elements, different section count -- the SECTIONS arm, isolated the
+    !> same way. Only n_elem == 2 uses it.
+    logical, intent(in), optional :: two_sections
     !> Add a SECOND amplitude, changing nothing else. It exists so a problem can disagree
     !> with a runtime on the amplitude count while agreeing on every mesh extent -- which
     !> is what makes the amplitude arm of the agreement gate separately falsifiable from
     !> the node and element arms.
     logical, intent(in), optional :: two_amplitudes
-    logical :: want_two
+    logical :: want_two, want_spare, want_split
 
     type(problem_builder_t) :: b
     type(step_builder_t) :: sb
@@ -249,7 +259,20 @@ contains
 
     ! Two adjoining unit squares, CCW in both elements: (0,0)-(1,0)-(1,1)-(0,1) and, for
     ! the 2-element case, (1,0)-(2,0)-(2,1)-(1,1) sharing edge {2,3}.
-    if (n_elem == 1) then
+    want_spare = .false.
+    if (present(spare_nodes)) want_spare = spare_nodes
+    want_split = .false.
+    if (present(two_sections)) want_split = two_sections
+
+    if (n_elem == 1 .and. want_spare) then
+      ! The 2-element mesh's NODES with the 1-element mesh's elements. Nodes 5 and 6 belong
+      ! to no element; nothing prescribes them (the boundary records name nodes 4 and 1,
+      ! both corners of element 1) and no rule requires a node to be used.
+      n_node = 6
+      allocate (xs(6), ys(6))
+      xs = [0.0_real64, 1.0_real64, 1.0_real64, 0.0_real64, 2.0_real64, 2.0_real64]
+      ys = [0.0_real64, 0.0_real64, 1.0_real64, 1.0_real64, 0.0_real64, 1.0_real64]
+    else if (n_elem == 1) then
       n_node = 4
       allocate (xs(4), ys(4))
       xs = [0.0_real64, 1.0_real64, 1.0_real64, 0.0_real64]
@@ -290,10 +313,17 @@ contains
     if (allocated(es%elements)) deallocate (es%elements)
     if (n_elem == 1) then
       allocate (es%elements(1)); es%elements = [1_int32]
+      call builder_add_elset(b, es, loc, errors)
+    else if (want_split) then
+      allocate (es%elements(1)); es%elements = [1_int32]
+      call builder_add_elset(b, es, loc, errors)
+      deallocate (es%elements)
+      allocate (es%elements(1)); es%elements = [2_int32]
+      call builder_add_elset(b, es, loc, errors)
     else
       allocate (es%elements(2)); es%elements = [1_int32, 2_int32]
+      call builder_add_elset(b, es, loc, errors)
     end if
-    call builder_add_elset(b, es, loc, errors)
 
     ! Two prescribed sets over the left edge {1,4}, as in good_draft -- present and
     ! non-empty in both mesh sizes, which is the "at least one prescribed record"
@@ -354,6 +384,13 @@ contains
     call opt_set(sc%uplift, 0_int32)
     call opt_set(sc%local_axes, 0.0_real64)
     call builder_add_section(b, sc, loc, errors)
+    if (want_split) then
+      ! A second section over the second element set. Identical in every authored field
+      ! except its name, because the point of this draft is that ONLY the section count
+      ! differs from the single-section 2-element draft.
+      call opt_set(sc%name, 'g2')
+      call builder_add_section(b, sc, loc, errors)
+    end if
 
     ! One LINEAR curve, points (0, 1) and (1, 1) -- the "at least one amplitude" leg of
     ! the Bridge row, and what makes tcurves non-empty after commit.
@@ -423,9 +460,11 @@ contains
     if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
     allocate (ld%gravity%direction(2))
     ld%gravity%direction = [0.0_real64, -1.0_real64]
+    ! One entry PER SECTION, not per element: the split draft has two sections over the
+    ! same two elements, and the pipeline rejects a short list outright.
     if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
-    if (n_elem == 1) then
-      allocate (ld%gravity%amplitude(1)); ld%gravity%amplitude = [1_int32]
+    if (want_split) then
+      allocate (ld%gravity%amplitude(2)); ld%gravity%amplitude = [1_int32, 1_int32]
     else
       allocate (ld%gravity%amplitude(1)); ld%gravity%amplitude = [1_int32]
     end if
@@ -454,9 +493,13 @@ contains
     call opt_set(ou%field%bcs, 0_int32)
     call opt_set(ou%frequency%nodes, 1_int32)
     call opt_set(ou%frequency%fields, 1_int32)
+    ! Per section as well, for the same reason.
     if (allocated(ou%stress_averaging)) deallocate (ou%stress_averaging)
-    allocate (ou%stress_averaging(1))
-    ou%stress_averaging = [2_int32]
+    if (want_split) then
+      allocate (ou%stress_averaging(2)); ou%stress_averaging = [2_int32, 2_int32]
+    else
+      allocate (ou%stress_averaging(1)); ou%stress_averaging = [2_int32]
+    end if
     call builder_step_set_output(b, sb, ou, loc, errors)
 
     ! SIX FIELDS THAT MUST BE ABLE TO TELL EACH OTHER APART. Every one of these lands in a
@@ -500,6 +543,9 @@ contains
     call opt_set(ac%material, 1_int32)
     call opt_set(ac%active, 1_int32)
     call builder_step_add_activation(b, sb, ac, loc, errors)
+    ! One activation entry PER SECTION: build_boundary indexes activation by section, so a
+    ! second section with no entry would read as inactive and free no variable.
+    if (want_split) call builder_step_add_activation(b, sb, ac, loc, errors)
 
     call builder_step_finish(b, sb, st, loc, errors)
     call builder_add_step(b, st, loc, errors)
@@ -851,6 +897,22 @@ contains
           int(opt_value_or(problem%mesh%elements(i)%material, 0_int32), ink)) ok_all = .false.
     end do
     call check('element(:)%matno matches mesh.elements[].material', ok_all)
+    ! The last two element rows (step 4). Asserted separately from matno and from each
+    ! other: all three are small integers in one record, so a source mix-up between them is
+    ! a value swap. The fixture keeps them apart -- kind is 5 (Q4) and elset is 1 or 2 --
+    ! and the two-section draft below makes elset actually vary.
+    ok_all = .true.
+    do ie = 1, size(problem%mesh%elements)
+      if (element(ie)%index /= int(opt_value_or(problem%mesh%elements(ie)%kind, 0_int32), ink)) &
+        ok_all = .false.
+    end do
+    call check('element(:)%index matches mesh.elements[].kind', ok_all)
+    ok_all = .true.
+    do ie = 1, size(problem%mesh%elements)
+      if (element(ie)%group /= int(opt_value_or(problem%mesh%elements(ie)%elset, 0_int32), ink))&
+        ok_all = .false.
+    end do
+    call check('element(:)%group matches mesh.elements[].elset', ok_all)
     ok_all = .true.
     do ig = 1, size(problem%mesh%elsets)
       if (group(ig)%nelgroup /= int(size(problem%mesh%elsets(ig)%elements), ink)) ok_all = .false.
@@ -1011,7 +1073,7 @@ contains
     type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: rt_1, rt_2
 
-    type(problem_state_t), allocatable :: draft2, problem_2amp
+    type(problem_state_t), allocatable :: draft2, problem_2amp, problem_spare, problem_split
     type(manifest_t), allocatable :: pmanifest
     type(problem_errors_t) :: errors
     character(len=:), allocatable :: message
@@ -1072,6 +1134,63 @@ contains
       call check('the amplitude disagreement is not reported as a node or element count',       &
                 index(message, 'nodes and the runtime numbers') == 0 .and.                      &
                 index(message, 'elements and the runtime numbers') == 0)
+    end if
+
+    ! --- arm 3: same nodes, FEWER elements ----------------------------------
+    ! The elements arm cannot be reached by pairing the 1- and 2-element drafts: those
+    ! differ in node count too, so the nodes arm fires first and the elements arm is never
+    ! the thing under test. This draft carries the 2-element mesh's six nodes and only one
+    ! element, so the nodes arm must agree and stay silent.
+    call errors%clear()
+    call draft_of(1, draft2, spare_nodes=.true.)
+    call prepare_problem(draft2, PROFILE_TAG, problem_spare, pmanifest, errors)
+    call check('prepare_problem accepted the spare-node draft', .not. errors%any())
+    if (errors%any()) then
+      call report_errors('prepare_problem (spare nodes)', errors)
+      return
+    end if
+    call errors%clear()
+    call commit_legacy_globals(problem_spare, residue, rt_2, errors)
+    call check('a problem with fewer elements than the runtime is refused', errors%any())
+    if (errors%any()) then
+      call one_error_message(errors, 1, message)
+      call check('the element disagreement names the element counts',                           &
+                index(message, '1 elements and the runtime numbers 2') > 0)
+      ! The whole point of the spare-node mesh: node counts agree, so the arm that runs
+      ! BEFORE this one must not be what fired.
+      call check('the element disagreement is not reported as a node count',                    &
+                index(message, 'nodes and the runtime numbers') == 0)
+    end if
+
+    ! --- arm 4: the sections arm is UNREACHABLE, and this is what says so -----
+    ! The sections arm of the agreement gate cannot be fired: to reach it a problem must
+    ! carry a section count the runtime does not, and the capability gate admits exactly
+    ! ONE section ("sections.size: 2 is not in {1} for build capability static-q4/1"). No
+    ! admissible problem has two sections, so no admissible pair can disagree about the
+    ! count.
+    !
+    ! That is a claim about the GATE, so it is asserted against the gate rather than
+    ! written in a comment that would quietly stop being true. The draft below really does
+    ! carry two sections; prepare_problem really does refuse it; and the day the capability
+    ! widens to admit two, THIS check goes red and points at the arm that then needs
+    ! firing. A note would have gone stale silently -- which is the defect shape this task
+    ! keeps finding.
+    call errors%clear()
+    call draft_of(2, draft2, two_sections=.true.)
+    call prepare_problem(draft2, PROFILE_TAG, problem_split, pmanifest, errors)
+    call check('a two-section draft is refused by the capability gate', errors%any())
+    if (errors%any()) then
+      ! render(), not the message alone: `sections.size` is the error's LOCATION and the
+      ! message is only "2 is not in {1} for build capability ...". Checking the message
+      ! for it failed, which is how this line came to be right -- and why the check below
+      ! about {1} is kept separate from the one that names WHICH capability.
+      message = errors%render(1)
+      call check('the two-section refusal names the section-count capability',                  &
+                index(message, 'sections.size') > 0)
+      ! WHEN THIS GOES RED, the capability now admits more than one section and the
+      ! sections arm of the agreement gate has become reachable and must be fired here.
+      call check('while sections.size is capped at 1 the sections arm cannot be fired',         &
+                index(message, 'is not in {1}') > 0)
     end if
 
     ! The globals must be exactly as section 2 left them: a refusal writes nothing. That

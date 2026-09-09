@@ -300,8 +300,8 @@ module yl_runtime_commit
     commit_provenance_t('mesh.nodes.xyz', COMMIT_FROM_PROBLEM, 'mesh.nodes[].xyz'),                                                             &
     commit_provenance_t('mesh.elements.id', COMMIT_SYNTHETIC, 'dump emits 1..nelem'),                                           &
     commit_provenance_t('mesh.elements.nodes', COMMIT_FROM_PROBLEM, 'mesh.elements[].nodes'),                                                        &
-    commit_provenance_t('mesh.elements.kind', COMMIT_NOT_MIGRATED, ''),                                                         &
-    commit_provenance_t('mesh.elements.group', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('mesh.elements.kind', COMMIT_FROM_PROBLEM, 'mesh.elements[].kind'),                                                         &
+    commit_provenance_t('mesh.elements.group', COMMIT_FROM_PROBLEM, 'mesh.elements[].elset'),                                                        &
     commit_provenance_t('mesh.elements.material', COMMIT_FROM_PROBLEM, 'mesh.elements[].material'),                                                     &
     commit_provenance_t('mesh.sets.elset', COMMIT_FROM_PROBLEM, 'mesh.elsets[].elements'),                                                            &
     commit_provenance_t('mesh.sets.nset', COMMIT_FROM_PROBLEM, 'steps[0].boundary[].nset (dump regroups)'),                                                             &
@@ -722,6 +722,14 @@ contains
       ! not observable at model_ready), so leaving matno unassigned would publish that row
       ! out of the sentinel even with group%list correct.
       s_element(ie)%matno = int(opt_or(problem%mesh%elements(ie)%material), ink)
+      ! The last two element rows (M4-01 step 4, element). Both are `derived:index_map` in
+      ! the map and both are owned by ProblemState -- legacy fills them from the group loop
+      ! that reads the element (Elements.f90:1082,1112), and the pipeline's
+      ! derive_element_kinds reproduces exactly that from the element-to-elset reference.
+      ! So commit copies them; it does not re-derive them from the elset membership, which
+      ! would be a second derivation of something ProblemState already decided.
+      s_element(ie)%index = int(opt_or(problem%mesh%elements(ie)%kind), ink)
+      s_element(ie)%group = int(opt_or(problem%mesh%elements(ie)%elset), ink)
       allocate (s_element(ie)%ldofs(nevab))
       s_element(ie)%ldofs = STAGE_POISON_I
       s_element(ie)%ldofs = int(runtime%dof%element_variables(ie)%values, ink)
@@ -1511,9 +1519,12 @@ contains
     ! cannot tell "authored as zero" from "never authored", so each one is a place where a
     ! missing input would be published as 0 / 0.0 / ''.
     do i = 1, size(problem%mesh%elements)
-      if (.not. opt_is_set(problem%mesh%elements(i)%material)) then
-        call fail(errors, 'mesh.elements['//itoa(i)//'].material is not set; commit will '//   &
-                  'not publish a default for a value the deck did not supply')
+      if (.not. opt_is_set(problem%mesh%elements(i)%material) .or.                            &
+          .not. opt_is_set(problem%mesh%elements(i)%kind) .or.                                 &
+          .not. opt_is_set(problem%mesh%elements(i)%elset)) then
+        call fail(errors, 'mesh.elements['//itoa(i)//'] has an unset material, kind or '//     &
+                  'elset; commit will not publish a default for a value the deck did not '//   &
+                  'supply')
         return
       end if
     end do
@@ -1830,10 +1841,15 @@ contains
     c%type_curve = ''
   end subroutine poison_tcurve
 
-  ! element_lib: 1 component, `matno`, assigned in the element-record loop since step 3b.
+  ! element_lib: 3 components assigned in the element-record loop -- `matno` since step 3b,
+  ! `index` and `group` since step 4. The type's other scalars (nstre, nrfields,
+  ! ne_include, jblks, ktotg, icbound, neqcy, area, minedge, elength) are not assigned here
+  ! and so are not poisoned; none of their map rows is emitted at model_ready.
   subroutine poison_element(e)
     type(element_lib), intent(inout) :: e
     e%matno = STAGE_POISON_I
+    e%index = STAGE_POISON_I
+    e%group = STAGE_POISON_I
   end subroutine poison_element
 
   ! unode_elements: 3 components. `ipoin` and `ne_unode` are assigned from the runtime;
