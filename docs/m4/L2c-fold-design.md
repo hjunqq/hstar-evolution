@@ -838,14 +838,35 @@ v1 建议"把待发布的全局收进一张显式清单，守卫/`move_alloc`/`c
 - 因此 **ASan / valgrind 不是建议，是这条路线成立的必要条件**：
   它是下半唯一的检查手段。见 §5.4。
 
-#### 5.1.3 一个能覆盖下半一部分的低成本补充（新增建议）
+#### 5.1.3 一个能覆盖下半一部分的低成本补充（**已落地，边界已实测**）
 
 `commit_release` 之后，全局应当处于"全部未分配 / 全部未关联"的状态。
 可以给 `yl_runtime_bridge_test` 加一条**释放后的总体性断言**：
 遍历它知道的每一个全局与每一层指针分量，断言 release 之后无一 `allocated` / `associated`。
 它抓不到泄漏（泄漏是进程看不见的），但它**能抓到"忘在 `commit_release` 里"这一类漏项**
-—— 因为一个没被释放的分量在 release 之后仍然 `associated`。
+—— 因为一个没被释放的全局在 release 之后仍然 `allocated`。
 这不能替代 ASan，但它把上面第 3 点的那个具体缺口从"全部测试通过"变成"一条红线"。
+
+**已在 M4-01 步 3 落地**（`b22e440`），并且它的**边界被实测出了确切位置**（lead，2026-09-09）：
+
+| 对照 | 结果 |
+|---|---|
+| 删掉 `coord` 在 `commit_release` 里的释放（**忘了顶层全局**） | **rc=6**，`BAD release is total: no published global is still allocated` |
+| 删掉 `props(i)%mechanical%solid` 的释放、保留外层 `%mechanical`（**忘了内一级，泄漏 `solid_skeleton`**） | **release 817/817、`sanitize`(MSan) 817/817，两个都 rc=0 —— 什么都不响** |
+
+> **释放后总量断言覆盖顶层全局的释放，不覆盖被释放全局内部的指针目标。**
+> 实测：删掉 `props%mechanical%solid` 的释放，release 与 MSan 均 817/817 通过。
+> `props` 是唯一的两级链，因此是**唯一处于该盲区中的对象**。
+> 关闭它需要 ASan 或 valgrind，仍为 NOT PERFORMED。
+
+这不是缺陷，是一条已知边界被量到了确切位置 —— 而它顺带把 §5.4 的出口条件从"原则上需要"
+变成**"有一个具体的、已知抓不到的缺陷等着它抓"**。
+
+**因此 §5.4 的出口条件多一条阳性对照**：ASan/valgrind 跑通之后，
+用**同一个改动**（删掉 `props%mechanical%solid` 的释放）当阳性对照 ——
+**valgrind 必须报出这次泄漏**；报不出，说明那条出口条件本身没有生效，
+而不是说明没有泄漏。这与 `yl_map_selfcheck.py` 先证明自己还能找到已知的 `nsmat` 缺陷
+再给"干净"结论，是同一条纪律。
 
 ### 5.2 折叠会不会打破 L3-b 现在全绿的 46 行？会，有三条具体路径
 
@@ -910,6 +931,10 @@ v1 建议"把待发布的全局收进一张显式清单，守卫/`move_alloc`/`c
 
 > 在两个 golden 算例上，跑 commit → commit → release → commit → release 序列，
 > **无泄漏、无 use-after-free**，结果与命令入报告。这一条不通过，折叠不算完成。
+>
+> **并且必须先过阳性对照**：删掉 `props(i)%mechanical%solid` 的释放，valgrind/ASan
+> **必须报出**这次泄漏（§5.1.3 已实测该缺陷在 release 与 MSan 下都不响）。
+> 阳性对照不响，则"干净"这个结论不成立 —— 那说明工具没在看，不说明没有泄漏。
 
 #### 5.4.1 `sanitize` 剖面已解封（`274c1c0`），但它**不测泄漏**
 

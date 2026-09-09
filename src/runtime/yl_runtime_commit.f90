@@ -105,7 +105,7 @@ module yl_runtime_commit
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
-  use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_get
+  use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_get, opt_is_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
   use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
@@ -291,11 +291,11 @@ module yl_runtime_commit
     commit_provenance_t('mesh.nodes.id', COMMIT_SYNTHETIC, 'dump emits 1..npoin'),                                              &
     commit_provenance_t('mesh.nodes.xyz', COMMIT_FROM_PROBLEM, 'mesh.nodes[].xyz'),                                                             &
     commit_provenance_t('mesh.elements.id', COMMIT_SYNTHETIC, 'dump emits 1..nelem'),                                           &
-    commit_provenance_t('mesh.elements.nodes', COMMIT_NOT_MIGRATED, ''),                                                        &
+    commit_provenance_t('mesh.elements.nodes', COMMIT_FROM_PROBLEM, 'mesh.elements[].nodes'),                                                        &
     commit_provenance_t('mesh.elements.kind', COMMIT_NOT_MIGRATED, ''),                                                         &
     commit_provenance_t('mesh.elements.group', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('mesh.elements.material', COMMIT_NOT_MIGRATED, ''),                                                     &
-    commit_provenance_t('mesh.sets.elset', COMMIT_NOT_MIGRATED, ''),                                                            &
+    commit_provenance_t('mesh.elements.material', COMMIT_FROM_PROBLEM, 'mesh.elements[].material'),                                                     &
+    commit_provenance_t('mesh.sets.elset', COMMIT_FROM_PROBLEM, 'mesh.elsets[].elements'),                                                            &
     commit_provenance_t('mesh.sets.nset', COMMIT_NOT_MIGRATED, ''),                                                             &
     commit_provenance_t('materials.id', COMMIT_FROM_PROBLEM, 'props(:) index 1..nmats'),                                                               &
     commit_provenance_t('materials.kind', COMMIT_FROM_PROBLEM, 'associated(mechanical)'),                                                             &
@@ -320,8 +320,8 @@ module yl_runtime_commit
     commit_provenance_t('sections.fields', COMMIT_NOT_MIGRATED, ''),                                                            &
     commit_provenance_t('sections.special', COMMIT_NOT_MIGRATED, ''),                                                           &
     commit_provenance_t('sections.formulation', COMMIT_NOT_MIGRATED, ''),                                                       &
-    commit_provenance_t('sections.elset_size', COMMIT_NOT_MIGRATED, ''),                                                        &
-    commit_provenance_t('sections.material_header', COMMIT_NOT_MIGRATED, ''),                                                   &
+    commit_provenance_t('sections.elset_size', COMMIT_DERIVED, 'size(mesh.elsets[].elements)'),                                                        &
+    commit_provenance_t('sections.material_header', COMMIT_FROM_PROBLEM, 'element%matno reconstruct'),                                                   &
     commit_provenance_t('sections.material', COMMIT_NOT_MIGRATED, ''),                                                          &
     commit_provenance_t('sections.type_nalgo', COMMIT_NOT_MIGRATED, ''),                                                        &
     commit_provenance_t('sections.type_stiff', COMMIT_NOT_MIGRATED, ''),                                                        &
@@ -512,7 +512,7 @@ contains
     logical :: ok
 
     ! ---------------------------------------------------------------- verify
-    call verify_registered(runtime, errors, ok)
+    call verify_registered(problem, runtime, errors, ok)
     if (.not. ok) return
 
     ! W4 guard (see the OWNERSHIP header): if any record-array global this module writes
@@ -646,6 +646,13 @@ contains
     allocate (s_element(s_nelem))
     do ie = 1, int(s_nelem)
       call null_element(s_element(ie))
+      call poison_element(s_element(ie))
+      ! mesh.elements.material -> element%matno. Written here and not only for its own
+      ! row: sections.material_header is RECONSTRUCTED from element(group(g)%list(1))%matno
+      ! (the .glb header slot it came from is overwritten in place at Fem.f90:1717 and is
+      ! not observable at model_ready), so leaving matno unassigned would publish that row
+      ! out of the sentinel even with group%list correct.
+      s_element(ie)%matno = int(opt_or(problem%mesh%elements(ie)%material), ink)
       allocate (s_element(ie)%ldofs(nevab))
       s_element(ie)%ldofs = STAGE_POISON_I
       s_element(ie)%ldofs = int(runtime%dof%element_variables(ie)%values, ink)
@@ -659,6 +666,13 @@ contains
       allocate (s_element(ie)%field(1)%elcod_f(s_ndimn, nnode))
       s_element(ie)%field(1)%elcod_f = STAGE_POISON_R
       s_element(ie)%field(1)%elcod_f = real(runtime%element(ie)%field_coordinates, irk)
+      ! mesh.elements.nodes (step 3b). One of the two rows whose absence aborts the dump
+      ! unconditionally: yl_state_dump.f90:135 tests associated(element(1)%field(1)%lnods_f)
+      ! with no count in front of it, so a null here is not a wrong value, it is no
+      ! snapshot at all.
+      allocate (s_element(ie)%field(1)%lnods_f(nnode))
+      s_element(ie)%field(1)%lnods_f = STAGE_POISON_I
+      s_element(ie)%field(1)%lnods_f = int(problem%mesh%elements(ie)%nodes, ink)
       ! RESERVED, as above: allocated to their final length and not written, so they carry
       ! the sentinel out (rule 2 of the STAGE_POISON note).
       allocate (s_element(ie)%field(1)%tload(nevab))
@@ -696,6 +710,22 @@ contains
     do ig = 1, int(s_ngroup)
       call null_group(s_group(ig))
       call poison_group(s_group(ig))
+      ! sections.elset_size and mesh.sets.elset (step 3b). The other unconditional abort:
+      ! yl_state_adapters.f90:271 fails outright on nelgroup < 1 before it looks at
+      ! anything, then on an unassociated list. Both are needed to reach
+      ! sections.material_header at all.
+      !
+      ! The ELEMENT IDS, not the storage indices: the map calls this row's values element
+      ! ids, and mesh.elements[].id is the 1-based record order on this path (the adapter
+      ! synthesises it and legacy discards the deck's own i0), so the two coincide here.
+      ! They would not coincide under a renumbering, which is why this reads elsets rather
+      ! than counting.
+      n = size(problem%mesh%elsets(ig)%elements)
+      s_group(ig)%nelgroup = int(n, ink)
+      allocate (s_group(ig)%list(n))
+      s_group(ig)%list = STAGE_POISON_I
+      s_group(ig)%list = int(problem%mesh%elsets(ig)%elements, ink)
+
       n = size(runtime%topology%sections(ig)%nodes)
       s_group(ig)%np_unode = int(n, ink)
       allocate (s_group(ig)%unode(n))
@@ -922,6 +952,7 @@ contains
         if (associated(element(i)%ldofs)) deallocate (element(i)%ldofs)
         if (associated(element(i)%field)) then
           do ig = 1, size(element(i)%field)
+            if (associated(element(i)%field(ig)%lnods_f)) deallocate (element(i)%field(ig)%lnods_f)
             if (associated(element(i)%field(ig)%ldofs_f)) deallocate (element(i)%field(ig)%ldofs_f)
             if (associated(element(i)%field(ig)%elcod_f)) deallocate (element(i)%field(ig)%elcod_f)
             if (associated(element(i)%field(ig)%tload)) deallocate (element(i)%field(ig)%tload)
@@ -944,6 +975,7 @@ contains
 
     if (allocated(group)) then
       do i = 1, size(group)
+        if (associated(group(i)%list)) deallocate (group(i)%list)
         if (associated(group(i)%unode)) then
           do ig = 1, size(group(i)%unode)
             if (associated(group(i)%unode(ig)%list)) deallocate (group(i)%unode(ig)%list)
@@ -1109,7 +1141,8 @@ contains
   ! This is the check that makes the commit safe to write blind afterwards. It runs over
   ! the RULE TABLE rather than over a list kept here, so a row added to the table without
   ! a commit for it fails here instead of being committed as a silent absence.
-  subroutine verify_registered(runtime, errors, ok)
+  subroutine verify_registered(problem, runtime, errors, ok)
+    type(problem_state_t), intent(in) :: problem
     type(runtime_state_t), intent(in) :: runtime
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
@@ -1128,6 +1161,10 @@ contains
     ! is `tools/yl_state_map.py commit-provenance`, run from tools/build.sh against the
     ! PROV| export; see the ledger's header for why the split is where it is.
     call verify_provenance_table(errors, ok)
+    if (.not. ok) return
+    ok = .false.
+
+    call verify_problem_inputs(problem, errors, ok)
     if (.not. ok) return
     ok = .false.
 
@@ -1210,6 +1247,69 @@ contains
 
     ok = .true.
   end subroutine verify_registered
+
+  ! INV-COMMIT-TOTAL, ProblemState half: every ProblemState scalar the staging pass reads
+  ! must actually be SET.
+  !
+  ! WHY THIS IS A CHECK AND NOT A FALLBACK. The staging code reads these through `opt_or`
+  ! / `opt_or_real`, whose fallback is 0. That fallback is justified for the RUNTIME side
+  ! -- verify_registered has already accepted the runtime, so an unset scalar there is a
+  ! reported fault before staging begins -- but nothing had made the same promise about
+  ! the ProblemState side, and `opt_or` cannot tell "authored as zero" from "never
+  ! authored". So commit would publish a 0 for a value no deck supplied: exactly the
+  ! forging deck_residue_t and the staging poison exist to prevent, in the one place
+  ! neither of them can see (the poison is overwritten by the fallback, and the fallback
+  ! is a legal value).
+  !
+  ! Found by the step-3b landing assertion: the bridge fixture never authored
+  ! mesh.elements[].material, element%matno came out 0 through this fallback, and
+  ! sections.material_header -- which the dump RECONSTRUCTS from element%matno -- was
+  ! silently wrong. A missing input has to be a rejection, not a zero.
+  !
+  ! Checked here rather than at each read so the VERIFY/STAGE split holds: a rejection
+  ! must happen before any staging local exists, or "a failed commit touches nothing"
+  ! becomes a claim about where the return statement is.
+  subroutine verify_problem_inputs(problem, errors, ok)
+    type(problem_state_t), intent(in) :: problem
+    type(problem_errors_t), intent(inout) :: errors
+    logical, intent(out) :: ok
+    integer :: i, k
+
+    ok = .false.
+    do i = 1, size(problem%mesh%elements)
+      if (.not. opt_is_set(problem%mesh%elements(i)%material)) then
+        call fail(errors, 'mesh.elements['//itoa(i)//'].material is not set; commit will '//   &
+                  'not publish a default for a value the deck did not supply')
+        return
+      end if
+    end do
+    do k = 1, size(problem%steps)
+      do i = 1, size(problem%steps(k)%activation)
+        if (.not. opt_is_set(problem%steps(k)%activation(i)%active) .or.                       &
+            .not. opt_is_set(problem%steps(k)%activation(i)%material)) then
+          call fail(errors, 'steps['//itoa(k)//'].activation['//itoa(i)//                      &
+                    '] has an unset active or material')
+          return
+        end if
+      end do
+    end do
+    do i = 1, size(problem%sections)
+      if (.not. opt_is_set(problem%sections(i)%material) .or.                                  &
+          .not. opt_is_set(problem%sections(i)%thickness)) then
+        call fail(errors, 'sections['//itoa(i)//'] has an unset material or thickness')
+        return
+      end if
+    end do
+    do i = 1, size(problem%materials)
+      if (.not. opt_is_set(problem%materials(i)%E) .or.                                        &
+          .not. opt_is_set(problem%materials(i)%nu) .or.                                       &
+          .not. opt_is_set(problem%materials(i)%density)) then
+        call fail(errors, 'materials['//itoa(i)//'] has an unset E, nu or density')
+        return
+      end if
+    end do
+    ok = .true.
+  end subroutine verify_problem_inputs
 
   ! INV-COMMIT-TOTAL, provenance half: the table above must be well formed. An entry with
   ! an empty id names no row; an entry with an unnameable state exports as `?` and would
@@ -1394,10 +1494,23 @@ contains
   ! (`s_group(ig)%np_unode = int(n, ink)`). Every other non-pointer component of this type
   ! belongs to the ProblemState half and is not assigned here yet -- M4-01 adds them, and
   ! each addition belongs in this routine on the same commit.
+  ! group_of_elements: 2 components. `np_unode` is assigned in the section-record loop;
+  ! `nelgroup` arrived with step 3b and is the count yl_state_adapters checks BEFORE it
+  ! looks at anything else, so an unassigned one aborts the dump rather than mis-sizing a
+  ! read. Every other non-pointer component of this type is still the ProblemState half's
+  ! and is not assigned here yet -- each addition belongs in this routine on the same
+  ! commit that adds its assignment.
   subroutine poison_group(g)
     type(group_of_elements), intent(inout) :: g
     g%np_unode = STAGE_POISON_I
+    g%nelgroup = STAGE_POISON_I
   end subroutine poison_group
+
+  ! element_lib: 1 component, `matno`, assigned in the element-record loop since step 3b.
+  subroutine poison_element(e)
+    type(element_lib), intent(inout) :: e
+    e%matno = STAGE_POISON_I
+  end subroutine poison_element
 
   ! unode_elements: 3 components. `ipoin` and `ne_unode` are assigned from the runtime;
   ! `np_unode` is assigned the literal 0 because the ledger calls it ABSENT on this path,

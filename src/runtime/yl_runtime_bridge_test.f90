@@ -231,6 +231,11 @@ contains
       call builder_add_node(b, nd, loc, errors)
     end do
 
+    ! material is authored because commit now REFUSES an unset one rather than
+    ! publishing a 0 (verify_problem_inputs). The fixture left it unset until M4-01 step
+    ! 3b, which made element%matno 0 through opt_or's fallback and sections.material_header
+    ! -- reconstructed from it -- silently wrong.
+    call opt_set(el%material, 1_int32)
     call opt_set(el%id, 1_int32)
     if (allocated(el%nodes)) deallocate (el%nodes)
     allocate (el%nodes(4))
@@ -286,6 +291,10 @@ contains
     call opt_set(sc%special, 'ST')
     call opt_set(sc%material, 1_int32)
     call opt_set(sc%material_header, 1_int32)
+    ! thickness likewise: unset until M4-01 step 3b's verify_problem_inputs made an
+    ! unauthored ProblemState scalar a rejection instead of a published 0.0. The value is
+    ! the one the .mat elastic_isotropic record supplies on a real deck.
+    call opt_set(sc%thickness, 1.0_real64)
     call opt_set(sc%algorithm, 0_int32)
     call opt_set(sc%stiffness_kind, 1_int32)
     call opt_set(sc%stress_recovery, 1_int32)
@@ -623,6 +632,45 @@ contains
     call check('tcurvegravity matches steps[0].load.gravity.amplitude',                          &
               allocated(tcurvegravity) .and.                                                     &
               all(tcurvegravity == int(problem%steps(1)%load%gravity%amplitude, ink)))
+
+    ! --- step 3b: the two rows whose absence aborts the dump outright -------------
+    ok_all = .true.
+    do i = 1, size(problem%mesh%elements)
+      if (.not. associated(element(i)%field(1)%lnods_f)) then
+        ok_all = .false.
+      else if (.not. all(element(i)%field(1)%lnods_f ==                                         &
+                         int(problem%mesh%elements(i)%nodes, ink))) then
+        ok_all = .false.
+      end if
+    end do
+    call check('element(:)%field(1)%lnods_f matches mesh.elements[].nodes', ok_all)
+    ok_all = .true.
+    do i = 1, size(problem%mesh%elements)
+      if (element(i)%matno /=                                                                   &
+          int(opt_value_or(problem%mesh%elements(i)%material, 0_int32), ink)) ok_all = .false.
+    end do
+    call check('element(:)%matno matches mesh.elements[].material', ok_all)
+    ok_all = .true.
+    do ig = 1, size(problem%mesh%elsets)
+      if (group(ig)%nelgroup /= int(size(problem%mesh%elsets(ig)%elements), ink)) ok_all = .false.
+      if (.not. associated(group(ig)%list)) then
+        ok_all = .false.
+      else if (.not. all(group(ig)%list == int(problem%mesh%elsets(ig)%elements, ink))) then
+        ok_all = .false.
+      end if
+    end do
+    call check('group(:)%nelgroup and %list match mesh.elsets[].elements', ok_all)
+    ! sections.material_header is reconstructed by the dump as element(group(g)%list(1))%matno.
+    ! Asserted along that exact path rather than against the section, because a group%list
+    ! that pointed at the wrong element would still give a plausible material id.
+    ok_all = .true.
+    do ig = 1, size(problem%mesh%elsets)
+      if (.not. associated(group(ig)%list)) cycle
+      if (size(group(ig)%list) < 1) cycle
+      if (element(group(ig)%list(1))%matno /=                                                   &
+          int(opt_value_or(problem%sections(ig)%material_header, 0_int32), ink)) ok_all = .false.
+    end do
+    call check('element(group(:)%list(1))%matno reconstructs sections[].material_header', ok_all)
 
     call check('props extent', allocated(props) .and. size(props) == size(problem%materials))
     if (allocated(props)) then
