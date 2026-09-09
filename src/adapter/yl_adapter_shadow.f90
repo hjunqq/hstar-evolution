@@ -68,6 +68,7 @@ program yl_adapter_shadow
   use yl_diag, only: diag_set_mode_from_argv, yl_dump_enabled, yl_dump_dir
 
   use yl_problem_types, only: problem_state_t
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_manifest, only: manifest_t
   use yl_problem_errors, only: problem_errors_t
   use yl_adapter_driver, only: adapt_legacy_deck
@@ -82,6 +83,7 @@ program yl_adapter_shadow
   implicit none
 
   type(problem_state_t), allocatable :: problem
+  type(deck_residue_t) :: residue
   type(manifest_t), allocatable :: pmanifest, rmanifest
   type(problem_errors_t) :: errors
   type(runtime_state_t), allocatable :: rt
@@ -111,7 +113,10 @@ program yl_adapter_shadow
   end if
   write (output_unit, '(a)') 'yl_adapter_shadow: build_runtime ok (contract '//CONTRACT_TAG//')'
 
-  call commit_legacy_globals(rt, errors)
+  ! The residue is default-initialised: every component unset. No parser fills it
+  ! yet (M4-01 step 5) and commit reads nothing out of it; passing it now keeps the
+  ! signature change separate from the semantic steps.
+  call commit_legacy_globals(problem, residue, rt, errors)
   if (errors%any()) then
     call print_findings('commit_legacy_globals', errors)
     call exit_with(4)

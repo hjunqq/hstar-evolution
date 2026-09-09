@@ -83,6 +83,7 @@ program yl_adapter_bridge_test
   use iso_fortran_env, only: int32, int64, real64, output_unit, error_unit
 
   use yl_problem_types, only: problem_state_t
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_manifest, only: manifest_t
   use yl_problem_errors, only: problem_errors_t
   use yl_adapter_driver, only: adapt_legacy_deck
@@ -159,6 +160,7 @@ contains
     character(len=2048) :: cmd   ! holds scratch+legacy_src twice over; 512 truncates on a long repo root
     integer :: rc, cs
     type(problem_state_t), allocatable :: problem
+    type(deck_residue_t) :: residue
     type(manifest_t), allocatable :: pmanifest, rmanifest
     type(problem_errors_t) :: errors
     type(runtime_state_t), allocatable :: rt
@@ -201,7 +203,10 @@ contains
     write (output_unit, '(a)') '  build_runtime: ok'
 
     ! -- 3. runtime_state_t -> real legacy globals ----------------------------------
-    call commit_legacy_globals(rt, errors)
+    ! The residue is default-initialised: every component unset. No parser fills it
+    ! yet (M4-01 step 5) and commit reads nothing out of it; passing it now keeps the
+    ! signature change separate from the semantic steps.
+    call commit_legacy_globals(problem, residue, rt, errors)
     if (errors%any()) then
       write (output_unit, '(a)') '  ABORT: commit_legacy_globals reported a finding; every row UNVERIFIED.'
       call report_errors('commit_legacy_globals', errors)

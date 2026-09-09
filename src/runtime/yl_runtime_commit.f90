@@ -101,6 +101,8 @@ module yl_runtime_commit
   use applied_load, only: tcurves, ntcurve, time_curve
   use meshfine, only: ice0
 
+  use yl_problem_types, only: problem_state_t
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_optional, only: opt_int, opt_real, opt_get
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
@@ -440,15 +442,43 @@ contains
 
   !> Publish `runtime` into the legacy globals.
   !>
+  !>   problem  the finished ProblemState. intent(in): the ProblemState half of the fold
+  !>            reads its values from here. NOT READ YET -- M4-01 step 3 is the first that
+  !>            does; see THE THREE INPUTS below.
+  !>   residue  the deck values that reach a legacy global and no ProblemState field
+  !>            (yl_problem_deck_residue). NOT READ YET -- step 5.
   !>   runtime  the built runtime. intent(in): committing does not consume it, and the
   !>            same runtime may be committed again -- see the T02 properties.
   !>   errors   findings are APPENDED. A finding here is always PE_INTERNAL: by the time
   !>            a runtime exists its deck has been validated, so anything wrong at this
   !>            point is a broken pipeline and not a bad model.
   !>
+  !> THE THREE INPUTS, AND WHY THEY ARE THREE
+  !>   Each carries the rows the other two cannot. `runtime` holds what build_runtime
+  !>   produced; `problem` holds the ProblemState-owned rows, which no runtime component
+  !>   carries; `residue` holds the rows the M2 map owns at `derived` / `not_migrated` and
+  !>   that nothing can recompute, which neither of the other two may hold -- putting them
+  !>   in problem_state_t would make the map's `owner` column lie (see that module's
+  !>   header), and putting them in runtime_state_t is the move that kills option B in
+  !>   docs/m4/L2c-fold-design.md §3.
+  !>
+  !>   All three are intent(in) and none is consumed. The commit reads them in ONE staging
+  !>   pass and publishes in ONE write phase, so a third input adds no second writer and no
+  !>   second transaction -- which is the property §3.2.5 of the design had to argue for
+  !>   and this signature has to keep.
+  !>
+  !> WHY TWO OF THEM ARE UNREAD TODAY
+  !>   The signature lands before the reads on purpose. Threading three arguments through
+  !>   eleven call sites and folding 118 rows in the same commit would put a mechanical
+  !>   change and a semantic one behind one review; this way the semantic steps land
+  !>   against a signature that is already green. `tools/yl_state_map.py commit-provenance`
+  !>   reports the debt as NOT_MIGRATED=118, and it is meant to fall to zero.
+  !>
   !> On success every registered global carries this runtime. On failure not one global
   !> was touched.
-  subroutine commit_legacy_globals(runtime, errors)
+  subroutine commit_legacy_globals(problem, residue, runtime, errors)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: runtime
     type(problem_errors_t), intent(inout) :: errors
 

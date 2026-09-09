@@ -203,6 +203,7 @@ if [ "$TARGET" = problem-types ] || [ "$TARGET" = runtime ]; then
     # accumulator -> draft builder -> the four pipeline stages.
     PT_PROBLEM_SRCS=(src/problem/yl_problem_optional.f90
                      src/problem/yl_problem_types.f90
+                     src/problem/yl_problem_deck_residue.f90
                      src/problem/yl_problem_errors.f90
                      src/problem/yl_problem_profile.f90
                      src/problem/yl_problem_manifest.f90
@@ -508,6 +509,7 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     # profile flags, exactly as in the solver build.
     RB_REPO_SRCS=(src/problem/yl_problem_optional.f90
                   src/problem/yl_problem_types.f90
+                  src/problem/yl_problem_deck_residue.f90
                   src/problem/yl_problem_errors.f90
                   src/problem/yl_problem_profile.f90
                   src/problem/yl_problem_manifest.f90

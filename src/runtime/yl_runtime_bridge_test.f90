@@ -51,6 +51,7 @@ program yl_runtime_bridge_test
   use variable_types, only: ink, irk
 
   use yl_problem_optional, only: opt_int, opt_real, opt_set, opt_get, opt_value_or
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_types, only: problem_state_t, case_t, node_t, element_t, elset_t, nset_t,       &
                               material_t, section_t, amplitude_t, amplitude_point_t,             &
                               interactions_t, solver_t, step_t, controls_t, load_t, output_t,    &
@@ -72,31 +73,33 @@ program yl_runtime_bridge_test
 
   integer :: n_check = 0, n_fail = 0
   type(runtime_state_t), allocatable :: rt1, rt2
+  type(problem_state_t), allocatable :: pr1, pr2
+  type(deck_residue_t) :: rs1, rs2
 
   write (output_unit, '(a)') 'yl_runtime_bridge_test: M3-03 isolated bridge (commit_legacy_globals)'
 
   write (output_unit, '(a)') '-- 1. commit lands the values (1-element draft)'
-  call build_and_commit(1, rt1)
+  call build_and_commit(1, rt1, pr1, rs1)
   call check_landed(rt1)
 
   write (output_unit, '(a)') '-- 2. commit lands the values (2-element draft)'
-  call build_and_commit(2, rt2)
+  call build_and_commit(2, rt2, pr2, rs2)
   call check_landed(rt2)
 
   write (output_unit, '(a)') '-- 3. no partial commit'
-  call group_no_partial(rt2)
+  call group_no_partial(pr2, rs2, rt2)
 
   write (output_unit, '(a)') '-- 4. repeat load / ownership'
-  call group_repeat_and_ownership(rt2)
+  call group_repeat_and_ownership(pr2, rs2, rt2)
 
   write (output_unit, '(a)') '-- 5. unregistered globals are not disturbed'
-  call group_sentinels(rt2)
+  call group_sentinels(pr2, rs2, rt2)
 
   write (output_unit, '(a)') '-- 6. the W4 foreign-allocation guard, one door at a time'
-  call group_foreign_allocation_guard(rt2)
+  call group_foreign_allocation_guard(pr2, rs2, rt2)
 
   write (output_unit, '(a)') '-- 7. the snapshot blind spots, and how far their guards reach'
-  call group_blind_spot_falsifiability(rt2)
+  call group_blind_spot_falsifiability(pr2, rs2, rt2)
 
   ! The provenance ledger, exported for the Python cross-check (yl_runtime_commit's
   ! ledger header). Deliberately printed AFTER the suite and outside the PASS/FAIL
@@ -115,9 +118,16 @@ contains
   ! sections can re-verify against it.
   ! ==========================================================================
 
-  subroutine build_and_commit(n_elem, rt)
+  subroutine build_and_commit(n_elem, rt, problem_out, residue_out)
     integer, intent(in) :: n_elem
     type(runtime_state_t), allocatable, intent(out) :: rt
+    !> The ProblemState and the deck residue this commit was made with. Handed back
+    !> because commit_legacy_globals now takes all three and the later sections re-commit
+    !> the same runtime: they must re-commit it with the same inputs, not with fresh
+    !> default-initialised ones, or "repeat commit is bit-for-bit identical" would be
+    !> comparing two different calls.
+    type(problem_state_t), allocatable, intent(out) :: problem_out
+    type(deck_residue_t), intent(out) :: residue_out
     type(problem_state_t), allocatable :: draft, problem
     type(manifest_t), allocatable :: pmanifest, rmanifest
     type(problem_errors_t) :: errors
@@ -140,7 +150,10 @@ contains
       return
     end if
 
-    call commit_legacy_globals(rt, errors)
+    ! The residue is default-initialised: every component unset. That is honest at this
+    ! step -- no parser fills it yet (M4-01 step 5) and commit reads nothing out of it.
+    call move_alloc(problem, problem_out)
+    call commit_legacy_globals(problem_out, residue_out, rt, errors)
     call check('commit_legacy_globals accepted the '//itoa(n_elem)//'-element runtime',          &
               .not. errors%any())
     built = .not. errors%any()
@@ -616,7 +629,9 @@ contains
   ! section 2: a commit that must fail in VERIFY must not touch a single global.
   ! ==========================================================================
 
-  subroutine group_no_partial(rt_good)
+  subroutine group_no_partial(problem, residue, rt_good)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: rt_good
     type(runtime_state_t) :: rt_bad     ! default-initialised: never handed to build_runtime
     type(problem_errors_t) :: errors
@@ -627,7 +642,7 @@ contains
     ! runtime_status_count(rt_bad) is 0 against build_rule_produced_count() > 0: the
     ! FIRST check inside verify_registered, before any staging allocation runs. This is
     ! "a runtime that was never built", the simplest of the two shapes the task allows.
-    call commit_legacy_globals(rt_bad, errors)
+    call commit_legacy_globals(problem, residue, rt_bad, errors)
     call check('commit of an unbuilt runtime is rejected', errors%any())
     if (errors%any()) call assert_internal_commit_total(errors)
 
@@ -681,7 +696,9 @@ contains
   ! section 3: repeat commit, release, and the ownership flag.
   ! ==========================================================================
 
-  subroutine group_repeat_and_ownership(rt)
+  subroutine group_repeat_and_ownership(problem, residue, rt)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: rt
     type(problem_errors_t) :: errors
     integer(ink) :: npoin_1, nelem_1
@@ -694,7 +711,7 @@ contains
     allocate (fixed_1(size(fixed))); fixed_1 = fixed
 
     ! --- repeat commit of the SAME runtime: bit-for-bit identical effect ---------
-    call commit_legacy_globals(rt, errors)
+    call commit_legacy_globals(problem, residue, rt, errors)
     call check('repeat commit of the same runtime is accepted', .not. errors%any())
     call check('npoin identical after a repeat commit', npoin == npoin_1)
     call check('nelem identical after a repeat commit', nelem == nelem_1)
@@ -724,7 +741,7 @@ contains
     call check('element stays deallocated after a second release', .not. allocated(element))
 
     ! --- a fresh commit after release works again ---------------------------------
-    call commit_legacy_globals(rt, errors)
+    call commit_legacy_globals(problem, residue, rt, errors)
     call check('a fresh commit after release is accepted', .not. errors%any())
     call check('commit_owns_globals is true after the fresh commit', commit_owns_globals())
     call check_landed(rt)
@@ -734,7 +751,9 @@ contains
   ! section 4: globals commit_legacy_globals never registers must be untouched.
   ! ==========================================================================
 
-  subroutine group_sentinels(rt)
+  subroutine group_sentinels(problem, residue, rt)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: rt
     integer(ink), parameter :: SENTINEL_NMATS = 987_ink, SENTINEL_NBLKS = 654_ink
     integer(ink), parameter :: SENTINEL_RESTART = 321_ink
@@ -752,7 +771,7 @@ contains
     restart = SENTINEL_RESTART
     ttime = SENTINEL_TTIME
 
-    call commit_legacy_globals(rt, errors)
+    call commit_legacy_globals(problem, residue, rt, errors)
     call check('commit for the sentinel check is accepted', .not. errors%any())
 
     call check('nmats is undisturbed by commit', nmats == SENTINEL_NMATS)
@@ -781,7 +800,9 @@ contains
   !   reverse) and that parse -- not a maintainer's memory -- is what fails.
   ! ==========================================================================
 
-  subroutine group_foreign_allocation_guard(good_rt)
+  subroutine group_foreign_allocation_guard(problem, residue, good_rt)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: good_rt
     character(len=11), parameter :: NAMES(6) =                                                  &
       ['element    ', 'group      ', 'listp_group', 'prescrib   ', 'tcurves    ', 'trans      ']
@@ -798,7 +819,7 @@ contains
       call allocate_foreign(trim(NAMES(k)))
 
       call errors%clear()
-      call commit_legacy_globals(good_rt, errors)
+      call commit_legacy_globals(problem, residue, good_rt, errors)
       call check(trim(NAMES(k))//': a foreign allocation is refused', errors%any())
       call assert_internal_commit_total(errors, trim(NAMES(k)))
       call check(trim(NAMES(k))//': commit_owned stays false after the refusal',                &
@@ -880,7 +901,9 @@ contains
   ! comment is here so the next reader finds it deliberate rather than missed.
   ! ==========================================================================
 
-  subroutine group_blind_spot_falsifiability(rt)
+  subroutine group_blind_spot_falsifiability(problem, residue, rt)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: rt
     type(problem_errors_t) :: errors
     integer(ink), parameter :: POISON = 7_ink
@@ -888,7 +911,7 @@ contains
     ! Section 6 ends with every global released and commit_owned false, so this
     ! section establishes its own committed state before it poisons anything.
     call errors%clear()
-    call commit_legacy_globals(rt, errors)
+    call commit_legacy_globals(problem, residue, rt, errors)
     call check('a fresh commit for the blind-spot trials is accepted', .not. errors%any())
     call check('the blind-spot guards pass on a fresh commit',                                  &
               unode_np_unode_all_zero() .and. unode_patch_pointers_all_null() .and.             &
@@ -899,7 +922,7 @@ contains
     call check('unode np_unode guard FAILS on a poisoned value',                                &
               .not. unode_np_unode_all_zero())
     call errors%clear()
-    call commit_legacy_globals(rt, errors)
+    call commit_legacy_globals(problem, residue, rt, errors)
     call check('the recommit for np_unode is accepted', .not. errors%any())
     call check('unode np_unode is restored to 0 by a recommit', unode_np_unode_all_zero())
 
@@ -935,7 +958,7 @@ contains
     call check('the lineload guard FAILS on a poisoned value', .not. (lineload == 0_ink))
     call check('the linet guard FAILS on a poisoned value', .not. (linet == 0_ink))
     call errors%clear()
-    call commit_legacy_globals(rt, errors)
+    call commit_legacy_globals(problem, residue, rt, errors)
     call check('the recommit for the cursors is accepted', .not. errors%any())
     call check('lineload is restored to 0 by a recommit', lineload == 0_ink)
     call check('linet is restored to 0 by a recommit', linet == 0_ink)

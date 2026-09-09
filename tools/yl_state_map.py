@@ -2018,6 +2018,16 @@ PROV_OBTAINABLE_ROWS = {
 }
 
 RUNTIME_TYPES_SRC = REPO_ROOT / "src" / "runtime" / "yl_runtime_types.f90"
+DECK_RESIDUE_SRC = REPO_ROOT / "src" / "problem" / "yl_problem_deck_residue.f90"
+
+
+def deck_residue_rows() -> set[str]:
+    """Map ids claimed by a `deck_residue_t` component via its `@map:` marker."""
+    try:
+        text = DECK_RESIDUE_SRC.read_text(encoding="utf-8")
+    except OSError:
+        return set()
+    return set(re.findall(r"@map:\s*([A-Za-z0-9_.]+)", text))
 
 
 def runtime_component_rows() -> set[str]:
@@ -2170,6 +2180,23 @@ def check_commit_provenance(doc: dict, header: dict, rows: list[dict]) -> list[s
                 problems.append(f"{r['map_id']} claims FROM_PROBLEM but its owner is "
                                 f"{owner_of(r['map_id'])!r}, not a ProblemState path")
 
+    # P11 deck_residue_t carries EXACTLY the computed residue. Checked here rather than in
+    # a gate of its own because `residue` is computed here and a second computation would
+    # be the second source invariant 4 forbids -- the carrier and the boundary have to come
+    # from the same arithmetic or they can drift apart while both look right.
+    carrier = deck_residue_rows()
+    if carrier or DECK_RESIDUE_SRC.exists():
+        for fid in sorted(residue - carrier):
+            problems.append(f"map row {fid} is in the residue ({len(residue)} rows: emitted, "
+                            f"owned by derived/not_migrated, not obtainable) but no "
+                            f"deck_residue_t component claims it")
+        for fid in sorted(carrier - residue):
+            why = ("it is obtainable from a ProblemState cardinality or the runtime"
+                   if fid in PROV_OBTAINABLE_ROWS else
+                   "it is not an emitted model_ready row owned by derived/not_migrated")
+            problems.append(f"deck_residue_t claims {fid} but {why}; the carrier may hold "
+                            f"only the residue")
+
     # P10 DERIVED and FROM_DECK partition the derived/not_migrated rows, and the boundary
     # is computed above rather than declared. FROM_DECK must be exactly the residue.
     for r in rows:
@@ -2228,6 +2255,12 @@ def cmd_commit_provenance(a) -> int:
           f"runtime without owning them")
     print(f"       NOT_MIGRATED={tally.get('NOT_MIGRATED', 0)} "
           f"(rows whose value has no recorded source; M4-01 exits when this is 0)")
+    res_n = len({f["id"] for f in doc.get("field", [])
+                 if f.get("checkpoint") == "model_ready" and emit_of(f) != "none"
+                 and str(f.get("owner", "")).split(".")[0] in ("derived", "not_migrated")
+                 and f["id"] not in PROV_OBTAINABLE_ROWS})
+    print(f"       deck_residue_t carries {len(deck_residue_rows())} rows and the computed "
+          f"residue is {res_n}")
     return 0
 
 
