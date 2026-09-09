@@ -1191,7 +1191,12 @@ contains
         if (trim(found(pos)) /= trim(expected(pos))) all_match = .false.
       end do
     end if
-    call check('the guard message names this test''s six globals, in order', all_match)
+    ! The count is derived from `expected`, not written out, for the reason this whole
+    ! file keeps running into: a label that says "six" while checking seven is a small
+    ! version of the same defect as a guard that covers less than it claims. It said
+    ! "six" until the seventh door (props) arrived in M4-01 step 3.
+    call check('the guard message names this test''s '//itoa(size(expected))//               &
+              ' globals, in order', all_match)
   end subroutine check_guard_names_match
 
   subroutine one_error_message(errors, i, message)
