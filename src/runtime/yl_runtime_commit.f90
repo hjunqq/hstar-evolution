@@ -18,7 +18,12 @@
 !                      and against its own allocation status, then every legacy target
 !                      is built COMPLETE in a local temporary -- allocation, kind
 !                      conversion, extent, the lot. Any failure returns here, and no
-!                      global has been touched.
+!                      global has been touched. Every staging buffer is POISONED at
+!                      allocation and the real assignment overwrites it, so a value no
+!                      assignment ever reached is published as a sentinel rather than as
+!                      undefined memory that reads back as a plausible 0 -- see the
+!                      STAGE_POISON note below, which records the three profiles that
+!                      could not see a deleted write before this existed.
 !     WRITE            The previous commit's storage is released and the staged values
 !                      are moved in. Nothing in this phase allocates, converts, or can
 !                      fail: it is `move_alloc` and scalar assignment, top to bottom.
@@ -116,6 +121,52 @@ module yl_runtime_commit
   ! by the legacy readers cannot have them freed from under it.
   logical, save :: commit_owned = .false.
 
+  ! --- STAGING POISON ---------------------------------------------------------
+  ! Every staging buffer is filled with one of these the moment it is allocated, and the
+  ! real assignment overwrites it. A staged value that no assignment ever reached is then
+  ! published as the sentinel instead of as whatever the heap happened to contain.
+  !
+  ! WHY THIS EXISTS, measured rather than argued (docs/m4/L2c-fold-design.md §5.5):
+  !   Deleting one real assignment from this module -- `s_group(ig)%unode(i)%np_unode =
+  !   0_ink` was the case that found it -- left yl_runtime_bridge_test at 720/720 under
+  !   `release`, under `strict` (-init=snan,arrays reaches reals only) and under
+  !   `sanitize` (-check uninit / MemorySanitizer). Nothing in this repository could see
+  !   a write that was simply not there. The reason is not carelessness in the tests: the
+  !   legacy record types have no default initialisation, commit REALLOCATES their storage
+  !   on every commit, and undefined memory reads back as 0 often enough to impersonate a
+  !   correct value. "Wrote the wrong value" was caught; "never wrote it" was not, and the
+  !   M4-01 fold's dominant failure mode is the second one -- it adds 89 rows that would
+  !   otherwise be published straight out of undefined memory.
+  !
+  ! THREE RULES, and the second is the one that will be tempting to break:
+  !   1 The sentinel must never reach legacy as a value. It lives only in the staging
+  !     locals, and every component that this module ASSIGNS must be poisoned before the
+  !     assignment and covered by it afterwards. Poisoning a component this module does
+  !     NOT assign would publish a sentinel for no benefit -- which is why the poison
+  !     routines below cover exactly the assigned set and say so component by component.
+  !   2 RESERVED rows are the one exception: they are allocated and deliberately left
+  !     unwritten, so they DO reach the globals carrying the sentinel. That is more honest
+  !     than reaching them carrying 0, because 0 is a value and the ledger says these have
+  !     none. Every such row is RUNTIME_VALUE_RESERVED in the ledger and `ignore` +
+  !     `emit = "none"` in docs/m2/state-field-map.toml, so no snapshot and no comparison
+  !     ever reads one. Which rows carry a sentinel out of here is the LEDGER'S decision;
+  !     it must never become the residue of a forgotten assignment.
+  !   3 The poison routines are maintained beside the null_ routines under the same
+  !     discipline: null_ covers the POINTER components (an ownership question), poison_
+  !     covers the assigned NON-pointer components (a "did anyone write this" question).
+  !     Each states its own coverage, so a legacy type gaining a component shows up as a
+  !     gap in both rather than in neither.
+  !
+  ! WHY huge() AND NOT A NaN: a signalling NaN would be the better real sentinel, but the
+  ! `strict` and `sanitize` profiles compile with -fpe0, where merely copying one can trap
+  ! far from the defect and turn a clear red line into a confusing crash. -init=snan
+  ! already gives those two profiles the NaN behaviour for reals; huge() adds a sentinel
+  ! that behaves identically in all four profiles. Neither value is producible by any
+  ! legal path here: every integer this module stages is an index, a count or a 0/1/5
+  ! flag, and every real is a coordinate, a force or a Jacobian.
+  integer(ink), parameter :: STAGE_POISON_I = huge(0_ink)
+  real(irk), parameter :: STAGE_POISON_R = huge(0.0_irk)
+
 contains
 
   !> Publish `runtime` into the legacy globals.
@@ -183,6 +234,16 @@ contains
       end if
     end if
 
+    ! Scalars first (see STAGE_POISON_I): every published scalar is poisoned before it is
+    ! computed. Seven of them are also the extents of the allocations below, so deleting
+    ! one of those assignments fails at the `allocate` rather than at a comparison -- a
+    ! louder failure than the one this mechanism is for, but a failure either way.
+    s_npoin = STAGE_POISON_I;   s_nelem = STAGE_POISON_I;   s_ngroup = STAGE_POISON_I
+    s_ndimn = STAGE_POISON_I;   s_mdofn = STAGE_POISON_I;   s_cdofn = STAGE_POISON_I
+    s_ntotv = STAGE_POISON_I;   s_ndofix = STAGE_POISON_I;  s_ntcurve = STAGE_POISON_I
+    s_iblks = STAGE_POISON_I;   s_lblks = STAGE_POISON_I
+    s_lineload = STAGE_POISON_I; s_linet = STAGE_POISON_I
+
     s_npoin = int(size(runtime%dof%node_variables, 2), ink)
     s_cdofn = int(size(runtime%dof%node_variables, 1), ink)
     s_nelem = int(size(runtime%element), ink)
@@ -210,42 +271,56 @@ contains
     ! Vartype.f90 says they are, and an implicit conversion here would be the one place
     ! a kind change in the legacy tree could go unnoticed.
     allocate (s_lmdofn(s_mdofn), s_lcdofn(s_mdofn))
+    s_lmdofn = STAGE_POISON_I;  s_lcdofn = STAGE_POISON_I
     s_lmdofn = int(runtime%dof%component_to_active, ink)
     s_lcdofn = int(runtime%dof%active_to_component, ink)
 
     allocate (s_nodfn(s_cdofn, s_npoin))
+    s_nodfn = STAGE_POISON_I
     s_nodfn = int(runtime%dof%node_variables, ink)
 
     allocate (s_iffix(s_ntotv), s_fixed(s_ntotv))
+    s_iffix = STAGE_POISON_I;  s_fixed = STAGE_POISON_R
     s_iffix = int(runtime%dof%fixed_mask, ink)
     s_fixed = real(runtime%dof%prescribed_value, irk)
 
     allocate (s_appear(s_ngroup))
+    s_appear = STAGE_POISON_I
     s_appear = int(runtime%activation%section_state, ink)
 
     allocate (s_result_zero(s_ntotv), s_tofor(s_ntotv), s_stfor(s_ntotv),                       &
               s_toforl(s_ntotv), s_toform(s_ntotv))
+    s_result_zero = STAGE_POISON_R;  s_tofor = STAGE_POISON_R;  s_stfor = STAGE_POISON_R
+    s_toforl = STAGE_POISON_R;       s_toform = STAGE_POISON_R
     s_result_zero = real(runtime%vectors%total_displacement, irk)
     s_tofor = real(runtime%vectors%external_force_total, irk)
     s_stfor = real(runtime%vectors%internal_force, irk)
     s_toforl = real(runtime%vectors%external_force_load, irk)
     s_toform = real(runtime%vectors%external_force_mass, irk)
 
-    ! RESERVED: allocated to the final length, contents deliberately not set. Reading
-    ! them before the first increment is what the ledger forbids, and staging a value
-    ! here would quietly turn "undefined" into "zero".
+    ! RESERVED (rule 2 of the STAGE_POISON note): allocated to the final length, contents
+    ! deliberately not set. Reading them before the first increment is what the ledger
+    ! forbids, and staging a real value here would quietly turn "undefined" into "zero".
+    ! They are poisoned like everything else and therefore reach the globals CARRYING THE
+    ! SENTINEL -- which is the honest form of "this has no value yet". All four are
+    ! RUNTIME_VALUE_RESERVED in the ledger and `ignore` + `emit = "none"` in the M2 map,
+    ! so nothing dumps or compares them.
     allocate (s_delitfi(s_ntotv), s_deltafi(s_ntotv))
+    s_delitfi = STAGE_POISON_R;  s_deltafi = STAGE_POISON_R
 
     allocate (s_line_load_block(size(runtime%cursor%load_line_per_block)))
     allocate (s_line_temp_block(size(runtime%cursor%temperature_line_per_block)))
+    s_line_load_block = STAGE_POISON_I;  s_line_temp_block = STAGE_POISON_I
 
     allocate (s_ice0(s_nelem))
+    s_ice0 = STAGE_POISON_I
     do ie = 1, int(s_nelem)
       s_ice0(ie) = int(opt_or(runtime%element(ie)%refinement_skip), ink)
     end do
 
     allocate (s_trans(s_ntotv))
     do i = 1, int(s_ntotv)
+      s_trans(i)%nintf = STAGE_POISON_I
       s_trans(i)%nintf = int(runtime%dof%interpolation_count(i), ink)
       nullify (s_trans(i)%listf, s_trans(i)%rintf)
     end do
@@ -255,19 +330,26 @@ contains
     do ie = 1, int(s_nelem)
       call null_element(s_element(ie))
       allocate (s_element(ie)%ldofs(nevab))
+      s_element(ie)%ldofs = STAGE_POISON_I
       s_element(ie)%ldofs = int(runtime%dof%element_variables(ie)%values, ink)
 
       allocate (s_element(ie)%field(1))
       call null_element_field(s_element(ie)%field(1))
       allocate (s_element(ie)%field(1)%ldofs_f(nevab))
+      s_element(ie)%field(1)%ldofs_f = STAGE_POISON_I
       s_element(ie)%field(1)%ldofs_f =                                                          &
         int(runtime%dof%element_field_variables(ie)%fields(1)%values, ink)
       allocate (s_element(ie)%field(1)%elcod_f(s_ndimn, nnode))
+      s_element(ie)%field(1)%elcod_f = STAGE_POISON_R
       s_element(ie)%field(1)%elcod_f = real(runtime%element(ie)%field_coordinates, irk)
-      ! RESERVED, as above: allocated to their final length and not written.
+      ! RESERVED, as above: allocated to their final length and not written, so they carry
+      ! the sentinel out (rule 2 of the STAGE_POISON note).
       allocate (s_element(ie)%field(1)%tload(nevab))
       allocate (s_element(ie)%field(1)%eload(nevab))
       allocate (s_element(ie)%field(1)%rload(nevab))
+      s_element(ie)%field(1)%tload = STAGE_POISON_R
+      s_element(ie)%field(1)%eload = STAGE_POISON_R
+      s_element(ie)%field(1)%rload = STAGE_POISON_R
 
       allocate (s_element(ie)%egaus(2))
       call null_gauss(s_element(ie)%egaus(1))
@@ -275,11 +357,16 @@ contains
       allocate (s_element(ie)%egaus(1)%djacb(ngaus))
       allocate (s_element(ie)%egaus(1)%gpcod(s_ndimn, ngaus))
       allocate (s_element(ie)%egaus(1)%cartd(s_ndimn, nnode, ngaus))
+      s_element(ie)%egaus(1)%djacb = STAGE_POISON_R
+      s_element(ie)%egaus(1)%gpcod = STAGE_POISON_R
+      s_element(ie)%egaus(1)%cartd = STAGE_POISON_R
       s_element(ie)%egaus(1)%djacb = real(runtime%gauss(ie)%stiffness%weighted_jacobian, irk)
       s_element(ie)%egaus(1)%gpcod = real(runtime%gauss(ie)%stiffness%point_coordinates, irk)
       s_element(ie)%egaus(1)%cartd = real(runtime%gauss(ie)%stiffness%shape_gradient, irk)
       allocate (s_element(ie)%egaus(2)%djacb(ngaus_mass))
       allocate (s_element(ie)%egaus(2)%gpcod(s_ndimn, ngaus_mass))
+      s_element(ie)%egaus(2)%djacb = STAGE_POISON_R
+      s_element(ie)%egaus(2)%gpcod = STAGE_POISON_R
       s_element(ie)%egaus(2)%djacb = real(runtime%gauss(ie)%mass%weighted_jacobian, irk)
       s_element(ie)%egaus(2)%gpcod = real(runtime%gauss(ie)%mass%point_coordinates, irk)
       ! egaus(2)%cartd stays null: legacy allocates cartd only for a rule whose name is
@@ -291,15 +378,18 @@ contains
     allocate (s_group(s_ngroup))
     do ig = 1, int(s_ngroup)
       call null_group(s_group(ig))
+      call poison_group(s_group(ig))
       n = size(runtime%topology%sections(ig)%nodes)
       s_group(ig)%np_unode = int(n, ink)
       allocate (s_group(ig)%unode(n))
       do i = 1, n
         call null_unode(s_group(ig)%unode(i))
+        call poison_unode(s_group(ig)%unode(i))
         s_group(ig)%unode(i)%ipoin = int(opt_or(runtime%topology%sections(ig)%nodes(i)%node_id), ink)
         s_group(ig)%unode(i)%ne_unode =                                                         &
           int(opt_or(runtime%topology%sections(ig)%nodes(i)%element_count), ink)
         allocate (s_group(ig)%unode(i)%list(size(runtime%topology%sections(ig)%nodes(i)%elements)))
+        s_group(ig)%unode(i)%list = STAGE_POISON_I
         s_group(ig)%unode(i)%list = int(runtime%topology%sections(ig)%nodes(i)%elements, ink)
         ! np_unode and patch_nod are the stabilisation pair: not assigned and not
         ! allocated on this path. The ledger calls them ABSENT and verify_registered
@@ -312,10 +402,12 @@ contains
     allocate (s_listp(s_npoin))
     do i = 1, int(s_npoin)
       n = int(runtime%topology%node_sections%group_count(i))
+      s_listp(i)%mgroup = STAGE_POISON_I
       s_listp(i)%mgroup = int(n, ink)
       nullify (s_listp(i)%listg, s_listp(i)%listp)
       if (n > 0) then
         allocate (s_listp(i)%listg(n), s_listp(i)%listp(n))
+        s_listp(i)%listg = STAGE_POISON_I;  s_listp(i)%listp = STAGE_POISON_I
         s_listp(i)%listg = int(runtime%topology%node_sections%section_index(i)%values, ink)
         s_listp(i)%listp = int(runtime%topology%node_sections%position_in_section(i)%values, ink)
       end if
@@ -325,10 +417,14 @@ contains
     allocate (s_prescrib(s_ndofix))
     do i = 1, int(s_ndofix)
       call null_prescrib(s_prescrib(i))
+      call poison_prescrib(s_prescrib(i))
       s_prescrib(i)%ldofix = int(opt_or(runtime%boundary(i)%dof_index), ink)
       s_prescrib(i)%lnefix = int(opt_or(runtime%boundary(i)%element_count), ink)
       n = size(runtime%boundary(i)%attached_element)
       allocate (s_prescrib(i)%leldofix(n), s_prescrib(i)%levdofix(n), s_prescrib(i)%lefdofix(n))
+      s_prescrib(i)%leldofix = STAGE_POISON_I
+      s_prescrib(i)%levdofix = STAGE_POISON_I
+      s_prescrib(i)%lefdofix = STAGE_POISON_I
       s_prescrib(i)%leldofix = int(runtime%boundary(i)%attached_element, ink)
       s_prescrib(i)%levdofix = int(runtime%boundary(i)%attached_local_position, ink)
       s_prescrib(i)%lefdofix = int(runtime%boundary(i)%attached_field, ink)
@@ -339,6 +435,7 @@ contains
     allocate (s_tcurves(s_ntcurve))
     do i = 1, int(s_ntcurve)
       call null_tcurve(s_tcurves(i))
+      s_tcurves(i)%dfact = STAGE_POISON_R
       s_tcurves(i)%dfact = real(opt_or_real(runtime%amplitudes(i)%factor), irk)
     end do
 
@@ -645,21 +742,24 @@ contains
   ! components. water_pipe, temp_pre and dof point at other record types this module
   ! never populates -- the pointer still must be nulled, because an unset bit pattern
   ! there is exactly the same undefined `associated()` hazard as any other component.
+  ! The `g%np_unode = 0_ink` this routine used to carry moved to poison_group: zeroing an
+  ! assigned scalar here MASKS a deleted assignment, which is exactly the defect the
+  ! STAGE_POISON note describes. Nulling stays about pointers only.
   subroutine null_group(g)
     type(group_of_elements), intent(inout) :: g
     nullify (g%type_mass, g%order_time, g%list, g%belem, g%unode)
     nullify (g%water_pipe, g%temp_pre, g%lcgroup, g%valun, g%dof)
-    g%np_unode = 0_ink
   end subroutine null_group
 
   ! unode_elements (Global.f90:263-271): 3 `pointer` declaration lines, 4 pointer
   ! components.
+  ! The three scalar zeroings this routine used to carry moved to poison_unode, for the
+  ! reason given above null_group. `np_unode` in particular was zeroed here AND assigned 0
+  ! in the staging loop, so deleting the staging line changed nothing observable -- the
+  ! measured blind spot of docs/m4/L2c-fold-design.md §5.5.1.
   subroutine null_unode(u)
     type(unode_elements), intent(inout) :: u
     nullify (u%list, u%patch_nod, u%patch_sta, u%patch_load)
-    u%ne_unode = 0_ink
-    u%np_unode = 0_ink
-    u%ipoin = 0_ink
   end subroutine null_unode
 
   ! freedom_prescribe (Prescrib.f90:14-35): 9 `pointer` declaration lines, 9 pointer
@@ -678,6 +778,56 @@ contains
              c%dx, c%Ca, c%AI, c%omega, c%nalgo, c%ncdis, c%piter, c%giter, c%Nextr,            &
              c%NFS, c%order_stoch_parameter)
   end subroutine null_tcurve
+
+  ! ==========================================================================
+  ! poisoning helpers
+  ! ==========================================================================
+  !
+  ! The counterpart of the null_ family, and the split between them is the point: null_
+  ! answers "who owns this storage" and covers every POINTER component exhaustively;
+  ! poison_ answers "did anyone actually write this" and covers exactly the NON-pointer
+  ! components this module ASSIGNS. Neither set is a subset of the other and neither may
+  ! be widened to the union:
+  !
+  !   * nulling a pointer this module never touches costs nothing (a null pointer claims
+  !     no storage), which is why null_ is exhaustive;
+  !   * poisoning a scalar this module never assigns PUBLISHES A SENTINEL into a legacy
+  !     record, which is rule 1 of the STAGE_POISON note. So poison_ is exact, and each
+  !     routine below names the assignment site that justifies every component it covers.
+  !
+  ! Called immediately after the matching null_ and before any real assignment. A legacy
+  ! type gaining a component therefore shows up as a gap in whichever family should have
+  ! covered it, rather than in neither.
+
+  ! group_of_elements: 1 component, `np_unode`, assigned in the section-record loop
+  ! (`s_group(ig)%np_unode = int(n, ink)`). Every other non-pointer component of this type
+  ! belongs to the ProblemState half and is not assigned here yet -- M4-01 adds them, and
+  ! each addition belongs in this routine on the same commit.
+  subroutine poison_group(g)
+    type(group_of_elements), intent(inout) :: g
+    g%np_unode = STAGE_POISON_I
+  end subroutine poison_group
+
+  ! unode_elements: 3 components. `ipoin` and `ne_unode` are assigned from the runtime;
+  ! `np_unode` is assigned the literal 0 because the ledger calls it ABSENT on this path,
+  ! and it is poisoned exactly so that "assigned 0 deliberately" stays distinguishable
+  ! from "never assigned". `patch_nod`/`patch_sta`/`patch_load` are pointers -- null_unode
+  ! owns them, and they must NOT appear here.
+  subroutine poison_unode(u)
+    type(unode_elements), intent(inout) :: u
+    u%ipoin = STAGE_POISON_I
+    u%ne_unode = STAGE_POISON_I
+    u%np_unode = STAGE_POISON_I
+  end subroutine poison_unode
+
+  ! freedom_prescribe: 2 components, `ldofix` and `lnefix`, both assigned in the
+  ! prescription-record loop. The rest of this type's scalars (itcurve, ifixvar, vdofix,
+  ! nodfix, outfix, ifixset, ...) are the ProblemState half -- not assigned here yet.
+  subroutine poison_prescrib(p)
+    type(freedom_prescribe), intent(inout) :: p
+    p%ldofix = STAGE_POISON_I
+    p%lnefix = STAGE_POISON_I
+  end subroutine poison_prescrib
 
   ! ==========================================================================
   ! small helpers
