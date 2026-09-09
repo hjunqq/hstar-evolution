@@ -8,7 +8,13 @@
 
 ## 一句话结论
 
-**27 项判据中 20 项有可独立重现的证据，本次全部重跑；7 项仍属断言。**
+**27 项判据中 22 项有可独立重现的证据，本次全部重跑；5 项仍属断言**（判据 5、9、11、25、27）。
+
+> **更正（2026-09-09，编制人自查）**：本行原写「20 项有证据；7 项仍属断言」，与下表的判决列
+> **对不上**——下表 27 行里标 `仅有断言` 的是 5 行，其余 22 行标 `独立证据支撑`。7 这个数字
+> 来自本文末尾「升级路径」表的行数，那张表额外收了判据 26 的两条残余与 build-id 附录，
+> 二者都不是判决为断言的准则。**摘要与它所概括的表不一致，正是本项目反复编目的那个缺陷形状**，
+> 在此更正而非悄悄改数。以判决列为准。
 M3 的实现质量在本次复核中站得住：四套门禁（`problem-types` 50/50 + 485/485、`runtime`
 108/108 + 双射、`runtime-bridge` 1131/1131、`adapter` 桥接 64/0/28/0 + 方言 317/317×2）
 全部在钉住的树上复现，规则覆盖不是「套件绿了」而是**由可遍历的表逐行断言**（能力表 15/15、
@@ -47,7 +53,7 @@ M3 的实现质量在本次复核中站得住：四套门禁（`problem-types` 5
 | 2 | 98 项已导出字段与类型双向核对通过（映射表 `owner` 路径 → Fortran 字段名，机械推导） | 同上；`tools/yl_problem_check.py` 头部：字段名从 `owner` 路径推导而非从 `id`（`id` 仍带 `gid_u`/`icreep`/`type_nalgo` 等 Fortran 拼写） | 同上 `check` PASS；`--selftest` → `SELFTEST PASS: 56/56`（每条规则 1–13 各有一个必须 FAIL 的变异，含「用例名所称规则号必须等于匹配报文的规则号」这条常设断言）（已跑） | 独立证据支撑 |
 | 3 | 类型中无 Fortran 槽位名 | 规则 10：deny 列表**机械地**从映射表的 `legacy_symbol` 末段与 `derived.counts.*` 收割，再减去干净 owner 路径自己用到的词 | `check` → `deny list 252/260 legacy slot names`（已跑） | 独立证据支撑 |
 | 4 | 缺失 / 零 / 空三态分离（`opt_*` 包装 + 集合分配状态） | `yl_problem_optional`；`yl_problem_builder` 的私有枚举 `COLL_UNSET/EMPTY/FILLED`，`COLL_EMPTY` 全文件仅 11 处赋值；I04 断言三态互不混淆；M3-02 §9 另拆出**发布侧**一条（作者显式声明的空集合必须以显式空的形态穿过 finalize） | `bash tools/build.sh problem-types` → `PASS: 50/50`（类型级）+ `PASS: 485/485`（流水线），日志含 `ok I04 …`、`ok P-emp …`（已跑） | 独立证据支撑 |
-| 5 | 初始输入与积分历史变量分离（`docs/05` M3-01 验收列） | **找不到任何证据**：`docs/m3/*.md`、`docs/tasks/M3-01.md`、`src/problem/**`、`tools/yl_problem_check.py` 中都没有「历史」/`history`/`gpvar`/`stres0` 的段落或断言 | `grep -rn "历史\|history" docs/m3/*.md docs/tasks/M3-0*.md` → 无命中；`grep -n "gpvar\|stres0" docs/m2/state-field-map.toml` → 仅出现在两条 `ignore`/说明性 note 里，无 `ProblemState.*` owner（均已跑） | **仅有断言** — 分离在结构上成立（`ProblemState` 的字段全部由映射表的 `ProblemState.*` owner 机械推导，而 `element%estif/alfa/stres0/gmatx`、`gpvar0/gpvar` 在映射表里没有 ProblemState owner），但**没有任何文档写下过这个论证，也没有门禁指名它**。它今天靠判据 2 的双射顺带成立，明天映射表加一行就可能不成立 |
+| 5 | 初始输入与积分历史变量分离（`docs/05` M3-01 验收列） | **找不到任何证据**：`docs/m3/*.md`、`docs/tasks/M3-01.md`、`src/problem/**`、`tools/yl_problem_check.py` 中都没有「历史」/`history`/`gpvar`/`stres0` 的段落或断言 | `grep -rn "历史\|history" docs/m3/*.md docs/tasks/M3-0*.md` → 无命中；`grep -n "gpvar\|stres0" docs/m2/state-field-map.toml` → 仅出现在两条 `ignore`/说明性 note 里，无 `ProblemState.*` owner（均已跑） | **仅有断言（本次复核后已部分升级）** — 分离在结构上成立（`ProblemState` 的字段全部由映射表的 `ProblemState.*` owner 机械推导，而 `element%estif/alfa/stres0/gmatx`、`gpvar0/gpvar` 在映射表里没有 ProblemState owner），但编制本矩阵时**没有任何文档写下过这个论证，也没有门禁指名它**——它靠判据 2 的双射顺带成立，映射表加一行就可能不成立。**2026-09-09 由负责人补上 `yl_problem_check.py` 规则 15（`ed7e4eb`）**：任何 `ProblemState.*` owner 的行其 `determinism` 必须是 `deterministic`，规则从映射表**派生**而非维护一张会腐烂的历史槽位清单。本次对它做了阴性对照——把 `case.name` 的 determinism 改为 `pointer`，得到**恰好一条** FAIL 且点名规则 15 与该字段，其余规则保持沉默（预期先写、结果相符）。**残余仍属断言**：规则是**必要条件而非该性质本身**（其 docstring 亦如此声明并回指本判据）——一个在其检查点上恰好确定性的历史槽位仍能通过 |
 | 6 | YL「组」拆为 elset / section / material | 类型表：`mesh%elsets(i)%elements(:)`、`sections(i)%*`（17 项）、`materials(i)%*`（13 项）各自独立；映射表 `mesh.sets.elset` / `sections.*` / `materials.*` 三组 owner 前缀不同 | `python3 tools/yl_problem_check.py render` 的输出与 `docs/m3/M3-01-problemstate.md` **逐字节相同**（已跑，`diff` 无差异），即该文档是生成物、不能手工漂移 | 独立证据支撑 |
 
 ### B. 校验、派生来源与事务（M3-02）
@@ -114,7 +120,7 @@ M3 的实现质量在本次复核中站得住：四套门禁（`problem-types` 5
 
 | 判据 | 当前状态 | 升级为独立证据所需 |
 |---|---|---|
-| 判据 5：初始输入与积分历史变量分离 | 仓库中没有任何文档段落或断言指名这条验收要求；它今天靠判据 2 的双射顺带成立 | 在 `tools/yl_problem_check.py` 加一条规则：`ProblemState.*` 的 owner 面不得包含任何积分历史类 legacy 槽位（`gpvar*`、`stres0`、`estif`、`alfa`、`gmatx` 等），并在 M3-01 底稿写明这条论证 |
+| 判据 5：初始输入与积分历史变量分离 | **必要条件已由规则 15 机器强制**（`ed7e4eb`，本次阴性对照确认会响）；残余是「恰好确定性的历史槽位仍能通过」，且 M3-01 底稿仍未写下这条论证 | 在 M3-01 底稿写明该论证与规则 15 的作用边界；若要覆盖残余，需要一个独立于 determinism 的判据（例如按 legacy 槽位的**首次赋值位点**是否晚于检查点来分类），但这条是否值得做由负责人判断——当前残余的可达性很低 |
 | 判据 9：未知字段拒绝 | 同上，无落点。结构上由 Fortran 强类型 + M4 方言门覆盖 | 在 M3-02 底稿里写明「这条验收要求在本层由类型系统承担，deck 文本侧由 M4 的 `CAP_STAGE_ADAPT` 表承担」，并指向 `yl_adapter_dialect_test` 的逐行反例；或明确把它移出 M3 的验收列 |
 | 判据 11：validate 家族每条件反例 | 一次已完成的审计，非常设控制；M3-02 §7 自己预言会退化 | 按 M3-02 §7 对 M3-03 下的那条硬性要求，回过头把 validate 规则也声明进可遍历的表，使「每条规则的每个条件都有反例」成为套件断言（M3-03 已经这样做了，M3-02 没有回改） |
 | 判据 25：泄漏 / 用后释放 | 未做 | 建 ASan 或 valgrind 目标 + shell 层比对（进程内无法观测自身泄漏），并把它做成 `tools/build.sh` 的一个目标——「没有构建目标的套件不是门禁，无论手工跑起来多绿」（`build.sh` 头部对 `adapter` 目标的原话） |
