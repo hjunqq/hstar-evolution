@@ -1400,8 +1400,16 @@ contains
         ! them, or deallocating dof loses the only handle on them. Neither the
         ! release-totality assertion nor MSan can see it if this is dropped -- the lead
         ! measured that on prescrib%leldofix, a one-level pointer that predates the fold --
-        ! so this line's correctness rests on the valgrind exit condition, not on a green
-        ! suite.
+        ! so a green suite says nothing about this line.
+        !
+        ! It is no longer unmeasured. M4-01 step 6 gave this site its own positive
+        ! control: deleting this release is reported by LeakSanitizer at :927 (the
+        ! `allocate` for listdof_f), the only site named, while the suite stays
+        ! 1292/1292. The instrument is `tools/build.sh --profile asan`, NOT valgrind --
+        ! valgrind is not installable on this host, and this comment said "valgrind exit
+        ! condition" until 2026-09-09, after step 6 had already settled the question with
+        ! a different tool. Six of the routine's record arrays have such a control; the
+        ! other fifteen inner-release sites do not, and are not covered by it.
         if (associated(group(i)%dof)) then
           do ig = 1, size(group(i)%dof)
             if (associated(group(i)%dof(ig)%listdof_f))                                         &
