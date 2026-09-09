@@ -259,12 +259,12 @@ contains
 
       ! -- inp: no ctx dependency (see module header); called first, matching Fem.f90 --
       mark = errors%count()
-      call parse_inp(u_inp, ctx, b, errors)
+      call parse_inp(u_inp, ctx, b, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       ! -- .glb: the sole writer of ctx; every other parser below depends on it --------
       mark = errors%count()
-      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, errors)
+      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       ! -- the six remaining ctx-readers, contract SS1 order -----------------------------
@@ -285,7 +285,7 @@ contains
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
-      call parse_loa(u_loa, ctx, b, parts, errors)
+      call parse_loa(u_loa, ctx, b, parts, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()

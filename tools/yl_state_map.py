@@ -2260,56 +2260,98 @@ def check_commit_provenance(doc: dict, header: dict, rows: list[dict]) -> list[s
 
 # --- commit input coverage (M4-01 step 3b follow-up) ---------------------------------------
 COMMIT_SRC = REPO_ROOT / "src" / "runtime" / "yl_runtime_commit.f90"
-VERIFY_SUB = "verify_problem_inputs"
+
+# commit takes THREE inputs and each needs this containment check, not just the first.
+# `residue` was added in step 5a BEFORE commit read a single component of it: the defect
+# fixed on the problem surface in 4b3ff7d ("said every, covered 8 of 13") is not a fact
+# about ProblemState, it is a fact about any input surface read through an `opt_*`
+# fallback -- so the guard goes up before the reads, not after the first one is missed.
+# `runtime` is deliberately absent: verify_registered has already accepted it against the
+# rule table, so an unset value there is a reported fault before staging begins.
+VERIFY_SUBS = {
+    "problem": "verify_problem_inputs",
+    "residue": "verify_residue_inputs",
+}
+VERIFY_SUB = VERIFY_SUBS["problem"]   # kept for messages that name the original surface
 
 
-def _problem_leaves(text: str) -> set[str]:
-    """Normalised `problem%...` component paths, indices stripped.
+def _root_leaves(text: str, root: str) -> set[str]:
+    """Normalised `<root>%...` component paths, indices stripped.
 
     `problem%mesh%elements(ie)%material` and `problem%mesh%elements(i)%material` both
     become `problem%mesh%elements%material`, so a read and its check compare equal
     whatever the loop variable is called.
     """
     leaves = set()
-    for m in re.finditer(r"problem((?:%[A-Za-z]\w*(?:\([^()]*\))?)+)", text):
+    for m in re.finditer(root + r"((?:%[A-Za-z]\w*(?:\([^()]*\))?)+)", text):
         path = re.sub(r"\([^()]*\)", "", m.group(1))
-        leaves.add("problem" + path)
+        leaves.add(root + path)
     return leaves
 
 
-def commit_input_coverage() -> tuple[set[str], set[str]]:
-    """(leaves the staging reads, leaves verify_problem_inputs checks)."""
+def _problem_leaves(text: str) -> set[str]:
+    return _root_leaves(text, "problem")
+
+
+def _sub_span(text: str, sub: str):
+    start = text.find("  subroutine " + sub)
+    end = text.find("  end subroutine " + sub)
+    if start < 0 or end < 0:
+        return None
+    return start, end
+
+
+def commit_input_coverage(root: str = "problem") -> tuple[set[str], set[str]]:
+    """(leaves the staging reads, leaves this root's verify_* subroutine checks).
+
+    EVERY checking subroutine is cut out of the staging text, not just this root's. A
+    check written as `opt_is_set(residue%nsmat)` is a read of `residue%nsmat` to the
+    regex, so leaving the other surface's routine in would let one guard's text stand in
+    for the other's coverage.
+    """
+    sub = VERIFY_SUBS[root]
     try:
         text = COMMIT_SRC.read_text(encoding="utf-8")
     except OSError:
         return set(), set()
-    start = text.find("  subroutine " + VERIFY_SUB)
-    end = text.find("  end subroutine " + VERIFY_SUB)
-    if start < 0 or end < 0:
-        return {"<" + VERIFY_SUB + " not found>"}, set()
-    checked = _problem_leaves(text[start:end])
-    # Everything outside the checking routine: the staging pass and the commit's own
+    span = _sub_span(text, sub)
+    if span is None:
+        return {"<" + sub + " not found>"}, set()
+    checked = _root_leaves(text[span[0]:span[1]], root)
+
+    # Everything outside EVERY checking routine: the staging pass and the commit's own
     # signature. Comments are stripped first so prose naming a field cannot masquerade
     # as coverage -- the defect this whole check exists to prevent, one level up.
-    rest = text[:start] + text[end:]
+    spans = sorted(x for x in (_sub_span(text, s) for s in VERIFY_SUBS.values())
+                   if x is not None)
+    rest, cursor = "", 0
+    for a, b in spans:
+        rest += text[cursor:a]
+        cursor = b
+    rest += text[cursor:]
     rest = "\n".join(re.sub(r"!.*$", "", ln) for ln in rest.splitlines())
-    read = {leaf for leaf in _problem_leaves(rest) if leaf != "problem"}
+    read = {leaf for leaf in _root_leaves(rest, root) if leaf != root}
     return read, checked
 
 
 def cmd_commit_inputs(a) -> int:
-    read, checked = commit_input_coverage()
     problems = []
-    for leaf in sorted(read - checked):
-        problems.append(f"{leaf} is read by the staging pass but {VERIFY_SUB} does not "
-                        f"check it; an unset value would be published as a default")
+    tallies = []
+    for root in sorted(VERIFY_SUBS):
+        sub = VERIFY_SUBS[root]
+        read, checked = commit_input_coverage(root)
+        for leaf in sorted(read - checked):
+            problems.append(f"{leaf} is read by the staging pass but {sub} does not "
+                            f"check it; an unset value would be published as a default")
+        tallies.append(f"{root}: {len(read)} read / {len(checked)} checked by {sub}")
     if problems:
         print(f"FAIL: {len(problems)} problems")
         for p in problems:
             print("  " + p)
         return 1
-    print(f"PASS: every ProblemState leaf the commit staging reads ({len(read)}) is checked "
-          f"by {VERIFY_SUB} ({len(checked)} checked)")
+    print("PASS: every input leaf the commit staging reads is checked before it is read")
+    for t in tallies:
+        print("       " + t)
     return 0
 
 

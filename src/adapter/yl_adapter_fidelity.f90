@@ -99,6 +99,7 @@ module yl_adapter_fidelity
                                 builder_step_set_output, builder_step_add_boundary, &
                                 builder_step_boundary_empty, builder_step_add_activation, &
                                 builder_step_activation_empty
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_adapter_parts, only: deck_context_t, deck_context_reset, &
                               step_parts_t, step_parts_reset, &
                               solver_parts_t, solver_parts_reset, &
@@ -264,6 +265,7 @@ contains
     integer :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man
     character(len=:), allocatable :: prefix
     type(problem_builder_t) :: b
+    type(deck_residue_t) :: residue
     type(deck_context_t) :: ctx
     type(step_parts_t) :: parts
     type(solver_parts_t) :: sparts
@@ -312,11 +314,11 @@ contains
       if (.not. bok) exit parse_all
 
       mark = errors%count()
-      call parse_inp(u_inp, ctx, b, errors)
+      call parse_inp(u_inp, ctx, b, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
-      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, errors)
+      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
@@ -336,7 +338,7 @@ contains
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
-      call parse_loa(u_loa, ctx, b, parts, errors)
+      call parse_loa(u_loa, ctx, b, parts, residue, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()

@@ -474,14 +474,14 @@ contains
     call section_parts_reset(secparts)
 
     select case (deck)
-    case ('inp'); call parse_inp(unit, ctx, b, errs)
+    case ('inp'); call parse_inp(unit, ctx, b, residue, errs)
     case ('man'); call parse_man(unit, ctx, b, parts, errs)
-    case ('glb'); call parse_glb(unit, ctx, b, parts, sparts, secparts, errs)
+    case ('glb'); call parse_glb(unit, ctx, b, parts, sparts, secparts, residue, errs)
     case ('cor'); call parse_cor(unit, ctx, b, errs)
     case ('ele'); call parse_ele(unit, ctx, b, errs)
     case ('mat'); call parse_mat(unit, ctx, b, secparts, errs)
     case ('sol'); call parse_sol(unit, ctx, b, sparts, errs)
-    case ('loa'); call parse_loa(unit, ctx, b, parts, errs)
+    case ('loa'); call parse_loa(unit, ctx, b, parts, residue, errs)
     case ('pre'); call parse_pre(unit, ctx, b, parts, errs)
     case ('tem'); call parse_tem(unit, residue, errs)
     case default

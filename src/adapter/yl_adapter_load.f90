@@ -83,6 +83,7 @@ module yl_adapter_load
                                 builder_amplitude_begin, builder_amplitude_set_name, &
                                 builder_amplitude_set_type, builder_amplitude_add_point, &
                                 builder_amplitude_finish, builder_add_amplitude
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_adapter_parts, only: step_parts_t, deck_context_t, TYPE_ABC_MIF, reject_dialect
 
   implicit none
@@ -104,11 +105,12 @@ contains
   !> both run against the same unit in the legacy call sequence
   !> (Fem.f90 -> STATIC_U), so a rewind between them would desynchronise the
   !> cursor from the deck the driver actually opened.
-  subroutine parse_loa(unit, ctx, b, parts, errors)
+  subroutine parse_loa(unit, ctx, b, parts, residue, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(step_parts_t), intent(inout) :: parts
+    type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
 
     logical :: ok
@@ -116,9 +118,9 @@ contains
     call require_context(errors, ctx, ok)
     if (.not. ok) return
 
-    call external_load_1(unit, b, errors, ok)
+    call external_load_1(unit, b, residue, errors, ok)
     if (.not. ok) return
-    call external_load_2(unit, ctx, parts, errors, ok)
+    call external_load_2(unit, ctx, parts, residue, errors, ok)
   end subroutine parse_loa
 
   !> Parses `.pre`: `prescrib_set` in full.
@@ -305,9 +307,10 @@ contains
   ! present), edge definitions (rejected if present)
   ! ==========================================================================
 
-  subroutine external_load_1(unit, b, errors, ok)
+  subroutine external_load_1(unit, b, residue, errors, ok)
     integer, intent(in) :: unit
     type(problem_builder_t), intent(inout) :: b
+    type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
 
@@ -454,6 +457,10 @@ contains
       return
     end if
 
+    ! Carried out after the gates, as everywhere else on this surface.
+    call opt_set(residue%nplgroup, int(nplgroup, int32))
+    call opt_set(residue%nedge, int(nedge, int32))
+
     ok = .true.
   end subroutine external_load_1
 
@@ -463,10 +470,11 @@ contains
   ! present)
   ! ==========================================================================
 
-  subroutine external_load_2(unit, ctx, parts, errors, ok)
+  subroutine external_load_2(unit, ctx, parts, residue, errors, ok)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(step_parts_t), intent(inout) :: parts
+    type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
 
@@ -598,6 +606,16 @@ contains
                           actual=itoa(nplateload), expected='0')
       return
     end if
+
+    ! `delgroup` is carried even though NOTHING consumes it -- not legacy, not the new
+    ! path. It shares a read with edge_load_group (Load.f90:754) and legacy leaves it in
+    ! the applied_load module, and the differential compares GLOBALS: "no consumer" is not
+    ! an exemption (L2c-fold-design.md 1.7.2). It is also the only one of these six whose
+    ! own gate is the neighbouring field's rather than its own.
+    call opt_set(residue%edge_load_group, int(edge_load_group, int32))
+    call opt_set(residue%delgroup, int(delgroup, int32))
+    call opt_set(residue%nbeamload, int(nbeamload, int32))
+    call opt_set(residue%nplateload, int(nplateload, int32))
 
     ok = .true.
   end subroutine external_load_2

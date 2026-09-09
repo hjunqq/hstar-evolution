@@ -146,6 +146,7 @@ module yl_adapter_model
                                  builder_set_interactions, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_STAGE_ADAPT
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, section_parts_t, &
                                LEN_TYPE_ABC, reject_dialect
 
@@ -175,13 +176,16 @@ contains
   ! parser fills its leaves in the shared aggregate exactly as it does for `parts`, and
   ! never calls `builder_set_solver` / `builder_add_section` itself. `sections[].thickness`
   ! is `.mat`'s leaf (read AFTER .glb, Fem.f90:117 then :191) and is left unset here.
-  subroutine parse_glb(unit, ctx, b, parts, sparts, secparts, errors)
+  subroutine parse_glb(unit, ctx, b, parts, sparts, secparts, residue, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(inout) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(step_parts_t), intent(inout) :: parts
     type(solver_parts_t), intent(inout) :: sparts
     type(section_parts_t), intent(inout) :: secparts
+    !> Carries out the 13 `.glb` values ADR-0003 does not model. Filled only once every
+    !> gate below has accepted the deck.
+    type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
 
     integer(int32) :: ios
@@ -1123,6 +1127,31 @@ contains
     ctx%nbackdt = nbackdT
     ctx%ntrans = ntrans
     ctx%filled = .true.
+
+    ! ---- the 13 values .glb leaves in legacy's globals that ADR-0003 does not model ----
+    ! Set HERE, at the end, for the same reason parse_inp sets its four after the gates:
+    ! every one of these has already been through its rejection above, so a refused deck
+    ! leaves the carrier untouched and a filled carrier means "this deck was accepted AND
+    ! this is what it said". The gate and the carried value stay two independent sources;
+    ! commit cross-checks them rather than deriving one from the other (1.6.2).
+    call opt_set(residue%npoinb, npoinb)
+    call opt_set(residue%stab_matde, stab_matde)
+    call opt_set(residue%ninit, ninit)
+    call opt_set(residue%nlinks, nlinks)
+    call opt_set(residue%block_stab, block_stab)
+    call opt_set(residue%nbackf, nbackf)
+    call opt_set(residue%ebody, ebody)
+    call opt_set(residue%nlayer, nlayer)
+    call opt_set(residue%state_change, state_change)
+    call opt_set(residue%bparameter, Bparameter)
+    call opt_set(residue%nsmat, nsmat)
+    call opt_set(residue%ntrans, ntrans)
+    ! uinitial is the carrier's only array. It is [nblks] long in the map and legacy reads
+    ! exactly nblks values into it (Global.f90:1093), so the carried copy is that slice --
+    ! not the local's allocated length, which this file sizes at 1.
+    if (allocated(residue%uinitial)) deallocate (residue%uinitial)
+    allocate (residue%uinitial(nblks))
+    residue%uinitial = uinitial(1:nblks)
 
   contains
 

@@ -177,6 +177,7 @@ contains
     ! The residue is default-initialised: every component unset. That is honest at this
     ! step -- no parser fills it yet (M4-01 step 5) and commit reads nothing out of it.
     call move_alloc(problem, problem_out)
+    call residue_of(residue_out)
     call commit_legacy_globals(problem_out, residue_out, rt, errors)
     call check('commit_legacy_globals accepted the '//itoa(n_elem)//'-element runtime',          &
               .not. errors%any())
@@ -193,6 +194,52 @@ contains
     call check('commit_owns_globals is true after a successful commit', commit_owns_globals())
     ok = commit_owns_globals()
   end subroutine build_and_commit
+
+  !> A COMPLETE deck residue, because commit refuses an incomplete one (M4-01 step 5a).
+  !>
+  !> This program owns no deck, so no parser can fill the carrier for it -- it authors all
+  !> 27 components itself, the same way it authors every ProblemState scalar rather than
+  !> letting opt_or's fallback stand in for a value. Every value here is the one the two
+  !> golden decks carry, which is what makes it a fixture for this capability rather than
+  !> an arbitrary filling: all zero except `runblks` (1 step), `nsmat` (1, corrected in
+  !> 0646de3 against a map note that said 0), `npoinb` (= npoin) and `stab_matde`
+  !> (99999, the disabling sentinel both decks use).
+  !>
+  !> It is deliberately NOT derived from the type: a loop that set every component to 0
+  !> would pass verify_residue_inputs while saying nothing, and the three non-zero values
+  !> are exactly the ones such a loop would get wrong.
+  subroutine residue_of(r)
+    type(deck_residue_t), intent(out) :: r
+    call opt_set(r%restart, 0_int32)
+    call opt_set(r%relis, 0_int32)
+    call opt_set(r%adina, 0_int32)
+    call opt_set(r%runblks, 1_int32)
+    call opt_set(r%ninit, 0_int32)
+    call opt_set(r%nlinks, 0_int32)
+    call opt_set(r%block_stab, 0_int32)
+    call opt_set(r%nbackf, 0_int32)
+    call opt_set(r%ebody, 0_int32)
+    call opt_set(r%nlayer, 0_int32)
+    call opt_set(r%state_change, 0_int32)
+    call opt_set(r%bparameter, 0_int32)
+    call opt_set(r%ntrans, 0_int32)
+    call opt_set(r%stab_matde, 99999_int32)
+    call opt_set(r%npoinb, 0_int32)
+    call opt_set(r%nsmat, 1_int32)
+    call opt_set(r%nplgroup, 0_int32)
+    call opt_set(r%nedge, 0_int32)
+    call opt_set(r%edge_load_group, 0_int32)
+    call opt_set(r%delgroup, 0_int32)
+    call opt_set(r%nbeamload, 0_int32)
+    call opt_set(r%nplateload, 0_int32)
+    call opt_set(r%ntemp_surface, 0_int32)
+    call opt_set(r%ntedge, 0_int32)
+    call opt_set(r%ntelgroup, 0_int32)
+    call opt_set(r%npipe, 0_int32)
+    if (allocated(r%uinitial)) deallocate (r%uinitial)
+    allocate (r%uinitial(1))
+    r%uinitial = 0_int32
+  end subroutine residue_of
 
   ! A draft structurally like yl_problem_pipeline_selftest's cooks-equivalent good_draft
   ! (same supported combination: 2-D Q4 kind 5 class CO field U formulation PE, ELASTIC_

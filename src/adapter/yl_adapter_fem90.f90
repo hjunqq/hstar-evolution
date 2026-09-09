@@ -136,6 +136,7 @@ module yl_adapter_fem90
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 PE_INVALID_INPUT, PE_INTERNAL
   use yl_problem_optional, only: opt_set
+  use yl_problem_deck_residue, only: deck_residue_t
   use yl_adapter_parts, only: step_parts_t, deck_context_t, reject_dialect
 
   implicit none
@@ -163,10 +164,14 @@ contains
   !> (Fem.f90:94-117 precedes `call global_data`), so `ctx` cannot yet be filled when this
   !> runs. Reading it here would be a bug, not a missed opportunity -- do not "fix" that by
   !> adding a use of it.
-  subroutine parse_inp(unit, ctx, b, errors)
+  !> `residue` carries out the four values this file reads that ADR-0003 does not model:
+  !> the three run-control flags and runblks. They are SET after their gate has accepted
+  !> them, so a refused deck leaves the carrier untouched.
+  subroutine parse_inp(unit, ctx, b, residue, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
+    type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
 
     character(len=80) :: title
@@ -203,6 +208,15 @@ contains
     if (.not. reject_nonzero(errors, uopt_r, 'F1', 'uopt_r', loc)) return
     if (.not. reject_nonzero(errors, gamamax, 'F1', 'gamamax', loc)) return
 
+    ! Carried out, not inferred from the rejection above. The gate proves the value must
+    ! be 0; the residue records what the deck actually said. Two independent sources that
+    ! commit cross-checks (L2c-fold-design.md 1.6.2) is stronger than deriving one from
+    ! the other -- and `sysrelis`, `uopt_r` and `gamamax` are absent here because they are
+    ! not model_ready map rows, only gate conditions.
+    call opt_set(residue%restart, restart)
+    call opt_set(residue%relis, relis)
+    call opt_set(residue%adina, adina)
+
     ! RD: INP.FEM90.title#2 (Fem.f90:101)
     ! read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) text
     read (unit, *, iostat=ios, iomsg=iomsg_buf) title
@@ -233,6 +247,7 @@ contains
       call reject_dialect(errors, 'F1', 'runblks', loc, actual=itoa(int(runblks)), expected='1')
       return
     end if
+    call opt_set(residue%runblks, runblks)
   end subroutine parse_inp
 
   ! ============================================================================================

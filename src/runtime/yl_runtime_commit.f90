@@ -520,7 +520,7 @@ contains
     logical :: ok
 
     ! ---------------------------------------------------------------- verify
-    call verify_registered(problem, runtime, errors, ok)
+    call verify_registered(problem, residue, runtime, errors, ok)
     if (.not. ok) return
 
     ! W4 guard (see the OWNERSHIP header): if any record-array global this module writes
@@ -1409,8 +1409,9 @@ contains
   ! This is the check that makes the commit safe to write blind afterwards. It runs over
   ! the RULE TABLE rather than over a list kept here, so a row added to the table without
   ! a commit for it fails here instead of being committed as a silent absence.
-  subroutine verify_registered(problem, runtime, errors, ok)
+  subroutine verify_registered(problem, residue, runtime, errors, ok)
     type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
     type(runtime_state_t), intent(in) :: runtime
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
@@ -1433,6 +1434,10 @@ contains
     ok = .false.
 
     call verify_problem_inputs(problem, errors, ok)
+    if (.not. ok) return
+    ok = .false.
+
+    call verify_residue_inputs(residue, errors, ok)
     if (.not. ok) return
     ok = .false.
 
@@ -1703,6 +1708,81 @@ contains
     end do
     ok = .true.
   end subroutine verify_problem_inputs
+
+  ! INV-COMMIT-TOTAL, residue half: every component of the carrier must be SET.
+  !
+  ! WHY THIS EXISTS BEFORE COMMIT READS A SINGLE ONE OF THEM. The defect fixed in 4b3ff7d
+  ! -- a checker whose header said "every" and covered 8 of 13 -- was not a fact about
+  ! ProblemState. It is a fact about any input read through an `opt_*` fallback: the
+  ! fallback cannot tell "the deck said 0" from "no parser filled this", and those two are
+  ! exactly what deck_residue_t exists to keep apart (see its module header). Writing the
+  ! guard after the first read would repeat the same mistake on a second surface, so it
+  ! goes up first and `tools/yl_state_map.py commit-inputs` now checks containment on BOTH
+  ! surfaces rather than only the original one.
+  !
+  ! THE LIST IS NOT WRITTEN OUT HERE EITHER. Every component is checked by walking the
+  ! type, one `opt_is_set` per line in declaration order, so a component added to
+  ! deck_residue_t and forgotten here is a gap this file makes visible rather than one
+  ! that hides behind "every". The carrier's own bijection gate (P11) is what keeps that
+  ! type in step with the map, so the two together are the closed loop: map -> type ->
+  ! this check -> commit.
+  subroutine verify_residue_inputs(residue, errors, ok)
+    type(deck_residue_t), intent(in) :: residue
+    type(problem_errors_t), intent(inout) :: errors
+    logical, intent(out) :: ok
+
+    ok = .false.
+
+    ! uinitial is the one allocatable: unallocated is undefined behaviour on read, not a
+    ! silent zero, so it is checked as a separate condition from the 26 scalars.
+    if (.not. allocated(residue%uinitial)) then
+      call fail(errors, 'the deck residue carries no uinitial; it is an allocatable and '//   &
+                'reading it unallocated is undefined, not a default')
+      return
+    end if
+
+    if (.not. opt_is_set(residue%block_stab) .or.                                             &
+        .not. opt_is_set(residue%bparameter) .or.                                             &
+        .not. opt_is_set(residue%ebody) .or.                                                  &
+        .not. opt_is_set(residue%nbackf) .or.                                                 &
+        .not. opt_is_set(residue%ninit) .or.                                                  &
+        .not. opt_is_set(residue%nlayer) .or.                                                 &
+        .not. opt_is_set(residue%nlinks) .or.                                                 &
+        .not. opt_is_set(residue%ntrans) .or.                                                 &
+        .not. opt_is_set(residue%stab_matde) .or.                                             &
+        .not. opt_is_set(residue%state_change) .or.                                           &
+        .not. opt_is_set(residue%adina) .or.                                                  &
+        .not. opt_is_set(residue%relis) .or.                                                  &
+        .not. opt_is_set(residue%restart)) then
+      call fail(errors, 'the deck residue has an unset control value (block_stab, '//         &
+                'bparameter, ebody, nbackf, ninit, nlayer, nlinks, ntrans, stab_matde, '//    &
+                'state_change, adina, relis or restart); commit will not publish a '//        &
+                'default for a value no parser supplied')
+      return
+    end if
+
+    if (.not. opt_is_set(residue%delgroup) .or.                                               &
+        .not. opt_is_set(residue%edge_load_group) .or.                                        &
+        .not. opt_is_set(residue%nbeamload) .or.                                              &
+        .not. opt_is_set(residue%nedge) .or.                                                  &
+        .not. opt_is_set(residue%npipe) .or.                                                  &
+        .not. opt_is_set(residue%nplateload) .or.                                             &
+        .not. opt_is_set(residue%nplgroup) .or.                                               &
+        .not. opt_is_set(residue%npoinb) .or.                                                 &
+        .not. opt_is_set(residue%nsmat) .or.                                                  &
+        .not. opt_is_set(residue%ntedge) .or.                                                 &
+        .not. opt_is_set(residue%ntelgroup) .or.                                              &
+        .not. opt_is_set(residue%ntemp_surface) .or.                                          &
+        .not. opt_is_set(residue%runblks)) then
+      call fail(errors, 'the deck residue has an unset count (delgroup, edge_load_group, '//  &
+                'nbeamload, nedge, npipe, nplateload, nplgroup, npoinb, nsmat, ntedge, '//    &
+                'ntelgroup, ntemp_surface or runblks); commit will not publish a default '//  &
+                'for a value no parser supplied')
+      return
+    end if
+
+    ok = .true.
+  end subroutine verify_residue_inputs
 
   ! INV-COMMIT-TOTAL, provenance half: the table above must be well formed. An entry with
   ! an empty id names no row; an entry with an unnameable state exports as `?` and would
