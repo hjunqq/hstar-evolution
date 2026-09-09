@@ -53,6 +53,31 @@
 !   sparts%solver%profile.* and never calls builder_set_solver itself -- L2-a's
 !   driver makes that one call once both this parser and the .glb parser have filled
 !   their leaves of the shared `sparts`.
+!
+! sections[] is ALSO a deferred-publication object (adapter-contract.md §2.4, added
+! 2026-09-09 after L3-a's fidelity gate) -- the third instance of this shape, after
+! steps[0] and solver:
+!   `sections[].thickness` comes from .mat (Material.f90:319, stored PER MATERIAL,
+!   `props(imat)%mechanical%solid%thickness`) while every other field of a section
+!   comes from .glb's group header. Legacy reads .glb before .mat (Fem.f90:117,:191),
+!   so at the point parse_glb builds a section it does not yet know that section's
+!   thickness, and `builder_add_section` -- like builder_set_solver -- takes a whole
+!   section_t with no way to amend one already published. So parse_glb fills every
+!   OTHER field of secparts%sections(:) and does not call builder_add_section;
+!   parse_mat below resolves section -> material (via ctx%group_matno) -> thickness
+!   and fills ONLY that one field; the driver calls builder_add_section once per
+!   section, in order, after both have run.
+!
+!   This module's own earlier defect (fixed here): an prior revision of parse_mat
+!   read `thickness` (Material.f90:319) and DISCARDED it, reasoning correctly that
+!   its ProblemState owner is sections[], not materials[], but wrongly concluding
+!   that made it someone else's field to fill -- the same mistake this file's
+!   `.ele`-attribution note (yl_adapter_mesh.f90) had already named once: the map's
+!   `owner`/`derived_from` columns name the FIELD'S SOURCE FILE, not a different
+!   MODULE, and nothing else in this repository read .mat's thickness at all.
+!   Caught by L3-a's fidelity gate, not by any golden-deck numeric mismatch (both
+!   golden decks carry the map's "plane-strain placeholder" thickness of 1.0, so a
+!   silently dropped value and a correctly threaded one look identical there).
 module yl_adapter_material
 
   use iso_fortran_env, only: int32, real64, iostat_end
@@ -63,7 +88,7 @@ module yl_adapter_material
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED, &
                                 PE_INTERNAL
-  use yl_adapter_parts, only: deck_context_t, solver_parts_t
+  use yl_adapter_parts, only: deck_context_t, solver_parts_t, section_parts_t
 
   implicit none
   private
@@ -86,15 +111,22 @@ contains
   ! (Material.f90:243-313). See the module header for why every switch below is
   ! checked the instant it is read, not deferred to a later stage.
   !
-  ! `ctx` (adapter-contract.md §2.2) is taken for uniformity with every other non-
-  ! .glb parser and to police call order (below); no .mat record shape in this
-  ! whitelist slice actually depends on any of ctx's fields -- unlike .cor/.ele/.pre,
-  ! nothing material_set reads here is sized or branched by ndimn, element kind or
-  ! type_abc.
-  subroutine parse_mat(unit, ctx, b, errors)
+  ! `ctx` (adapter-contract.md §2.2) polices call order (below) and, new in this
+  ! revision, supplies `ctx%group_matno(:)` -- the material id each section's
+  ! header declared -- which is what lets this routine resolve section ->
+  ! material -> thickness (adapter-contract.md §2.4, module header). No other
+  ! .mat record shape in this whitelist slice depends on ctx: unlike .cor/.ele/.pre,
+  ! nothing else material_set reads here is sized or branched by ndimn, element
+  ! kind or type_abc.
+  !
+  ! `secparts` is `yl_adapter_parts.section_parts_t`: parse_glb fills every field of
+  ! secparts%sections(:) except thickness, this routine fills only that field, and
+  ! the driver publishes the finished sections (module header).
+  subroutine parse_mat(unit, ctx, b, secparts, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
+    type(section_parts_t), intent(inout) :: secparts
     type(problem_errors_t), intent(inout) :: errors
 
     character(len=200) :: text
@@ -104,6 +136,7 @@ contains
     integer(int32) :: imat, nphase, icreep, kind_wt, jliqu
     integer(int32) :: iE_switch, iNu_switch
     real(real64) :: density, ratio, thickness, e, nu, alfa, density_w
+    real(real64), allocatable :: mat_thickness(:)   ! thickness by material id, filled below
     type(material_t) :: mat
     type(source_location_t) :: loc
 
@@ -160,6 +193,15 @@ contains
       return
     end if
 
+    ! Sized by mmats, indexed by imat: materials.id's own note records that imat IS
+    ! the props(:) index (Material.f90:293, "props(imat)%name=trim(name)"), so this
+    ! mirrors legacy's own storage instead of inventing a second numbering. Needed
+    ! now (not merely nice to have) because the array is about to be INDEXED by
+    ! imat below -- unlike the duplicate-id question (left to rule V6, module
+    ! header), an out-of-range imat here is a memory-safety problem this routine
+    ! cannot defer to a later stage.
+    allocate (mat_thickness(mmats))
+
     do jmat = 1_int32, mmats
 
       ! RD: MAT.material_set.title#3 (Material.f90:281) -- a title line, discarded.
@@ -171,6 +213,18 @@ contains
       read (unit, *, iostat=ios, iomsg=iomsg_buf) property, name, imat
       if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.material_header', &
                             283_int32, rec=jmat)) return
+      if (imat < 1_int32 .or. imat > mmats) then
+        loc = make_source_location(file='.mat', reader='material_set', line=283_int32, &
+                                    record=jmat)
+        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                        rule_id='A-MAT/material-id-range', object_path='materials', &
+                        index=jmat, field='id', &
+                        message='imat must address the 1..nmats props(:) slot ' &
+                        //'(Material.f90:274, diag_range); mat_thickness(imat) below ' &
+                        //'would be indexed out of bounds otherwise', &
+                        actual=itoa(imat), expected='1..'//itoa(mmats), source=loc))
+        return
+      end if
       if (trim(property) /= 'MECHANICAL') then
         call mat_reject(errors, 'A-MAT/property', 294_int32, &
                         'property_select (Material.f90:294) has a branch per property; only ' &
@@ -271,17 +325,92 @@ contains
       call opt_set(mat%creep_model, icreep)             ! == 0, checked above
       call opt_set(mat%liquefaction, jliqu)              ! == 0, checked above
       call opt_set(mat%wetting_kind, kind_wt)            ! == 0, checked above
-      ! `thickness` (Material.f90:319) is read above but NOT stored: its ProblemState
-      ! owner is sections[].thickness, not materials[] (docs/m2/state-field-map.toml
-      ! id "sections.thickness" -- "resolving section -> material -> thickness ... is
-      ! the bridge's job, not this map's"). Nothing in this parser owns sections[].
+      ! `thickness` (Material.f90:319) is NOT a materials[] field -- its ProblemState
+      ! owner is sections[].thickness (docs/m2/state-field-map.toml id
+      ! "sections.thickness") -- but it MUST still be captured here: this is the
+      ! only place .mat's thickness is ever read, and an earlier revision of this
+      ! routine stopped at "not my field" and dropped the value outright (module
+      ! header). Recorded by material id; resolved to each section below.
+      mat_thickness(imat) = thickness
 
       loc = make_source_location(file='.mat', reader='material_set', line=283_int32, &
                                   record=jmat)
       call builder_add_material(b, mat, loc, errors)
       if (builder_failed(b)) return
     end do
+
+    call resolve_section_thickness(errors, ctx, mat_thickness, secparts)
   end subroutine parse_mat
+
+  ! Section -> material -> thickness (adapter-contract.md §2.4). Positional: section
+  ! `igroup` is `secparts%sections(igroup)`, whose material is `ctx%group_matno(igroup)`
+  ! (the same positional convention rule N4 already uses for mesh.elsets[], see
+  ! yl_adapter_mesh.f90).
+  !
+  ! The map requires rejecting a deck where two sections share a material but
+  ! disagree on thickness. Because legacy stores thickness PER MATERIAL
+  ! (Material.f90:319) and this routine resolves every section through the SAME
+  ! `mat_thickness` table by the SAME key, two sections sharing a material cannot
+  ! actually disagree here -- the loop below still checks (comparing against the
+  ! first section seen for that material), because the alternative is asserting a
+  ! property of this routine's own indexing rather than of the deck, and this
+  ! gate's charter is deck defects, not code proofs. On both golden decks ngroup==1,
+  ! so the "second section, same material" branch below is never even reached; it
+  ! exists for when the capability gate someday admits more than one section.
+  subroutine resolve_section_thickness(errors, ctx, mat_thickness, secparts)
+    type(problem_errors_t), intent(inout) :: errors
+    type(deck_context_t), intent(in) :: ctx
+    real(real64), intent(in) :: mat_thickness(:)
+    type(section_parts_t), intent(inout) :: secparts
+
+    integer(int32) :: igroup, matno, j
+    integer(int32), allocatable :: seen_matno(:)
+    real(real64), allocatable :: seen_thickness(:)
+    integer(int32) :: n_seen
+    type(source_location_t) :: loc
+
+    allocate (seen_matno(0), seen_thickness(0))
+    n_seen = 0_int32
+
+    do igroup = 1_int32, size(ctx%group_matno)
+      matno = ctx%group_matno(igroup)
+      if (matno < 1_int32 .or. matno > size(mat_thickness)) then
+        loc = make_source_location(file='.mat', reader='material_set', line=283_int32)
+        call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                        rule_id='A-MAT/section-material-range', object_path='sections[]', &
+                        index=igroup, field='material', &
+                        message='section references a material id .mat never defined', &
+                        actual=itoa(matno), expected='1..'//itoa(size(mat_thickness)), &
+                        source=loc))
+        return
+      end if
+
+      do j = 1_int32, n_seen
+        if (seen_matno(j) /= matno) cycle
+        if (seen_thickness(j) /= mat_thickness(matno)) then
+          loc = make_source_location(file='.mat', reader='material_set', line=319_int32)
+          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=STAGE_ADAPT, &
+                          rule_id='A-MAT/thickness-conflict', object_path='sections[]', &
+                          index=igroup, field='thickness', &
+                          message='this section''s material already resolved to a ' &
+                          //'different thickness for an earlier section -- impossible ' &
+                          //'from a single well-formed .mat, so something upstream ' &
+                          //'(ctx%group_matno or this table) is wrong', &
+                          actual=itoa_real(mat_thickness(matno)), &
+                          expected=itoa_real(seen_thickness(j)), source=loc))
+          return
+        end if
+        exit
+      end do
+      if (j > n_seen) then
+        seen_matno = [seen_matno, matno]
+        seen_thickness = [seen_thickness, mat_thickness(matno)]
+        n_seen = n_seen + 1_int32
+      end if
+
+      call opt_set(secparts%sections(igroup)%thickness, mat_thickness(matno))
+    end do
+  end subroutine resolve_section_thickness
 
   ! ============================================================================
   ! .sol
@@ -418,5 +547,17 @@ contains
     write (buffer, '(i0)') value
     text = trim(buffer)
   end function itoa
+
+  ! Minimal real-to-text helper for `actual=`/`expected=` on the thickness-conflict
+  ! finding. Full precision (g0), not a rounded display format: the two values being
+  ! compared came from the same real64 read, so any formatting difference between
+  ! them would itself be a false lead when the finding is being read back.
+  pure function itoa_real(value) result(text)
+    real(real64), intent(in) :: value
+    character(len=:), allocatable :: text
+    character(len=32) :: buffer
+    write (buffer, '(g0)') value
+    text = trim(buffer)
+  end function itoa_real
 
 end module yl_adapter_material

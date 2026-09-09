@@ -4,11 +4,36 @@
 ! ONE public entry point, `adapt_legacy_deck`. It is the only adapter module allowed to
 ! open, close or position a deck unit (contract SS2: "不打开、不关闭、不 rewind 任何单元。
 ! 单元生命周期归 L2-a 驱动"), the only module allowed to call `yl_problem_builder`'s
-! `builder_step_*` and `builder_set_solver` routines (contract SS2.1/SS2.2: every other
-! parser only fills a leaf of the shared `step_parts_t`/`solver_parts_t`, because those
-! builder calls are single-shot singletons and a second call from a second parser would
-! be silently rejected -- or worse, silently accepted for the wrong reason), and the only
-! module that calls `yl_problem_pipeline.prepare_problem`.
+! `builder_step_*`, `builder_set_solver` and `builder_add_section`/`builder_sections_empty`
+! routines (contract SS2.1/SS2.2/SS2.4: every other parser only fills a leaf of the shared
+! `step_parts_t`/`solver_parts_t`/`section_parts_t`, because those builder calls are
+! single-shot -- `builder_add_section` takes a whole `section_t` with no way to amend one
+! afterwards, deliberately, the same discipline the singleton setters enforce -- and a
+! second call from a second parser would be silently rejected, or worse, silently accepted
+! for the wrong reason), and the only module that calls `yl_problem_pipeline.prepare_problem`.
+!
+! THREE cross-file objects, not two (contract SS2.4, 2026-09-09, found by L3-a): `steps[0]`
+! splits across four files, `solver` across two, and now `sections[]` across two --
+! `parse_glb` fills every `section_t` field except `thickness` (`.mat`'s leaf, read AFTER
+! `.glb` in legacy's own order, Fem.f90:117 then :191), `parse_mat` resolves each section's
+! material via `ctx%group_matno` and fills `thickness`, and this driver publishes the whole
+! `section_parts_t%sections(:)` array with one `builder_add_section` call per entry, in
+! array order, after both parsers have run -- the same assemble-once-publish-once shape as
+! `steps[0]`/`solver`, for the same reason: `builder_add_section` cannot be called partially
+! filled and amended later. The contract itself now says a fourth instance of this shape
+! should be suspected as another missing channel before any one parser is suspected.
+!
+! ORDER AGAINST `mesh.elsets[]`: `parse_ele` calls `builder_add_elset` itself, DURING
+! parsing, positionally attributed via `ctx%nelgroup`/`ctx%group_matno`/`ctx%group_kind`
+! (all filled by `parse_glb`, group index 1..ngroup) -- so elsets are already in the builder
+! by the time this driver's post-parse assembly block runs. `section_parts_t%sections(:)`
+! is built by the SAME per-group loop in `parse_glb` (`secparts%sections(igroup) = sec`), so
+! both collections are keyed 1..ngroup off the same source and land in the same order and
+! count without this driver reconciling anything itself -- validate rule N4 (equal length)
+! is satisfied by construction, not by an ordering choice made here. Nothing about that
+! required reordering the legacy read sequence to suit it; if a future revision to either
+! parser broke that shared-index premise, it would show up here as an N4 finding, not
+! silently.
 !
 ! WHAT THIS MODULE DOES NOT DO
 !   It does not decide whether a value is admissible -- every whitelist judgement is the
@@ -114,6 +139,7 @@ module yl_adapter_driver
   use yl_problem_builder, only: problem_builder_t, step_builder_t, &
                                 builder_begin, builder_finish, builder_failed, &
                                 builder_note_failure, builder_add_step, builder_set_solver, &
+                                builder_add_section, builder_sections_empty, &
                                 builder_step_begin, builder_step_finish, &
                                 builder_step_set_procedure, builder_step_set_load_mode, &
                                 builder_step_set_controls, builder_step_set_load, &
@@ -123,7 +149,8 @@ module yl_adapter_driver
   use yl_problem_pipeline, only: prepare_problem
   use yl_adapter_parts, only: deck_context_t, deck_context_reset, &
                               step_parts_t, step_parts_reset, &
-                              solver_parts_t, solver_parts_reset
+                              solver_parts_t, solver_parts_reset, &
+                              section_parts_t, section_parts_reset
   use yl_adapter_fem90, only: parse_inp, parse_man
   use yl_adapter_model, only: parse_glb
   use yl_adapter_mesh, only: parse_cor, parse_ele
@@ -164,6 +191,7 @@ contains
     type(deck_context_t) :: ctx
     type(step_parts_t) :: parts
     type(solver_parts_t) :: sparts
+    type(section_parts_t) :: secparts
     type(step_builder_t) :: sb
     type(step_t) :: step_val
     type(problem_state_t), allocatable :: draft
@@ -179,6 +207,7 @@ contains
     call deck_context_reset(ctx)
     call step_parts_reset(parts)
     call solver_parts_reset(sparts)
+    call section_parts_reset(secparts)
     call builder_begin(b)
 
     mark0 = errors%count()
@@ -215,7 +244,7 @@ contains
 
       ! -- .glb: the sole writer of ctx; every other parser below depends on it --------
       mark = errors%count()
-      call parse_glb(u_glb, ctx, b, parts, sparts, errors)
+      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, errors)
       if (errors%count() > mark) exit parse_all
 
       ! -- the six remaining ctx-readers, contract SS1 order -----------------------------
@@ -228,7 +257,7 @@ contains
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
-      call parse_mat(u_mat, ctx, b, errors)
+      call parse_mat(u_mat, ctx, b, secparts, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
@@ -246,6 +275,25 @@ contains
       mark = errors%count()
       call parse_man(u_man, ctx, b, parts, errors)
       if (errors%count() > mark) exit parse_all
+
+      ! -- publish sections[] exactly once, from the shared section_parts_t (contract SS2.4) --
+      ! `secparts%sections` is always allocated on a successful parse_glb (size 0 when
+      ! ngroup<=0, size ngroup otherwise -- mirrors the boundary/activation three-state
+      ! convention below), so "unallocated" here would mean parse_glb did not run to
+      ! completion, which fail-fast above already ruled out.
+      loc = make_source_location(reader=SITE, &
+              file='(sections[] publish: not one deck record, see module header)')
+      if (allocated(secparts%sections)) then
+        if (size(secparts%sections) == 0) then
+          call builder_sections_empty(b, loc, errors)
+          if (builder_failed(b)) exit parse_all
+        else
+          do i = 1, size(secparts%sections)
+            call builder_add_section(b, secparts%sections(i), loc, errors)
+            if (builder_failed(b)) exit parse_all
+          end do
+        end if
+      end if
 
       ! -- assemble steps[0] exactly once, from the shared step_parts_t (contract SS2.1) --
       loc = make_source_location(reader=SITE, &

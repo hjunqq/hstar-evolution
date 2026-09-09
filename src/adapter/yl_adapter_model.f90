@@ -32,10 +32,10 @@
 !   same rule with its own chance to drift from the table.
 !
 ! What this parser writes, and through what channel
-!   ONLY through yl_problem_builder (mesh.dimension, sections[], interactions) and through
-!   two shared scratch aggregates in src/adapter/yl_adapter_parts.f90 (adapter-contract.md
-!   SS2.1/SS2.2):
-!     `step_parts_t`   -- `procedure_`, `load_mode`, `output` (the whole aggregate),
+!   ONLY through yl_problem_builder (mesh.dimension, interactions) and through three
+!   shared scratch aggregates in src/adapter/yl_adapter_parts.f90 (adapter-contract.md
+!   SS2.1/SS2.2/SS2.4):
+!     `step_parts_t`    -- `procedure_`, `load_mode`, `output` (the whole aggregate),
 !                         `activation(:)`, and EXACTLY ONE leaf each of `controls`
 !                         (nonlinear_type) and `load` (gravity.enabled). Every other
 !                         `step_parts_t` leaf (the other eight `controls` fields,
@@ -43,10 +43,15 @@
 !                         to `.man`/`.loa`/`.pre` and is left untouched -- writing it here
 !                         would be the exact silent-second-writer defect that module's
 !                         header warns about, even if the value happened to be right.
-!     `solver_parts_t` -- `linear`, `symmetric`. `profile%*` belongs to `.sol` and is left
+!     `solver_parts_t`  -- `linear`, `symmetric`. `profile%*` belongs to `.sol` and is left
 !                         untouched. `builder_set_solver` (a duplicate_singleton setter,
 !                         same as the step setters) is therefore never called from here;
 !                         L2-a makes that one call after every parser has run.
+!     `section_parts_t` -- every `sections[]` field this module ever read EXCEPT
+!                         `thickness`, which is `.mat`'s leaf (read AFTER .glb,
+!                         Fem.f90:117 then :191) and is deliberately left unset here for
+!                         `parse_mat` to fill. `builder_add_section` is, for the same
+!                         reason as the two aggregates above, never called from here.
 !   It also FILLS `deck_context_t` (intent(inout), see the subroutine header) so that
 !   `.cor`/`.ele`/`.loa`/`.pre` do not have to guess `ndimn`/`ngroup`/element kind/
 !   `type_abc`/`nbackdt`/`ntrans` the way yl_adapter_mesh.f90's own module header
@@ -138,11 +143,11 @@ module yl_adapter_model
   use yl_problem_types, only: section_t, interactions_t, output_t, &
                                output_field_t, activation_t
   use yl_problem_builder, only: problem_builder_t, builder_set_mesh_dimension, &
-                                 builder_set_interactions, &
-                                 builder_add_section, builder_sections_empty, builder_failed
+                                 builder_set_interactions, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_UNSUPPORTED
-  use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, LEN_TYPE_ABC
+  use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, section_parts_t, &
+                               LEN_TYPE_ABC
 
   implicit none
   private
@@ -163,19 +168,23 @@ contains
   ! FILLS it, from the group-1 element kind and the switches every other parser needs to
   ! size a read or pick a branch, so that yl_adapter_mesh's own NDIMN=2/NNODE_Q4=4
   ! hardcoding (its module header names this exact gap) has a real value to consult
-  ! instead. `sparts` is not in the illustrative signature the contract text shows for
-  ! parse_glb (that snippet was written before SS2.2's solver_parts_t existed and was
-  ! never updated for it), but the SS2.2 leaf table assigns `.glb -> linear, symmetric`
-  ! of `solver_parts_t` exactly like it assigns `.glb -> procedure_/load_mode/output/
-  ! activation` of `step_parts_t` -- so this parser takes it for the same reason it
-  ! takes `parts`, and does not call `builder_set_solver` itself (reported to
-  ! team-lead/L2-a as a contract-text gap to reconcile with L1-d/.sol).
-  subroutine parse_glb(unit, ctx, b, parts, sparts, errors)
+  ! instead.
+  !
+  ! `sparts`/`secparts` are not in the illustrative signature the contract text first
+  ! showed for parse_glb (that snippet predates solver_parts_t/section_parts_t and was
+  ! never updated for either), but by the time section_parts_t landed (SS2.4) the
+  ! contract itself names this as the third instance of the same shape: an object the
+  ! model keeps whole (`solver`, `sections[]`) that the deck splits across files, so this
+  ! parser fills its leaves in the shared aggregate exactly as it does for `parts`, and
+  ! never calls `builder_set_solver` / `builder_add_section` itself. `sections[].thickness`
+  ! is `.mat`'s leaf (read AFTER .glb, Fem.f90:117 then :191) and is left unset here.
+  subroutine parse_glb(unit, ctx, b, parts, sparts, secparts, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(inout) :: ctx
     type(problem_builder_t), intent(inout) :: b
     type(step_parts_t), intent(inout) :: parts
     type(solver_parts_t), intent(inout) :: sparts
+    type(section_parts_t), intent(inout) :: secparts
     type(problem_errors_t), intent(inout) :: errors
 
     integer(int32) :: ios
@@ -902,11 +911,11 @@ contains
     end if
 
     if (ngroup <= 0_int32) then
-      call builder_sections_empty(b, here(1216_int32), errors)
-      if (builder_failed(b)) return
+      allocate (secparts%sections(0))
       allocate (activation(0))
       allocate (ctx%nelgroup(0), ctx%group_matno(0), ctx%group_kind(0))
     else
+      allocate (secparts%sections(ngroup))
       allocate (activation(ngroup))
       allocate (ctx%nelgroup(ngroup), ctx%group_matno(ngroup), ctx%group_kind(ngroup))
       do igroup = 1, ngroup
@@ -973,11 +982,14 @@ contains
           end if
         end do
 
-        ! sections[igroup]: only the leaves docs/m2/state-field-map.toml owns as
+        ! secparts%sections(igroup): only the leaves docs/m2/state-field-map.toml owns as
         ! ProblemState.sections[].* with source GLB.global_data.group_header. material
         ! and material_header are NOT set here (module header: both are `derived`, from
         ! mesh.elements[].material, populated while reading .ele -- a file this module
-        ! does not own).
+        ! does not own). thickness is NOT set here either: it is .mat's leaf
+        ! (adapter-contract.md SS2.4, read AFTER .glb, Fem.f90:117 then :191) -- left
+        ! unset for parse_mat to fill, and the driver publishes the assembled whole with
+        ! one builder_add_section call per section, never this parser.
         call opt_set(sec%name, trim(gkname))
         call opt_set(sec%element, trim(gname))
         call opt_set(sec%element_kind, gindex)
@@ -992,8 +1004,7 @@ contains
         call opt_set(sec%uplift, guplift_ic)
         call opt_set(sec%liquefaction, gliquj)
         call opt_set(sec%local_axes, gelcod_local)
-        call builder_add_section(b, sec, loc, errors)
-        if (builder_failed(b)) return
+        secparts%sections(igroup) = sec
 
         ! steps[0].activation[igroup]: fully .glb-sourced (appear_process/matno_process
         ! at block 1, both read above before this loop). Owned entirely by this parser
