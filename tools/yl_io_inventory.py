@@ -4,8 +4,12 @@
 Sub-commands
   scan        static census of every READ/OPEN/CLOSE/REWIND/BACKSPACE/INQUIRE
               statement in legacy/yl -> docs/m1/io-sites.json
-  gdb-script  emit a gdb batch script with one breakpoint per site that logs
-              "HIT <file>:<line>" and continues (used by yl_io_trace.sh)
+  gdb-script  emit a gdb batch script that breaks on EVERY address a site's
+              source line compiles to (one line can compile to several
+              non-adjacent ranges; `break FILE:LINE` binds only the first --
+              risk R27), logs "HIT <file>:<line>" and continues; needs the
+              trace binary, whose line table supplies the addresses
+              (used by yl_io_trace.sh)
   hits        parse one or more gdb hit logs -> hits.json {site: count}
   check       validate docs/m1/reader-inventory.toml against the census, the
               source text (anchors), the evidence (hits), the diag_check_read
@@ -138,33 +142,151 @@ def cmd_scan(a):
     return 0
 
 
+LINE_TABLE_ROW = re.compile(r"^(\d+)\s+(\d+|END)\s+(0x[0-9a-f]+)\s+(0x[0-9a-f]+)(\s+Y)?")
+LINE_TABLE_SYMTAB = re.compile(r"^symtab: (\S+) ")
+
+
+def dump_line_table(binary: Path) -> str:
+    """gdb's own view of the DWARF line table for every compilation unit.
+
+    `maint expand-symtabs` is required: without it the symtabs are lazily
+    unexpanded and `maint info line-table` prints nothing at all.
+    """
+    import subprocess
+    cp = subprocess.run(["gdb", "-batch", "-nx", "-ex", "set pagination off",
+                         "-ex", "maint expand-symtabs", "-ex", "maint info line-table", str(binary)],
+                        capture_output=True, text=True, errors="replace")
+    if cp.returncode != 0:
+        raise SystemExit(f"gdb failed on {binary}: {cp.stderr.strip()[:400]}")
+    return cp.stdout
+
+
+def line_addresses(table_text: str) -> dict[str, dict[int, list[int]]]:
+    """file -> line -> EVERY address the line table attributes to that line.
+
+    One source line compiles to several stretches of machine code that are not
+    adjacent (ifx does this routinely for an array-section READ), and all of
+    them carry the same line number.  `break FILE:LINE` binds only the first --
+    that is defect R27.
+
+    Every row is returned, not just the first address of each contiguous run of
+    rows.  Grouping into runs was tried first and is WRONG: measured on
+    cooks_membrane, five interior rows of Load.f90:231's first run fire while
+    that run's start address 0x5a9b16 never does, and breaking only on run
+    starts misses four sites that firing on every row finds (Output.f90:4301,
+    :4326, :4351, Temper.f90:243).  Interior rows are jump targets, so a run
+    start is not a chokepoint for its run.
+
+    Because one execution then trips several breakpoints of the same line, the
+    counts must NOT be summed; see cmd_hits for the merge rule.
+    """
+    out: dict[str, dict[int, list[int]]] = {}
+    rows_by_file: dict[str, list[tuple[int, int | None, int]]] = {}
+    cur = None
+    for ln in table_text.splitlines():
+        m = LINE_TABLE_SYMTAB.match(ln)
+        if m:
+            cur = m.group(1).rsplit("/", 1)[-1]
+            rows_by_file.setdefault(cur, [])
+            continue
+        if cur is None:
+            continue
+        m = LINE_TABLE_ROW.match(ln)
+        if not m:
+            continue
+        rel, unrel = int(m.group(3), 16), int(m.group(4), 16)
+        if rel != unrel:
+            raise SystemExit("line table is relocated (PIE?); `break *ADDR` on unrelocated addresses "
+                             f"would be wrong: {ln.strip()}")
+        rows_by_file[cur].append((int(m.group(1)), None if m.group(2) == "END" else int(m.group(2)), rel))
+    for f, rows in rows_by_file.items():
+        addrs: dict[int, set[int]] = defaultdict(set)
+        for _, line, addr in rows:
+            if line is not None:
+                addrs[line].add(addr)
+        out[f] = {line: sorted(a) for line, a in addrs.items()}
+    return out
+
+
 def cmd_gdb_script(a):
     sites = json.loads(Path(a.sites).read_text(encoding="utf-8"))["sites"]
+    binary = Path(a.binary)
+    if not binary.is_file():
+        raise SystemExit(f"binary not found: {binary}")
+    addr_map = line_addresses(dump_line_table(binary))
     log = Path(a.log).resolve()
     lines = ["set pagination off", "set confirm off", "set breakpoint pending on", "set print thread-events off",
              f"set logging file {log}", "set logging overwrite on", "set logging redirect on", "set logging enabled on"]
+    n_loc, multi, fallback = 0, [], []
     for s in sites:
-        lines += [f"break {s['site']}", "commands", "silent", f'printf "HIT {s["site"]}\\n"', "continue", "end"]
-    lines += ["run < /dev/null > gdb-stdout.txt 2> gdb-stderr.txt", 'printf "EXIT %d\\n", $_exitcode', "quit"]
+        addrs = sorted(addr_map.get(s["file"], {}).get(s["line"], []))
+        if addrs:
+            specs = [f"break *{a_:#x}" for a_ in addrs]
+            if len(addrs) > 1:
+                multi.append((s["site"], [f"{a_:#x}" for a_ in addrs]))
+        else:
+            # No code carries this line number: fall back to gdb's own linespec
+            # resolution (which slides to the next line that has code), i.e. the
+            # pre-R27 behaviour, rather than dropping the site silently.
+            specs = [f"break {s['site']}"]
+            fallback.append(s["site"])
+        for spec in specs:
+            where = spec.split()[-1]
+            lines += [spec, "commands", "silent", f'printf "HIT {s["site"]} {where}\\n"', "continue", "end"]
+            n_loc += 1
+    lines += [f'printf "LOCATIONS %d {n_loc}\\n", $bpnum',
+              "run < /dev/null > gdb-stdout.txt 2> gdb-stderr.txt",
+              'printf "EXIT %d\\n", $_exitcode', "quit"]
     Path(a.output).write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"wrote {a.output}: {len(sites)} breakpoints")
+    if a.locations:
+        Path(a.locations).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.locations).write_text(json.dumps(
+            {"version": 1, "binary": str(binary), "binary_sha256": hashlib.sha256(binary.read_bytes()).hexdigest(),
+             "sites": len(sites), "locations": n_loc, "multi_location_sites": dict(multi),
+             "fallback_sites": fallback}, indent=1) + "\n", encoding="utf-8")
+    print(f"wrote {a.output}: {len(sites)} sites, {n_loc} breakpoint locations, "
+          f"{len(multi)} sites with >1 location, {len(fallback)} line-spec fallbacks")
     return 0
 
 
-def parse_hits(path: Path) -> tuple[Counter, int | None]:
-    hits, exit_code = Counter(), None
+def parse_hits(path: Path) -> tuple[dict[str, Counter], int | None, tuple[int, int] | None]:
+    """log -> {site: Counter{location: hits}}, exit code, (breakpoints created, requested)."""
+    hits: dict[str, Counter] = defaultdict(Counter)
+    exit_code, locations = None, None
     for ln in path.read_text(encoding="utf-8", errors="replace").splitlines():
         if ln.startswith("HIT "):
-            hits[ln.split()[1]] += 1
+            f = ln.split()
+            hits[f[1]][f[2] if len(f) > 2 else "?"] += 1
         elif ln.startswith("EXIT "):
             exit_code = int(ln.split()[1])
-    return hits, exit_code
+        elif ln.startswith("LOCATIONS "):
+            f = ln.split()
+            locations = (int(f[1]), int(f[2]))  # (breakpoints gdb actually created, breakpoints requested)
+    return hits, exit_code, locations
 
 
 def cmd_hits(a):
-    hits, exit_code = parse_hits(Path(a.log))
+    per_loc, exit_code, locations = parse_hits(Path(a.log))
+    if locations is None:
+        raise SystemExit(f"{a.log}: no LOCATIONS line -- the breakpoint script did not run to completion")
+    if locations[0] != locations[1]:
+        raise SystemExit(f"{a.log}: gdb created {locations[0]} breakpoints, the script asked for {locations[1]}; "
+                         "some location did not bind, the hit set would be an under-count")
+    # A site's line compiles to many addresses (R27), and one execution trips
+    # several of them. Summing would therefore multiply the execution count by
+    # the code layout. The per-site number is the MAXIMUM over the line's
+    # addresses: exact when every execution passes the same address, a lower
+    # bound if executions take disjoint paths through the line's code. Measured
+    # against the pre-R27 evidence, max reproduces all 211 previously recorded
+    # counts exactly on both golden cases, while summing inflates 11 of them.
+    # The raw per-address counts are kept so the merge rule can be re-derived.
+    hits = {s: max(c.values()) for s, c in per_loc.items()}
+    detail = {s: dict(sorted(c.items())) for s, c in per_loc.items()}
     doc = {"version": 1, "case_id": a.case_id, "exit_code": exit_code, "total_hits": sum(hits.values()),
-           "distinct_sites": len(hits), "hits": dict(sorted(hits.items()))}
+           "distinct_sites": len(hits), "breakpoint_locations": locations[0],
+           "breakpoint_hits_raw": sum(sum(c.values()) for c in per_loc.values()),
+           "merge_rule": "per-site count = max over the addresses the line compiles to",
+           "hits": dict(sorted(hits.items())), "hits_by_range": dict(sorted(detail.items()))}
     Path(a.output).parent.mkdir(parents=True, exist_ok=True)
     Path(a.output).write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
     print(f"wrote {a.output}: {doc['distinct_sites']} sites, {doc['total_hits']} hits, exit {exit_code}")
@@ -531,7 +653,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("scan"); s.add_argument("-o", "--output", default=str(REPO_ROOT / "docs/m1/io-sites.json")); s.set_defaults(func=cmd_scan)
-    g = sub.add_parser("gdb-script"); g.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); g.add_argument("--log", required=True); g.add_argument("-o", "--output", required=True); g.set_defaults(func=cmd_gdb_script)
+    g = sub.add_parser("gdb-script"); g.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); g.add_argument("--log", required=True); g.add_argument("-o", "--output", required=True); g.add_argument("--binary", required=True, help="trace binary; its line table decides how many addresses each site line has (R27)"); g.add_argument("--locations", help="write the per-site breakpoint address map here"); g.set_defaults(func=cmd_gdb_script)
     h = sub.add_parser("hits"); h.add_argument("--log", required=True); h.add_argument("--case-id", required=True); h.add_argument("-o", "--output", required=True); h.set_defaults(func=cmd_hits)
     c = sub.add_parser("check"); c.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); c.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); c.add_argument("--evidence", nargs="+", required=True); c.add_argument("--registry", default=str(REGISTRY_DEFAULT), help="generated Fortran registry to compare with the inventory"); c.set_defaults(func=cmd_check)
     f = sub.add_parser("gen-fortran"); f.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); f.add_argument("-o", "--output", default=str(REGISTRY_DEFAULT)); f.set_defaults(func=cmd_gen_fortran)

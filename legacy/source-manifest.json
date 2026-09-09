@@ -1,9 +1,9 @@
 {
   "manifest_version": 1,
-  "generated_at": "2026-09-08T14:26:01+00:00",
+  "generated_at": "2026-09-09T10:10:55+00:00",
   "root": "legacy",
   "file_count": 39,
-  "total_bytes": 55713409,
+  "total_bytes": 55713815,
   "excludes": [
     "BASELINE.md",
     "source-manifest.json"
@@ -13,8 +13,8 @@
     "source_commit": "5414e737484edf2f53efbfd2bafd3702ebbbb88a",
     "source_tree": "HSTAR/",
     "stub_origin": "/home/huijun/HSTAR_Next/_archive/src/gidpost_stub.c",
-    "modified_by": "M1-fix-2026-09-08",
-    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements), + M2-02 state-dump instrumentation on the static_2d path (Fem.f90: one use line and three guarded yl_state_dump calls at the M2-01 checkpoints); + M1 fix 2026-09-08: Load.f90:231 (amplitude dfact_curve factors record, external_load_1) given iostat=/iomsg=/diag_check_read wrapping -- was executed-but-unwrapped, misclassified into the loadunit not_on_path group (see docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md); reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
+    "modified_by": "M1-04-r27-2026-09-09",
+    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements), + M2-02 state-dump instrumentation on the static_2d path (Fem.f90: one use line and three guarded yl_state_dump calls at the M2-01 checkpoints); + M1 fix 2026-09-08: Load.f90:231 (amplitude dfact_curve factors record, external_load_1) given iostat=/iomsg=/diag_check_read wrapping -- was executed-but-unwrapped, misclassified into the loadunit not_on_path group (see docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md); + M1-04 R27 closure 2026-09-09: Output.f90:4301/4326/4351 and Temper.f90:243 (the four labelled title reads that the pre-R27 `break FILE:LINE` breakpoints never bound) given iostat=/iomsg=/diag_check_read wrapping, see docs/m1/M1-04-r27-closure.md; reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
   },
   "case_insensitive_collisions": [],
   "files": [
@@ -65,8 +65,8 @@
     },
     {
       "path": "yl/Output.f90",
-      "bytes": 215614,
-      "sha256": "62b2c4ac1ffb52b70df2d091b4edbde5c3a1d0e40ff89990533c2c9251812892"
+      "bytes": 215917,
+      "sha256": "d80b528bf4d3e97bc6b2599d0129d8af023dd6707d60c281b3c495c0cf371a40"
     },
     {
       "path": "yl/Prescrib.f90",
@@ -90,8 +90,8 @@
     },
     {
       "path": "yl/Temper.f90",
-      "bytes": 54305,
-      "sha256": "f0a90af7ac7fddd010ca8e711bc87a5abc3d0fef4cd7fcd1660c3fab8dc1af7b"
+      "bytes": 54408,
+      "sha256": "ee7d15c3c272a1852cd7e856c82d0f0763c6c00e2c5154ac6e767514a7a83c72"
     },
     {
       "path": "yl/Vartype.f90",

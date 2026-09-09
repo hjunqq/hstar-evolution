@@ -240,7 +240,8 @@
 
 
 
-    11    read(tunit,*)text
+    11    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
+          call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_label11_title,0)
     read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text
     call diag_check_read(yl_ios,yl_msg,RD_TEM_boundt_title_3,0)
     read(tunit,*,iostat=yl_ios,iomsg=yl_msg)ntelgroup

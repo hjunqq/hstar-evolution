@@ -4298,7 +4298,8 @@
 
     !20210803
 
-1   read(outpread,*)text
+1   read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_label1_title,0)
     if (wegroup==0) goto 2
     toutelement=0
     allocate(temp(3,wegroup))
@@ -4323,7 +4324,8 @@
     end do
 
     deallocate(temp)
-2   read(outpread,*)text
+2   read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_label2_title,0)
 
     if (wggroup==0) goto 3
     toutgap=0
@@ -4348,7 +4350,8 @@
 
     deallocate(temp)
 
-3   read(outpread,*)text
+3   read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text
+    call diag_check_read(yl_ios,yl_msg,RD_OPR_output_read_label3_title,0)
 
     if (wjgroup==0) return
     toutmcjoint=0

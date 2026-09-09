@@ -26,7 +26,7 @@
     }
   ],
   "passed": true,
-  "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/cooks_membrane/reference/results.json",
-  "actual": "/tmp/yl-io-trace.nJWyes/results.json",
+  "reference": "/tmp/claude-1000/-home-huijun-HSTAR-Next-hstar-evolution/a027ac0c-2e95-471a-bc56-be5927378585/scratchpad/oldroot/cases/golden/static_2d/cooks_membrane/reference/results.json",
+  "actual": "/tmp/yl-io-trace.EpGCBG/results.json",
   "tolerance_section": "exact"
 }

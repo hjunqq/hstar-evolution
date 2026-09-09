@@ -25,10 +25,10 @@
 | 项 | 数量 |
 |---|---|
 | 静态全集位点 | 1022（read 886、open 80、rewind 54、close 2） |
-| 两例断点命中位点（机器实证） | 211（两例完全相同）——**下限，非精确计数：见下方"盲区与限制"** |
-| 其中 read | 153（150 条实际执行 + 3 条 `reached_only`） |
+| 两例断点命中位点（机器实证） | 216（两例完全相同）——R27 关闭后为**测量值**，见下方"盲区与限制" |
+| 其中 read | 157（154 条实际执行 + 3 条 `reached_only`） |
 | 其中 open / rewind | 46 / 13（其中 11 条 rewind 与 6 条 open 为 `reached_only`） |
-| 未执行候选 | 810 处，54 个单元组 |
+| 未执行候选 | 806 处，54 个单元组 |
 
 `reached_only`：单行 `if (cond) stmt` 的断点在条件为假时同样命中；这些条目记录 `condition_value`，
 `executed_by` 为空。本路径上的取值：`meshc=0, rmesh=0, Bparameter=0, nlayer=0, type_abc='FIX', iafile=0`。
@@ -82,13 +82,15 @@
   这些在 M1-02 需按"记录多余项"报警而非静默丢弃。
 - 已知缺陷 R17/R18 不影响读取点集合；R18 的触发条目是 `PRE.prescrib_set.set_header` 的
   `itcurve=0`。
-- **断点计数法本身有盲区**：`gdb-script` 对每个位点只下一个 `break FILE:LINE`，取行表里该行的
-  第一个地址。`LOA.external_load_1.curve_factors`（`Load.f90:231`）在编译后的目标码里对应
-  两段不相邻的地址，行表的"第一个地址"恰好是从未被执行到的一段，导致该处执行了但从未计入
-  211 这个命中集合——只有手工在正确地址下断点才捕捉到。这是本次两个金标准算例里唯一已知的
-  实例，但工具本身无法系统性地发现同类盲区（详见
-  `docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md` "工具根因"一节）。**因此 211 这个数字
-  是命中位点数的下限，不是精确测量**——它统计的是"断点生成器能看见的执行"，不是"实际执行"。
+- **断点计数法曾经有盲区，M1-04 已关闭（R27）**：`gdb-script` 原来对每个位点只下一个
+  `break FILE:LINE`，取行表里该行的第一个地址；ifx 会把一行编译成多段不相邻的目标码，
+  执行进入的若不是第一段，断点永不触发。`LOA.external_load_1.curve_factors`
+  （`Load.f90:231`）就是这样漏掉的。工具已改为**对该行编译出的全部地址下断并按最大值合并
+  计数**（1022 位点 → 5520 个断点位置），据此重跑两例，命中集从 211 升到 216：除
+  `Load.f90:231` 外新发现 4 条带语句标号、由 `goto` 跳入的读取
+  （`Output.f90:4301/4326/4351`、`Temper.f90:243`），均已按 M1-02 流程补包装。
+  **因此 216 是测量值，不再是下限**；剩余的两条假设（行表未登记的跳入点、多地址站点的
+  计数是下界）见 `docs/m1/M1-04-r27-closure.md` §6。
 
 ## 已执行读取点（reader）
 
@@ -273,7 +275,7 @@
 | `NRT.global_data.title#2` | global_data | `Global.f90:1494` | 2 | `text:str` | text_skip | always | startup | global_data | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 | `NRT.global_data.transgroup` | global_data | `Global.f90:1496` | 3 | `transgroup:int` | list_directed | always | startup | global_data interpolation groups | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 
-### `.opr`（outpread，5 条）
+### `.opr`（outpread，8 条）
 
 | ID | 例程 | 锚点 | seq | 字段 | 格式 | guard | 阶段 | 消费者 | ProblemState 目标 | 命中 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -282,6 +284,9 @@
 | `OPR.output_read.output_control` | output_read | `Output.f90:4159` | 3 | `irecover:int`<br>`wpgroup:int`<br>`wegroup:int`<br>`wggroup:int`<br>`wjgroup:int` | list_directed | always | startup | Output writers (.opw/.oew/.ogw/.ojw) | `output_control` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 | `OPR.output_read.title#3` | output_read | `Output.f90:4163` | 4 | `text:str` | text_skip | always | startup | output_read | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 | `OPR.output_read.title#4` | output_read | `Output.f90:4165` | 5 | `text:str` | text_skip | always | startup | output_read | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `OPR.output_read.label1_title` | output_read | `Output.f90:4301` | 6 | `text:str` | text_skip | always | startup | output_read | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `OPR.output_read.label2_title` | output_read | `Output.f90:4327` | 7 | `text:str` | text_skip | always | startup | output_read | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `OPR.output_read.label3_title` | output_read | `Output.f90:4353` | 8 | `text:str` | text_skip | always | startup | output_read | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 
 ### `.pre`（punit，6 条）
 
@@ -301,7 +306,7 @@
 | `SOL.PROFILE.title#1` | PROFILE | `Solver.f90:6829` | 1 | `text:str` | text_skip | type_solver=='PROFILE' | solver_lazy | PROFILE | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 | `SOL.PROFILE.profile_control` | PROFILE | `Solver.f90:6831` | 2 | `iafile:int`<br>`icond:int`<br>`ipdchk:int`<br>`ising:int` | list_directed | PROFILE first call | solver_lazy | PROFILE (iafile selects scratch-file storage; ising singularity check) | `solver` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 
-### `.tem`（tunit，9 条）
+### `.tem`（tunit，10 条）
 
 | ID | 例程 | 锚点 | seq | 字段 | 格式 | guard | 阶段 | 消费者 | ProblemState 目标 | 命中 |
 |---|---|---|---|---|---|---|---|---|---|---|
@@ -309,11 +314,12 @@
 | `TEM.boundt.temp_surface_count` | boundt | `Temper.f90:126` | 2 | `ntemp_surface:int` | list_directed | always | startup | boundt | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 | `TEM.boundt.title#2` | boundt | `Temper.f90:152` | 3 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 | `TEM.boundt.temp_edge_count` | boundt | `Temper.f90:154` | 4 | `ntedge:int` | list_directed | always | startup | boundt | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
-| `TEM.boundt.title#3` | boundt | `Temper.f90:244` | 5 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
-| `TEM.boundt.temp_elgroup_count` | boundt | `Temper.f90:246` | 6 | `ntelgroup:int` | list_directed | always | startup | boundt | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
-| `TEM.boundt.title#4` | boundt | `Temper.f90:305` | 7 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
-| `TEM.boundt.title#5` | boundt | `Temper.f90:307` | 8 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
-| `TEM.boundt.pipe_count` | boundt | `Temper.f90:310` | 9 | `npipe:int`<br>`algo_pipe:int` | list_directed | always | startup | boundt cooling pipes | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `TEM.boundt.label11_title` | boundt | `Temper.f90:243` | 5 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `TEM.boundt.title#3` | boundt | `Temper.f90:245` | 6 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `TEM.boundt.temp_elgroup_count` | boundt | `Temper.f90:247` | 7 | `ntelgroup:int` | list_directed | always | startup | boundt | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `TEM.boundt.title#4` | boundt | `Temper.f90:306` | 8 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `TEM.boundt.title#5` | boundt | `Temper.f90:308` | 9 | `text:str` | text_skip | always | startup | boundt | `title_skip` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
+| `TEM.boundt.pipe_count` | boundt | `Temper.f90:311` | 10 | `npipe:int`<br>`algo_pipe:int` | list_directed | always | startup | boundt cooling pipes | `empty_section` | static_2d.cooks_membrane:1, static_2d.lame_cylinder:1 |
 
 ## 游标操作（cursor_op）
 
@@ -393,12 +399,12 @@
 | solveunit | 29 | JPCG, MAIN_PARDISO, PBCG, PROFILE, PROFILEW, SSORPBCG | .sol records for PARDISO / other solver branches and iafile/=0 | M5 PARDISO variant |
 | unitread | 29 | read_initial | generic reread of restart/intermediate files; restart/=0 or meshc/=0 | M6.7 重启 |
 | restaunit | 28 | RESTA_READ_WRITE | restart file .rtt is only read when restart/=0; on this path it is written | M6.7 重启 |
-| tunit | 26 | boundt | temperature boundary data beyond the zero counts read on this path | M8 |
+| tunit | 25 | boundt | temperature boundary data beyond the zero counts read on this path. The labelled title read at Temper.f90:243 was in this group until M1-04: it IS executed (the `goto 11` target), and is now registered as TEM.boundt.label11_title. See docs/m1/M1-04-r27-closure.md | M8 |
 | punit | 20 | GHM2ADINA, prescrib_set, time_dependent | .pre records for MIF/VIE boundaries and interpolation slaves; type_abc/='FIX' or ntrans/=0 | M7.5/M7.7 |
 | stocunit | 18 | STATIC_U_reli, STATIC_rigid_reli | stochastic/reliability data (.sto); sysrelis/relis/=0 | M9 可靠度 |
 | recttunit | 16 | STATIC_U, STATIC_U_PW, STATIC_U_reli, STATIC_rigid_1, STATIC_rigid_reli, back_analysis, back_d_analysis, time_dependent | contact matrix scratch (.ctt) read only when ngapb/=0 | M6.6 接触 |
 | ftfread | 13 | global_data | surface force lists beyond the zero counts | M6.2 |
-| outpread | 13 | output_read | .opr observation-point lists; irecover/w*group are 0 | M5 output |
+| outpread | 10 | output_read | .opr observation-point lists; irecover/w*group are 0. The three labelled title reads at Output.f90:4301/4326/4351 were in this group until M1-04: they ARE executed (the goto targets), and are now registered as OPR.output_read.label{1,2,3}_title. See docs/m1/M1-04-r27-closure.md | M5 output |
 | ifsunit | 13 | stiff_absorb_fluid, stiff_absorb_solid, stiff_ifs2006, stiff_interface_fluid_solid | fluid-solid / absorbing boundary definitions beyond the zero counts read on this path | M7.5/M7.6 |
 | resbunit | 12 | global_data, value_submodel_boundary | binary result reread for restart/relis | M6.7 |
 | observ_unit | 11 | OUT_record_WRITE, global_data, observe_back_analysis_read, parameter_back_analysis_verify_read | observation data (.obsc) for back analysis; nbackf/=0 | M9 反分析 |

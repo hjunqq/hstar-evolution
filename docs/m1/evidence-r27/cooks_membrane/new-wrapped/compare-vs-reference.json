@@ -27,6 +27,6 @@
   ],
   "passed": true,
   "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/cooks_membrane/reference/results.json",
-  "actual": "/tmp/yl-io-trace.nJWyes/results.json",
+  "actual": "/tmp/yl-io-trace.3hg2LW/results.json",
   "tolerance_section": "exact"
 }

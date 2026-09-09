@@ -4,8 +4,9 @@
 #   tools/yl_io_trace.sh <case_id> [--binary build/trace/hstar] [--out docs/m1/evidence/<case>]
 #
 # Runs the trace-profile binary under gdb -batch in an isolated copy of the
-# case inputs, one breakpoint per census site (docs/m1/io-sites.json), and
-# writes hits.json, gdb-console.txt and a byte comparison of 1.flavia.res
+# case inputs, breakpoints on every address each census site's line compiles to
+# (docs/m1/io-sites.json; see R27 -- one line can be several ranges), and
+# writes hits.json, bp-locations.json, gdb-console.txt and a comparison of 1.flavia.res
 # against the frozen reference. The comparison must be IDENTICAL, otherwise
 # the instrumentation perturbed the run and the evidence is rejected.
 set -euo pipefail
@@ -35,7 +36,8 @@ WORK="$(mktemp -d "${TMPDIR:-/tmp}/yl-io-trace.XXXXXX")"
 trap 'rm -rf "$WORK"' EXIT
 cp "$CASE_DIR"/legacy/* "$WORK/"
 mkdir -p "$OUT"
-python3 "$ROOT/tools/yl_io_inventory.py" gdb-script --log "$WORK/hits.log" -o "$WORK/bp.gdb" >/dev/null
+python3 "$ROOT/tools/yl_io_inventory.py" gdb-script --log "$WORK/hits.log" -o "$WORK/bp.gdb" \
+    --binary "$BIN" --locations "$OUT/bp-locations.json"
 
 ( cd "$WORK" && OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 gdb -batch -x bp.gdb "$BIN" > gdb-console.txt 2>&1 ) || true
 cp "$WORK/gdb-console.txt" "$OUT/gdb-console.txt"

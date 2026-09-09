@@ -5,7 +5,7 @@
     {
       "name": "DISPLACEMENT",
       "ok": true,
-      "n_values": 578,
+      "n_values": 162,
       "max_abs_diff": 0.0,
       "max_abs_diff_at": null,
       "max_norm_diff": 0.0,
@@ -16,7 +16,7 @@
     {
       "name": "STRESS",
       "ok": true,
-      "n_values": 1156,
+      "n_values": 324,
       "max_abs_diff": 0.0,
       "max_abs_diff_at": null,
       "max_norm_diff": 0.0,
@@ -26,7 +26,7 @@
     }
   ],
   "passed": true,
-  "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/cooks_membrane/reference/results.json",
-  "actual": "/tmp/yl-io-trace.nJWyes/results.json",
+  "reference": "/tmp/claude-1000/-home-huijun-HSTAR-Next-hstar-evolution/a027ac0c-2e95-471a-bc56-be5927378585/scratchpad/oldroot/cases/golden/static_2d/lame_cylinder/reference/results.json",
+  "actual": "/tmp/yl-io-trace.2KceaD/results.json",
   "tolerance_section": "exact"
 }

@@ -2078,6 +2078,63 @@ executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
 hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
+id = "OPR.output_read.label1_title"
+site = "Output.f90:4301"
+anchor = "93251ab63b7a"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "1   read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text"
+seq = 6
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "labelled statement 1; reached by `goto 1` from Output.f90:4167 when wpgroup==0. Found by the R27 breakpoint fix (M1-04): `break Output.f90:4301` binds an address the goto never enters"
+
+[[reader]]
+id = "OPR.output_read.label2_title"
+site = "Output.f90:4327"
+anchor = "e0085122f654"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "2   read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text"
+seq = 7
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "labelled statement 2; reached by `goto 2` from Output.f90:4302 when wegroup==0. Found by the R27 breakpoint fix (M1-04)"
+
+[[reader]]
+id = "OPR.output_read.label3_title"
+site = "Output.f90:4353"
+anchor = "f2e6cd649b28"
+file = ".opr"
+unit_var = "outpread"
+routine = "output_read"
+statement = "3   read(outpread,*,iostat=yl_ios,iomsg=yl_msg)text"
+seq = 8
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "output_read"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "labelled statement 3; reached by `goto 3` from Output.f90:4328 when wggroup==0. Found by the R27 breakpoint fix (M1-04)"
+
+[[reader]]
 id = "LOA.external_load_1.title#1"
 site = "Load.f90:143"
 anchor = "2db16215127e"
@@ -2635,14 +2692,33 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 note = "0; M8"
 
 [[reader]]
+id = "TEM.boundt.label11_title"
+site = "Temper.f90:243"
+anchor = "7a1965206ef7"
+file = ".tem"
+unit_var = "tunit"
+routine = "boundt"
+statement = "11    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text"
+seq = 5
+fields = ["text:str"]
+format = "text_skip"
+guard = "always"
+phase = "startup"
+consumers = "boundt"
+state_target = "title_skip"
+executed_by = ["static_2d.cooks_membrane", "static_2d.lame_cylinder"]
+hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
+note = "labelled statement 11; reached by `goto 11` from Temper.f90:161 when ntedge==0. Found by the R27 breakpoint fix (M1-04)"
+
+[[reader]]
 id = "TEM.boundt.title#3"
-site = "Temper.f90:244"
+site = "Temper.f90:245"
 anchor = "b5c591332646"
 file = ".tem"
 unit_var = "tunit"
 routine = "boundt"
 statement = "read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text"
-seq = 5
+seq = 6
 fields = ["text:str"]
 format = "text_skip"
 guard = "always"
@@ -2654,13 +2730,13 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
 id = "TEM.boundt.temp_elgroup_count"
-site = "Temper.f90:246"
+site = "Temper.f90:247"
 anchor = "985938fb5742"
 file = ".tem"
 unit_var = "tunit"
 routine = "boundt"
 statement = "read(tunit,*,iostat=yl_ios,iomsg=yl_msg)ntelgroup"
-seq = 6
+seq = 7
 fields = ["ntelgroup:int"]
 format = "list_directed"
 guard = "always"
@@ -2673,13 +2749,13 @@ note = "0; M8"
 
 [[reader]]
 id = "TEM.boundt.title#4"
-site = "Temper.f90:305"
+site = "Temper.f90:306"
 anchor = "fd26690ed028"
 file = ".tem"
 unit_var = "tunit"
 routine = "boundt"
 statement = "22    read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text"
-seq = 7
+seq = 8
 fields = ["text:str"]
 format = "text_skip"
 guard = "always"
@@ -2692,13 +2768,13 @@ note = "labelled statement 22"
 
 [[reader]]
 id = "TEM.boundt.title#5"
-site = "Temper.f90:307"
+site = "Temper.f90:308"
 anchor = "b5c591332646"
 file = ".tem"
 unit_var = "tunit"
 routine = "boundt"
 statement = "read(tunit,*,iostat=yl_ios,iomsg=yl_msg)text"
-seq = 8
+seq = 9
 fields = ["text:str"]
 format = "text_skip"
 guard = "always"
@@ -2710,13 +2786,13 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 
 [[reader]]
 id = "TEM.boundt.pipe_count"
-site = "Temper.f90:310"
+site = "Temper.f90:311"
 anchor = "f7c4f5d1a734"
 file = ".tem"
 unit_var = "tunit"
 routine = "boundt"
 statement = "read(tunit,*,iostat=yl_ios,iomsg=yl_msg)npipe,algo_pipe"
-seq = 9
+seq = 10
 fields = ["npipe:int", "algo_pipe:int"]
 format = "list_directed"
 guard = "always"
@@ -3671,9 +3747,9 @@ migration_phase = "M6.7 重启"
 [[not_on_path]]
 unit_var = "tunit"
 file = ".tem"
-site_count = 26
+site_count = 25
 routines = "boundt"
-reason = "temperature boundary data beyond the zero counts read on this path"
+reason = "temperature boundary data beyond the zero counts read on this path. The labelled title read at Temper.f90:243 was in this group until M1-04: it IS executed (the `goto 11` target), and is now registered as TEM.boundt.label11_title. See docs/m1/M1-04-r27-closure.md"
 migration_phase = "M8"
 
 [[not_on_path]]
@@ -3711,9 +3787,9 @@ migration_phase = "M6.2"
 [[not_on_path]]
 unit_var = "outpread"
 file = ".opr"
-site_count = 13
+site_count = 10
 routines = "output_read"
-reason = ".opr observation-point lists; irecover/w*group are 0"
+reason = ".opr observation-point lists; irecover/w*group are 0. The three labelled title reads at Output.f90:4301/4326/4351 were in this group until M1-04: they ARE executed (the goto targets), and are now registered as OPR.output_read.label{1,2,3}_title. See docs/m1/M1-04-r27-closure.md"
 migration_phase = "M5 output"
 
 [[not_on_path]]
