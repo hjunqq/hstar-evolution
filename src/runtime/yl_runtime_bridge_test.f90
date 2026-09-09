@@ -97,6 +97,9 @@ program yl_runtime_bridge_test
     call skip_landed('2-element draft')
   end if
 
+  write (output_unit, '(a)') '-- 2b. the problem and the runtime must describe one model'
+  call group_extent_agreement(pr1, pr2, rs1, rt1, rt2)
+
   write (output_unit, '(a)') '-- 3. no partial commit'
   call group_no_partial(pr2, rs2, rt2)
 
@@ -202,9 +205,15 @@ contains
   ! square (4 nodes) and two unit squares sharing an edge (6 nodes, CCW node order in
   ! both elements). Only the mesh is parameterised; every other authored field is the
   ! same combination in both cases.
-  subroutine draft_of(n_elem, draft)
+  subroutine draft_of(n_elem, draft, two_amplitudes)
     integer, intent(in) :: n_elem
     type(problem_state_t), allocatable, intent(out) :: draft
+    !> Add a SECOND amplitude, changing nothing else. It exists so a problem can disagree
+    !> with a runtime on the amplitude count while agreeing on every mesh extent -- which
+    !> is what makes the amplitude arm of the agreement gate separately falsifiable from
+    !> the node and element arms.
+    logical, intent(in), optional :: two_amplitudes
+    logical :: want_two
 
     type(problem_builder_t) :: b
     type(step_builder_t) :: sb
@@ -364,6 +373,22 @@ contains
     call builder_amplitude_add_point(b, ab, pt, loc, errors)
     call builder_amplitude_finish(b, ab, am, loc, errors)
     call builder_add_amplitude(b, am, loc, errors)
+
+    want_two = .false.
+    if (present(two_amplitudes)) want_two = two_amplitudes
+    if (want_two) then
+      call builder_amplitude_begin(ab)
+      call builder_amplitude_set_name(b, ab, 'a2', loc, errors)
+      call builder_amplitude_set_type(b, ab, 'LINEAR', loc, errors)
+      call opt_set(pt%time, 0.0_real64)
+      call opt_set(pt%value, 1.0_real64)
+      call builder_amplitude_add_point(b, ab, pt, loc, errors)
+      call opt_set(pt%time, 1.0_real64)
+      call opt_set(pt%value, 3.5_real64)
+      call builder_amplitude_add_point(b, ab, pt, loc, errors)
+      call builder_amplitude_finish(b, ab, am, loc, errors)
+      call builder_add_amplitude(b, am, loc, errors)
+    end if
 
     call opt_set(sv%linear, 'PROFILE')
     call opt_set(sv%symmetric, .true.)
@@ -963,6 +988,98 @@ contains
   ! ==========================================================================
   ! section 2: a commit that must fail in VERIFY must not touch a single global.
   ! ==========================================================================
+
+  ! ==========================================================================
+  ! section 2b: the agreement gate, FIRED rather than merely asserted
+  !
+  ! commit refuses a `problem` and a `runtime` that do not describe the same model. Until
+  ! this section existed, two of those five refusals had never once been executed -- they
+  ! were asserted, and an assertion that has never fired is evidence of nothing, the same
+  ! way an assertion whose fixture cannot make its distinction is (docs/04, the test-side
+  ! subspecies). Both arms below therefore check the MESSAGE, not just that something was
+  ! refused: refusing for the wrong reason would otherwise look identical.
+  !
+  ! Each arm also pins what must stay SILENT. The arms are ordered inside commit -- nodes,
+  ! elements, sections, amplitudes, boundary records -- and the first to fail returns, so
+  ! an arm can only be shown to work if the arms before it agree. That is why the amplitude
+  ! arm uses a draft that differs ONLY in amplitude count: every mesh extent matches, so
+  ! nothing earlier can fire and the amplitude message is the only one that can appear.
+  ! ==========================================================================
+
+  subroutine group_extent_agreement(problem_1, problem_2, residue, rt_1, rt_2)
+    type(problem_state_t), intent(in) :: problem_1, problem_2
+    type(deck_residue_t), intent(in) :: residue
+    type(runtime_state_t), intent(in) :: rt_1, rt_2
+
+    type(problem_state_t), allocatable :: draft2, problem_2amp
+    type(manifest_t), allocatable :: pmanifest
+    type(problem_errors_t) :: errors
+    character(len=:), allocatable :: message
+    logical :: owned_before
+
+    ! --- arm 1: a runtime built from a LARGER mesh --------------------------
+    ! The 1-element problem (4 nodes, 1 element) against the 2-element runtime (6 nodes,
+    ! 2 elements). Before the agreement gate was hoisted above the staging loops this was
+    ! not a reportable disagreement at all: the element loop indexes
+    ! problem%mesh%elements(ie) with ie running to the RUNTIME's count, so it read past
+    ! the end of a 1-element collection before any check was reached.
+    owned_before = commit_owns_globals()
+    call errors%clear()
+    call commit_legacy_globals(problem_1, residue, rt_2, errors)
+    call check('a runtime from a larger mesh is refused', errors%any())
+    ! UNCHANGED, not false. A refusal touches nothing, so it leaves ownership exactly as it
+    ! found it -- and section 2 committed successfully, so what it finds here is `true`.
+    ! The first version of this line asserted `.not. commit_owns_globals()`, copied from
+    ! the foreign-allocation guard where the preceding commit_release really had left it
+    ! false. Comparing against what was observed a statement earlier cannot be wrong in
+    ! that way.
+    call check('the mesh disagreement leaves commit ownership as it found it',                  &
+              commit_owns_globals() .eqv. owned_before)
+    if (errors%any()) then
+      call one_error_message(errors, 1, message)
+      ! The NODES arm, and specifically not the elements arm: nodes are checked first, so
+      ! naming elements here would mean the order changed under us.
+      call check('the mesh disagreement names the node counts',                                 &
+                index(message, '4 nodes and the runtime numbers 6') > 0)
+      call check('the mesh disagreement is not reported as a boundary-record skip',             &
+                index(message, 'cannot recover which record was') == 0)
+    end if
+
+    ! --- arm 2: a problem with an extra AMPLITUDE ---------------------------
+    ! Same mesh, same sections, same boundary records: only the amplitude count differs,
+    ! so every arm before amplitudes must stay silent and this message is the only one
+    ! that can appear.
+    call draft_of(1, draft2, two_amplitudes=.true.)
+    ! CLEAR FIRST. Without this, `errors` still holds arm 1's refusal and prepare_problem
+    ! is reported as having failed with a message about node counts that it never
+    ! produced -- which is exactly what the first run of this section printed.
+    call errors%clear()
+    call prepare_problem(draft2, PROFILE_TAG, problem_2amp, pmanifest, errors)
+    call check('prepare_problem accepted the two-amplitude draft', .not. errors%any())
+    if (errors%any()) then
+      call report_errors('prepare_problem (two amplitudes)', errors)
+      return
+    end if
+
+    call errors%clear()
+    call commit_legacy_globals(problem_2amp, residue, rt_1, errors)
+    call check('a problem with an extra amplitude is refused', errors%any())
+    if (errors%any()) then
+      call one_error_message(errors, 1, message)
+      call check('the amplitude disagreement names the amplitude counts',                       &
+                index(message, '2 amplitudes and the runtime numbers 1') > 0)
+      ! The mesh extents all agree here, so no earlier arm may claim this failure.
+      call check('the amplitude disagreement is not reported as a node or element count',       &
+                index(message, 'nodes and the runtime numbers') == 0 .and.                      &
+                index(message, 'elements and the runtime numbers') == 0)
+    end if
+
+    ! The globals must be exactly as section 2 left them: a refusal writes nothing. That
+    ! state is the 2-ELEMENT commit, so this compares against problem_2/rt_2 -- comparing
+    ! against the 1-element pair the arms above used would assert the wrong model and fail
+    ! for a reason that has nothing to do with the refusals.
+    call check_landed_guarded(problem_2, rt_2, 'after the agreement refusals')
+  end subroutine group_extent_agreement
 
   subroutine group_no_partial(problem, residue, rt_good)
     type(problem_state_t), intent(in) :: problem

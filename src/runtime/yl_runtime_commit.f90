@@ -590,6 +590,67 @@ contains
     s_lineload = 0_ink
     s_linet = 0_ink
 
+    ! ------------------------------------------------- problem/runtime agreement
+    ! EVERY extent this routine uses to INDEX `problem`, checked in one place and BEFORE
+    ! the first staging loop that does so.
+    !
+    ! The extent rule (L2c-fold-design.md 5.2) makes the runtime the single derivation
+    ! source and lets the ProblemState side only assert agreement -- but an assertion
+    ! placed after the loop it protects is not a guard. Two of these checks used to sit
+    ! beside the arrays they were about (nodes just above the coord loop, amplitudes just
+    ! above the tcurves loop) and so ran AFTER the element and section loops had already
+    ! indexed `problem%mesh%elements(ie)` and `problem%sections(ig)` with ie and ig running
+    ! to the RUNTIME's counts. A runtime built from a larger model than the problem handed
+    ! in was therefore an out-of-bounds read, not a reported disagreement -- and the
+    ! element and section counts had no agreement check at all, so nothing would have said
+    ! so afterwards either. Found while trying to fire the nodes check on purpose: the
+    ! attempt could not be made safely, which is its own evidence.
+    !
+    ! These are MOVED here, not copied: a second copy beside each loop would be the second
+    ! source invariant 4 forbids, and would rot apart from this one.
+    if (size(problem%mesh%nodes) /= int(s_npoin)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%mesh%nodes))//               &
+                ' nodes and the runtime numbers '//itoa(int(s_npoin))//                         &
+                '; the extent rule makes the runtime the source and this a disagreement')
+      return
+    end if
+    if (size(problem%mesh%elements) /= int(s_nelem)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%mesh%elements))//            &
+                ' elements and the runtime numbers '//itoa(int(s_nelem))//                      &
+                '; the extent rule makes the runtime the source and this a disagreement')
+      return
+    end if
+    if (size(problem%sections) /= int(s_ngroup) .or.                                            &
+        size(problem%mesh%elsets) /= int(s_ngroup)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%sections))//                 &
+                ' sections and '//itoa(size(problem%mesh%elsets))//                             &
+                ' element sets and the runtime numbers '//itoa(int(s_ngroup))//                 &
+                '; the extent rule makes the runtime the source and this a disagreement')
+      return
+    end if
+    if (size(problem%amplitudes) /= int(s_ntcurve)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%amplitudes))//               &
+                ' amplitudes and the runtime numbers '//itoa(int(s_ntcurve))//                  &
+                '; the extent rule makes the runtime the source and this a disagreement')
+      return
+    end if
+    ! The boundary records are the one pairing that is NOT a plain extent question, so its
+    ! message says something different. build_boundary DROPS a record whose resolved
+    ! variable index is 0 (contract `boundary.skip_unnumbered_record`,
+    ! yl_runtime_build.f90:871), and one drop shifts the source of every later record by
+    ! one -- publishing the wrong node, component and value for each, all individually
+    ! plausible. commit cannot recover the correspondence without re-deriving the dof
+    ! numbering build_runtime owns, which invariant 4 forbids, so it refuses instead:
+    ! widening the capability gate to a deck that can skip a record fails HERE, at the line
+    ! that makes the assumption.
+    if (size(problem%steps(1)%boundary) /= int(s_ndofix)) then
+      call fail(errors, 'ProblemState carries '//itoa(size(problem%steps(1)%boundary))//        &
+                ' boundary records and build_runtime admitted '//itoa(int(s_ndofix))//          &
+                '; commit reads the two positionally and cannot recover which record was '//    &
+                'skipped without re-deriving the dof numbering')
+      return
+    end if
+
     ! ----------------------------------------------------------------- stage
     ! Plain arrays. `int(..., ink)` and `real(..., irk)` are explicit at every crossing:
     ! the runtime is int32/real64 by construction and the legacy kinds are whatever
@@ -798,27 +859,6 @@ contains
 
     ! Prescription records.
     !
-    ! PRECONDITION, ASSERTED RATHER THAN ASSUMED. Record k of `prescrib` is record k of
-    ! `problem%steps(1)%boundary` only if build_runtime admitted every one of them:
-    ! build_boundary drops a record whose resolved variable index is 0 (contract
-    ! `boundary.skip_unnumbered_record`, yl_runtime_build.f90:871), and one drop shifts the
-    ! source of every later record by one -- publishing the wrong node, component and value
-    ! for each of them, all of them individually plausible.
-    !
-    ! commit cannot recover the correspondence itself. Recomputing the admission decision
-    ! means recomputing `node_variables(component_to_active(dof), node_index(nset))`, which
-    ! is the DOF numbering build_runtime owns, and a second derivation of it here is what
-    ! invariant 4 forbids. So the alignment is stated as a condition and REFUSED when it
-    ! does not hold: widening the capability gate to a deck that can skip a record fails at
-    ! this line -- the line that makes the assumption -- rather than at some later value
-    ! comparison, or not at all.
-    if (size(problem%steps(1)%boundary) /= int(s_ndofix)) then
-      call fail(errors, 'ProblemState carries '//itoa(size(problem%steps(1)%boundary))//        &
-                ' boundary records and build_runtime admitted '//itoa(int(s_ndofix))//          &
-                '; commit reads the two positionally and cannot recover which record was '//    &
-                'skipped without re-deriving the dof numbering')
-      return
-    end if
     allocate (s_prescrib(s_ndofix))
     do i = 1, int(s_ndofix)
       call null_prescrib(s_prescrib(i))
@@ -866,13 +906,8 @@ contains
     nmats = size(problem%materials)
     nblks = size(problem%steps)
 
-    ! mesh.nodes.xyz -> coord(ndimn, npoin), Fortran order. The extent is the runtime's.
-    if (size(problem%mesh%nodes) /= int(s_npoin)) then
-      call fail(errors, 'ProblemState carries '//itoa(size(problem%mesh%nodes))//              &
-                ' nodes and the runtime numbers '//itoa(int(s_npoin))//                       &
-                '; the extent rule makes the runtime the source and this a disagreement')
-      return
-    end if
+    ! mesh.nodes.xyz -> coord(ndimn, npoin), Fortran order. The extent is the runtime's,
+    ! and the two are asserted to agree in the agreement gate above.
     allocate (s_coord(s_ndimn, s_npoin))
     s_coord = STAGE_POISON_R
     do i = 1, int(s_npoin)
@@ -972,16 +1007,8 @@ contains
 
     ! Amplitude records. Only the current factor is a model_ready row; the curve itself
     ! is authored data and belongs to the ProblemState half.
-    ! Amplitude records. The extent is the runtime's, as everywhere else; the ProblemState
-    ! side is only asserted to agree. Unlike prescrib there is no admission step here --
-    ! build_amplitudes sizes itself directly from problem%amplitudes -- so a disagreement
-    ! means the two objects did not come from one deck, not that a record was dropped.
-    if (size(problem%amplitudes) /= int(s_ntcurve)) then
-      call fail(errors, 'ProblemState carries '//itoa(size(problem%amplitudes))//               &
-                ' amplitudes and the runtime numbers '//itoa(int(s_ntcurve))//                  &
-                '; the extent rule makes the runtime the source and this a disagreement')
-      return
-    end if
+    ! Amplitude records. The extent is the runtime's; the agreement gate above has already
+    ! refused a problem whose amplitude count differs.
     allocate (s_tcurves(s_ntcurve))
     do i = 1, int(s_ntcurve)
       call null_tcurve(s_tcurves(i))
