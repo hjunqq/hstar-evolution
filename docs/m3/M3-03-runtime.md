@@ -29,7 +29,10 @@ commit_legacy_globals(runtime, errors)
   - `commit_legacy_globals` 分 VERIFY+STAGE 与 WRITE 两段，WRITE 段只有 `move_alloc` 与标量赋值，无分配、无转换、无失败路径。
 - `fail_at` 是 **T01 测试钩子**：12 个编号分配点，套件逐个注入并断言先前那个好 runtime 逐位存活、manifest 未增条目。
 - `commit_release` 幂等，先释放指针目标再释放数组；`commit_owned` 守卫保证**只释放本模块分配过的存储**。
-- 六个记录数组全局（`element` / `group` / `listp_group` / `prescrib` / `tcurves` / `trans`）在 `commit_owned` 为假时若已被分配，**拒绝提交**——见 §7。
+- 记录数组全局在 `commit_owned` 为假时若已被分配，**拒绝提交**——见 §7。M3-03 交付时是**六个**
+  （`element` / `group` / `listp_group` / `prescrib` / `tcurves` / `trans`）；**M4-01 步 3 加入 `props` 后为七个**，
+  且是在其 `move_alloc` 的同一个提交里加进守卫名单的（正是 Round-2 复核要求的纪律）。
+  **此处不再登记个数**，以守卫自己的拒绝消息为准——套件解析该消息并断言它与测试的名单逐字一致。
 
 ## 3. 值状态账本：三种 `ignore` 不是一回事
 
@@ -84,7 +87,7 @@ Gauss 几何按 legacy 语句逐句复刻，不是按数学等价重写：
 |---|---|
 | `tools/build.sh runtime` | 108/108，零告警 |
 | 反向双射（`yl_state_map.py runtime-rules`） | 60 rules，46 生产 46 个 model_ready 行，双向 |
-| `tools/build.sh runtime-bridge` | 513/513，**结论标注为 PARTIAL** |
+| `tools/build.sh runtime-bridge` | **通过，结论标注为 PARTIAL**。此处原记 `513/513`；该计数随 M4-01 的折叠持续增长（`581` → `1131` → `1180` → `1292`），**已不再登记具体数字**——以当次运行输出为准。一个只会增长的计数，最好的修法是让它不存在 |
 | `tools/build.sh problem-types` | 485/485（M3-01/02 回归） |
 | 映射表 / ProblemState 交叉校验 / 工具自检 | PASS / PASS / 97-97 |
 | 别名门禁 `grep -ni point'er' yl_runtime_types.f90` | 无匹配 |
@@ -117,7 +120,7 @@ Round 1 报出 3 Critical + 4 Warning，**全部落在 lead 自己写的 Layer 2
 
 W4 的守卫检查"记录数组已被分配但 `commit_owned` 为假"，但只列了 5 个全局，漏了 `trans`
 （`interpolation_group`，含 `listf`/`rintf` 两个指针，走同一个 `move_alloc`）。
-**它要防的那个泄漏，在六扇门里仍有一扇敞着。**
+**它要防的那个泄漏，在当时的六扇门里仍有一扇敞着。**
 
 加重情节：桥接的 513 条断言里**没有一条碰过这个守卫**。所以漏项不是"测试没测出来"，是根本没测。
 处置：补全清单、header 由"记录数组类"改为逐个列名，并要求桥接**用清单驱动遍历六个全局**，

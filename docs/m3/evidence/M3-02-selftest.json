@@ -1,7 +1,7 @@
 {
   "caveat": "the 10 excluded nets are unreachable while INV-EMPTY-DERIVED stands; if that assertion is ever removed they become live single-fault checks and must be reclassified",
   "frozen_at": "2026-09-08",
-  "note": "one build, one count, one set of hashes; sources verified unchanged across the run",
+  "note": "one build, one count, one set of hashes; sources verified unchanged across THAT run. This file is a HISTORICAL RECORD of 2026-09-08, not a current claim, and nothing reads it -- `grep -rn M3-02-selftest.json --include=*.py --include=*.sh --include=*.f90` returns nothing. It is an archive, not a gate.",
   "pipeline_selftest": {
     "breakdown": {
       "excluded_nets": 10,
@@ -33,5 +33,6 @@
   "type_selftest": {
     "checks": 50,
     "failures": 0
-  }
+  },
+  "superseded_note": "As of 2026-09-09, 3 of the 9 frozen source hashes have drifted -- yl_problem_errors.f90, yl_problem_manifest.f90 and yl_problem_profile.f90, all changed by M4-01 (PE_STAGE_ADAPT; the L2-b dialect rows; the manifest). The counts still reproduce, but that is a coincidence rather than a guarantee: pairing a count with the hashes it was measured against is what gives either of them meaning, and the pairing is now broken. Re-run the current counts with `tools/build.sh problem-types` instead of citing this file. Recorded rather than refreshed, because refreshing it would restore the appearance of a live gate that does not exist."
 }
