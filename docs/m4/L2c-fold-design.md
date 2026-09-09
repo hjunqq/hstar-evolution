@@ -709,6 +709,29 @@ L3-c §5.3 那 5 行的病根不是"没写"，是"发出去的东西没有出处
    （"与某个 runtime 行共用同一个旧全局"）会让错误声明从碰巧成立的那条溜进来。
    相等式没有这个缝，而且同一段代码顺带覆盖了反方向（把已覆盖的行悄悄降级）。
 
+   ### 出口条件的谎言检测（lead，2026-09-09，`d7d8867`）
+
+   **步 1 时，把 118 个 `NOT_MIGRATED` 表项改成 `FROM_RUNTIME` 就得到
+   `NOT_MIGRATED=0` 且四个门禁全绿——出口条件被一个谎言满足。** 折叠完成后重跑同一攻击，
+   并补了两个 `FROM_RUNTIME` 之外的方向（那是集合等式管不到的）：
+
+   | 攻击 | 预期 | 实得 |
+   |---|---|---|
+   | 其余 118 行全翻成 `FROM_RUNTIME` | 118 个问题 | **rc=6，120 个问题** |
+   | 单行 `FROM_PROBLEM` → `DERIVED` | 恰好 1 | 恰好 1：`case.name claims DERIVED but is not obtainable from a ProblemState cardinality or the runtime` |
+   | 单行 `FROM_DECK` → `FROM_PROBLEM` | 恰好 1 | 恰好 1：`control.run.restart claims FROM_PROBLEM but its owner is 'not_migrated'` |
+
+   多出的 2 是 `mesh.nodes.id` / `mesh.elements.id` 被 **P8 独立抓到**（「由 dump 合成而账本
+   声称 `FROM_RUNTIME`」）。**说谎的行被不止一个约束抓到——约束是重叠的，不只是分割。**
+   （lead 预期 118 是只数了集合等式的产出、漏了 P8 有自己的方向性检查；未命中照记。）
+
+   **结论的措辞必须准**：`NOT_MIGRATED = 0` **仍然是账本关于自身的陈述**，这一点不因攻击被挡
+   而改变。变的是——**目前没有哪一种赋值能在说谎的同时通过**。三个方向各自被不同的约束挡住。
+   **这不等于不存在这样的谎言，只等于攻了三个方向都没进去**；而步 1 时第一个方向就进去了。
+
+   **出口条件的真正判据不是这个计数**，是影子差分（L3-c）——账本自报与「新旧两条路径在真实
+   状态上是否一致」是两回事。计数归零只是让影子差分**第一次可运行**。
+
 3. **总体性闸门**，放在 commit 的 VERIFY 段，与 `INV-COMMIT-TOTAL` 同形：
    生成表里的每一个行 id 都必须在声明表里有条目，否则 commit **拒绝提交**。
    map 新增一行而 commit 没跟上 → 在 VERIFY 段失败，而不是静默少写一个全局。
