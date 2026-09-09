@@ -323,3 +323,17 @@ sed -n '/subroutine commit_release/,/end subroutine commit_release/p' \
 - 21 个内层释放站点里的其余 15 处。
 - 「适配器覆盖了全部读取站点」——R29 未关闭，该断言无法证实也无法证伪。
 - 「折叠已被验证正确」。**已验证的是 `model_ready` 那一个面。**
+
+## 附：与本报告同时刻的门禁记录（lead，2026-09-09，`5e995d2`）
+
+本报告是纯文档提交，代码树自步 6 的阴性对照以来未变。但**一份将被当作权威记述的报告，
+应当带一份与它同时刻的门禁记录**，否则读者只能相信「树没变」这句话本身。lead 在干净树上跑：
+
+| 门禁 | 结果 |
+|---|---|
+| `tools/build.sh runtime-bridge` | `PASS: 1292/1292`，`NOT_MIGRATED=0` |
+| `tools/build.sh adapter` | `MATCH=64 MISMATCH=0 NOT_COMPARABLE=28 UNVERIFIED=0`（红线），方言 317/317 ×2 |
+| `tools/build.sh runtime-bridge --profile asan` | LeakSanitizer 输出 **0 次**（该仪器已由步 6 的六个阳性对照证明有效） |
+
+**这三个数字与上文的判据结果不是同一类证据**：它们说明「本报告落地时门禁是绿的」，
+不扩大上文任何一条结论的范围。
