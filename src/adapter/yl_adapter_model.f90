@@ -1042,6 +1042,11 @@ contains
     if (ios /= 0) then
       call fail_read(errors, loc, 'empty_section', 'tension_joint_count', iomsg_buf); return
     end if
+    if (tsel /= 0) then
+      call reject_dialect(errors, 'A-GLB', 'tension-joint-nonzero', loc, actual=itoa(tsel), &
+                          expected='0')
+      return
+    end if
 
     ! seq 68 -- RD: GLB.global_data.title#36 (Global.f90:1826) -- contact_joint title
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -1055,6 +1060,11 @@ contains
     loc = here(1829_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'empty_section', 'contact_joint_count', iomsg_buf); return
+    end if
+    if (tsel /= 0) then
+      call reject_dialect(errors, 'A-GLB', 'contact-joint-nonzero', loc, actual=itoa(tsel), &
+                          expected='0')
+      return
     end if
 
     ! seq 70 -- RD: GLB.contact_point_to_point.title#1 (Global.f90:3466). `routine` here
@@ -1077,6 +1087,11 @@ contains
     if (ios /= 0) then
       call fail_read(errors, loc, 'empty_section', 'contact_control', iomsg_buf); return
     end if
+    if (ngaps /= 0 .or. ngapb /= 0) then
+      call reject_dialect(errors, 'A-GLB', 'contact-pairs-nonzero', loc,                        &
+                          actual=itoa(ngaps)//'/'//itoa(ngapb), expected='0/0')
+      return
+    end if
 
     ! seq 72 -- RD: GLB.link_concrete_and_steel.title#1 (Global.f90:4678)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -1091,6 +1106,11 @@ contains
     loc = make_source_location(file=SITE_FILE, reader='link_concrete_and_steel', line=4681_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'empty_section', 'rc_steel_count', iomsg_buf); return
+    end if
+    if (nrcsteel /= 0) then
+      call reject_dialect(errors, 'A-GLB', 'rc-steel-nonzero', loc, actual=itoa(nrcsteel), &
+                          expected='0')
+      return
     end if
 
     ! seq 74 -- RD: GLB.link_concrete_and_water_pipe.title#1 (Global.f90:4542)
@@ -1108,6 +1128,11 @@ contains
                                 line=4545_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'empty_section', 'water_pipe_count', iomsg_buf); return
+    end if
+    if (nwcpipe /= 0) then
+      call reject_dialect(errors, 'A-GLB', 'water-pipe-nonzero', loc, actual=itoa(nwcpipe), &
+                          expected='0')
+      return
     end if
 
     ! -------------------------------------------------------------------------------

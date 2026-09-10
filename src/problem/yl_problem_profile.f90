@@ -455,7 +455,42 @@ module yl_problem_profile
                       item='glb.uinitial', object_path='control.glb.uinitial',                                      &
                       field='uinitial', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                        &
                       message='pinned guard: value 0 keeps control flow on static_2d path '//   &
-                              '(docs/m2/state-field-map.toml, control.glb.uinitial)')]
+                              '(docs/m2/state-field-map.toml, control.glb.uinitial)'),                              &
+    ! The five .glb section counts the parser used to read into a local and DISCARD.
+    ! Found 2026-09-10 while the adapter first drove a solve: every one of them is
+    ! followed in legacy by count-many records, so a non-zero value did not fail -- it
+    ! made the parser read the NEXT section's records as if they were this one's, and
+    ! carry on. Silent misparse, no finding, wrong model.
+    !
+    ! Why the dialect suite could not see it: its coverage unit is "one counter-example
+    ! per capability-table ROW", so a condition with no row is invisible to it. A missing
+    ! row is exactly the failure a per-row check cannot report -- the same shape as
+    ! judgement 5's coverage limit in the M4-01 matrix.
+    capability_item_t(rule_id='A-GLB', condition='tension-joint-nonzero',                                           &
+                      item='glb.tension_joint_count', object_path='empty_section',                                  &
+                      field='tension_joint_count', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,             &
+                      message='tsel/=0 (Global.f90:1812) is followed by tsel element ids that mark '//   &
+                              'tension joints (Global.f90:1816-1819); this parser reads none of them'),             &
+    capability_item_t(rule_id='A-GLB', condition='contact-joint-nonzero',                                           &
+                      item='glb.contact_joint_count', object_path='empty_section',                                  &
+                      field='contact_joint_count', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,             &
+                      message='the contact-joint count (Global.f90:1829) is followed by that many element '//   &
+                              'ids; this parser reads none of them'),                                               &
+    capability_item_t(rule_id='A-GLB', condition='contact-pairs-nonzero',                                           &
+                      item='glb.ngaps', object_path='empty_section',                                                &
+                      field='contact_control', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                 &
+                      message='ngaps/ngapb /= 0 (Global.f90:3469) opens the contact-pair section '//   &
+                              '(contact_point_to_point); this parser reads none of it'),                            &
+    capability_item_t(rule_id='A-GLB', condition='rc-steel-nonzero',                                                &
+                      item='glb.nrcsteel', object_path='empty_section',                                             &
+                      field='rc_steel_count', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                  &
+                      message='nrcsteel/=0 (Global.f90:4681) opens the concrete-steel link section; '//   &
+                              'this parser reads none of it'),                                                       &
+    capability_item_t(rule_id='A-GLB', condition='water-pipe-nonzero',                                              &
+                      item='glb.nwcpipe', object_path='empty_section',                                              &
+                      field='water_pipe_count', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                &
+                      message='the water-pipe link count (Global.f90:4542 section) is followed by that '//   &
+                              'many records; this parser reads none of them')]
 
   ! .cor and .ele -- yl_adapter_mesh. The only two dialect rows whose whitelisted value
   ! is not fixed here but read from a CAP_STAGE_GATE row above (analysis.dimension,

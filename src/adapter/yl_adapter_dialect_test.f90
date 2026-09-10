@@ -60,6 +60,7 @@ program yl_adapter_dialect_test
   use yl_adapter_load, only: parse_loa, parse_pre
   use yl_adapter_temper, only: parse_tem
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
 
   implicit none
 
@@ -153,6 +154,16 @@ program yl_adapter_dialect_test
                   'W')
     call run_case('A-GLB', 'ntrans-nonzero', 'glb', 42, '  1  0  1.0e0  0.02  2  1980.0  25.0', 'W')
     call run_case('A-GLB', 'uinitial-nonzero', 'glb', 50, '  1', 'W')
+    ! The five .glb section counts that used to be read into a local and DISCARDED
+    ! (found 2026-09-10, while the adapter first drove a solve). Deck lines are the
+    ! counts themselves in 1.glb: 65 tension_joint, 67 contact_joint, 69 the contact
+    ! control record, 71 nrcsteel, 73 nwcpipe.
+    call run_case('A-GLB', 'tension-joint-nonzero', 'glb', 65, '  1', 'W')
+    call run_case('A-GLB', 'contact-joint-nonzero', 'glb', 67, '  1', 'W')
+    call run_case('A-GLB', 'contact-pairs-nonzero', 'glb', 69, &
+                  '  1  0  1  500  1.0E-05  1  0  0  0  1  PROFILE  0  0.0  1', 'W')
+    call run_case('A-GLB', 'rc-steel-nonzero', 'glb', 71, '  1', 'W')
+    call run_case('A-GLB', 'water-pipe-nonzero', 'glb', 73, '  1', 'W')
     call run_case('A-COR', 'dimension', 'cor', 0, '', 'DIM3')
     call run_case('A-ELE', 'element-kind', 'ele', 0, '', 'KIND7')
     call run_case('A-MAT', 'curve-count', 'mat', 2, '  1', 'W')
@@ -445,6 +456,7 @@ contains
     integer :: unit, ios, j, target_row, hits, first_hit
     logical :: found
     type(deck_residue_t) :: residue
+    type(deck_existence_t) :: existence
 
     key = trim(rule_id)//'/'//trim(condition)
     target_row = dialect_find(rule_id, condition)
@@ -468,6 +480,17 @@ contains
     end if
 
     call make_context(ctx, variant)
+    ! make_context pre-fills the per-section arrays for the parsers that CONSUME them
+    ! (.ele, .mat). parse_glb is the one that PRODUCES them, and allocates them itself.
+    ! Every earlier .glb counter-example rejected before reaching that allocate, so the
+    ! collision only appeared when the five section-count rows were added (2026-09-10) --
+    ! the first .glb cases that get past the group-header block. Latent since the suite
+    ! was written; the new rows did not cause it, they reached it.
+    if (deck == 'glb') then
+      if (allocated(ctx%nelgroup)) deallocate (ctx%nelgroup)
+      if (allocated(ctx%group_matno)) deallocate (ctx%group_matno)
+      if (allocated(ctx%group_kind)) deallocate (ctx%group_kind)
+    end if
     call builder_begin(b)
     call step_parts_reset(parts)
     call solver_parts_reset(sparts)
@@ -476,7 +499,7 @@ contains
     select case (deck)
     case ('inp'); call parse_inp(unit, ctx, b, residue, errs)
     case ('man'); call parse_man(unit, ctx, b, parts, errs)
-    case ('glb'); call parse_glb(unit, ctx, b, parts, sparts, secparts, residue, errs)
+    case ('glb'); call parse_glb(unit, ctx, b, parts, sparts, secparts, residue, existence, errs)
     case ('cor'); call parse_cor(unit, ctx, b, errs)
     case ('ele'); call parse_ele(unit, ctx, b, errs)
     case ('mat'); call parse_mat(unit, ctx, b, secparts, errs)
