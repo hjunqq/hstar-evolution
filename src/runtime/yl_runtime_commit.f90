@@ -92,7 +92,9 @@ module yl_runtime_commit
   use elements, only: element_field, gauss_element
   use global_var, only: element, group, listp_group, trans, appear,                             &
                         coord, appear_process, matno_process, average_appear,                   &
-                        lmdofn, lcdofn, nodfn, iffix, fixed, order_time_mdofn,                  &
+                        lmdofn, lcdofn, nodfn, iffix, fixed, order_time_mdofn, tension_joint,   &
+                        modf_dis_blocks, tlink, equvs_process, force_process,                   &
+                        listglocbeam, links, trans_c, tension_contact,                          &
                         result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
                         line_load_block, line_temp_block, lineload, linet,                      &
                         npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
@@ -513,7 +515,10 @@ contains
     integer(ink) :: s_ndofix, s_ntcurve, s_iblks, s_lblks, s_lineload, s_linet
     integer :: nevab, ngaus, ngaus_mass, nnode
     ! staging: the existence face (ADR-0009). One buffer per existence-face.toml row.
-    integer(ink), allocatable :: s_ex_order_time_mdofn(:)
+    integer(ink), allocatable :: s_ex_order_time_mdofn(:), s_ex_tension_joint(:)
+    integer(ink), allocatable :: s_ex_modf_dis_blocks(:)
+    integer(ink), allocatable :: s_ex_tlink(:,:), s_ex_equvs(:), s_ex_force_process(:)
+    integer(ink), allocatable :: s_ex_listglocbeam(:), s_ex_tension_contact(:)
     ! staging: the ProblemState half's plain arrays (M4-01 step 3)
     real(irk), allocatable :: s_coord(:,:), s_factg(:)
     integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
@@ -735,7 +740,19 @@ contains
     ! RUNTIME_VALUE_RESERVED in the ledger and `ignore` + `emit = "none"` in the M2 map,
     ! so nothing dumps or compares them.
     allocate (s_delitfi(s_ntotv), s_deltafi(s_ntotv))
-    s_delitfi = STAGE_POISON_R;  s_deltafi = STAGE_POISON_R
+    ! ZEROED, not poisoned (2026-09-11). These two are the increment work vectors legacy
+    ! allocates at Fem.f90:246 and never initialises, so the map calls them RESERVED and
+    ! nothing compares them. That was accurate about legacy and wrong about what the
+    ! SOLVER does: the second residual evaluation reads delitfi before anything writes it,
+    ! and legacy only survives that because a freshly mapped page is zero.
+    !
+    ! Under --adapter=on the poison made it visible: Fem.f90:240 deallocates these (commit
+    ! had allocated them) and :246 reallocates the same block, so the huge() sentinel came
+    ! straight back and the second residual was NaN while the FIRST matched legacy
+    ! exactly. Zeroing here reproduces what legacy actually has rather than what its
+    ! source literally says. The underlying read-before-write in legacy is R23's family
+    ! and is not fixed here.
+    s_delitfi = 0.0_irk;  s_deltafi = 0.0_irk
 
     allocate (s_line_load_block(size(runtime%cursor%load_line_per_block)))
     allocate (s_line_temp_block(size(runtime%cursor%temperature_line_per_block)))
@@ -793,14 +810,33 @@ contains
       allocate (s_element(ie)%field(1)%lnods_f(nnode))
       s_element(ie)%field(1)%lnods_f = STAGE_POISON_I
       s_element(ie)%field(1)%lnods_f = int(problem%mesh%elements(ie)%nodes, ink)
-      ! RESERVED, as above: allocated to their final length and not written, so they carry
-      ! the sentinel out (rule 2 of the STAGE_POISON note).
+      ! DEFINED as zero, corrected 2026-09-10 (see yl_runtime_build.f90 for the finding).
+      ! They were staged as RESERVED poison on the map's claim that legacy never
+      ! initialises them; Global.f90:1325-1327 sets all three to 0.0 three lines after the
+      ! allocates the map's reason cites. Poisoned buffers here made Residu.f90:1021's
+      ! `eload = eload + eload` produce an Infinity residual.
       allocate (s_element(ie)%field(1)%tload(nevab))
       allocate (s_element(ie)%field(1)%eload(nevab))
       allocate (s_element(ie)%field(1)%rload(nevab))
       s_element(ie)%field(1)%tload = STAGE_POISON_R
       s_element(ie)%field(1)%eload = STAGE_POISON_R
       s_element(ie)%field(1)%rload = STAGE_POISON_R
+      s_element(ie)%field(1)%tload = real(runtime%element(ie)%total_load, irk)
+      s_element(ie)%field(1)%eload = real(runtime%element(ie)%external_load, irk)
+      s_element(ie)%field(1)%rload = real(runtime%element(ie)%body_load, irk)
+
+      ! Existence face (ADR-0009), derived-zero. stiff_u assigns into this every
+      ! increment (Stiff.f90:672) and legacy creates it while reading .ele
+      ! (Global.f90:1312-1313: allocate, then =0.0). Zeroed rather than poisoned
+      ! BECAUSE that is what legacy leaves here at model_ready -- the poison
+      ! discipline exists to make an unwritten row visible, and this row is written,
+      ! by legacy, to zero.
+      ! Existence face (ADR-0009), derived. FORCE_EXTERNAL loops `do ifield = 1,
+      ! element(ie)%nrfields` (Fem.f90:13417-13418); at 0 the body-force assembly runs
+      ! zero times and the correct element loads gravity computed are discarded.
+      s_element(ie)%nrfields = int(size(runtime%dof%element_field_variables(ie)%fields), ink)   !@existence: element_nrfields
+      allocate (s_element(ie)%field(1)%khandmc(1)%fstif(nevab, nevab))   !@existence: element_field_khandmc_fstif
+      s_element(ie)%field(1)%khandmc(1)%fstif = 0.0_irk
 
       allocate (s_element(ie)%egaus(2))
       call null_gauss(s_element(ie)%egaus(1))
@@ -871,6 +907,15 @@ contains
       s_group(ig)%uplift_ic = int(opt_or(problem%sections(ig)%uplift), ink)
       s_group(ig)%type_nalgo = int(opt_or(problem%sections(ig)%algorithm), ink)
       s_group(ig)%type_stiff = int(opt_or(problem%sections(ig)%stiffness_kind), ink)
+
+      ! Existence face (ADR-0009): estif_assemble reads this every increment
+      ! (Stiff.f90:3344). sections.order_time is a map row with emit="none", so it is
+      ! never compared -- and null_group nullifies the pointer, which is what the
+      ! comparison face wants and what left the adapter path with nothing to read.
+      allocate (s_group(ig)%type_mass(size(existence%group_type_mass, 1)))   !@existence: group_type_mass
+      s_group(ig)%type_mass = int(existence%group_type_mass(:, ig), ink)
+      allocate (s_group(ig)%order_time(2, size(existence%group_order_time, 2)))   !@existence: group_order_time
+      s_group(ig)%order_time = int(existence%group_order_time(:, :, ig), ink)
       s_group(ig)%type_ecoint = int(opt_or(problem%sections(ig)%stress_recovery), ink)
       s_group(ig)%elcod_local = real(opt_or_real(problem%sections(ig)%local_axes), irk)
 
@@ -1286,6 +1331,28 @@ contains
     s_ex_order_time_mdofn = STAGE_POISON_I
     s_ex_order_time_mdofn = int(existence%order_time_mdofn, ink)
 
+    allocate (s_ex_tension_joint(size(existence%tension_joint)))
+    s_ex_tension_joint = STAGE_POISON_I
+    s_ex_tension_joint = int(existence%tension_joint, ink)
+
+    allocate (s_ex_modf_dis_blocks(size(existence%modf_dis_blocks)))
+    s_ex_modf_dis_blocks = STAGE_POISON_I
+    s_ex_modf_dis_blocks = int(existence%modf_dis_blocks, ink)
+
+    ! Runtime state manifest (ADR-0009), the rows global_data allocates unconditionally
+    ! past the adapter entry. Enumerated by tools/yl_runtime_scan.py, not by crash.
+    allocate (s_ex_tlink(size(existence%tlink, 1), size(existence%tlink, 2)))
+    s_ex_tlink = int(existence%tlink, ink)
+    allocate (s_ex_equvs(size(existence%equvs_process)))
+    s_ex_equvs = int(existence%equvs_process, ink)
+    allocate (s_ex_force_process(size(existence%force_process)))
+    s_ex_force_process = int(existence%force_process, ink)
+    ! derived-zero: legacy allocates and zeroes these (Global.f90:1055, :1825).
+    allocate (s_ex_listglocbeam(s_ngroup))
+    s_ex_listglocbeam = 0_ink
+    allocate (s_ex_tension_contact(s_nelem))
+    s_ex_tension_contact = 0_ink
+
     call verify_residue_against_gates(residue, errors, ok)
     if (.not. ok) return
 
@@ -1362,6 +1429,19 @@ contains
     ! abort demanded it; tools/yl_existence_check.py asserts this pass and that table are
     ! the same set, in both directions.
     call move_alloc(s_ex_order_time_mdofn, order_time_mdofn)   !@existence: order_time_mdofn
+    call move_alloc(s_ex_tension_joint, tension_joint)         !@existence: tension_joint
+    call move_alloc(s_ex_modf_dis_blocks, modf_dis_blocks)     !@existence: modf_dis_blocks
+    call move_alloc(s_ex_tlink, tlink)                         !@existence: tlink
+    call move_alloc(s_ex_equvs, equvs_process)                 !@existence: equvs_process
+    call move_alloc(s_ex_force_process, force_process)         !@existence: force_process
+    call move_alloc(s_ex_listglocbeam, listglocbeam)           !@existence: listglocbeam
+    call move_alloc(s_ex_tension_contact, tension_contact)     !@existence: tension_contact
+    ! links and trans_c are derived-type arrays legacy allocates unconditionally
+    ! (Global.f90:1138, :1772). nlinks is 0 on the whitelist, so links is empty; trans_c
+    ! is per-node and legacy sets only %nintf = 0 right after allocating it.
+    allocate (links(int(opt_or(residue%nlinks), ink)))         !@existence: links
+    allocate (trans_c(s_npoin))                                !@existence: trans_c
+    trans_c(1:s_npoin)%nintf = 0_ink
 
     commit_owned = .true.
   end subroutine commit_legacy_globals
@@ -1393,6 +1473,8 @@ contains
             if (associated(element(i)%field(ig)%tload)) deallocate (element(i)%field(ig)%tload)
             if (associated(element(i)%field(ig)%eload)) deallocate (element(i)%field(ig)%eload)
             if (associated(element(i)%field(ig)%rload)) deallocate (element(i)%field(ig)%rload)
+            if (associated(element(i)%field(ig)%khandmc(1)%fstif)) &
+              deallocate (element(i)%field(ig)%khandmc(1)%fstif)   !@existence: element_field_khandmc_fstif
           end do
           deallocate (element(i)%field)
         end if
@@ -1411,6 +1493,8 @@ contains
     if (allocated(group)) then
       do i = 1, size(group)
         if (associated(group(i)%list)) deallocate (group(i)%list)
+        if (associated(group(i)%type_mass)) deallocate (group(i)%type_mass)   !@existence: group_type_mass
+        if (associated(group(i)%order_time)) deallocate (group(i)%order_time)   !@existence: group_order_time
         if (associated(group(i)%unode)) then
           do ig = 1, size(group(i)%unode)
             if (associated(group(i)%unode(ig)%list)) deallocate (group(i)%unode(ig)%list)
@@ -1497,6 +1581,15 @@ contains
     if (allocated(tcurvegravity)) deallocate (tcurvegravity)
 
     if (allocated(order_time_mdofn)) deallocate (order_time_mdofn)   !@existence: order_time_mdofn
+    if (allocated(tension_joint)) deallocate (tension_joint)         !@existence: tension_joint
+    if (allocated(modf_dis_blocks)) deallocate (modf_dis_blocks)     !@existence: modf_dis_blocks
+    if (allocated(tlink)) deallocate (tlink)                         !@existence: tlink
+    if (allocated(equvs_process)) deallocate (equvs_process)         !@existence: equvs_process
+    if (allocated(force_process)) deallocate (force_process)         !@existence: force_process
+    if (allocated(listglocbeam)) deallocate (listglocbeam)           !@existence: listglocbeam
+    if (allocated(tension_contact)) deallocate (tension_contact)     !@existence: tension_contact
+    if (allocated(links)) deallocate (links)                         !@existence: links
+    if (allocated(trans_c)) deallocate (trans_c)                     !@existence: trans_c
     if (allocated(lmdofn)) deallocate (lmdofn)
     if (allocated(lcdofn)) deallocate (lcdofn)
     if (allocated(nodfn)) deallocate (nodfn)
@@ -2148,6 +2241,35 @@ contains
       call fail(errors, 'existence face: order_time_mdofn is not allocated -- the .glb '//   &
                 'parser did not run, and committing an empty array would publish a legacy '// &
                 'global that reads like a deck record nobody wrote')
+      return
+    end if
+    if (.not. allocated(existence%tlink)) then
+      call fail(errors, 'runtime state manifest: tlink is not allocated -- see above')
+      return
+    end if
+    if (.not. allocated(existence%equvs_process)) then
+      call fail(errors, 'runtime state manifest: equvs_process is not allocated')
+      return
+    end if
+    if (.not. allocated(existence%force_process)) then
+      call fail(errors, 'runtime state manifest: force_process is not allocated')
+      return
+    end if
+    if (.not. allocated(existence%modf_dis_blocks)) then
+      call fail(errors, 'existence face: modf_dis_blocks is not allocated -- see above')
+      return
+    end if
+    if (.not. allocated(existence%group_type_mass)) then
+      call fail(errors, 'runtime state manifest: group_type_mass is not allocated')
+      return
+    end if
+    if (.not. allocated(existence%group_order_time)) then
+      call fail(errors, 'existence face: group_order_time is not allocated -- see above')
+      return
+    end if
+    if (.not. allocated(existence%tension_joint)) then
+      call fail(errors, 'existence face: tension_joint is not allocated -- see above; the '// &
+                'same rule applies to every row of the face')
       return
     end if
     ok = .true.

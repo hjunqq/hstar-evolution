@@ -357,13 +357,13 @@ module yl_runtime_rules
     build_rule_t('D-ELEMENT-ELCOD-F', BR_DERIVE, 'built',                                                                         &
                  'runtime.element', 'elcod_f', '',                                                                                &
                  'runtime.element.elcod_f', MANIFEST_KIND_DERIVED, MANIFEST_RULE_INDEX_MAP, BR_REACHABLE, ''),                    &
-    build_rule_t('D-ELEMENT-TLOAD', BR_DERIVE, 'reserved',                                                         &
+    build_rule_t('D-ELEMENT-TLOAD', BR_DERIVE, 'built',                                                         &
                  'runtime.element', 'tload', '',                                                                                  &
                  'runtime.element.tload', MANIFEST_KIND_DERIVED, MANIFEST_RULE_LEGACY_DEFAULT, BR_REACHABLE, ''),                 &
-    build_rule_t('D-ELEMENT-ELOAD', BR_DERIVE, 'reserved',                                                         &
+    build_rule_t('D-ELEMENT-ELOAD', BR_DERIVE, 'built',                                                         &
                  'runtime.element', 'eload', '',                                                                                  &
                  'runtime.element.eload', MANIFEST_KIND_DERIVED, MANIFEST_RULE_LEGACY_DEFAULT, BR_REACHABLE, ''),                 &
-    build_rule_t('D-ELEMENT-RLOAD', BR_DERIVE, 'reserved',                                                         &
+    build_rule_t('D-ELEMENT-RLOAD', BR_DERIVE, 'built',                                                         &
                  'runtime.element', 'rload', '',                                                                                  &
                  'runtime.element.rload', MANIFEST_KIND_DERIVED, MANIFEST_RULE_LEGACY_DEFAULT, BR_REACHABLE, ''),                 &
     build_rule_t('D-VECTORS-RESULT-ZERO', BR_DERIVE, 'built',                                                                     &

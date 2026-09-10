@@ -699,8 +699,8 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     # answers "what must exist". Its gates are set equalities in both directions between the
     # table, deck_existence_t, commit's existence pass and commit_release -- the comparison
     # face's bijection is untouched, this is a second one of the same shape.
-    python3 "$ROOT/tools/yl_existence_check.py" >/dev/null || {
-        python3 "$ROOT/tools/yl_existence_check.py" >&2; exit 4; }
+    python3 "$ROOT/tools/yl_runtime_manifest_check.py" >/dev/null || {
+        python3 "$ROOT/tools/yl_runtime_manifest_check.py" >&2; exit 4; }
     for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do
         [ -f "$ROOT/$f" ] || {
             echo "build.sh: runtime-bridge: missing source $ROOT/$f" >&2
@@ -976,8 +976,8 @@ python3 "$ROOT/tools/yl_guard_check.py" >/dev/null || {
 # answers "what must exist". Its gates are set equalities in both directions between the
 # table, deck_existence_t, commit's existence pass and commit_release -- the comparison
 # face's bijection is untouched, this is a second one of the same shape.
-python3 "$ROOT/tools/yl_existence_check.py" >/dev/null || {
-    python3 "$ROOT/tools/yl_existence_check.py" >&2; exit 4; }
+python3 "$ROOT/tools/yl_runtime_manifest_check.py" >/dev/null || {
+    python3 "$ROOT/tools/yl_runtime_manifest_check.py" >&2; exit 4; }
 for f in "${SOLVER_REPO_SRCS[@]}" "${ENTRY_SRCS[@]}"; do [ -f "$ROOT/$f" ] || { echo "build.sh: missing source $ROOT/$f" >&2; exit 4; }; done
 for f in "${SRCS[@]}" "${MAIN_SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing source $SRC/$f" >&2; exit 4; }; done
 [ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }

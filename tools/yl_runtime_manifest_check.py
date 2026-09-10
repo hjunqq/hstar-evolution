@@ -20,9 +20,12 @@ was satisfiable by a lie for exactly that reason (docs/m4/L2c-fold-design.md).
       NAME equals its row's `carrier`. The name half is not pedantry: until the residue
       carrier grew the same check (P12), renaming a component and leaving its marker alone
       passed every gate.
-  E2  the table's rows == the symbols commit's existence pass writes, AND == the symbols
-      commit_release releases. A row written and never released is a leak; a row released
-      and never written is a claim about storage this module does not own.
+  E2  the table's rows == the symbols commit's existence pass writes, and the rows that
+      OWN storage (storage = "allocated", the default) == the symbols commit_release
+      releases. A row written and never released is a leak; a row released and never
+      written is a claim about storage this module does not own; and a scalar
+      (storage = "scalar") must appear in neither release direction, because demanding a
+      deallocate for something that owns nothing only invites a fake one.
   E3  the table's symbols are DISJOINT from the legacy symbols the map emits. A value that
       is compared must not also be registered as "not observed" -- if a symbol needs to be
       on both faces, the map is the one that wins and the row does not belong here.
@@ -45,7 +48,8 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TABLE = ROOT / "docs/m4/existence-face.toml"
+TABLE = ROOT / "docs/m4/runtime-state-manifest.toml"
+SCAN = ROOT / "docs/m4/evidence/runtime-state-scan.json"
 CARRIER = ROOT / "src/problem/yl_problem_existence.f90"
 COMMIT = ROOT / "src/runtime/yl_runtime_commit.f90"
 MAP = ROOT / "docs/m2/state-field-map.toml"
@@ -91,10 +95,13 @@ def commit_symbols() -> tuple[set[str], set[str]]:
         m = MARKER.search(ln)
         if not m:
             continue
-        if "move_alloc" in ln:
-            written.add(m.group(1))
-        elif "deallocate" in ln:
+        if "deallocate" in ln:
             released.add(m.group(1))
+        elif "move_alloc" in ln or "allocate" in ln or "=" in ln:
+            # deck rows land by move_alloc out of a staging buffer; derived arrays are
+            # allocated in place during staging; a derived SCALAR is a plain assignment.
+            # All three are "commit writes it".
+            written.add(m.group(1))
     return written, released
 
 
@@ -117,7 +124,10 @@ def main(argv=None):
                     choices=["carrier", "commit", "release", "map", "evidence"], default=None)
     a = ap.parse_args(argv)
 
-    rows = table_rows()
+    all_rows = table_rows()
+    unreachable = {k: v for k, v in all_rows.items()
+                   if v.get("disposition") == "unreachable"}
+    rows = {k: v for k, v in all_rows.items() if k not in unreachable}
     carriers = carrier_components()
     written, released = commit_symbols()
     emitted = map_emitted_symbols()
@@ -140,21 +150,65 @@ def main(argv=None):
 
     problems = []
 
+    # E4 -- the manifest accounts for every candidate the SCAN found. This replaces the
+    # original admission rule (one row per observed abort) with the owner's ruling of
+    # 2026-09-11: enumerate mechanically, decide per row, verify by driving a real solve.
+    # A candidate with no row is the failure the old rule could not see -- it only ever
+    # learned about state something had already crashed on.
+    if SCAN.is_file():
+        import json as _json
+        scan = _json.loads(SCAN.read_text(encoding="utf-8"))
+        cands = {c["symbol"].lower() for c in scan.get("candidates", [])}
+        known = {k.lower() for k in all_rows}
+        for sym in sorted(cands - known):
+            problems.append(f"E4 tools/yl_runtime_scan.py lists {sym} as state global_data "
+                            f"establishes past the adapter entry, and the manifest does not "
+                            f"account for it")
+    else:
+        problems.append(f"E4 {SCAN} is missing; run tools/yl_runtime_scan.py -- without it "
+                        f"the manifest is a list nobody checked for completeness")
+
+    # E5 -- a row decided `unreachable` must NOT be written. Establishing state legacy
+    # does not have is a divergence in the other direction, and just as invisible.
+    for sym in sorted(unreachable):
+        if sym in written:
+            problems.append(f"E5 {sym} is decided unreachable but commit's existence pass "
+                            f"writes it; that is state the legacy path does not have")
+
     # E0 -- every row carries the run that demanded it.
     for sym, r in sorted(rows.items()):
-        if not str(r.get("observed_requirement", "")).strip():
-            problems.append(f"E0 {sym}: no observed_requirement. A row may only be admitted "
-                            f"after a real run aborted for want of it, at a named site; "
-                            f"admitting it by reading is the defect this face exists to fix")
+        if not (str(r.get("observed_requirement", "")).strip()
+                or str(r.get("why", "")).strip()):
+            problems.append(f"E0 {sym}: neither observed_requirement nor why. Every row must "
+                            f"say why it is here -- the run that demanded it, or the scan "
+                            f"line that enumerated it")
 
-    # E1 -- table == carrier, both directions, and the names match.
-    for sym in sorted(set(rows) - set(carriers)):
+    # E1 -- table == carrier, both directions, and the names match. Rows whose value is
+    # derived carry nothing, and E1 asserts that ABSENCE rather than skipping them: a
+    # derived row that grew a carrier would mean someone started shipping a value for
+    # something the deck does not supply.
+    DERIVED = ("derived", "derived-zero")
+    deck_rows = {s_ for s_, r in rows.items() if r.get("value_source") not in DERIVED}
+    derived_rows = set(rows) - deck_rows
+    for sym in sorted(derived_rows & set(carriers)):
+        problems.append(f"E1 {sym} is a derived row, so nothing should carry it, but "
+                        f"deck_existence_t has a component for it")
+    for sym in sorted(derived_rows):
+        if rows[sym].get("value_source") == "derived" and not str(rows[sym].get("derivation", "")).strip():
+            problems.append(f"E0 {sym} is value_source=derived but states no derivation; "
+                            f"a derived value without a stated rule is a number nobody "
+                            f"can check")
+    for sym in sorted(derived_rows):
+        if rows[sym].get("carrier"):
+            problems.append(f"E1 {sym} is a derived row but names a carrier "
+                            f"{rows[sym]['carrier']!r}; derived rows have no carrier")
+    for sym in sorted(deck_rows - set(carriers)):
         problems.append(f"E1 {sym} is in {TABLE.name} but no deck_existence_t component "
                         f"claims it")
     for sym in sorted(set(carriers) - set(rows)):
         problems.append(f"E1 deck_existence_t claims {sym}, which is not a row of "
                         f"{TABLE.name}")
-    for sym in sorted(set(rows) & set(carriers)):
+    for sym in sorted(deck_rows & set(carriers)):
         want = rows[sym].get("carrier")
         if carriers[sym] != want:
             problems.append(f"E1 {sym}: the component is named {carriers[sym]!r} but the "
@@ -167,9 +221,16 @@ def main(argv=None):
     for sym in sorted(written - set(rows)):
         problems.append(f"E2 commit's existence pass writes {sym}, which is not a row of "
                         f"{TABLE.name}")
-    for sym in sorted(set(rows) - released):
+    # Only rows that OWN storage need releasing. A scalar has none, and demanding a
+    # deallocate for it would push someone to write a fake one -- so the table says which
+    # kind each row is, and both directions are checked against that.
+    allocating = {s_ for s_, r in rows.items() if r.get("storage", "allocated") == "allocated"}
+    for sym in sorted(allocating - released):
         problems.append(f"E2 {sym} is written but commit_release does not release it -- "
                         f"a row this module allocates and never frees is a leak")
+    for sym in sorted((set(rows) - allocating) & released):
+        problems.append(f"E2 {sym} is declared storage=scalar but commit_release releases "
+                        f"it; a scalar owns nothing to release")
     for sym in sorted(released - set(rows)):
         problems.append(f"E2 commit_release releases {sym}, which is not a row of "
                         f"{TABLE.name} -- releasing storage this module may not own")
@@ -182,9 +243,10 @@ def main(argv=None):
     for p in problems:
         print(f"FAIL {p}")
     if problems:
-        print(f"EXISTENCE-FACE FAIL: {len(problems)} problem(s)")
+        print(f"RUNTIME-STATE-MANIFEST FAIL: {len(problems)} problem(s)")
         return 1
-    print(f"EXISTENCE-FACE PASS: {len(rows)} row(s); table == carrier == commit writes == "
+    print(f"RUNTIME-STATE-MANIFEST PASS: {len(rows)} required + {len(unreachable)} "
+          f"unreachable row(s); table == carrier == commit writes == "
           f"commit releases (set equality, both directions each), disjoint from the "
           f"{len(emitted)} legacy symbols the map emits, every row carrying the run that "
           f"demanded it")

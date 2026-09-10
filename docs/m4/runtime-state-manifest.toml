@@ -1,0 +1,842 @@
+# The RUNTIME STATE MANIFEST (ADR-0009, revised by the owner's ruling of 2026-09-11).
+#
+# WHAT THIS TABLE IS
+#   Legacy globals the solver requires to EXIST but whose values do not belong on the
+#   comparison face. `docs/m2/state-field-map.toml` answers "what do we compare";
+#   this file answers "what must exist". Those two questions were safely confused
+#   until the adapter path first drove a solve, at which point the difference showed
+#   up as an unallocated-array abort rather than as a wrong number.
+#
+# THE ADMISSION RULE, AND IT IS STRICT
+#   A row is added ONLY after execution demanded it -- a real abort, in a real run,
+#   at a named site. Never because a scan suggested it might be needed. The whole
+#   defect this face exists to fix was a classification made by reading
+#   (`order_time_mdofn` was tagged "unused_switch / dynamic time integration") being
+#   overturned by execution, and populating this table by reading would reproduce it.
+#   `observed_requirement` is the evidence line, and it is mandatory.
+#
+# WHY NOT JUST PUT THESE IN THE MAP
+#   Because the residue set is computed from EMITTED rows (tools/yl_state_map.py),
+#   so a row can only join it by joining the snapshot -- which makes the frozen
+#   baseline incomplete and forces a re-freeze. `yl_state_probe.py freeze` is
+#   deliberately one-shot with no --force, and ADR-0006 says why: the baseline is
+#   worth something because it does not follow the implementation.
+#
+# WHY NOT LET THE ADAPTER ALLOCATE THEM DIRECTLY
+#   That is a second writer of legacy globals, which M4-01's hard constraint forbids:
+#   the snapshot reads globals at a checkpoint and cannot know a second writer has
+#   not finished.
+#
+# TWO KINDS OF ROW
+#   value_source = "deck" / "deck-gated-zero"
+#       The deck supplies the values, so a carrier component of deck_existence_t holds
+#       them and `carrier` names it. "Nothing observes it" never licenses a constant --
+#       stab_matde is the standing lesson about pinning a value both golden decks share.
+#   value_source = "derived"
+#       The value exists and is computable from state that IS committed. `derivation`
+#       states the rule, and it is mandatory: a derived row without a stated rule is a
+#       number nobody can check. No carrier -- there is nothing to carry.
+#   value_source = "derived-zero"
+#       No deck value exists: legacy allocates the storage and zeroes it, and whatever
+#       the solver later puts there it computes itself. There is nothing to carry, so
+#       these rows have NO carrier and commit sizes and zeroes them from runtime extents.
+#       E1 asserts the absence of a carrier for them, so the two kinds cannot be confused.
+#
+# GATES (tools/yl_existence_check.py, both directions, set equality -- never
+# sufficient conditions; see docs/m4/L2c-fold-design.md on why)
+#   E1  this table's rows  ==  deck_existence_t's components (and names match)
+#   E2  this table's rows  ==  the symbols commit's existence pass writes
+#   E3  this table's symbols are DISJOINT from the map's emitted rows -- a value that
+#       is compared must not also be claimed as "not observed"
+
+version = 1
+
+[[array]]
+symbol = "order_time_mdofn"
+carrier = "order_time_mdofn"
+module = "global_var"
+extent = "mdofn"
+dtype = "i32"
+value_source = "deck"
+deck_reader = "GLB.global_data.order_time_mdofn"
+legacy_allocation = "Global.f90:954"
+observed_requirement = """
+Fem.f90:10752, predict (called from static_u every increment):
+  ordert = order_time_mdofn(lcdofn(idofn))
+read once per degree of freedom. Surfaced as
+`forrtl: severe (408): Attempt to fetch from allocatable variable ORDER_TIME_MDOFN
+when it is not allocated` on the first adapter-driven solve, 2026-09-10.
+"""
+why_not_on_compare_face = """
+M1 classified this reader `state_target = "unused_switch"`, `consumers = "dynamic
+time integration"`, and M2 gave it no map row at all. That classification is right
+about EFFECT and wrong about ACCESS: on the static path every value is 0, the
+consumer branch is inert, and predict still reads the array once per dof. So its
+value genuinely does not need to be compared -- and it genuinely does need to be
+allocated and carry the deck's values, because a second deck may not be all zeros.
+"""
+
+[[array]]
+symbol = "tension_joint"
+carrier = "tension_joint"
+module = "global_var"
+extent = "nelem"
+dtype = "i32"
+value_source = "deck-gated-zero"
+deck_reader = "GLB.global_data.tension_joint_count"
+legacy_allocation = "Global.f90:1807"
+observed_requirement = """
+Stiff.f90:224, stiff_u (called from static_u every increment):
+  if (tension_joint(ielem)==1) goto 100
+read once per element of every group. Surfaced as
+`forrtl: severe (408): Attempt to fetch from allocatable variable TENSION_JOINT
+when it is not allocated` on the adapter-driven solve, 2026-09-10, immediately
+after order_time_mdofn was fixed.
+"""
+why_not_on_compare_face = """
+legacy allocates it as nelem zeros (Global.f90:1807-1808) and then sets
+tension_joint(id)=1 for each of the `tsel` element ids that follow. The M2 map
+registers no row for it: on the static path it is all zeros and stiff_u's branch
+is never taken, so its value is not part of the state anyone compares.
+"""
+gated_zero_by = """
+A-GLB/tension-joint-nonzero. The zeros are NOT a pinned constant of the kind
+stab_matde warns against -- the capability gate refuses any deck with tsel/=0
+(the parser reads none of the element ids that would follow), so on every deck
+this build accepts, the array IS all zeros. That gate did not exist until
+2026-09-10; it was added in the same change as this row, and this row would not
+be admissible without it.
+"""
+
+[[array]]
+symbol = "element_field_khandmc_fstif"
+module = "elements (element(ie)%field(1)%khandmc(1)%fstif)"
+extent = "nevab x nevab, per element"
+dtype = "r64"
+value_source = "derived-zero"
+legacy_allocation = "Global.f90:1312-1313 (allocate then =0.0), inside global_data"
+observed_requirement = """
+Stiff.f90:672, stiff_u (called from static_u every increment):
+  element(ielem)%field(1)%khandmc(1)%fstif = estif*thick
+the assignment target itself. Surfaced as
+`forrtl: severe (408): Attempt to use pointer FSTIF when it is not associated with
+a target` on the adapter-driven solve, 2026-09-10, immediately after tension_joint
+was fixed.
+"""
+why_not_on_compare_face = """
+It is a POINTER component, and the M2 map registers no row for it: at model_ready
+its contents are legacy's zeros, and null_element_field nullifies it on the commit
+side precisely so that "nothing reachable from a staged field(1) is left
+indeterminate". The comparison face never looked at it. What the solve needs is not
+its value but its existence -- per-element storage of the right shape, which legacy
+creates while reading .ele and the adapter path therefore never created.
+"""
+
+[[array]]
+symbol = "group_order_time"
+carrier = "group_order_time"
+module = "global_var (group(ig)%order_time)"
+extent = "2 x nrfields, per group"
+dtype = "i32"
+value_source = "deck"
+deck_reader = "GLB.global_data.group_order_time"
+map_row = "sections.order_time"
+legacy_allocation = "Global.f90:1239, inside global_data"
+observed_requirement = """
+Stiff.f90:3344, estif_assemble (called from static_u every increment):
+  order_time = group(igroup)%order_time(ikh,ifield)
+Surfaced as `forrtl: severe (408): Attempt to use pointer ORDER_TIME when it is not
+associated with a target` on the adapter-driven solve, 2026-09-10, immediately after
+element_field_khandmc_fstif was fixed.
+"""
+why_not_on_compare_face = """
+It HAS a map row -- sections.order_time -- but that row is `emit = "none"` and
+`compare = "ignore"` ("time-derivative order per field; static path uses order 0"),
+so it is registered and never emitted, never compared, and commit nullifies the
+pointer with the rest of group's. The existence face is disjoint from the map's
+EMITTED rows, not from the map; a non-emitted row is exactly the shape that can need
+to exist without being compared, and `map_row` records the link so the two tables
+can be read against each other.
+"""
+
+[[array]]
+symbol = "modf_dis_blocks"
+carrier = "modf_dis_blocks"
+module = "global_var"
+extent = "nblks"
+dtype = "i32"
+value_source = "deck"
+deck_reader = "GLB.global_data.modf_dis_blocks"
+legacy_allocation = "Global.f90:965 (with the other nblks-sized arrays), zeroed at :969"
+observed_requirement = """
+Fem.f90:2830, reached from static_u (Fem.f90:4157) after the increment converged:
+  if(modf_dis_blocks(iblks)==1)call construction_dis_modify
+Surfaced as `forrtl: severe (408): Attempt to fetch from allocatable variable
+MODF_DIS_BLOCKS when it is not allocated` on the adapter-driven solve, 2026-09-10 --
+the first failure that happened AFTER the solve converged ("Convergence check for
+displacement / nchek= 0" precedes it in the log).
+"""
+why_not_on_compare_face = """
+No map row at all: it is a per-block construction-modification switch, 0 on both
+golden decks, and its consumer is a call that never happens on this path. Its value
+still comes from the deck -- a third deck may set it, and this build's dialect gate
+does not (yet) refuse that, so a pinned zero would be exactly the stab_matde mistake.
+"""
+
+[[array]]
+symbol = "element_nrfields"
+storage = "scalar"
+module = "global_var (element(ie)%nrfields)"
+extent = "scalar, per element"
+dtype = "i32"
+value_source = "derived"
+derivation = "= size(runtime%dof%element_field_variables(ie)%fields), the same runtime extent the map's derived.counts.nrfields and the section's group%nrfields already come from"
+legacy_allocation = "assigned in global_data's element-record loop while reading .ele"
+observed_requirement = """
+Fem.f90:13417, FORCE_EXTERNAL:
+  nrfields = element(ielem)%nrfields
+  do ifield = 1, nrfields ...
+With nrfields = 0 the body-force loop never runs, so tload never accumulates rload
+and tofor stays zero. Observed 2026-09-10 by gdb at Fem.f90:3685 with the adapter on:
+element(1)%nrfields = 0 against 1 in legacy mode, while element(1)%field(1)%rload(2)
+was IDENTICAL (-47915.718738445263) in both -- gravity had already computed the right
+element load and the assembly threw it away.
+"""
+why_not_on_compare_face = """
+commit's poison_element says it outright: "The type's other scalars (nstre, nrfields,
+ne_include, jblks, ktotg, icbound, neqcy, area, minedge, elength) are not assigned
+here and so are not poisoned; none of their map rows is emitted at model_ready." The
+comparison face never looked at it, and the three state dumps agreed on all 190
+emitted fields across all three checkpoints while the results were nonetheless zero.
+That is this face's sharpest example: state equivalence at every registered checkpoint
+did NOT imply numeric equivalence, because the assembly reads a scalar nobody registered.
+"""
+
+[[array]]
+symbol = "tlink"
+carrier = "tlink"
+value_source = "deck"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:758"
+dims = "2,ntlink"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "listfreeflownode"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:824"
+dims = "nfreeflownode"
+guard = "nfreeflownode/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "listbpointsu_t"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:845, Global.f90:865"
+dims = "tbpointsu"
+guard = "tbpointsu/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "listbpointst_t"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:850"
+dims = "tbpointst"
+guard = "tbpointst/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "listbpointsp_t"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:854"
+dims = "tbpointsp"
+guard = "tbpointsp/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "surface_force"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:882, Global.f90:931"
+dims = "nforce"
+guard = "nextrf/=0 | nforce/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "nforce_appear"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:882"
+dims = "nforce"
+guard = "nforce/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "nforce_gaps_appear"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:883"
+dims = "ngaps"
+guard = "nforce_gaps/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "safety_gaps_appear"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:894"
+dims = "ngaps,nsafety_gaps"
+guard = "nsafety_gaps/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "state_change_process"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:966"
+dims = "1:ngroup,nblks"
+guard = "state_change==1"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "equvs_process"
+carrier = "equvs_process"
+value_source = "deck"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:971"
+dims = "ngroup"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "force_process"
+carrier = "force_process"
+value_source = "deck"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:1014"
+dims = "ngroup"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "listglocbeam"
+value_source = "derived-zero"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:1054"
+dims = "ngroup"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "bspring"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1106"
+dims = "nbspring"
+guard = "nbspring>0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "links"
+value_source = "derived"
+derivation = "= links(nlinks); nlinks is the deck residue value, 0 on the whitelist, so the array is empty"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:1138, Global.f90:1147, Global.f90:1147"
+dims = "nlinks"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "listf"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1504, Global.f90:1527, Global.f90:1546, Global.f90:1624"
+dims = "nintf"
+guard = "nbackf/=0 | nintf==0 | title_intp(1:4)=='TRAL' | translg==0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "rintf"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1504, Global.f90:1527, Global.f90:1546, Global.f90:1624"
+dims = "nintf"
+guard = "nbackf/=0 | nintf==0 | title_intp(1:4)=='TRAL' | translg==0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "rotation"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1741"
+dims = "ndimn,ndimn"
+scanner_limitation = "tools/yl_runtime_scan.py attributed no guard to Global.f90:1741, and that is a limit of the scanner, not a fact about the code: the site sits inside the .nrt interpolation block, which ntrans=0 excludes on the whitelist (docs/m1/reader-inventory.toml lists .nrt under not_on_path). Decided unreachable on that deck evidence and VERIFIED by the solve completing without it -- if that verification ever fails, this row becomes required."
+why = """
+NOT allocated unconditionally, despite by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "trans_c"
+value_source = "derived"
+derivation = "= trans_c(npoin) with %nintf = 0, exactly what Global.f90:1772-1773 does"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:1772, Global.f90:1779, Global.f90:1779"
+dims = "npoin"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "tension_contact"
+value_source = "derived-zero"
+disposition = "required"
+module = "global_var"
+legacy_allocation = "Global.f90:1824"
+dims = "nelem"
+why = """
+Allocated UNCONDITIONALLY by global_data past the adapter entry, so legacy always has
+it and the adapter path never would. Enumerated by tools/yl_runtime_scan.py rather than
+found by a crash (owner ruling, 2026-09-11).
+"""
+
+[[array]]
+symbol = "backf"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1868, Global.f90:1883, Global.f90:1883, Global.f90:1883"
+dims = "nbackf"
+guard = "nbackf/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "para_points"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1914, Global.f90:1922, Global.f90:1922, Global.f90:1922"
+dims = "Npoints_pb"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "listdofn"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1917"
+dims = "4"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "para_pointsx"
+disposition = "unreachable"
+module = "global_var"
+legacy_allocation = "Global.f90:1941, Global.f90:1951, Global.f90:1951, Global.f90:1951"
+dims = "Npoints_pbx"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is
+false on the whitelisted static path, so legacy does not allocate it either and the
+solver cannot read it. Registered as accounted-for rather than omitted: an omission and
+a decision look identical in a file that only lists what it decided to keep.
+"""
+
+[[array]]
+symbol = "surface_force%ftfor_ext"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:931"
+dims = "ndimn,npface,nextrf"
+guard = "nextrf/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "links%link_freedom"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1147"
+dims = "cdofn"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by nlinks, which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "links%pairnode"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1147"
+dims = "2,npairs"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by nlinks, which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "element%field%khandmc%hstar"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1317"
+dims = "nevab,nevab"
+guard = "stabpw==1.and.(fieldid(ifield:ifield)=='W'.or.fieldid(ifield:ifield)=='P')"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "element%cstif"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1343"
+dims = "ncouple"
+guard = "ncouple/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "element%cstif%qmatx"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1352"
+dims = "nevab1,nevab2"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by stabpw, which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "element%cstif%qstab"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1356"
+dims = "nevab1,nevab2"
+guard = "stabpw==1.and.(fieldid(1:2)=='UW'.or.fieldid(1:2)=='UP')"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "listp_group%listg"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1466"
+dims = "mgroup"
+guard = "mgroup>0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "listp_group%listp"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1466"
+dims = "mgroup"
+guard = "mgroup>0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "trans%listf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1514, Global.f90:1534, Global.f90:1555, Global.f90:1571"
+dims = "nintf"
+guard = "itotv>0 | lmdofn(idofn)/=0 | ndimn==2 | ndimn==3.and.title_intp(1:5)=='ROTAX' | ndimn==3.and.title_intp(1:5)=='ROTAY' | ndimn==3.and.title_intp(1:5)=='ROTAZ' | nintf==0 | translg==0 | translg==2"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by ntrans, which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "trans%rintf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1514, Global.f90:1534, Global.f90:1555, Global.f90:1571"
+dims = "nintf"
+guard = "itotv>0 | lmdofn(idofn)/=0 | ndimn==2 | ndimn==3.and.title_intp(1:5)=='ROTAX' | ndimn==3.and.title_intp(1:5)=='ROTAY' | ndimn==3.and.title_intp(1:5)=='ROTAZ' | nintf==0 | translg==0 | translg==2"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by ntrans, which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "trans_c%listf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1779"
+dims = "abs(nintf)"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by ntrans (trans_c(ipoin)%nintf stays 0), which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "trans_c%rintf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1779"
+dims = "abs(nintf)"
+scanner_limitation = "tools/yl_runtime_scan.py reads `if` conditions, not LOOP BOUNDS, so it reports this site as unguarded. It sits inside a loop bounded by ntrans (trans_c(ipoin)%nintf stays 0), which is 0 on the whitelist, so legacy does not allocate it either. Decided on that and VERIFIED by the solve completing without it."
+why = """
+Not reached: the enclosing loop runs zero times on the whitelisted static path, so the
+legacy path does not create this storage either and the solver cannot read it.
+"""
+
+[[array]]
+symbol = "group%lcgroup"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1794"
+dims = "group(igroup)%cgroup"
+guard = "meshc==2.and.group(igroup)%cgroup/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "backf%relat%listf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1883"
+dims = "nintf"
+guard = "nbackf/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "backf%relat%rintf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1883"
+dims = "nintf"
+guard = "nbackf/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "backf%relat%listp"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1883"
+dims = "nintf"
+guard = "nbackf/=0"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_points%listf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1922, Global.f90:1971"
+dims = "nintf"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_points%rintf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1922, Global.f90:1971"
+dims = "nintf"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_points%listdofn"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1922, Global.f90:1971"
+dims = "xdofn"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_points%cor"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1923, Global.f90:1972"
+dims = "ndimn"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_pointsx%listf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1951"
+dims = "nintf"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_pointsx%rintf"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1951"
+dims = "nintf"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_pointsx%listdofn"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1951"
+dims = "1"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "para_pointsx%cor"
+disposition = "unreachable"
+legacy_allocation = "Global.f90:1952"
+dims = "ndimn"
+guard = "Bparameter>0.or.nbackdT==2"
+why = """
+Every allocation of this symbol past the adapter entry sits behind a guard that is false
+on the whitelisted static path, so legacy does not allocate it either.
+"""
+
+[[array]]
+symbol = "group_type_mass"
+disposition = "required"
+carrier = "group_type_mass"
+value_source = "deck"
+module = "global_var (group(ig)%type_mass)"
+extent = "nrfields, per group"
+dtype = "i32"
+deck_reader = "GLB.global_data.group_mass_damping"
+legacy_allocation = "Global.f90:1239, inside global_data, past the adapter entry"
+why = """
+Allocated unconditionally by global_data past the adapter entry, on the same line as
+group%order_time, and read by gravity every increment
+(`type_mass = group(igroup)%type_mass(ifield)`, Load.f90). Enumerated by
+tools/yl_runtime_scan.py once the scan was taught to see inner-component allocations --
+before that fix `element(ie)%field(1)%stres0` and friends were hidden behind their base
+name, which the commit layer already writes.
+"""

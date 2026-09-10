@@ -192,7 +192,7 @@ contains
     ! The existence face's one row is sized by mdofn, which this fixture's draft fixes
     ! at 2 (draft_of). Sized here rather than read back from a legacy global because
     ! commit has not run yet.
-    call existence_of(ex, 2)
+    call existence_of(ex, 2, n_elem)
     call commit_legacy_globals(problem_out, residue_out, ex, rt, errors)
     call check('commit_legacy_globals accepted the '//itoa(n_elem)//'-element runtime',          &
               .not. errors%any())
@@ -226,11 +226,21 @@ contains
   !> A COMPLETE existence face (ADR-0009), for the same reason residue_of exists: commit
   !> refuses an unallocated component, and an empty array would read like a deck record
   !> nobody wrote. mdofn in this fixture is what build_and_commit uses.
-  subroutine existence_of(e, mdofn)
+  subroutine existence_of(e, mdofn, nelem_fixture)
     type(deck_existence_t), intent(out) :: e
-    integer, intent(in) :: mdofn
+    integer, intent(in) :: mdofn, nelem_fixture
     allocate (e%order_time_mdofn(mdofn))
     e%order_time_mdofn = 0
+    allocate (e%tension_joint(max(nelem_fixture, 0)))
+    e%tension_joint = 0
+    allocate (e%group_type_mass(1, 1)); e%group_type_mass = 0
+    allocate (e%group_order_time(2, 1, 1))
+    e%group_order_time = 0
+    allocate (e%modf_dis_blocks(1))
+    e%modf_dis_blocks = 0
+    allocate (e%tlink(2, 0))
+    allocate (e%equvs_process(1)); e%equvs_process = 0
+    allocate (e%force_process(1)); e%force_process = 0
   end subroutine existence_of
 
   subroutine residue_of(r)

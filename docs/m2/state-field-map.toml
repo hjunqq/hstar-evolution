@@ -3997,11 +3997,11 @@ dtype = "f64"
 unit = "N"
 owner = "RuntimeState.element.tload"
 index_by = "mesh.elements[].id"
-compare = { rule = "ignore", reason = "allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)" }
+compare = { rule = "ignore", reason = "CORRECTED 2026-09-10: the earlier reason said 'allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)'. Global.f90:1325-1327 -- the three statements right after those allocates -- set all three to 0.0. Kept as ignore because emit is none and the frozen baseline does not carry it; the VALUE is now known and produced (build rule D-ELEMENT-*LOAD is built, not reserved)" }
 emit = "none"
-determinism = "uninitialized"
+determinism = "deterministic"
 snapshot_file = "dof.sha256"
-note = "total element load; not initialised at any covered checkpoint."
+note = "total element load; zeroed at Global.f90:1325 with eload and rload."
 
 [[field]]
 id = "runtime.element.eload"
@@ -4015,11 +4015,11 @@ dtype = "f64"
 unit = "N"
 owner = "RuntimeState.element.eload"
 index_by = "mesh.elements[].id"
-compare = { rule = "ignore", reason = "allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)" }
+compare = { rule = "ignore", reason = "CORRECTED 2026-09-10: the earlier reason said 'allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)'. Global.f90:1325-1327 -- the three statements right after those allocates -- set all three to 0.0. Kept as ignore because emit is none and the frozen baseline does not carry it; the VALUE is now known and produced (build rule D-ELEMENT-*LOAD is built, not reserved)" }
 emit = "none"
-determinism = "uninitialized"
+determinism = "deterministic"
 snapshot_file = "dof.sha256"
-note = "external element load; not initialised at any covered checkpoint."
+note = "external element load; zeroed at Global.f90:1326 with tload and rload."
 
 [[field]]
 id = "runtime.element.rload"
@@ -4033,11 +4033,11 @@ dtype = "f64"
 unit = "N"
 owner = "RuntimeState.element.rload"
 index_by = "mesh.elements[].id"
-compare = { rule = "ignore", reason = "allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)" }
+compare = { rule = "ignore", reason = "CORRECTED 2026-09-10: the earlier reason said 'allocated at Global.f90:1321-1323 and never initialised before the first assembly (R23)'. Global.f90:1325-1327 -- the three statements right after those allocates -- set all three to 0.0. Kept as ignore because emit is none and the frozen baseline does not carry it; the VALUE is now known and produced (build rule D-ELEMENT-*LOAD is built, not reserved)" }
 emit = "none"
-determinism = "uninitialized"
+determinism = "deterministic"
 snapshot_file = "dof.sha256"
-note = "body-force load; zeroed only inside gravity at Load.f90:1237, i.e. after increment_ready(1,1); not initialised at any covered checkpoint."
+note = "body-force element load; zeroed at Global.f90:1327 with tload and eload."
 
 [[field]]
 id = "runtime.element.jblks"

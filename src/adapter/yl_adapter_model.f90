@@ -594,6 +594,8 @@ contains
     if (ios /= 0) then
       call fail_read(errors, loc, 'control.glb', 'equvs_process', iomsg_buf); return
     end if
+    ! Runtime state manifest (ADR-0009): allocated unconditionally at Global.f90:971.
+    existence%equvs_process = equvs_process(1:max(ngroup, 0_int32))
 
     ! seq 25 -- RD: GLB.global_data.title#13 (Global.f90:980)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -661,6 +663,8 @@ contains
     if (ios /= 0) then
       call fail_read(errors, loc, 'control.glb', 'force_process', iomsg_buf); return
     end if
+    ! Runtime state manifest (ADR-0009): allocated unconditionally at Global.f90:1014.
+    existence%force_process = force_process(1:max(ngroup, 0_int32))
 
     ! seq 33 -- RD: GLB.global_data.title#17 (Global.f90:1021)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -820,6 +824,16 @@ contains
     if (ios /= 0) then
       call fail_read(errors, loc, 'control.glb', 'modf_dis_blocks', iomsg_buf); return
     end if
+    ! Runtime state manifest (ADR-0009): global_data allocates tlink(2,ntlink)
+    ! unconditionally at Global.f90:758, past the adapter entry.
+    allocate (existence%tlink(2, max(ntlink, 0_int32)))
+    existence%tlink = 0
+
+    ! Existence face (ADR-0009): Fem.f90:2830 reads modf_dis_blocks(iblks) after the
+    ! increment converges. No map row, so commit never wrote it -- and the deck's value
+    ! is carried rather than a pinned zero, because nothing refuses a deck that sets it.
+    existence%modf_dis_blocks = modf_dis_blocks(1:max(nblks, 0_int32))
+
 
     ! seq 51 -- RD: GLB.global_data.title#26 (Global.f90:1091)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -945,6 +959,34 @@ contains
           return
         end if
 
+        ! Existence face (ADR-0009): estif_assemble reads group(ig)%order_time(ikh,ifield)
+        ! every increment (Stiff.f90:3344). The map registers it as sections.order_time
+        ! with emit="none", so it is never compared and commit nullifies the pointer --
+        ! which is why the adapter path had nothing there.
+        !
+        ! Legacy's shape is ragged (nrfields per group). Rather than assume a common
+        ! nrfields, the first group fixes it and a later group that disagrees is REFUSED:
+        ! silently truncating or padding would put a wrong number where the solver reads
+        ! one, and this face's whole point is that "nobody compares it" is not "anything
+        ! will do".
+        if (.not. allocated(existence%group_order_time)) then
+          allocate (existence%group_order_time(2, gnrfields, max(ngroup, 0_int32)))
+          existence%group_order_time = 0
+        else if (size(existence%group_order_time, 2) /= gnrfields) then
+          call fail_read(errors, loc, 'sections', 'group_order_time', &
+                         'group '//itoa(igroup)//' declares '//itoa(gnrfields)//     &
+                         ' fields but group 1 declared '//                            &
+                         itoa(size(existence%group_order_time, 2))//                  &
+                         '; this build carries one field count for all groups', index=igroup)
+          return
+        end if
+        existence%group_order_time(:, 1:gnrfields, igroup) = gorder_time(:, 1:gnrfields)
+        if (.not. allocated(existence%group_type_mass)) then
+          allocate (existence%group_type_mass(gnrfields, max(ngroup, 0_int32)))
+          existence%group_type_mass = 0
+        end if
+        existence%group_type_mass(1:gnrfields, igroup) = gtype_mass(1:gnrfields)
+
         do ifield = 1, gnrfields
           ! seq 64 -- RD: GLB.global_data.group_nfdof (Global.f90:1255), loop ifield
           read (unit, *, iostat=ios, iomsg=iomsg_buf) nfdof
@@ -1047,6 +1089,12 @@ contains
                           expected='0')
       return
     end if
+    ! Existence face (ADR-0009): stiff_u reads tension_joint(ielem) for every element of
+    ! every group (Stiff.f90:224) although no checkpoint observes it. Zeros here are what
+    ! the DECK says, not a pinned constant: the gate one line above refuses any deck with
+    ! tsel/=0, so every deck this build accepts leaves the array all zeros.
+    allocate (existence%tension_joint(max(nelem, 0_int32)))
+    existence%tension_joint = 0
 
     ! seq 68 -- RD: GLB.global_data.title#36 (Global.f90:1826) -- contact_joint title
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text

@@ -1,0 +1,805 @@
+{
+ "version": 1,
+ "source": "legacy/yl/Global.f90",
+ "span": {
+  "from_adapter_entry": 757,
+  "to_end_of_global_data": 1993
+ },
+ "allocations_seen": 133,
+ "module_scope": 119,
+ "already_committed": 31,
+ "candidates": [
+  {
+   "symbol": "listfreeflownode",
+   "line": 824,
+   "dims": "nfreeflownode",
+   "guard": "nfreeflownode/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listbpointsu_t",
+   "line": 845,
+   "dims": "tbpointsu",
+   "guard": "tbpointsu/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listbpointst_t",
+   "line": 850,
+   "dims": "tbpointst",
+   "guard": "tbpointst/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listbpointsp_t",
+   "line": 854,
+   "dims": "tbpointsp",
+   "guard": "tbpointsp/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listbpointsu_t",
+   "line": 865,
+   "dims": "tbpointsu",
+   "guard": "tbpointsu/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "surface_force",
+   "line": 882,
+   "dims": "nforce",
+   "guard": "nforce/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "nforce_appear",
+   "line": 882,
+   "dims": "nforce",
+   "guard": "nforce/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "nforce_gaps_appear",
+   "line": 883,
+   "dims": "ngaps",
+   "guard": "nforce_gaps/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "safety_gaps_appear",
+   "line": 894,
+   "dims": "ngaps,nsafety_gaps",
+   "guard": "nsafety_gaps/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "surface_force%ftfor_ext",
+   "line": 931,
+   "dims": "ndimn,npface,nextrf",
+   "guard": "nextrf/=0",
+   "init_after": "npface=0",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "state_change_process",
+   "line": 966,
+   "dims": "1:ngroup,nblks",
+   "guard": "state_change==1",
+   "init_after": "appear_process(:,0)=0",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "bspring",
+   "line": 1106,
+   "dims": "nbspring",
+   "guard": "nbspring>0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "links%link_freedom",
+   "line": 1147,
+   "dims": "cdofn",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "links%pairnode",
+   "line": 1147,
+   "dims": "2,npairs",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "element%field%khandmc%hstar",
+   "line": 1317,
+   "dims": "nevab,nevab",
+   "guard": "stabpw==1.and.(fieldid(ifield:ifield)=='W'.or.fieldid(ifield:ifield)=='P')",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "element%cstif",
+   "line": 1343,
+   "dims": "ncouple",
+   "guard": "ncouple/=0",
+   "init_after": "field1=elkn(index)%couple(icouple)%field_couple(1)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "element%cstif%qmatx",
+   "line": 1352,
+   "dims": "nevab1,nevab2",
+   "guard": "",
+   "init_after": "if (stabpw==1.and.(fieldid(1:2)=='UW'.or.fieldid(1:2)=='UP')) then",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "element%cstif%qstab",
+   "line": 1356,
+   "dims": "nevab1,nevab2",
+   "guard": "stabpw==1.and.(fieldid(1:2)=='UW'.or.fieldid(1:2)=='UP')",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listp_group%listg",
+   "line": 1466,
+   "dims": "mgroup",
+   "guard": "mgroup>0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listp_group%listp",
+   "line": 1466,
+   "dims": "mgroup",
+   "guard": "mgroup>0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listf",
+   "line": 1504,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "if(title_intp(1:4)=='TRAL')then",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rintf",
+   "line": 1504,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "if(title_intp(1:4)=='TRAL')then",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1514,
+   "dims": "nintf",
+   "guard": "itotv>0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1514,
+   "dims": "nintf",
+   "guard": "itotv>0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listf",
+   "line": 1527,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rintf",
+   "line": 1527,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1534,
+   "dims": "nintf",
+   "guard": "lmdofn(idofn)/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1534,
+   "dims": "nintf",
+   "guard": "lmdofn(idofn)/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listf",
+   "line": 1546,
+   "dims": "nintf",
+   "guard": "title_intp(1:4)=='TRAL'",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rintf",
+   "line": 1546,
+   "dims": "nintf",
+   "guard": "title_intp(1:4)=='TRAL'",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1555,
+   "dims": "nintf",
+   "guard": "lmdofn(idofn)/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1555,
+   "dims": "nintf",
+   "guard": "lmdofn(idofn)/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1571,
+   "dims": "nintf",
+   "guard": "ndimn==2",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1571,
+   "dims": "nintf",
+   "guard": "ndimn==2",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1584,
+   "dims": "nintf",
+   "guard": "ndimn==3.and.title_intp(1:5)=='ROTAX'",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1584,
+   "dims": "nintf",
+   "guard": "ndimn==3.and.title_intp(1:5)=='ROTAX'",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1595,
+   "dims": "nintf",
+   "guard": "ndimn==3.and.title_intp(1:5)=='ROTAY'",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1595,
+   "dims": "nintf",
+   "guard": "ndimn==3.and.title_intp(1:5)=='ROTAY'",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1606,
+   "dims": "nintf",
+   "guard": "ndimn==3.and.title_intp(1:5)=='ROTAZ'",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1606,
+   "dims": "nintf",
+   "guard": "ndimn==3.and.title_intp(1:5)=='ROTAZ'",
+   "init_after": "trans(itotv)%listf(idofn)=nodfn(jdimn,jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listf",
+   "line": 1624,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rintf",
+   "line": 1624,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1631,
+   "dims": "nintf",
+   "guard": "lmdofn(idofn)/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1631,
+   "dims": "nintf",
+   "guard": "lmdofn(idofn)/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1648,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "jtotv=nodfn(lmdofn(idfn(i0)),jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1648,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "jtotv=nodfn(lmdofn(idfn(i0)),jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listf",
+   "line": 1654,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "listf=trans(itotv)%listf",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rintf",
+   "line": 1654,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "listf=trans(itotv)%listf",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1660,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "trans(itotv)%listf(1:(nintf-1))=listf",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1660,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "trans(itotv)%listf(1:(nintf-1))=listf",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1677,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "jtotv=nodfn(lmdofn(idimn),jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1677,
+   "dims": "nintf",
+   "guard": "nintf==0",
+   "init_after": "jtotv=nodfn(lmdofn(idimn),jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1694,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "ipoin1=element(i1)%field(1)%lnods_f(1)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1694,
+   "dims": "nintf",
+   "guard": "translg==0",
+   "init_after": "ipoin1=element(i1)%field(1)%lnods_f(1)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1712,
+   "dims": "nintf",
+   "guard": "",
+   "init_after": "ipoin1=element(i1)%field(1)%lnods_f(1)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1712,
+   "dims": "nintf",
+   "guard": "",
+   "init_after": "ipoin1=element(i1)%field(1)%lnods_f(1)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1731,
+   "dims": "nintf",
+   "guard": "",
+   "init_after": "trans(itotv)%listf(1:6)=nodfn(lmdofn(1:6),jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1731,
+   "dims": "nintf",
+   "guard": "",
+   "init_after": "trans(itotv)%listf(1:6)=nodfn(lmdofn(1:6),jpoin)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rotation",
+   "line": 1741,
+   "dims": "ndimn,ndimn",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1750,
+   "dims": "ndimn",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1750,
+   "dims": "ndimn",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%listf",
+   "line": 1758,
+   "dims": "ndimn",
+   "guard": "translg==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans%rintf",
+   "line": 1758,
+   "dims": "ndimn",
+   "guard": "translg==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans_c%listf",
+   "line": 1779,
+   "dims": "abs(nintf)",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "trans_c%rintf",
+   "line": 1779,
+   "dims": "abs(nintf)",
+   "guard": "",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "group%lcgroup",
+   "line": 1794,
+   "dims": "group(igroup)%cgroup",
+   "guard": "meshc==2.and.group(igroup)%cgroup/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "backf",
+   "line": 1868,
+   "dims": "nbackf",
+   "guard": "nbackf/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listf",
+   "line": 1880,
+   "dims": "nintf",
+   "guard": "nbackf/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "rintf",
+   "line": 1880,
+   "dims": "nintf",
+   "guard": "nbackf/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "backf%relat%listf",
+   "line": 1883,
+   "dims": "nintf",
+   "guard": "nbackf/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "backf%relat%rintf",
+   "line": 1883,
+   "dims": "nintf",
+   "guard": "nbackf/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "backf%relat%listp",
+   "line": 1883,
+   "dims": "nintf",
+   "guard": "nbackf/=0",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points",
+   "line": 1914,
+   "dims": "Npoints_pb",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "listdofn",
+   "line": 1917,
+   "dims": "4",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "Npoints_pbx=0",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%listf",
+   "line": 1922,
+   "dims": "nintf",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%rintf",
+   "line": 1922,
+   "dims": "nintf",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%listdofn",
+   "line": 1922,
+   "dims": "xdofn",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%cor",
+   "line": 1923,
+   "dims": "ndimn",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_pointsx",
+   "line": 1941,
+   "dims": "Npoints_pbx",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "Npoints_pbx=0",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_pointsx%listf",
+   "line": 1951,
+   "dims": "nintf",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_pointsx%rintf",
+   "line": 1951,
+   "dims": "nintf",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_pointsx%listdofn",
+   "line": 1951,
+   "dims": "1",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_pointsx%cor",
+   "line": 1952,
+   "dims": "ndimn",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "para_pointsx(Npoints_pbx)%listdofn(1)=para_points(i)%listdofn(j)",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points",
+   "line": 1967,
+   "dims": "Npoints_pbx",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "nintf=para_pointsx(i)%nintf",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%listf",
+   "line": 1971,
+   "dims": "nintf",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%rintf",
+   "line": 1971,
+   "dims": "nintf",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%listdofn",
+   "line": 1971,
+   "dims": "1",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "",
+   "module_scope": true,
+   "already_committed": false
+  },
+  {
+   "symbol": "para_points%cor",
+   "line": 1972,
+   "dims": "ndimn",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "init_after": "para_points(i)%listdofn(1)=para_pointsx(i)%listdofn(1)",
+   "module_scope": true,
+   "already_committed": false
+  }
+ ]
+}

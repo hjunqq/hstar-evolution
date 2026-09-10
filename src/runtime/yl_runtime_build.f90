@@ -1263,11 +1263,24 @@ contains
         kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
         cand%element(ie)%field_coordinates(:, inode) = shape%coord(:, kpoin)
       end do
-      ! RESERVED: allocated at model_ready, written no earlier than Load.f90:1237.
-      ! Nothing here writes them and nothing may read them; the ledger says so.
+      ! DEFINED as zero, corrected 2026-09-10. These were 'reserved' -- "allocated at
+      ! model_ready, written no earlier than Load.f90:1237" -- on the strength of the M2
+      ! map's reason, which cited Global.f90:1321-1323 (the three allocates) and concluded
+      ! "never initialised before the first assembly". Global.f90:1325-1327, the three
+      ! statements immediately after, set all three to 0.0.
+      !
+      ! Found by execution, not by reading: Residu.f90:1021 accumulates
+      ! `eload = eload + eload`, so a reserved (poisoned) buffer made the residual
+      ! Infinity and the increment "converged" at zero displacement. This is the first
+      ! counter-example to the determinism labels registered as a debt under M2
+      ! judgement 10, and it is the shape that debt predicted: the gate enforces
+      ! "labelled uninitialised => must be ignored", never "the label is right".
       allocate (cand%element(ie)%total_load(shape%nevab))
       allocate (cand%element(ie)%external_load(shape%nevab))
       allocate (cand%element(ie)%body_load(shape%nevab))
+      cand%element(ie)%total_load = 0.0_real64
+      cand%element(ie)%external_load = 0.0_real64
+      cand%element(ie)%body_load = 0.0_real64
       call opt_set(cand%element(ie)%refinement_skip, skip)
     end do
 
@@ -1280,9 +1293,26 @@ contains
                           RUNTIME_VALUE_DEFINED, errors)
     deallocate (flat)
 
-    call publish_reserved(cand, record, 'runtime.element.tload', errors)
-    call publish_reserved(cand, record, 'runtime.element.eload', errors)
-    call publish_reserved(cand, record, 'runtime.element.rload', errors)
+    ! DEFINED as zero (corrected 2026-09-10, see the allocation above). Published with
+    ! their values rather than as `reserved`, because the value exists and legacy sets it.
+    n = shape%nevab
+    allocate (flat(n*shape%nelem))
+    do ie = 1, shape%nelem
+      flat((ie - 1)*n + 1:ie*n) = cand%element(ie)%total_load
+    end do
+    call publish_f64_list(cand, record, 'runtime.element.tload', flat,                          &
+                          RUNTIME_VALUE_DEFINED, errors)
+    do ie = 1, shape%nelem
+      flat((ie - 1)*n + 1:ie*n) = cand%element(ie)%external_load
+    end do
+    call publish_f64_list(cand, record, 'runtime.element.eload', flat,                          &
+                          RUNTIME_VALUE_DEFINED, errors)
+    do ie = 1, shape%nelem
+      flat((ie - 1)*n + 1:ie*n) = cand%element(ie)%body_load
+    end do
+    call publish_f64_list(cand, record, 'runtime.element.rload', flat,                          &
+                          RUNTIME_VALUE_DEFINED, errors)
+    deallocate (flat)
 
     block
       integer(int32), allocatable :: ice(:)

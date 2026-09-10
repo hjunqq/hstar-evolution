@@ -52,6 +52,27 @@ module yl_problem_existence
   type, public :: deck_existence_t
     !@existence: order_time_mdofn
     integer(int32), allocatable :: order_time_mdofn(:)
+    !@existence: tension_joint
+    integer(int32), allocatable :: tension_joint(:)
+    !@existence: tlink
+    !> (2, ntlink). ntlink is a .glb size; on the whitelist it is 0 and the array is empty,
+    !> but the EXTENT still has to come from the deck rather than from a pinned 0.
+    integer(int32), allocatable :: tlink(:, :)
+    !@existence: equvs_process
+    integer(int32), allocatable :: equvs_process(:)
+    !@existence: force_process
+    integer(int32), allocatable :: force_process(:)
+    !@existence: modf_dis_blocks
+    integer(int32), allocatable :: modf_dis_blocks(:)
+    !@existence: group_type_mass
+    !> (nrfields, ngroup). Read from the same .glb record as order_time; gravity reads
+    !> group(ig)%type_mass(ifield) every increment.
+    integer(int32), allocatable :: group_type_mass(:, :)
+    !@existence: group_order_time
+    !> (2, nrfields, ngroup). Ragged in legacy (nrfields varies per group); this build's
+    !> whitelist admits one shape, and the parser refuses a deck where a later group
+    !> disagrees rather than silently truncating.
+    integer(int32), allocatable :: group_order_time(:, :, :)
   end type deck_existence_t
 
 end module yl_problem_existence
