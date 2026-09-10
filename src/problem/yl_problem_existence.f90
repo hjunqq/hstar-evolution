@@ -41,6 +41,7 @@
 module yl_problem_existence
 
   use iso_fortran_env, only: int32
+  use yl_problem_runtime_scalars, only: runtime_scalars_t
 
   implicit none
   private
@@ -50,6 +51,9 @@ module yl_problem_existence
   !> each component's NAME equals its row's `carrier`, and that commit's existence pass
   !> writes exactly the same set -- all as set equalities, in both directions.
   type, public :: deck_existence_t
+    !> The 79 .glb scalars global_data reads past the adapter entry. Generated, not
+    !> hand-listed: see tools/yl_runtime_gen.py.
+    type(runtime_scalars_t) :: scalars
     !@existence: order_time_mdofn
     integer(int32), allocatable :: order_time_mdofn(:)
     !@existence: tension_joint

@@ -6,7 +6,7 @@
   "to_end_of_global_data": 1993
  },
  "allocations_seen": 133,
- "module_scope": 119,
+ "module_scope": 105,
  "already_committed": 31,
  "candidates": [
   {
@@ -190,24 +190,6 @@
    "already_committed": false
   },
   {
-   "symbol": "listf",
-   "line": 1504,
-   "dims": "nintf",
-   "guard": "translg==0",
-   "init_after": "if(title_intp(1:4)=='TRAL')then",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rintf",
-   "line": 1504,
-   "dims": "nintf",
-   "guard": "translg==0",
-   "init_after": "if(title_intp(1:4)=='TRAL')then",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
    "symbol": "trans%listf",
    "line": 1514,
    "dims": "nintf",
@@ -226,24 +208,6 @@
    "already_committed": false
   },
   {
-   "symbol": "listf",
-   "line": 1527,
-   "dims": "nintf",
-   "guard": "translg==0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rintf",
-   "line": 1527,
-   "dims": "nintf",
-   "guard": "translg==0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
    "symbol": "trans%listf",
    "line": 1534,
    "dims": "nintf",
@@ -257,24 +221,6 @@
    "line": 1534,
    "dims": "nintf",
    "guard": "lmdofn(idofn)/=0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "listf",
-   "line": 1546,
-   "dims": "nintf",
-   "guard": "title_intp(1:4)=='TRAL'",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rintf",
-   "line": 1546,
-   "dims": "nintf",
-   "guard": "title_intp(1:4)=='TRAL'",
    "init_after": "",
    "module_scope": true,
    "already_committed": false
@@ -370,24 +316,6 @@
    "already_committed": false
   },
   {
-   "symbol": "listf",
-   "line": 1624,
-   "dims": "nintf",
-   "guard": "translg==0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rintf",
-   "line": 1624,
-   "dims": "nintf",
-   "guard": "translg==0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
    "symbol": "trans%listf",
    "line": 1631,
    "dims": "nintf",
@@ -420,24 +348,6 @@
    "dims": "nintf",
    "guard": "nintf==0",
    "init_after": "jtotv=nodfn(lmdofn(idfn(i0)),jpoin)",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "listf",
-   "line": 1654,
-   "dims": "nintf",
-   "guard": "nintf==0",
-   "init_after": "listf=trans(itotv)%listf",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rintf",
-   "line": 1654,
-   "dims": "nintf",
-   "guard": "nintf==0",
-   "init_after": "listf=trans(itotv)%listf",
    "module_scope": true,
    "already_committed": false
   },
@@ -528,15 +438,6 @@
    "dims": "nintf",
    "guard": "",
    "init_after": "trans(itotv)%listf(1:6)=nodfn(lmdofn(1:6),jpoin)",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rotation",
-   "line": 1741,
-   "dims": "ndimn,ndimn",
-   "guard": "",
-   "init_after": "",
    "module_scope": true,
    "already_committed": false
   },
@@ -613,24 +514,6 @@
    "already_committed": false
   },
   {
-   "symbol": "listf",
-   "line": 1880,
-   "dims": "nintf",
-   "guard": "nbackf/=0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "rintf",
-   "line": 1880,
-   "dims": "nintf",
-   "guard": "nbackf/=0",
-   "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
    "symbol": "backf%relat%listf",
    "line": 1883,
    "dims": "nintf",
@@ -663,15 +546,6 @@
    "dims": "Npoints_pb",
    "guard": "Bparameter>0.or.nbackdT==2",
    "init_after": "",
-   "module_scope": true,
-   "already_committed": false
-  },
-  {
-   "symbol": "listdofn",
-   "line": 1917,
-   "dims": "4",
-   "guard": "Bparameter>0.or.nbackdT==2",
-   "init_after": "Npoints_pbx=0",
    "module_scope": true,
    "already_committed": false
   },
@@ -800,6 +674,674 @@
    "init_after": "para_points(i)%listdofn(1)=para_pointsx(i)%listdofn(1)",
    "module_scope": true,
    "already_committed": false
+  }
+ ],
+ "scalar_candidates": [
+  {
+   "symbol": "text",
+   "line": 759,
+   "kind": "scalar",
+   "type": "character",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text"
+  },
+  {
+   "symbol": "kinit",
+   "line": 762,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ninit,kinit,winit,nblks,nlinks,nonsym,outinp,outintr,outintw,neuman,equvs,type_A"
+  },
+  {
+   "symbol": "ninistn",
+   "line": 762,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ninit,kinit,winit,nblks,nlinks,nonsym,outinp,outintr,outintw,neuman,equvs,type_A"
+  },
+  {
+   "symbol": "stabpw",
+   "line": 789,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb,state_change,Bpara"
+  },
+  {
+   "symbol": "balgor",
+   "line": 789,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb,state_change,Bpara"
+  },
+  {
+   "symbol": "upliftin",
+   "line": 789,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)type_problem,type_solver,type_load,type_nl,stabpw,nlayer,kglb,state_change,Bpara"
+  },
+  {
+   "symbol": "nmass",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "nhmat",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "nqmat",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "nldfl",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "kgmat",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "nswkw",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "uwcpl",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "nflow",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "ECWPIPE",
+   "line": 815,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)nmass,nsmat,nhmat,nqmat,nldfl,kgmat,nswkw,uwcpl,NGRAV,nflow,ECWPIPE"
+  },
+  {
+   "symbol": "nfreeflownode",
+   "line": 822,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "nflow/=0",
+   "statement": "read(gunit,*)nfreeflownode"
+  },
+  {
+   "symbol": "listfreeflownode",
+   "line": 825,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "nfreeflownode/=0",
+   "statement": "read(gunit,*)listfreeflownode"
+  },
+  {
+   "symbol": "ntsmat",
+   "line": 833,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel"
+  },
+  {
+   "symbol": "nthmat",
+   "line": 833,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel"
+  },
+  {
+   "symbol": "kstat",
+   "line": 833,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel"
+  },
+  {
+   "symbol": "nextrf",
+   "line": 833,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntsmat,nthmat,kstat,ground_inf,src,nextrf,submodel"
+  },
+  {
+   "symbol": "tbpointsu",
+   "line": 842,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "submodel==1",
+   "statement": "read(resbunit)tbpointsu,tbpointst,tbpointsp"
+  },
+  {
+   "symbol": "tbpointst",
+   "line": 842,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "submodel==1",
+   "statement": "read(resbunit)tbpointsu,tbpointst,tbpointsp"
+  },
+  {
+   "symbol": "tbpointsp",
+   "line": 842,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "submodel==1",
+   "statement": "read(resbunit)tbpointsu,tbpointst,tbpointsp"
+  },
+  {
+   "symbol": "listbpointsu_t",
+   "line": 846,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "tbpointsu/=0",
+   "statement": "read(resbunit)listbpointsu_t"
+  },
+  {
+   "symbol": "listbpointst_t",
+   "line": 851,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "tbpointst/=0",
+   "statement": "read(resbunit)listbpointst_t"
+  },
+  {
+   "symbol": "listbpointsp_t",
+   "line": 855,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "tbpointsp/=0",
+   "statement": "read(resbunit)listbpointsp_t"
+  },
+  {
+   "symbol": "nforce",
+   "line": 880,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(ftfread,*,iostat=yl_ios,iomsg=yl_msg)nforce,ngaps,nforce_gaps,nsafety_gaps"
+  },
+  {
+   "symbol": "ngaps",
+   "line": 880,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(ftfread,*,iostat=yl_ios,iomsg=yl_msg)nforce,ngaps,nforce_gaps,nsafety_gaps"
+  },
+  {
+   "symbol": "nforce_gaps",
+   "line": 880,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(ftfread,*,iostat=yl_ios,iomsg=yl_msg)nforce,ngaps,nforce_gaps,nsafety_gaps"
+  },
+  {
+   "symbol": "nsafety_gaps",
+   "line": 880,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(ftfread,*,iostat=yl_ios,iomsg=yl_msg)nforce,ngaps,nforce_gaps,nsafety_gaps"
+  },
+  {
+   "symbol": "nforce_appear",
+   "line": 886,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "nforce/=0",
+   "statement": "read(ftfread,*)nforce_appear"
+  },
+  {
+   "symbol": "nforce_gaps_appear",
+   "line": 890,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "nforce_gaps/=0",
+   "statement": "read(ftfread,*)nforce_gaps_appear"
+  },
+  {
+   "symbol": "beeta1",
+   "line": 961,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)beeta1,beeta2,theta1"
+  },
+  {
+   "symbol": "beeta2",
+   "line": 961,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)beeta1,beeta2,theta1"
+  },
+  {
+   "symbol": "theta1",
+   "line": 961,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)beeta1,beeta2,theta1"
+  },
+  {
+   "symbol": "res_u",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_s",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_ms",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_f",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_rot",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_v",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_a",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_T",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "res_P",
+   "line": 1032,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)res_u,res_s,res_ms,res_f,res_rot,res_v,res_a,res_T,res_P,   &"
+  },
+  {
+   "symbol": "Icaddmass",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "swlifs2006",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "toth",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "ifswater",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "ifsgravity",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "absorb",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "alfa_p4",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "stiff_p4",
+   "line": 1058,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)Icaddmass,swlifs2006,toth,ifswater,ifsgravity,absorb,alfa_p4,stiff_p4"
+  },
+  {
+   "symbol": "ftcrack",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "coefMpa",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "ikindks",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "doubsig",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "ktan1",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "ktan2",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "nlocalbeam",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "ndimnrt",
+   "line": 1062,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ftcrack,coefMpa,ikindks,doubsig,ktan1,ktan2,nlocalbeam,ndimnrt,listglocbeam(1:nl"
+  },
+  {
+   "symbol": "nlaymif",
+   "line": 1075,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+  },
+  {
+   "symbol": "epsMIFb",
+   "line": 1075,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+  },
+  {
+   "symbol": "gamaMIF",
+   "line": 1075,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+  },
+  {
+   "symbol": "ifixvar0_inpb",
+   "line": 1075,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+  },
+  {
+   "symbol": "camif",
+   "line": 1075,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+  },
+  {
+   "symbol": "dxmif",
+   "line": 1075,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*,iostat=yl_ios,iomsg=yl_msg)ntrans,nlaymif,epsMIFb,gamaMIF,ifixvar0_inpb,camif,dxmif"
+  },
+  {
+   "symbol": "i0",
+   "line": 1150,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "",
+   "statement": "read(gunit,*)i0,links(ilink)%pairnode(1:2,ipair)"
+  },
+  {
+   "symbol": "ipoin",
+   "line": 1503,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "translg==0",
+   "statement": "read(nrtunit,*)title_intp,ipoin,nintf"
+  },
+  {
+   "symbol": "nintf",
+   "line": 1503,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "translg==0",
+   "statement": "read(nrtunit,*)title_intp,ipoin,nintf"
+  },
+  {
+   "symbol": "jpoin",
+   "line": 1573,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "ndimn==2",
+   "statement": "read(nrtunit,*)jpoin,jdimn,f0"
+  },
+  {
+   "symbol": "f0",
+   "line": 1573,
+   "kind": "scalar",
+   "type": "real",
+   "module": "global_var",
+   "guard": "ndimn==2",
+   "statement": "read(nrtunit,*)jpoin,jdimn,f0"
+  },
+  {
+   "symbol": "ngroup0",
+   "line": 1790,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "meshc==1.or.meshc==2",
+   "statement": "read(nrtunit,*)ngroup0"
+  },
+  {
+   "symbol": "Npoints_pb",
+   "line": 1910,
+   "kind": "scalar",
+   "type": "integer",
+   "module": "global_var",
+   "guard": "Bparameter>0.or.nbackdT==2",
+   "statement": "read(back_ctl_unit,*)Npoints_pb"
   }
  ]
 }

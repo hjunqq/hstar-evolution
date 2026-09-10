@@ -1234,6 +1234,9 @@ contains
     allocate (residue%uinitial(nblks))
     residue%uinitial = uinitial(1:nblks)
 
+
+    include 'yl_adapter_scalars.inc'
+
   contains
 
     ! Every .glb source_location_t in this routine, in one place.

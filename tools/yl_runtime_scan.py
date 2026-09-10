@@ -58,6 +58,50 @@ def span(lines: list[str]) -> tuple[int, int]:
     return hook[0], min(e for e in end if e > hook[0])
 
 
+def module_types() -> dict[str, tuple[str, str]]:
+    """name -> (declared base type, owning module), for the scalars the manifest carries."""
+    out: dict[str, tuple[str, str]] = {}
+    for f in sorted((ROOT / "legacy/yl").glob("*.f90")):
+        txt = f.read_bytes().decode("latin-1").split("\n")
+        in_routine = False
+        in_type = False
+        mod = ""
+        for l in txt:
+            head = l.split("!")[0]
+            mm = re.match(r"\s*module\s+([A-Za-z_]\w*)\s*$", head, re.I)
+            if mm:
+                mod, in_routine = mm.group(1), False
+            # Module variables are declared BEFORE `contains`; everything after belongs to
+            # the module's own procedures. Without this, locals declared old-style inside
+            # global_data (lgroup, listf, neface) were attributed to global_var and the
+            # generated `use` named entities the module does not have.
+            if re.match(r"\s*contains\s*$", head, re.I):
+                in_routine = True
+            if re.match(r"\s*type\s*(,|::|\s+[A-Za-z_])", head, re.I) and \
+               not re.match(r"\s*type\s*\(", head, re.I):
+                in_type = True
+            if re.match(r"\s*end\s*type\b", head, re.I):
+                in_type = False
+                continue
+            if in_type:
+                continue
+            s_ = l.split("!")[0]
+            if re.match(r"\s*(subroutine|function|program)\s", s_, re.I):
+                in_routine = True
+            if re.match(r"\s*end\s+(subroutine|function|program)", s_, re.I):
+                in_routine = False
+            if in_routine:
+                continue
+            d = re.match(r"\s*(integer|real|double\s+precision|logical|character)\b"
+                         r"\s*(\([^)]*\))?\s*(\*\s*\d+)?\s*(::)?\s*(.*)$", s_, re.I)
+            if not d or not d.group(5).strip():
+                continue
+            base = re.sub(r"\s+", " ", d.group(1).lower())
+            for m in re.finditer(r"\b([A-Za-z_]\w*)\b", d.group(5)):
+                out.setdefault(m.group(1).lower(), (base, mod))
+    return out
+
+
 def module_names() -> set[str]:
     """Names declared at MODULE scope anywhere in the legacy tree.
 
@@ -70,15 +114,38 @@ def module_names() -> set[str]:
     for f in sorted((ROOT / "legacy/yl").glob("*.f90")):
         txt = f.read_bytes().decode("latin-1").split("\n")
         depth_in_routine = False
+        in_type = False
         for l in txt:
             s = l.split("!")[0]
+            if re.match(r"\s*type\s*(,|::|\s+[A-Za-z_])", s, re.I) and \
+               not re.match(r"\s*type\s*\(", s, re.I):
+                in_type = True
+            if re.match(r"\s*end\s*type\b", s, re.I):
+                in_type = False
+                continue
+            if in_type:
+                continue
             if re.match(r"\s*(subroutine|function|program)\s", s, re.I):
                 depth_in_routine = True
             if re.match(r"\s*end\s+(subroutine|function|program)", s, re.I):
                 depth_in_routine = False
-            if depth_in_routine or "::" not in s:
+            if depth_in_routine:
                 continue
-            decl = s.split("::", 1)[1]
+            if re.match(r"\s*contains\s*$", s, re.I):
+                depth_in_routine = True
+                continue
+            if "::" in s:
+                decl = s.split("::", 1)[1]
+            else:
+                # Old-style declarations carry no `::`:  `real   (irk) alfa_p4,stiff_p4`.
+                # Missing them made every such global look routine-local, which is how
+                # alfa_p4 -- a .glb scalar the adapter path leaves uninitialised -- stayed
+                # out of the candidate set until -init=snan trapped on it.
+                d = re.match(r"\s*(integer|real|double\s+precision|logical|character|type)\b"
+                             r"\s*(\([^)]*\))?\s*(\*\s*\d+)?\s*(.*)$", s, re.I)
+                if not d or not d.group(4).strip():
+                    continue
+                decl = d.group(4)
             for m in re.finditer(r"\b([A-Za-z_]\w*)\b", decl):
                 names.add(m.group(1).lower())
     return names
@@ -165,6 +232,15 @@ def committed_symbols() -> set[str]:
     txt = COMMIT.read_text()
     out = set(x.lower() for x in re.findall(r"move_alloc\s*\([^,]+,\s*([A-Za-z_]\w*)", txt))
     out |= set(x.lower() for x in re.findall(r"!@existence:\s*([A-Za-z_%]+)", txt))
+    # Scalars commit establishes by plain assignment, including the `a = x;  b = y`
+    # compound lines. Without these every legacy scalar commit already writes -- nblks,
+    # type_problem, ntotv -- would report as an unaccounted candidate.
+    for line in txt.split("\n"):
+        body = line.split("!")[0]
+        for stmt in body.split(";"):
+            m2 = re.match(r"\s*([A-Za-z_]\w*)\s*=[^=]", stmt)
+            if m2:
+                out.add(m2.group(1).lower())
     for m in re.finditer(r"\ballocate\s*\((.*)\)\s*$", txt, re.M):
         for name, _dims in alloc_targets(m.group(1)):
             low = name.lower()
@@ -183,6 +259,7 @@ def main(argv=None):
     lines = source_lines()
     lo, hi = span(lines)
     globals_ = module_names()
+    types = module_types()
     committed = committed_symbols()
 
     rows, i = [], lo
@@ -214,13 +291,43 @@ def main(argv=None):
                 })
         i += 1
 
+    # --- scalars ------------------------------------------------------------------
+    # The allocation scan cannot see them, and they are just as required: `alfa_p4` is a
+    # .glb scalar read past the entry, and under -init=snan the adapter path trapped on
+    # `if (alfa_p4 > 0)` in modf_element_lib while the legacy path ran clean.
+    # Enumerated from the item lists of `read(...)` statements in the span, which is where
+    # a deck scalar enters, filtered to module scope and to what commit does not write.
+    srows = []
+    for k in range(lo, hi + 1):
+        t = lines[k - 1].split("!")[0].strip()
+        m = re.match(r"read\s*\([^)]*\)\s*(.*)$", t, re.I)
+        if not m or not m.group(1).strip():
+            continue
+        for item in m.group(1).split(","):
+            nm = re.match(r"\s*([A-Za-z_]\w*)\s*$", item)
+            if not nm:
+                continue           # subscripted items are arrays, covered above
+            low = nm.group(1).lower()
+            if low in globals_ and low not in committed:
+                srows.append({"symbol": nm.group(1), "line": k, "kind": "scalar",
+                              "type": types.get(low, ("?", ""))[0],
+                              "module": types.get(low, ("?", ""))[1],
+                              "guard": guard_of(lines, k), "statement": t[:120]})
+    seen, scalars = set(), []
+    for r in srows:
+        if r["symbol"].lower() in seen:
+            continue
+        seen.add(r["symbol"].lower())
+        scalars.append(r)
+
     cand = [r for r in rows if r["module_scope"] and not r["already_committed"]]
     doc = {"version": 1, "source": "legacy/yl/Global.f90",
            "span": {"from_adapter_entry": lo, "to_end_of_global_data": hi},
            "allocations_seen": len(rows),
            "module_scope": sum(1 for r in rows if r["module_scope"]),
            "already_committed": sum(1 for r in rows if r["already_committed"]),
-           "candidates": cand}
+           "candidates": cand,
+           "scalar_candidates": scalars}
     out = Path(a.json)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=1) + "\n", encoding="utf-8")
@@ -233,6 +340,9 @@ def main(argv=None):
     for r in cand:
         g = f"  guard[{r['guard']}]" if r["guard"] else ""
         print(f"    Global.f90:{r['line']:<5} {r['symbol']:<24} dims({r['dims']}){g}")
+    print(f"  SCALAR candidates (read past the entry, not committed) : {len(scalars)}")
+    for r in scalars:
+        print(f"    Global.f90:{r['line']:<5} {r['symbol']}")
     print(f"wrote {out}")
     return 0
 

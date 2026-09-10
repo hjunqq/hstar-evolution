@@ -255,6 +255,7 @@ if [ "$TARGET" = problem-types ] || [ "$TARGET" = runtime ]; then
     PT_PROBLEM_SRCS=(src/problem/yl_problem_optional.f90
                      src/problem/yl_problem_types.f90
                      src/problem/yl_problem_deck_residue.f90
+                     src/problem/yl_problem_runtime_scalars.f90
                      src/problem/yl_problem_existence.f90
                      src/problem/yl_problem_errors.f90
                      src/problem/yl_problem_profile.f90
@@ -517,6 +518,7 @@ if [ "$TARGET" = solver-adapter ]; then
     SOLVER_REPO_SRCS=(src/problem/yl_problem_optional.f90
                       src/problem/yl_problem_types.f90
                       src/problem/yl_problem_deck_residue.f90
+                      src/problem/yl_problem_runtime_scalars.f90
                       src/problem/yl_problem_existence.f90
                       src/problem/yl_problem_errors.f90
                       src/problem/yl_problem_profile.f90
@@ -622,6 +624,7 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     RB_REPO_SRCS=(src/problem/yl_problem_optional.f90
                   src/problem/yl_problem_types.f90
                   src/problem/yl_problem_deck_residue.f90
+                  src/problem/yl_problem_runtime_scalars.f90
                   src/problem/yl_problem_existence.f90
                   src/problem/yl_problem_errors.f90
                   src/problem/yl_problem_profile.f90

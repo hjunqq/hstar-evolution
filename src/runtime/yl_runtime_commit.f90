@@ -118,6 +118,7 @@ module yl_runtime_commit
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
+  include 'yl_runtime_scalars_use.inc'
   use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_logical, opt_get, opt_is_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
@@ -1442,6 +1443,8 @@ contains
     allocate (links(int(opt_or(residue%nlinks), ink)))         !@existence: links
     allocate (trans_c(s_npoin))                                !@existence: trans_c
     trans_c(1:s_npoin)%nintf = 0_ink
+
+    include 'yl_runtime_scalars.inc'
 
     commit_owned = .true.
   end subroutine commit_legacy_globals
