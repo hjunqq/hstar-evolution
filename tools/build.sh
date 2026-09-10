@@ -633,6 +633,14 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     # the map is what is wrong. (Found by a control that blocked for the wrong reason.)
     python3 "$ROOT/tools/yl_map_selfcheck.py" --positive-control || exit 4
     state_dump_provenance_check || exit 4
+    # M2-01 judgement 5: the anchor guard table (M2-01-checkpoints.md §1) is prose that
+    # every anchor argument and every dead-code claim rests on, and nothing compared it
+    # to a measurement until one row (stab_matde) was found wrong by hand during M4-01.
+    # yl_guard_check.py compares it to the frozen baseline, and prints by name every
+    # guard it CANNOT confirm -- silence there reads exactly like confirmation, which
+    # is how the wrong row survived.
+    python3 "$ROOT/tools/yl_guard_check.py" >/dev/null || {
+        python3 "$ROOT/tools/yl_guard_check.py" >&2; exit 4; }
     for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do
         [ -f "$ROOT/$f" ] || {
             echo "build.sh: runtime-bridge: missing source $ROOT/$f" >&2
@@ -896,6 +904,14 @@ for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}"; do [ -f "$ROOT/$f" ] || { echo "b
 # the map is what is wrong. (Found by a control that blocked for the wrong reason.)
 python3 "$ROOT/tools/yl_map_selfcheck.py" --positive-control || exit 4
 state_dump_provenance_check || exit 4
+# M2-01 judgement 5: the anchor guard table (M2-01-checkpoints.md §1) is prose that
+# every anchor argument and every dead-code claim rests on, and nothing compared it
+# to a measurement until one row (stab_matde) was found wrong by hand during M4-01.
+# yl_guard_check.py compares it to the frozen baseline, and prints by name every
+# guard it CANNOT confirm -- silence there reads exactly like confirmation, which
+# is how the wrong row survived.
+python3 "$ROOT/tools/yl_guard_check.py" >/dev/null || {
+    python3 "$ROOT/tools/yl_guard_check.py" >&2; exit 4; }
 for f in "${SRCS[@]}" "${MAIN_SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing source $SRC/$f" >&2; exit 4; }; done
 [ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }
 
@@ -994,3 +1010,14 @@ if manifest['unresolved_runtime_deps']:
 print(f"binary {exe} sha256={manifest['binary']['sha256'][:16]}… deps={len(deps)} warnings={warnings}")
 PY
 log "=== BUILD OK ($PROFILE) $T0 → $T1"
+
+# M2-01 judgement 4: the cross-routine half of the anchor argument ("no model-level
+# reader runs after the anchor in some other routine") was carried by a hand-written
+# call-order table; yl_io_inventory check only ever scanned within the anchor's own
+# routine. The trace binary is the only build that can settle it, so the check runs
+# here, where that binary has just been produced.
+if [ "$PROFILE" = "trace" ] && [ "${HSTAR_SKIP_ANCHOR_ORDER:-0}" != "1" ]; then
+    log "=== anchor order (M2-01 judgement 4)"
+    python3 "$ROOT/tools/yl_anchor_order.py" check --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build.sh: anchor-order check failed" >&2; exit 6; }
+fi

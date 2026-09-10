@@ -31,8 +31,46 @@
 | `ninit`, `uinitial(1)` | 0, 0 | 同上 / GLB.global_data.uinitial（`Global.f90:1093`） | `:1705` 不调 `read_initial`；`:1707` 不清 `result_zero`；`stab_initialize` `:2347` 不 stop |
 | `nlayer`, `state_change`, `Bparameter` | 0, 0, 0 | `.glb` / GLB.global_data.problem_type（`Global.f90:789`） | `:1913` 不调 `nonzero_stiff_pcg`；`Prescrib.f90:64` 走 appear 分支；`:1650`、`:3588`、`Stiff.f90:99` 不 rewind / 不取 `xvalue` |
 | `nlinks`, `ntrans` | 0, 0 | `.glb` init_and_blocks / transform_and_mif | `totv_to_eq` 无 link 循环；`.pre` 无 frecoord 记录（`Prescrib.f90:243`） |
-| `stab_matde` | 0 | `.glb` / GLB.global_data.sizes_and_switches（`Global.f90:694`） | `:3658` `iblks>=stab_matde` 为**真**：每步调 `stab_initialize`（清 `result_zero`、`gpvar0/gpvar`） |
+| `stab_matde` | 99999 | `.glb` / GLB.global_data.sizes_and_switches（`Global.f90:694`） | `:2441`/`:3030`/`:3661`/`:4869` 的 `if(iblks>=stab_matde)call stab_initialize` 为**假**（`iblks<=nblks=1`）：`stab_initialize` **从不执行**。99999 是**禁用哨兵**，不是零 |
 | `tfixvar`, `nextr`（每个 .pre 集） | 0, 0 | `.pre` 集头 / PRE.prescrib_set.set_header（`Prescrib.f90:220`） | `iffix=tfixvar+1=1`（`:258`）；`:261` 不读外推记录 |
+
+### 1.1 `stab_matde` 一行的订正（2026-09-10）
+
+本表初稿把 `stab_matde` 记作 **0**，并由此推出「`iblks>=stab_matde` 为真 → 每步调
+`stab_initialize` → 它清零 `result_zero` 与 `element%field(1)%gpvar0/gpvar`」。**值错了，
+结论跟着反了**：两个 golden deck 的 `.glb` 记录 2 第 15 项都是 **99999**，冻结基线
+`control.glb.stab_matde` 也是 99999，因此该分支在本路径上**恒假**，`stab_initialize`
+**一次都没跑**。映射表已于 2026-09-08 订正（`state-field-map.toml` 该行 note，提交
+`0646de3`/`a8d4646`），本表直到此刻才跟上——**这正是「同一事实记在两处、只订正了一处」的
+复发形态**，已计入 `docs/04-quality-gates.md` 的缺陷表。
+
+被这条错误结论顶替掉的两个真实成因，本次一并查明并记在这里，以免「谁把它们清零的」
+继续悬空（M2 验收矩阵判据 5 把它列为未答问题）：
+
+- **`result_zero` 在 `model_ready` 处为零**：由 startup 的分配即清零造成——`Fem.f90:219`
+  与 `:243-244`（见 §2 调用序表同一行）。与 `stab_initialize` 无关。
+- **`element%field(1)%gpvar0` / `gpvar` 为零**：由 `modf_element_lib`（`Fem.f90:193` 调用，
+  仍在 startup）在分配点旁边显式清零——`Fem.f90:11859-11860` 分配、`:11881-11882` 赋 0。
+  与 `stab_initialize` 无关。
+
+**订正不改变任何锚点位置**：这四个 `iblks>=stab_matde` 判断全部在三个锚点之后或在与锚点
+无关的分支里。改变的是「本路径上还有哪些代码在跑」这一事实本身。
+
+**支持条件也随之改写**：可支持的前提是 `stab_matde > nblks`（禁用），**不是**
+`stab_matde == 0`。`src/adapter/yl_adapter_model.f90:401` 的闸门按**关系**而非常量写，
+原因即此。
+
+### 1.2 本表由门禁核对，不再靠人读
+
+`tools/yl_guard_check.py` 把上表逐行解析出来，经映射表的 `legacy_symbol` 解析到冻结基线的
+快照字段，在两例上逐值比对。它有三种判决，第三种是关键：
+
+- `CONFIRMED`——在导出面上且与冻结基线一致（现 **22** 个守卫值）；
+- `MISMATCH`——在导出面上且**不一致**，退出码 1（`stab_matde` 那一行在订正前正是这样被机械
+  抓到的，与矩阵的人工发现独立吻合）；
+- `NOT_ON_FACE`——**不在任何检查点的导出面上，本工具无法确认**（现 5 个：`cwater`、`ngaps`、
+  `nrcsteel`、`tfixvar`、`nextr`）。这一类**每次都逐名打印**。一个确认不了的守卫必须持续可见：
+  在这里保持沉默读起来与「已确认」完全一样，而本表那一行错值正是这样活下来的。
 
 规则：**决定路径的守卫值一律 `compare="exact"`**（不用 `ignore`），owner 仍为 `not_migrated` 并保留 `reason`；映射表中这些行的 note 以 "pinned guard" 开头。守卫值一旦偏离，比较立刻失败并指出原因，而不是静默地比较另一条路径上的状态。
 
