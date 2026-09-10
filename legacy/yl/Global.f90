@@ -687,7 +687,7 @@
     open(faiunit,  file=probn(1:len1)//'.fai',FORM='UNFORMATTED')
     recttunit=35
     open(recttunit,file=probn(1:len1)//'.ctt',FORM='UNFORMATTED') !ctt2005
-
+    if (yl_adapter_mode) call yl_adapter_override(); if (yl_adapter_mode) return   ! M4-02 adapter entry
     read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
     call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_1,0)
     print *,text

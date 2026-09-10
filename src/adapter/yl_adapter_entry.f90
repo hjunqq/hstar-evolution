@@ -47,6 +47,18 @@ subroutine yl_adapter_override()
 
   use yl_diag, only: diag_abort, EXIT_INIT
 
+  ! Deck-INDEPENDENT legacy initialisation that global_data happens to perform on its
+  ! way through the readers (Global.f90:1190). kinddefine builds the element-kind
+  ! library -- Q4/T3/L2 shape functions, Gauss rules -- which no deck can influence.
+  ! Switching global_data off therefore also switches this off, and modf_element_lib
+  ! then dereferences an unassociated elkn(index)%ggaus.
+  !
+  ! It is called here rather than left to the legacy path because that is what it is:
+  ! initialisation, not input. The distinction this whole task keeps having to make is
+  ! "did the deck decide this, or did the code?" -- and everything on the deck's side
+  ! comes through commit, while everything on the code's side has to keep running.
+  use elements, only: kinddefine
+
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_manifest, only: manifest_t
@@ -66,8 +78,10 @@ subroutine yl_adapter_override()
   type(problem_errors_t) :: errors
   type(runtime_state_t), allocatable :: rt
 
-  write (output_unit, '(a)') 'yl_adapter_override: adapter entry ON; the globals the '// &
-    'legacy readers built are about to be replaced by the adapter commit.'
+  write (output_unit, '(a)') 'yl_adapter_override: adapter entry ON; the legacy readers '// &
+    'below are switched off and these globals come from the deck through the adapter.'
+
+  call kinddefine
 
   call adapt_legacy_deck('.', problem, residue, pmanifest, errors)
   if (errors%any() .or. .not. allocated(problem)) call fail('adapt_legacy_deck', errors)

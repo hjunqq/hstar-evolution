@@ -103,7 +103,7 @@
     read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) probn
     call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_problem_name,0)
     !	adina=0
-    if (yl_adapter_mode) call yl_adapter_override()   ! M4-02 adapter entry
+
     !mystatus=0
     !CALL GETARG (1, probn,mystatus(1))
     !CALL GETARG (2, t2,mystatus(2))
@@ -114,7 +114,7 @@
     print *, 'time: ', char_time
     write(chkunit,*)'time: ', char_time
     ! analysis process
-    if (.not. yl_adapter_mode) call global_data ! set the global data, they will be unchanged in the whole
+    call global_data ! set the global data, they will be unchanged in the whole
 
 
     if(Uopt_R==1)then  !20210502
@@ -190,7 +190,7 @@
     ! material set
     if (.not. yl_adapter_mode) call material_set
     ! modify the element libary
-    if (.not. yl_adapter_mode) call modf_element_lib  !20221124
+    call modf_element_lib  !20221124
 
     if (.not. yl_adapter_mode) call contact_point_to_point  !!ctt2005
 
@@ -256,8 +256,8 @@
     endif
 
 
-    allocate(ice0(nelem))
-    ice0=0
+    if (.not. yl_adapter_mode) allocate(ice0(nelem))
+    if (.not. yl_adapter_mode) ice0=0
 
     call gid_output_parameter !only for check
 
@@ -270,7 +270,7 @@
         fexta=0.
     endif
 
-    allocate(line_load_block(nblks),line_temp_block(nblks))   !!rrr
+    if (.not. yl_adapter_mode) allocate(line_load_block(nblks),line_temp_block(nblks))   !!rrr
     line_load_block=0
     line_temp_block=0
     nincs=0

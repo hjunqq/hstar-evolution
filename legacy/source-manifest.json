@@ -1,9 +1,9 @@
 {
   "manifest_version": 1,
-  "generated_at": "2026-09-10T09:37:14+00:00",
+  "generated_at": "2026-09-10T10:19:46+00:00",
   "root": "legacy",
   "file_count": 39,
-  "total_bytes": 55714376,
+  "total_bytes": 55714432,
   "excludes": [
     "BASELINE.md",
     "source-manifest.json"
@@ -35,13 +35,13 @@
     },
     {
       "path": "yl/Fem.f90",
-      "bytes": 724818,
-      "sha256": "2b8b5d72518a59266fb6dad695a635744c6fea3fc1c285b2f9b1de4d8a43b831"
+      "bytes": 724770,
+      "sha256": "5849cc00b38b5eb4902c84c421c318ee1b089fa50248489d222fe1a25d7c1ff2"
     },
     {
       "path": "yl/Global.f90",
-      "bytes": 208957,
-      "sha256": "940d1a38bbe351da05ded40d891406987f263a9db77579c0d531fc1be443a0df"
+      "bytes": 209061,
+      "sha256": "023a299b76a0ba1617984d6c5627b454e974db3c5162f9c6e634d52f257b7635"
     },
     {
       "path": "yl/Level.f90",
