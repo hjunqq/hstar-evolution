@@ -1,0 +1,46 @@
+{
+ "version": 1,
+ "binary": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+ "repeats": 8,
+ "negative_control": false,
+ "cases": {
+  "static_2d.cooks_membrane": {
+   "runs": [
+    "20260910T091802Z_b04ea896_noise00",
+    "20260910T091802Z_b04ea896_noise01",
+    "20260910T091803Z_b04ea896_noise02",
+    "20260910T091803Z_b04ea896_noise03",
+    "20260910T091803Z_b04ea896_noise04",
+    "20260910T091803Z_b04ea896_noise05",
+    "20260910T091803Z_b04ea896_noise06",
+    "20260910T091803Z_b04ea896_noise07"
+   ],
+   "pairs": 28,
+   "pairs_with_difference": 0,
+   "max_abs_diff_by_block": {
+    "DISPLACEMENT": 0.0,
+    "STRESS": 0.0
+   }
+  },
+  "static_2d.lame_cylinder": {
+   "runs": [
+    "20260910T091805Z_19a77894_noise00",
+    "20260910T091805Z_19a77894_noise01",
+    "20260910T091805Z_19a77894_noise02",
+    "20260910T091806Z_19a77894_noise03",
+    "20260910T091806Z_19a77894_noise04",
+    "20260910T091806Z_19a77894_noise05",
+    "20260910T091806Z_19a77894_noise06",
+    "20260910T091806Z_19a77894_noise07"
+   ],
+   "pairs": 28,
+   "pairs_with_difference": 0,
+   "max_abs_diff_by_block": {
+    "DISPLACEMENT": 0.0,
+    "STRESS": 0.0
+   }
+  }
+ },
+ "max_abs_diff_overall": 0.0,
+ "verdict": "no non-zero noise observed"
+}

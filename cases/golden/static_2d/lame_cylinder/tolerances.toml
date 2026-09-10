@@ -1,5 +1,6 @@
-# 容差登记（M0-05a）。B02 重复运行要求精确相等；跨路径容差为临时值，
-# 须在 M0-04b 得到重复噪声后以独立任务定稿，不得看到差异后放宽。
+# 容差登记（M0-05a，跨路径一节于 2026-09-10 定案）。B02 重复运行要求精确相等；
+# 跨路径容差原为临时值，现已按 ADR-0008 §4 先测噪声后定案——见下方 [cross_path] 注释。
+# 原则不变：不得看到差异后放宽。
 version = 1
 case_id = "static_2d.lame_cylinder"
 comparison_rule = "abs(actual - reference) <= atol + rtol * abs(reference), per component, after shape/ID/finite checks"
@@ -8,15 +9,28 @@ comparison_rule = "abs(actual - reference) <= atol + rtol * abs(reference), per 
 atol = 0.0
 rtol = 0.0
 
-[cross_path]       # N01（M4）：新旧入口路径；临时值
-status = "provisional"
+[cross_path]       # N01（M4）：新旧入口路径
+# 定案 2026-09-10（ADR-0008 §4，取代原「临时值」）。
+# 原值是量纲估算（atol = 1e-9 × 量纲尺度），没有任何测量支撑，R28 记为
+# 「用估算数当判据」。按裁定先测噪声再定容差：tools/yl_noise.py 用同一二进制、
+# 同一输入、同一环境重复运行 8 次 × 2 例，两两比较（每例 28 对，共 56 对），
+# **严格比较（atol = rtol = 0）下 max|d| 处处为 0**，DISPLACEMENT 与 STRESS 均然。
+# 证据：docs/m4/evidence/noise/noise.json。阴性对照：把一个位移分量改动 1e-18，
+# 比较器立即报出该差异（2/3 对出现差异，STRESS 保持沉默）——所以这次「一片安静」
+# 是有意义的安静。
+#
+# 观察不到噪声，因此不引入容差：跨路径比较用严格相等。
+# **这不是「已证明确定性」**：它把**观测到的**噪声在这个二进制、这份输入、
+# 这个环境、这个重复次数下界定为 0，仅此而已。改变线程数或环境是另一个问题，
+# 要另测、另标。
+status = "measured"
+basis = "tools/yl_noise.py, 8 repeats x 2 cases, 56 pairs, exact comparison, max|d| = 0"
+evidence = "docs/m4/evidence/noise/noise.json"
 [cross_path.displacement]
 unit = "m"
-atol = 3.8e-15
-rtol = 1e-9
-basis = "atol = 1e-9 × 位移尺度；rtol 取双精度求解 1e-9；待 M0-04b 噪声数据复核"
+atol = 0.0
+rtol = 0.0
 [cross_path.stress]
 unit = "Pa"
-atol = 4.7e-5
-rtol = 1e-9
-basis = "atol = 1e-9 × 应力尺度；待 M0-04b 噪声数据复核"
+atol = 0.0
+rtol = 0.0
