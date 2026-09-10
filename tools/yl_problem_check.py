@@ -936,8 +936,18 @@ class Checker:
             its checkpoint would pass. Criterion 5 of the M3 acceptance matrix records
             what remains assertion-only.
         """
+        # A row that OMITS `determinism` is "not stated", which is not the same as
+        # "stated as non-deterministic", and this rule does not adjudicate it: the map's
+        # own schema is what requires the key (yl_state_map.py enforces it, and all 269
+        # real rows carry it), while the synthetic fixtures in this file's own self-test
+        # legitimately omit everything they are not testing. Judging a missing key as a
+        # violation turned SELFTEST from 56/56 to 54/56 the moment this rule landed --
+        # and nothing said so, because no build target runs this self-test
+        # (`grep -c yl_problem_check tools/build.sh` was 0). Found by accept-m2m3 while
+        # building the M4-01 acceptance matrix, 2026-09-09.
         bad = [r for r in self.doc.get("field", [])
                if str(r.get("owner", "")).startswith("ProblemState.")
+               and "determinism" in r
                and r.get("determinism") != "deterministic"]
         for r in bad:
             self.fail(f"map: {r.get('id')} is owned by {r.get('owner')} but its determinism "

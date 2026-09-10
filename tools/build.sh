@@ -437,6 +437,23 @@ PT_PY
         exit 6
     fi
 
+    # yl_problem_check's OWN self-test. It was never wired into any target, and on
+    # 2026-09-09 a rule added to that checker (rule 15, closing M3 acceptance criterion 5)
+    # took its self-test from 56/56 to 54/56 -- the synthetic fixtures legitimately omit
+    # `determinism`, and the rule judged a missing key as a violation. Nothing reported it,
+    # because `grep -c yl_problem_check tools/build.sh` was 0: a tool that guards the map
+    # had a suite guarding the tool, and no gate ran it. Found by accept-m2m3 while
+    # building the M4-01 acceptance matrix.
+    log "--- self-test: tools/yl_problem_check.py"
+    set +e
+    python3 "$ROOT/tools/yl_problem_check.py" --selftest 2>&1 | tee -a "$LOG" | tail -1
+    PT_CHECK_RC=${PIPESTATUS[0]}
+    set -e
+    if [ "$PT_CHECK_RC" -ne 0 ]; then
+        log "=== yl_problem_check SELF-TEST FAILED ($TARGET/$PROFILE) rc=$PT_CHECK_RC"
+        exit 6
+    fi
+
     # The BACKWARD half of the rule-table bijection (M3-03). The self-test asserts the
     # forward and injective halves in Fortran and exports its table as RULES|/RULE|
     # lines; only Python can read docs/m2/state-field-map.toml and answer the other
