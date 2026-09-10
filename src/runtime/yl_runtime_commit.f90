@@ -92,7 +92,7 @@ module yl_runtime_commit
   use elements, only: element_field, gauss_element
   use global_var, only: element, group, listp_group, trans, appear,                             &
                         coord, appear_process, matno_process, average_appear,                   &
-                        lmdofn, lcdofn, nodfn, iffix, fixed,                                    &
+                        lmdofn, lcdofn, nodfn, iffix, fixed, order_time_mdofn,                  &
                         result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
                         line_load_block, line_temp_block, lineload, linet,                      &
                         npoin, nelem, ngroup, ndimn, mdofn, cdofn, ntotv, iblks, lblks,         &
@@ -115,6 +115,7 @@ module yl_runtime_commit
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
   use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_logical, opt_get, opt_is_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
@@ -496,9 +497,14 @@ contains
   !>
   !> On success every registered global carries this runtime. On failure not one global
   !> was touched.
-  subroutine commit_legacy_globals(problem, residue, runtime, errors)
+  subroutine commit_legacy_globals(problem, residue, existence, runtime, errors)
     type(problem_state_t), intent(in) :: problem
     type(deck_residue_t), intent(in) :: residue
+    !> The EXISTENCE FACE (ADR-0009, docs/m4/existence-face.toml): legacy arrays the solver
+    !> requires to exist whose values no checkpoint observes. Written by its own pass below,
+    !> with its own provenance bucket, so the comparison face's bijection keeps its exact
+    !> meaning instead of being widened to mean two things.
+    type(deck_existence_t), intent(in) :: existence
     type(runtime_state_t), intent(in) :: runtime
     type(problem_errors_t), intent(inout) :: errors
 
@@ -506,6 +512,8 @@ contains
     integer(ink) :: s_npoin, s_nelem, s_ngroup, s_ndimn, s_mdofn, s_cdofn, s_ntotv
     integer(ink) :: s_ndofix, s_ntcurve, s_iblks, s_lblks, s_lineload, s_linet
     integer :: nevab, ngaus, ngaus_mass, nnode
+    ! staging: the existence face (ADR-0009). One buffer per existence-face.toml row.
+    integer(ink), allocatable :: s_ex_order_time_mdofn(:)
     ! staging: the ProblemState half's plain arrays (M4-01 step 3)
     real(irk), allocatable :: s_coord(:,:), s_factg(:)
     integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
@@ -555,7 +563,7 @@ contains
     logical :: ok
 
     ! ---------------------------------------------------------------- verify
-    call verify_registered(problem, residue, runtime, errors, ok)
+    call verify_registered(problem, residue, existence, runtime, errors, ok)
     if (.not. ok) return
 
     ! W4 guard (see the OWNERSHIP header): if any record-array global this module writes
@@ -1272,6 +1280,12 @@ contains
     s_uinitial = STAGE_POISON_I
     s_uinitial = int(residue%uinitial, ink)
 
+    ! Existence face (ADR-0009). Poisoned like every other buffer: a row that is declared
+    ! and never written must show up as huge(), not as a plausible zero.
+    allocate (s_ex_order_time_mdofn(size(existence%order_time_mdofn)))
+    s_ex_order_time_mdofn = STAGE_POISON_I
+    s_ex_order_time_mdofn = int(existence%order_time_mdofn, ink)
+
     call verify_residue_against_gates(residue, errors, ok)
     if (.not. ok) return
 
@@ -1340,6 +1354,14 @@ contains
     call move_alloc(s_tcurvegravity, tcurvegravity)
     call move_alloc(s_props, props)
     call move_alloc(s_uinitial, uinitial)
+
+    ! --- the EXISTENCE FACE (ADR-0009) -----------------------------------------------
+    ! Written in its own pass, in the same WRITE phase, so it cannot introduce a second
+    ! writer of the legacy globals -- the constraint that killed the first M4-02 design.
+    ! Every symbol here is registered in docs/m4/existence-face.toml with the site whose
+    ! abort demanded it; tools/yl_existence_check.py asserts this pass and that table are
+    ! the same set, in both directions.
+    call move_alloc(s_ex_order_time_mdofn, order_time_mdofn)   !@existence: order_time_mdofn
 
     commit_owned = .true.
   end subroutine commit_legacy_globals
@@ -1474,6 +1496,7 @@ contains
     if (allocated(factg)) deallocate (factg)
     if (allocated(tcurvegravity)) deallocate (tcurvegravity)
 
+    if (allocated(order_time_mdofn)) deallocate (order_time_mdofn)   !@existence: order_time_mdofn
     if (allocated(lmdofn)) deallocate (lmdofn)
     if (allocated(lcdofn)) deallocate (lcdofn)
     if (allocated(nodfn)) deallocate (nodfn)
@@ -1589,9 +1612,10 @@ contains
   ! This is the check that makes the commit safe to write blind afterwards. It runs over
   ! the RULE TABLE rather than over a list kept here, so a row added to the table without
   ! a commit for it fails here instead of being committed as a silent absence.
-  subroutine verify_registered(problem, residue, runtime, errors, ok)
+  subroutine verify_registered(problem, residue, existence, runtime, errors, ok)
     type(problem_state_t), intent(in) :: problem
     type(deck_residue_t), intent(in) :: residue
+    type(deck_existence_t), intent(in) :: existence
     type(runtime_state_t), intent(in) :: runtime
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
@@ -1618,6 +1642,10 @@ contains
     ok = .false.
 
     call verify_residue_inputs(residue, errors, ok)
+    if (.not. ok) return
+    ok = .false.
+
+    call verify_existence_inputs(existence, errors, ok)
     if (.not. ok) return
     ok = .false.
 
@@ -2103,6 +2131,27 @@ contains
 
     ok = .true.
   end subroutine verify_residue_inputs
+
+  !> Every existence-face component must be allocated before the staging pass reads it.
+  !>
+  !> Same rule and same reason as verify_residue_inputs: an unallocated component means
+  !> "the parser never ran", and staging an empty array for it would publish a zero-length
+  !> legacy global that reads exactly like a deck whose record was empty. ADR-0002's
+  !> three-state absence discipline applies here even though these values are never
+  !> compared -- "nothing observes it" is not "anything will do".
+  subroutine verify_existence_inputs(existence, errors, ok)
+    type(deck_existence_t), intent(in) :: existence
+    type(problem_errors_t), intent(inout) :: errors
+    logical, intent(out) :: ok
+    ok = .false.
+    if (.not. allocated(existence%order_time_mdofn)) then
+      call fail(errors, 'existence face: order_time_mdofn is not allocated -- the .glb '//   &
+                'parser did not run, and committing an empty array would publish a legacy '// &
+                'global that reads like a deck record nobody wrote')
+      return
+    end if
+    ok = .true.
+  end subroutine verify_existence_inputs
 
   ! INV-COMMIT-TOTAL, provenance half: the table above must be well formed. An entry with
   ! an empty id names no row; an entry with an unnameable state exports as `?` and would

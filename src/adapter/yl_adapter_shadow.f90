@@ -69,6 +69,7 @@ program yl_adapter_shadow
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
   use yl_problem_manifest, only: manifest_t
   use yl_problem_errors, only: problem_errors_t
   use yl_adapter_driver, only: adapt_legacy_deck
@@ -84,6 +85,7 @@ program yl_adapter_shadow
 
   type(problem_state_t), allocatable :: problem
   type(deck_residue_t) :: residue
+  type(deck_existence_t) :: existence
   type(manifest_t), allocatable :: pmanifest, rmanifest
   type(problem_errors_t) :: errors
   type(runtime_state_t), allocatable :: rt
@@ -99,7 +101,7 @@ program yl_adapter_shadow
     'commit_legacy_globals -> yl_state_dump), cwd is the deck directory.'
   write (output_unit, '(a)') 'yl_adapter_shadow: dump dir = '//trim(yl_dump_dir)
 
-  call adapt_legacy_deck('.', problem, residue, pmanifest, errors)
+  call adapt_legacy_deck('.', problem, residue, existence, pmanifest, errors)
   if (errors%any() .or. .not. allocated(problem)) then
     call print_findings('adapt_legacy_deck', errors)
     call exit_with(4)
@@ -115,7 +117,7 @@ program yl_adapter_shadow
 
   ! `.tem` fills four of the residue's 27 components (M4-01 step 4b); the other 23 are
   ! still unset and commit still reads none of them until step 5.
-  call commit_legacy_globals(problem, residue, rt, errors)
+  call commit_legacy_globals(problem, residue, existence, rt, errors)
   if (errors%any()) then
     call print_findings('commit_legacy_globals', errors)
     call exit_with(4)

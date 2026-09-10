@@ -63,6 +63,7 @@ program yl_runtime_bridge_test
 
   use yl_problem_optional, only: opt_int, opt_real, opt_set, opt_get, opt_value_or
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
   use yl_problem_types, only: problem_state_t, case_t, node_t, element_t, elset_t, nset_t,       &
                               material_t, section_t, amplitude_t, amplitude_point_t,             &
                               interactions_t, solver_t, step_t, controls_t, load_t, output_t,    &
@@ -86,6 +87,7 @@ program yl_runtime_bridge_test
   type(runtime_state_t), allocatable :: rt1, rt2
   type(problem_state_t), allocatable :: pr1, pr2
   type(deck_residue_t) :: rs1, rs2
+  type(deck_existence_t) :: ex
   logical :: ok1, ok2
 
   write (output_unit, '(a)') 'yl_runtime_bridge_test: M3-03 isolated bridge (commit_legacy_globals)'
@@ -187,7 +189,11 @@ contains
     ! step -- no parser fills it yet (M4-01 step 5) and commit reads nothing out of it.
     call move_alloc(problem, problem_out)
     call residue_of(residue_out)
-    call commit_legacy_globals(problem_out, residue_out, rt, errors)
+    ! The existence face's one row is sized by mdofn, which this fixture's draft fixes
+    ! at 2 (draft_of). Sized here rather than read back from a legacy global because
+    ! commit has not run yet.
+    call existence_of(ex, 2)
+    call commit_legacy_globals(problem_out, residue_out, ex, rt, errors)
     call check('commit_legacy_globals accepted the '//itoa(n_elem)//'-element runtime',          &
               .not. errors%any())
     built = .not. errors%any()
@@ -217,6 +223,16 @@ contains
   !> It is deliberately NOT derived from the type: a loop that set every component to 0
   !> would pass verify_residue_inputs while saying nothing, and the three non-zero values
   !> are exactly the ones such a loop would get wrong.
+  !> A COMPLETE existence face (ADR-0009), for the same reason residue_of exists: commit
+  !> refuses an unallocated component, and an empty array would read like a deck record
+  !> nobody wrote. mdofn in this fixture is what build_and_commit uses.
+  subroutine existence_of(e, mdofn)
+    type(deck_existence_t), intent(out) :: e
+    integer, intent(in) :: mdofn
+    allocate (e%order_time_mdofn(mdofn))
+    e%order_time_mdofn = 0
+  end subroutine existence_of
+
   subroutine residue_of(r)
     type(deck_residue_t), intent(out) :: r
     call opt_set(r%restart, 0_int32)
@@ -1270,7 +1286,7 @@ contains
     ! the end of a 1-element collection before any check was reached.
     owned_before = commit_owns_globals()
     call errors%clear()
-    call commit_legacy_globals(problem_1, residue, rt_2, errors)
+    call commit_legacy_globals(problem_1, residue, ex, rt_2, errors)
     call check('a runtime from a larger mesh is refused', errors%any())
     ! UNCHANGED, not false. A refusal touches nothing, so it leaves ownership exactly as it
     ! found it -- and section 2 committed successfully, so what it finds here is `true`.
@@ -1307,7 +1323,7 @@ contains
     end if
 
     call errors%clear()
-    call commit_legacy_globals(problem_2amp, residue, rt_1, errors)
+    call commit_legacy_globals(problem_2amp, residue, ex, rt_1, errors)
     call check('a problem with an extra amplitude is refused', errors%any())
     if (errors%any()) then
       call one_error_message(errors, 1, message)
@@ -1333,7 +1349,7 @@ contains
       return
     end if
     call errors%clear()
-    call commit_legacy_globals(problem_spare, residue, rt_2, errors)
+    call commit_legacy_globals(problem_spare, residue, ex, rt_2, errors)
     call check('a problem with fewer elements than the runtime is refused', errors%any())
     if (errors%any()) then
       call one_error_message(errors, 1, message)
@@ -1414,7 +1430,7 @@ contains
     ! runtime_status_count(rt_bad) is 0 against build_rule_produced_count() > 0: the
     ! FIRST check inside verify_registered, before any staging allocation runs. This is
     ! "a runtime that was never built", the simplest of the two shapes the task allows.
-    call commit_legacy_globals(problem, residue, rt_bad, errors)
+    call commit_legacy_globals(problem, residue, ex, rt_bad, errors)
     call check('commit of an unbuilt runtime is rejected', errors%any())
     if (errors%any()) call assert_internal_commit_total(errors)
 
@@ -1483,7 +1499,7 @@ contains
     allocate (fixed_1(size(fixed))); fixed_1 = fixed
 
     ! --- repeat commit of the SAME runtime: bit-for-bit identical effect ---------
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, ex, rt, errors)
     call check('repeat commit of the same runtime is accepted', .not. errors%any())
     if (errors%any()) then
       call skip_landed('repeat commit')
@@ -1538,7 +1554,7 @@ contains
                      allocated(uinitial)))
 
     ! --- a fresh commit after release works again ---------------------------------
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, ex, rt, errors)
     call check('a fresh commit after release is accepted', .not. errors%any())
     if (errors%any()) then
       call skip_landed('fresh commit after release')
@@ -1578,7 +1594,7 @@ contains
     restart = SENTINEL_RESTART
     ttime = SENTINEL_TTIME
 
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, ex, rt, errors)
     call check('commit for the sentinel check is accepted', .not. errors%any())
     if (errors%any()) then
       call skip_landed('sentinel check')
@@ -1636,7 +1652,7 @@ contains
       call allocate_foreign(trim(NAMES(k)))
 
       call errors%clear()
-      call commit_legacy_globals(problem, residue, good_rt, errors)
+      call commit_legacy_globals(problem, residue, ex, good_rt, errors)
       call check(trim(NAMES(k))//': a foreign allocation is refused', errors%any())
       call assert_internal_commit_total(errors, trim(NAMES(k)))
       call check(trim(NAMES(k))//': commit_owned stays false after the refusal',                &
@@ -1728,7 +1744,7 @@ contains
     ! Section 6 ends with every global released and commit_owned false, so this
     ! section establishes its own committed state before it poisons anything.
     call errors%clear()
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, ex, rt, errors)
     call check('a fresh commit for the blind-spot trials is accepted', .not. errors%any())
     if (errors%any()) then
       call skip_landed('blind-spot trials')
@@ -1743,7 +1759,7 @@ contains
     call check('unode np_unode guard FAILS on a poisoned value',                                &
               .not. unode_np_unode_all_zero())
     call errors%clear()
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, ex, rt, errors)
     call check('the recommit for np_unode is accepted', .not. errors%any())
     call check('unode np_unode is restored to 0 by a recommit', unode_np_unode_all_zero())
 
@@ -1779,7 +1795,7 @@ contains
     call check('the lineload guard FAILS on a poisoned value', .not. (lineload == 0_ink))
     call check('the linet guard FAILS on a poisoned value', .not. (linet == 0_ink))
     call errors%clear()
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, ex, rt, errors)
     call check('the recommit for the cursors is accepted', .not. errors%any())
     call check('lineload is restored to 0 by a recommit', lineload == 0_ink)
     call check('linet is restored to 0 by a recommit', linet == 0_ink)

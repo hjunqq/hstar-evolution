@@ -61,6 +61,7 @@ subroutine yl_adapter_override()
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
   use yl_problem_manifest, only: manifest_t
   use yl_problem_errors, only: problem_errors_t
   use yl_adapter_driver, only: adapt_legacy_deck
@@ -74,6 +75,7 @@ subroutine yl_adapter_override()
 
   type(problem_state_t), allocatable :: problem
   type(deck_residue_t) :: residue
+  type(deck_existence_t) :: existence
   type(manifest_t), allocatable :: pmanifest, rmanifest
   type(problem_errors_t) :: errors
   type(runtime_state_t), allocatable :: rt
@@ -83,13 +85,13 @@ subroutine yl_adapter_override()
 
   call kinddefine
 
-  call adapt_legacy_deck('.', problem, residue, pmanifest, errors)
+  call adapt_legacy_deck('.', problem, residue, existence, pmanifest, errors)
   if (errors%any() .or. .not. allocated(problem)) call fail('adapt_legacy_deck', errors)
 
   call build_runtime(problem, CONTRACT_TAG, rt, rmanifest, errors)
   if (errors%any() .or. .not. allocated(rt)) call fail('build_runtime', errors)
 
-  call commit_legacy_globals(problem, residue, rt, errors)
+  call commit_legacy_globals(problem, residue, existence, rt, errors)
   if (errors%any()) call fail('commit_legacy_globals', errors)
 
   write (output_unit, '(a)') 'yl_adapter_override: commit ok; the solve below runs on '// &

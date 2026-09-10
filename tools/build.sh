@@ -255,6 +255,7 @@ if [ "$TARGET" = problem-types ] || [ "$TARGET" = runtime ]; then
     PT_PROBLEM_SRCS=(src/problem/yl_problem_optional.f90
                      src/problem/yl_problem_types.f90
                      src/problem/yl_problem_deck_residue.f90
+                     src/problem/yl_problem_existence.f90
                      src/problem/yl_problem_errors.f90
                      src/problem/yl_problem_profile.f90
                      src/problem/yl_problem_manifest.f90
@@ -516,6 +517,7 @@ if [ "$TARGET" = solver-adapter ]; then
     SOLVER_REPO_SRCS=(src/problem/yl_problem_optional.f90
                       src/problem/yl_problem_types.f90
                       src/problem/yl_problem_deck_residue.f90
+                      src/problem/yl_problem_existence.f90
                       src/problem/yl_problem_errors.f90
                       src/problem/yl_problem_profile.f90
                       src/problem/yl_problem_manifest.f90
@@ -620,6 +622,7 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     RB_REPO_SRCS=(src/problem/yl_problem_optional.f90
                   src/problem/yl_problem_types.f90
                   src/problem/yl_problem_deck_residue.f90
+                  src/problem/yl_problem_existence.f90
                   src/problem/yl_problem_errors.f90
                   src/problem/yl_problem_profile.f90
                   src/problem/yl_problem_manifest.f90
@@ -629,7 +632,13 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
                   src/runtime/yl_runtime_contract.f90
                   src/runtime/yl_runtime_rules.f90
                   src/runtime/yl_runtime_build.f90
-                  src/runtime/yl_runtime_commit.f90)
+                  src/runtime/yl_runtime_commit.f90
+                  # Global.f90 now calls the external yl_adapter_override() behind
+                  # `if (yl_adapter_mode)`, so EVERY target that links the legacy tree
+                  # needs one implementation of it. These test programs never set the
+                  # flag, so they link the stub -- which refuses rather than returning,
+                  # so a target that somehow did set it could not quietly run the old path.
+                  src/adapter/yl_adapter_entry_stub.f90)
     RB_MAIN=src/runtime/yl_runtime_bridge_test.f90
     RB_EXTRA_RUN=()
 
@@ -686,6 +695,12 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
     # is how the wrong row survived.
     python3 "$ROOT/tools/yl_guard_check.py" >/dev/null || {
         python3 "$ROOT/tools/yl_guard_check.py" >&2; exit 4; }
+    # ADR-0009: the existence face. The map answers "what do we compare"; existence-face.toml
+    # answers "what must exist". Its gates are set equalities in both directions between the
+    # table, deck_existence_t, commit's existence pass and commit_release -- the comparison
+    # face's bijection is untouched, this is a second one of the same shape.
+    python3 "$ROOT/tools/yl_existence_check.py" >/dev/null || {
+        python3 "$ROOT/tools/yl_existence_check.py" >&2; exit 4; }
     for f in "${DIAG_SRCS[@]}" "${STATE_SRCS[@]}" "${RB_REPO_SRCS[@]}" "$RB_MAIN" "${RB_EXTRA_RUN[@]}"; do
         [ -f "$ROOT/$f" ] || {
             echo "build.sh: runtime-bridge: missing source $ROOT/$f" >&2
@@ -957,6 +972,12 @@ state_dump_provenance_check || exit 4
 # is how the wrong row survived.
 python3 "$ROOT/tools/yl_guard_check.py" >/dev/null || {
     python3 "$ROOT/tools/yl_guard_check.py" >&2; exit 4; }
+# ADR-0009: the existence face. The map answers "what do we compare"; existence-face.toml
+# answers "what must exist". Its gates are set equalities in both directions between the
+# table, deck_existence_t, commit's existence pass and commit_release -- the comparison
+# face's bijection is untouched, this is a second one of the same shape.
+python3 "$ROOT/tools/yl_existence_check.py" >/dev/null || {
+    python3 "$ROOT/tools/yl_existence_check.py" >&2; exit 4; }
 for f in "${SOLVER_REPO_SRCS[@]}" "${ENTRY_SRCS[@]}"; do [ -f "$ROOT/$f" ] || { echo "build.sh: missing source $ROOT/$f" >&2; exit 4; }; done
 for f in "${SRCS[@]}" "${MAIN_SRCS[@]}"; do [ -f "$SRC/$f" ] || { echo "build.sh: missing source $SRC/$f" >&2; exit 4; }; done
 [ -f "$STUB" ] || { echo "build.sh: missing $STUB" >&2; exit 4; }

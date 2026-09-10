@@ -147,6 +147,7 @@ module yl_adapter_model
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_STAGE_ADAPT
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
   use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, section_parts_t, &
                                LEN_TYPE_ABC, reject_dialect
 
@@ -176,7 +177,7 @@ contains
   ! parser fills its leaves in the shared aggregate exactly as it does for `parts`, and
   ! never calls `builder_set_solver` / `builder_add_section` itself. `sections[].thickness`
   ! is `.mat`'s leaf (read AFTER .glb, Fem.f90:117 then :191) and is left unset here.
-  subroutine parse_glb(unit, ctx, b, parts, sparts, secparts, residue, errors)
+  subroutine parse_glb(unit, ctx, b, parts, sparts, secparts, residue, existence, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(inout) :: ctx
     type(problem_builder_t), intent(inout) :: b
@@ -186,6 +187,8 @@ contains
     !> Carries out the 13 `.glb` values ADR-0003 does not model. Filled only once every
     !> gate below has accepted the deck.
     type(deck_residue_t), intent(inout) :: residue
+    !> The existence face (ADR-0009). `.glb` supplies its only row so far.
+    type(deck_existence_t), intent(inout) :: existence
     type(problem_errors_t), intent(inout) :: errors
 
     integer(int32) :: ios
@@ -1134,6 +1137,11 @@ contains
     ! leaves the carrier untouched and a filled carrier means "this deck was accepted AND
     ! this is what it said". The gate and the carried value stay two independent sources;
     ! commit cross-checks them rather than deriving one from the other (1.6.2).
+    ! Existence face (ADR-0009): predict reads this array once per dof per increment
+    ! (Fem.f90:10752) although nothing observes its value at any checkpoint. The deck's
+    ! values are carried, not a constant zero -- see existence-face.toml.
+    existence%order_time_mdofn = order_time_mdofn
+
     call opt_set(residue%npoinb, npoinb)
     call opt_set(residue%stab_matde, stab_matde)
     call opt_set(residue%ninit, ninit)

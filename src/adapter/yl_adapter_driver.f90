@@ -170,6 +170,7 @@ module yl_adapter_driver
   use yl_adapter_load, only: parse_loa, parse_pre
   use yl_adapter_temper, only: parse_tem
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
 
   implicit none
   private
@@ -190,13 +191,17 @@ contains
   ! Opens every deck unit this build parses, drives the five parser modules in the order
   ! the module header derives, assembles steps[0]/solver exactly once, and hands the
   ! finished draft to prepare_problem. See the module header for the full rationale.
-  subroutine adapt_legacy_deck(dir, problem, residue, manifest, errors)
+  subroutine adapt_legacy_deck(dir, problem, residue, existence, manifest, errors)
     character(len=*), intent(in) :: dir
     type(problem_state_t), allocatable, intent(inout) :: problem
     !> The values legacy reads from the deck and leaves in its globals that ADR-0003 does
     !> not model. Returned beside `problem` because commit needs both and neither is
     !> derivable from the other (L2c-fold-design.md 3.2). Only `.tem` fills it so far.
     type(deck_residue_t), intent(out) :: residue
+    !> The EXISTENCE FACE (ADR-0009, docs/m4/existence-face.toml): deck values a legacy
+    !> global must hold even though no checkpoint observes them. Separate from `residue`
+    !> because `residue` is computed from the map's EMITTED rows and these are not emitted.
+    type(deck_existence_t), intent(out) :: existence
     type(manifest_t), allocatable, intent(inout) :: manifest
     type(problem_errors_t), intent(inout) :: errors
 
@@ -264,7 +269,7 @@ contains
 
       ! -- .glb: the sole writer of ctx; every other parser below depends on it --------
       mark = errors%count()
-      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, residue, errors)
+      call parse_glb(u_glb, ctx, b, parts, sparts, secparts, residue, existence, errors)
       if (errors%count() > mark) exit parse_all
 
       ! -- the six remaining ctx-readers, contract SS1 order -----------------------------

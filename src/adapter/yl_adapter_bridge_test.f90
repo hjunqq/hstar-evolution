@@ -84,6 +84,7 @@ program yl_adapter_bridge_test
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
   use yl_problem_manifest, only: manifest_t
   use yl_problem_errors, only: problem_errors_t
   use yl_adapter_driver, only: adapt_legacy_deck
@@ -161,6 +162,7 @@ contains
     integer :: rc, cs
     type(problem_state_t), allocatable :: problem
     type(deck_residue_t) :: residue
+    type(deck_existence_t) :: existence
     type(manifest_t), allocatable :: pmanifest, rmanifest
     type(problem_errors_t) :: errors
     type(runtime_state_t), allocatable :: rt
@@ -183,7 +185,7 @@ contains
     end if
 
     ! -- 1. legacy deck -> problem_state_t -----------------------------------------
-    call adapt_legacy_deck(trim(scratch), problem, residue, pmanifest, errors)
+    call adapt_legacy_deck(trim(scratch), problem, residue, existence, pmanifest, errors)
     if (errors%any() .or. .not. allocated(problem)) then
       write (output_unit, '(a)') '  ABORT: adapt_legacy_deck reported a finding; every row UNVERIFIED.'
       call report_errors('adapt_legacy_deck', errors)
@@ -205,7 +207,7 @@ contains
     ! -- 3. runtime_state_t -> real legacy globals ----------------------------------
     ! `.tem` fills four of the residue's 27 components (M4-01 step 4b); the other 23 are
     ! still unset and commit still reads none of them until step 5.
-    call commit_legacy_globals(problem, residue, rt, errors)
+    call commit_legacy_globals(problem, residue, existence, rt, errors)
     if (errors%any()) then
       write (output_unit, '(a)') '  ABORT: commit_legacy_globals reported a finding; every row UNVERIFIED.'
       call report_errors('commit_legacy_globals', errors)
