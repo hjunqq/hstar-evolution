@@ -45,7 +45,7 @@ subroutine yl_adapter_override()
 
   use iso_fortran_env, only: output_unit, error_unit
 
-  use yl_diag, only: diag_abort, EXIT_INIT
+  use yl_diag, only: diag_abort, EXIT_INIT, EXIT_INPUT, EXIT_UNSUPPORTED
 
   ! Deck-INDEPENDENT legacy initialisation that global_data happens to perform on its
   ! way through the readers (Global.f90:1190). kinddefine builds the element-kind
@@ -103,6 +103,7 @@ contains
     character(len=*), intent(in) :: stage
     type(problem_errors_t), intent(inout) :: errs
     integer :: i
+    integer :: code
     write (error_unit, '(a)') 'yl_adapter_override: '//stage//' raised a finding; refusing '// &
       'to continue on legacy state.'
     do i = 1, errs%count()
@@ -110,8 +111,25 @@ contains
     end do
     flush (output_unit)
     flush (error_unit)
-    call diag_abort('INIT', EXIT_INIT, 'yl_adapter_override', &
-         stage//' raised a finding under --adapter=on')
+    ! Carry the finding's OWN verdict outward instead of flattening everything to INIT.
+    ! A refused dialect is exit 3 (UNSUPPORTED) and a malformed record is exit 2 (INPUT);
+    ! reporting both as 4 would erase the distinction the exit protocol exists to make,
+    ! and M4-01's judgement 5 asserts the outward verdict for a refused dialect is uniform.
+    ! Found 2026-09-11 by the fallback gate, which asked what a refused deck actually
+    ! reports and got INIT.
+    code = errs%exit_code()
+    select case (code)
+    case (EXIT_UNSUPPORTED)
+      call diag_abort('UNSUPPORTED', EXIT_UNSUPPORTED, 'yl_adapter_override', &
+           stage//' refused this deck under --adapter=on; rerun with --adapter=off to '// &
+           'use the legacy readers')
+    case (EXIT_INPUT)
+      call diag_abort('RANGE', EXIT_INPUT, 'yl_adapter_override', &
+           stage//' rejected this deck under --adapter=on')
+    case default
+      call diag_abort('INIT', EXIT_INIT, 'yl_adapter_override', &
+           stage//' raised a finding under --adapter=on')
+    end select
   end subroutine fail
 
 end subroutine yl_adapter_override

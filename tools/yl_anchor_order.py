@@ -101,8 +101,12 @@ def gdb_script(binary: Path, sites: list[str], log: Path, out: Path) -> str:
         for spec in specs:
             lines += [spec, "commands", "silent", f'printf "HIT {s}\\n"', "continue", "end"]
             n += 1
+    # --adapter=off explicitly: this check is ABOUT the legacy reader order, and since
+    # 2026-09-11 the solver's default entry is the adapter, which switches those readers
+    # off. Without the flag every registered reader reports as "never reached" -- which is
+    # true of the adapter path and beside the point here.
     lines += [f'printf "LOCATIONS %d {n}\\n", $bpnum',
-              "run < /dev/null > gdb-stdout.txt 2> gdb-stderr.txt",
+              "run --adapter=off < /dev/null > gdb-stdout.txt 2> gdb-stderr.txt",
               'printf "EXIT %d\\n", $_exitcode', "quit"]
     out.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return f"{len(sites)} sites -> {n} breakpoint locations"

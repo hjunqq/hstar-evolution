@@ -511,10 +511,19 @@ MAIN_SRCS=(Fem.f90)
 # which must print only yl_adapter_entry_stub.o. The stub refuses rather than
 # returning quietly: a fallback switch whose "on" silently means "off" in some
 # builds is worse than no switch (see the stub's own header).
-ENTRY_SRCS=(src/adapter/yl_adapter_entry_stub.f90)
+# M4-02 exit condition: the adapter is the DEFAULT entry for the whitelisted slice, so
+# every solver build links the real entry and `--adapter=off` is the documented fallback.
+# This deliberately ends M4-01's criterion 12 ("the solver links no adapter object file"),
+# which was scoped to M4-01 and whose whole point was that the adapter was not yet the
+# entry. The stub survives for the targets that link the legacy tree WITHOUT the adapter
+# (runtime-bridge, adapter): Global.f90's guarded call needs an implementation there too,
+# and a stub that REFUSES is the only safe one -- see its header.
+#
+# `solver-adapter` remains as an alias so existing invocations keep working; it now builds
+# exactly what `release` builds.
+ENTRY_SRCS=(src/adapter/yl_adapter_entry.f90)
 SOLVER_REPO_SRCS=()
-if [ "$TARGET" = solver-adapter ]; then
-    ENTRY_SRCS=(src/adapter/yl_adapter_entry.f90)
+if [ "$TARGET" = solver ] || [ "$TARGET" = solver-adapter ]; then
     SOLVER_REPO_SRCS=(src/problem/yl_problem_optional.f90
                       src/problem/yl_problem_types.f90
                       src/problem/yl_problem_deck_residue.f90
@@ -1086,6 +1095,17 @@ log "=== BUILD OK ($PROFILE) $T0 → $T1"
 # call-order table; yl_io_inventory check only ever scanned within the anchor's own
 # routine. The trace binary is the only build that can settle it, so the check runs
 # here, where that binary has just been produced.
+# M4-02 exit conditions: the adapter is the default entry and the fallback is tested.
+# Run on the release solver because that is the binary an operator gets; the gate does the
+# comparison BOTH ways (each path against the reference, and the two paths against each
+# other) and checks that a refused deck stops with its dialect named rather than falling
+# back to the legacy readers.
+if [ "$TARGET" = solver ] && [ "$PROFILE" = "release" ] && [ "${HSTAR_SKIP_FALLBACK:-0}" != "1" ]; then
+    log "=== fallback and default entry (M4-02)"
+    python3 "$ROOT/tools/yl_fallback_check.py" --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build.sh: fallback check failed" >&2; exit 6; }
+fi
+
 if [ "$PROFILE" = "trace" ] && [ "${HSTAR_SKIP_ANCHOR_ORDER:-0}" != "1" ]; then
     log "=== anchor order (M2-01 judgement 4)"
     python3 "$ROOT/tools/yl_anchor_order.py" check --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"

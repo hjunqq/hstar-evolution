@@ -59,7 +59,7 @@ module yl_diag
   ! entry until the cross-path comparison says otherwise, and --adapter=off remains
   ! the documented fallback switch after that default flips (M4 exit condition
   ! "回退开关经过测试，但不会自动触发" -- it never turns itself on or off).
-  logical, save, protected, public :: yl_adapter_mode = .false.
+  logical, save, protected, public :: yl_adapter_mode = .true.
 
   integer, parameter :: LEN_CODE = 16, LEN_MSG = 512
   integer, parameter :: LEN_SITE = 64, LEN_FIELD = 256
