@@ -103,7 +103,7 @@
     read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) probn
     call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_problem_name,0)
     !	adina=0
-
+    if (yl_adapter_mode) call yl_adapter_override()   ! M4-02 adapter entry
     !mystatus=0
     !CALL GETARG (1, probn,mystatus(1))
     !CALL GETARG (2, t2,mystatus(2))
@@ -114,7 +114,7 @@
     print *, 'time: ', char_time
     write(chkunit,*)'time: ', char_time
     ! analysis process
-    call global_data ! set the global data, they will be unchanged in the whole
+    if (.not. yl_adapter_mode) call global_data ! set the global data, they will be unchanged in the whole
 
 
     if(Uopt_R==1)then  !20210502
@@ -182,20 +182,20 @@
     print *,'nblks=',nblks
     print *,'Input runblks, =?'
     !read *,runblks
-    read (inpunit,*,iostat=yl_ios,iomsg=yl_msg)runblks
-    call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_runblks,0)
+    if (.not. yl_adapter_mode) read (inpunit,*,iostat=yl_ios,iomsg=yl_msg)runblks
+    if (.not. yl_adapter_mode) call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_runblks,0)
     call TIME(char_time)
     print *, 'time: ', char_time
     write(chkunit,*)'time: ', char_time
     ! material set
-    call material_set
+    if (.not. yl_adapter_mode) call material_set
     ! modify the element libary
-    call modf_element_lib  !20221124
+    if (.not. yl_adapter_mode) call modf_element_lib  !20221124
 
-    call contact_point_to_point  !!ctt2005
+    if (.not. yl_adapter_mode) call contact_point_to_point  !!ctt2005
 
-    call link_concrete_and_steel  !20210328
-    call link_concrete_and_water_pipe !20210411
+    if (.not. yl_adapter_mode) call link_concrete_and_steel  !20210328
+    if (.not. yl_adapter_mode) call link_concrete_and_water_pipe !20210411
 
 
 
@@ -206,17 +206,17 @@
 
     !call steel_spring_parameter  !!steel 2006
     ! stiffness for interface of Fluid and solid, absorbing boundary
-    call stiff_interface_fluid_solid    !!ifs2000
-    call stiff_absorb_fluid             !!ifs2000
-    call stiff_absorb_solid             !!ifs2000
-    call stiff_ifs2006                  !!ifs2006 zhao, 06/03/29
+    if (.not. yl_adapter_mode) call stiff_interface_fluid_solid    !!ifs2000
+    if (.not. yl_adapter_mode) call stiff_absorb_fluid             !!ifs2000
+    if (.not. yl_adapter_mode) call stiff_absorb_solid             !!ifs2000
+    if (.not. yl_adapter_mode) call stiff_ifs2006                  !!ifs2006 zhao, 06/03/29
 
     allocate(toler_var(mdofn))
-    call output_read  !20210803
+    if (.not. yl_adapter_mode) call output_read  !20210803
     iwriten=0
     trstep=0
 
-    allocate(result_zero(ntotv)) ; result_zero=0.
+    if (.not. yl_adapter_mode) allocate(result_zero(ntotv)) ; result_zero=0.
     if(upliftin/=0)allocate(uplift_node(npoin))
     if(outind==-1)  allocate(accq(ndimn,npoin))  !20231113
 
@@ -1679,7 +1679,7 @@
         call gpvar_initial  !201605
     endif
 
-    call external_load_1
+    if (.not. yl_adapter_mode) call external_load_1
     do iblks=lblks+1,runblks
         write(7,*)'iblks=',iblks,'runblks=',runblks
         if(allocated(torel))               torel=0.0  !20201121
@@ -1870,7 +1870,7 @@
         if(ikindks/=0)call steel_spring_parameter  !!steel 2006
 
 
-        call prescrib_set  !20221124
+        if (.not. yl_adapter_mode) call prescrib_set  !20221124
 
         if(nbackdT==1)then !20210820
 
@@ -1893,10 +1893,10 @@
             end do
         endif
 
-        call external_load_2
+        if (.not. yl_adapter_mode) call external_load_2
         if(block_stab==0) &   !20200331
             call contact_pair_process !ctt2005  !zhao 2007.04.16
-        call boundt !! temperature
+        if (.not. yl_adapter_mode) call boundt !! temperature
         if(ADINA/=0.and.iblks==runblks)call GHM2ADINA
         if(ADINA==1.and.iblks<runblks)cycle
         if(ADINA==1.and.iblks==runblks)stop 'stop for ADINA==1!'

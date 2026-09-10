@@ -52,6 +52,14 @@ module yl_diag
   ! --dump-state=DIR and read (never written) by yl_state_serializer / Fem.f90.
   logical, save, protected, public :: yl_dump_enabled = .false.
   character(len=256), save, protected, public :: yl_dump_dir = ''
+  ! M4-02 adapter entry. When .true., Fem.f90 calls the external subroutine
+  ! yl_adapter_override() immediately before the model_ready anchor, replacing the
+  ! globals the legacy readers built with the ones the adapter committed, and the
+  ! solve then runs on adapter data. DEFAULT OFF: the legacy path stays the default
+  ! entry until the cross-path comparison says otherwise, and --adapter=off remains
+  ! the documented fallback switch after that default flips (M4 exit condition
+  ! "回退开关经过测试，但不会自动触发" -- it never turns itself on or off).
+  logical, save, protected, public :: yl_adapter_mode = .false.
 
   integer, parameter :: LEN_CODE = 16, LEN_MSG = 512
   integer, parameter :: LEN_SITE = 64, LEN_FIELD = 256
@@ -112,6 +120,9 @@ contains
   ! Scan every command-line argument. Accepted, in any order:
   !   --check-legacy       check mode
   !   --max-entities=N     N decimal, 1..huge(0_ink); overrides diag_max_entities
+  !   --adapter=on|off     M4-02 adapter entry (default off); no other spelling is
+  !                        accepted, and it may appear at most once, so a typo can
+  !                        never be read as "off"
   !   --dump-state=DIR     M2-02 state observer; DIR is copied byte-exactly into
   !                        yl_dump_dir (no shell expansion) and yl_dump_enabled
   !                        is set. May appear at most once and is mutually
@@ -122,17 +133,31 @@ contains
   subroutine diag_set_mode_from_argv()
     character(len=*), parameter :: OPT_ME = '--max-entities='
     character(len=*), parameter :: OPT_DS = '--dump-state='
+    character(len=*), parameter :: OPT_AD = '--adapter='
     character(len=LEN_VALUE) :: arg
     integer :: i, l, st, k
     integer(i8) :: n
-    logical :: ok
+    logical :: ok, seen_adapter
+    seen_adapter = .false.
     do i = 1, command_argument_count()
       arg = ''
       call get_command_argument(i, arg, l, st)
       if (st /= 0 .or. l > len(arg)) then
         call argv_error(i, arg(1:min(l, len(arg))), 'argument too long or unreadable')
       end if
-      if (arg(1:l) == '--check-legacy') then
+      if (l > len(OPT_AD) .and. arg(1:len(OPT_AD)) == OPT_AD) then
+        if (seen_adapter) then
+          call argv_error(i, arg(1:l), 'repeated --adapter=on|off option')
+        end if
+        if (arg(len(OPT_AD) + 1:l) == 'on') then
+          yl_adapter_mode = .true.
+        else if (arg(len(OPT_AD) + 1:l) == 'off') then
+          yl_adapter_mode = .false.
+        else
+          call argv_error(i, arg(1:l), 'expected --adapter=on or --adapter=off')
+        end if
+        seen_adapter = .true.
+      else if (arg(1:l) == '--check-legacy') then
         if (yl_dump_enabled) then
           call argv_error(i, arg(1:l), '--check-legacy and --dump-state=DIR are mutually exclusive')
         end if
@@ -192,7 +217,7 @@ contains
     d%index = i
     d%field = 'argv'
     d%value = arg
-    d%allowed = '--check-legacy | --max-entities=N | --dump-state=DIR'
+    d%allowed = '--check-legacy | --max-entities=N | --dump-state=DIR | --adapter=on|off'
     d%message = message
     call diag_emit(d)
     call diag_exit(d%exit_code)
