@@ -1,0 +1,66 @@
+# Cook's membrane under self-weight. See docs/m5/authoring-contract.md.
+version = 1
+
+[case]
+name        = "cooks_membrane"
+units       = "SI"
+description = "Cook's membrane, 16x16 Q4 plane strain, gravity only"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name       = "body"
+mesh_group = 1
+
+[[nset]]
+name  = "clamped_edge"
+nodes = [1, 18, 35, 52, 69, 86, 103, 120, 137, 154, 171, 188, 205, 222, 239, 256, 273]
+
+[[material]]
+name    = "concrete"
+model   = "elastic_isotropic"
+density = 2400.0
+E       = 2.5e10
+nu      = 0.2
+
+[[section]]
+name        = "membrane"
+elset       = "body"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[step]]
+name      = "self_weight"
+procedure = "static"
+
+[step.controls]
+increments      = 1
+max_iterations  = 5
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+
+[[step.boundary]]
+nset  = "clamped_edge"
+dof   = [1, 2]
+value = 0.0
+
+[step.load.gravity]
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+
+[solver]
+linear = "profile"
+
+[output]
+format = "gid"
+field  = ["u", "s"]
