@@ -133,6 +133,7 @@ while [ $# -gt 0 ]; do
         runtime) TARGET=runtime;;
         runtime-bridge) TARGET=runtime-bridge;;
         adapter) TARGET=adapter;;
+        authoring) TARGET=authoring;;
         solver-adapter) TARGET=solver-adapter;;
         --profile)
             case "$2" in
@@ -150,7 +151,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 case "$TARGET" in
-    problem-types|runtime|runtime-bridge|adapter)
+    problem-types|runtime|runtime-bridge|adapter|authoring)
         [ -z "$OUT" ] && OUT="$ROOT/build/$TARGET/$PROFILE${LABEL:+-$LABEL}";;
     solver-adapter)
         [ -z "$OUT" ] && OUT="$ROOT/build/solver-adapter${LABEL:+-$LABEL}";;
@@ -496,6 +497,59 @@ SRCS=(Vartype.f90 Array.f90 Elements.f90 gidpost.F90 vsl_gauss_module.f90
       Global.f90 Material.f90 meshfine.f90 Load.f90 Prescrib.f90 Solver.f90
       Output.f90 Temper.f90 Stiff.f90 Residu.f90 Level.f90)
 MAIN_SRCS=(Fem.f90)
+
+# --- target: authoring (M5) ---------------------------------------------------
+# The TOML subset reader, the declared key table, the operator-facing renderer and the
+# counter-example suite. It links NO legacy object file: the authoring layer's whole point
+# is that it does not know what a deck is, and a target that could not build without the
+# legacy tree would quietly make that untrue.
+if [ "$TARGET" = authoring ]; then
+    AUTH_SRCS=(src/problem/yl_problem_optional.f90
+               src/problem/yl_problem_errors.f90
+               src/authoring/yl_authoring_toml.f90
+               src/authoring/yl_authoring_keys.f90
+               src/authoring/yl_authoring_report.f90)
+    AUTH_MAIN=src/authoring/yl_authoring_test.f90
+    for f in "${AUTH_SRCS[@]}" "$AUTH_MAIN"; do
+        [ -f "$ROOT/$f" ] || { echo "build.sh: authoring: missing source $ROOT/$f" >&2; exit 4; }
+    done
+    rm -rf "$OUT"; mkdir -p "$OUT/obj"
+    LOG="$OUT/build.log"; : > "$LOG"
+    T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    log() { echo "$*" | tee -a "$LOG"; }
+    run() { log "\$ $*"; "$@" >>"$LOG" 2>&1; }
+    log "=== HSTAR Evolution build: target=authoring profile=$PROFILE out=$OUT"
+    OBJS=()
+    for f in "${AUTH_SRCS[@]}" "$AUTH_MAIN"; do
+        b="$(basename "$f")"; obj="$OUT/obj/${b%.*}.o"
+        run "$HSTAR_FC" -c "${FFLAGS[@]}" -warn all -stand f18 -module "$OUT/obj" \
+            -I "$OUT/obj" "$ROOT/$f" -o "$obj" || {
+            echo "=== COMPILE FAILED (authoring): $f" >&2
+            grep -iE "error" "$LOG" | head -10 >&2; exit 7; }
+        OBJS+=("$obj")
+    done
+    # No MKL and no OpenMP -- this target links no legacy object and solves nothing.
+    # The compiler runtime still needs its rpath, or the binary cannot find libimf.
+    run "$HSTAR_FC" "${FFLAGS[@]}" "${OBJS[@]}" -o "$OUT/yl_authoring_test" \
+        "-Wl,--disable-new-dtags" "-Wl,-rpath,$(dirname "$HSTAR_FC")/../lib" \
+        "-Wl,-rpath,$HSTAR_IOMP_LIBDIR" || {
+        echo "=== LINK FAILED (authoring)" >&2; exit 7; }
+    W=$(grep -c -iE "warning #|remark #" "$LOG" || true)
+    log "warnings/remarks in log: $W"
+    mkdir -p "$OUT/scratch"
+    # The full counter-example suite needs a deck with two nsets (a duplicate NAME inside
+    # one collection cannot be made by a single-line change otherwise); cooks_membrane is
+    # checked for a clean pass, which is the control the bad cases need.
+    "$OUT/yl_authoring_test" "$ROOT/cases/golden/static_2d/cooks_membrane/modern/case.toml" \
+        "$OUT/scratch" --clean-only 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (cooks_membrane)" >&2; exit 6; }
+    "$OUT/yl_authoring_test" "$ROOT/cases/golden/static_2d/lame_cylinder/modern/case.toml" \
+        "$OUT/scratch" 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (lame_cylinder)" >&2; exit 6; }
+    T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    log "=== BUILD OK (authoring/$PROFILE) $T0 -> $T1: contract validator suite passed"
+    exit 0
+fi
 
 # --- the M4-02 adapter entry seam ---------------------------------------------
 # Fem.f90 calls the external subroutine yl_adapter_override() before the
