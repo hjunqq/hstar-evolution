@@ -1,6 +1,30 @@
 # 当前进度
 
-更新日期：2026-09-10。此文件只登记已经发生的事；阶段验收以证据包为准。
+<!-- 事实源：全项目只有这一份「当前状态」。CLAUDE.md、报告、验收包只链接本文件，
+     不复制「当前在做 / 下一步」。.ccg/tasks/*/task.json 是执行器的工作队列，
+     不是状态；两者不一致时以本文件为准。 -->
+
+更新日期：2026-09-12。此文件只登记已经发生的事；阶段验收以证据包为准。
+
+## 验收链（2026-09-12 总览时清点）
+
+| 阶段 | 实现 | 验收 | 证据包 |
+|---|---|---|---|
+| M0 基线 | 完成 | **ACCEPTED** 2026-09-09 | `docs/m0/M0-acceptance-matrix.md`（18 判据，带 R28） |
+| M1 Crash Firewall | 完成 | **从未作为阶段签收** | **没有 M1 验收矩阵**；只有逐任务 DONE + R27 关闭报告 |
+| M2 状态观测 | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m2/M2-acceptance-matrix.md`（23 判据） |
+| M3 ProblemState | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m3/M3-acceptance-matrix.md`（27 判据） |
+| M4 Legacy Adapter | 完成 | **ACCEPTED** 2026-09-12 | `docs/m4/M4-01-acceptance-matrix.md`（32 判据）+ `M4-02-report.md` |
+| M5 现代输入闭环 | 进行中 1/5 | — | — |
+
+**M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
+`docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
+M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是「逐任务 DONE + 条件解除」，
+而条件解除的判断本身没有被第二方按判据逐条核过。R29（没有门禁能验证适配器覆盖了哪些读取站点）
+至今 OPEN，问的正是 M1 完备性的同一个问题。
+
+**这不是说 M1 的结论错了**——R27 关闭时命中集由 211 升为 216，四处新站点已按流程补包装，
+方言套件与影子差分都在其上跑通。缺的是**独立复核这件事本身**。
 
 ## 功能域视图（ADR-0007）
 
@@ -62,8 +86,8 @@
 | M3-01 ProblemState 类型 | **ACCEPTED（有条件接受，负责人 Huijun 签收 2026-09-10）** | `src/problem/` 最小类型（24 个类型 / 100 字段，98 项对应 M2 映射表，2 项 M5-only）；`opt_*` 包装区分 unset/zero/empty；独立 `problem-types` 构建目标不入求解器链接链（build-id 不变）；`yl_problem_check.py` 双向核对 + 槽位名黑名单；映射表 6 项缺陷修正 + `legacy_only`(47)。**签收（2026-09-10）**：依 ADR-0005 三份矩阵一并审阅，M2 三条件、M3 一条件签字前全部完成（判据 4 锚点顺序改由测量建立、判据 5 守卫表机械对账 + `stab_matde` 订正、判据 16/17 口径修订为字段值级可复现见 ADR-0006、判据 9 层次边界写明）；带着签的债务：M2 判据 10/22、M3 判据 5/11/25 覆盖残余。**签收不确立 `docs/07` SECTION 02 的任何能力** |
 | M3-02 输入流水线 | **ACCEPTED（有条件接受，负责人 Huijun 签收 2026-09-10）** | normalize/validate/capability gate/finalize 四阶段，仅 `prepare_problem` 公开、阶段间失败即止、阶段内累积；错误累积器为纯内存（不触 `diag_*`，保证同进程重试）；manifest 记派生/默认/核对三类；反例矩阵 485/485 覆盖每条已实现规则的每个条件，能力表 15 行由套件遍历断言（计数与源码哈希冻结于 `docs/m3/evidence/M3-02-selftest.json`）；5 条无反例规则明确不实现。**签收（2026-09-10）**：依 ADR-0005 三份矩阵一并审阅，M2 三条件、M3 一条件签字前全部完成（判据 4 锚点顺序改由测量建立、判据 5 守卫表机械对账 + `stab_matde` 订正、判据 16/17 口径修订为字段值级可复现见 ADR-0006、判据 9 层次边界写明）；带着签的债务：M2 判据 10/22、M3 判据 5/11/25 覆盖残余。**签收不确立 `docs/07` SECTION 02 的任何能力** |
 | M3-03 build_runtime / commit | **ACCEPTED（有条件接受，负责人 Huijun 签收 2026-09-10）** | `src/runtime/` 七个模块。`build_runtime` 产出 46 个 `model_ready` 行 + 值状态账本（DEFINED/RESERVED/ABSENT 35/9/2）+ 派生 manifest，无部分提交由结构保证（局部 candidate，末尾两个 `move_alloc`），12 个注入点由 T01 遍历；`commit_legacy_globals` 为迁移期唯一旧全局写入口，VERIFY+STAGE/WRITE 两段、`commit_release` 幂等、记录数组全局的外来分配一律拒绝（交付时六个；M4-01 步 3 加入 `props` 后为七个）；规则表 60 行（5 check/46 derive/6 inv/3 net），`condition` 列与账本状态 1:1 且受检，两张兜底网走账本而非点名行（未接线的 map 行 = 构建失败）；反向双射由 `yl_state_map.py runtime-rules` 消费自检导出行断言；自检 108/108 + 隔离桥接通过（结论标注 PARTIAL；该计数随 M4-01 折叠增长至 1292，**不再登记具体数字**，以当次运行为准）；求解器 build-id 不变。**与冻结基线的逐值比对未执行**——需 deck→ProblemState 适配器（M4-01），见 `docs/m3/M3-03-runtime.md` §8。**签收（2026-09-10）**：依 ADR-0005 三份矩阵一并审阅，M2 三条件、M3 一条件签字前全部完成（判据 4 锚点顺序改由测量建立、判据 5 守卫表机械对账 + `stab_matde` 订正、判据 16/17 口径修订为字段值级可复现见 ADR-0006、判据 9 层次边界写明）；带着签的债务：M2 判据 10/22、M3 判据 5/11/25 覆盖残余。**签收不确立 `docs/07` SECTION 02 的任何能力** |
-| M4-01 静力 Legacy Adapter | **DONE（矩阵已交付；随 M4 阶段一并签收）** | `src/adapter/` 的**十个解析器**（`parse_inp/cor/ele/glb/loa/man/mat/pre/sol/tem`，分布在 13 个模块中）把两个 golden deck 解析为 `problem_state_t`；L2-b 方言拒绝并入 M3-02 能力表（每行一个反例，且断言「只有该行触发」；计数随能力表增长，以 `bash tools/build.sh adapter` 为准，验收复核日实测 337/337 ×2）；L2-c 折叠把 ProblemState 那一半并入 `commit_legacy_globals` 的同一次 staging，出处账本 `NOT_MIGRATED` **118 → 0**（162 是 `model_ready` 已发出行的**总数**，不是该桶的起点）；**M4-01 自身判据（影子差分）**：`MATCH=324 MISMATCH=0 NOT_COMPARABLE=158 UNVERIFIED=56`——**仅覆盖 `model_ready`**，另两个检查点新路径不跑求解故到不了；L3-b 冻结基线对拍 `MATCH=64 MISMATCH=0`（红线，折叠十七步未动）；步 6 泄漏可检出性：**21 个内层释放站点中 6 处**（每记录数组一处）由 ASan/LeakSanitizer 阳性对照证明可报出——**工具是 ASan 不是 valgrind**（本机无法安装），且**第一次阳性对照什么都没报**（Intel OpenMP 运行时静默关闭 LeakSanitizer）。**未闭合**：R29（无门禁能验证适配器覆盖了哪些读取站点）、R30（`PROV_VIA_RUNTIME` 的来源是散文、无对账）。报告 `docs/m4/M4-01-report.md`（实现者撰写）；验收矩阵 `docs/m4/M4-01-acceptance-matrix.md`（独立于实现者编制，32 项判据 → **24 独立证据支撑 / 0 不满足 / 4 未建立 / 4 仅有断言**）。**待签收；签 M4-01 不等于签阶段 M4**——阶段四条出口条件里三条属 M4-02 |
-| M4-02 独立进程差分与默认入口 | **DONE（待阶段签收）** | 适配器真正驱动求解：两例 `--adapter=on` 与冻结参考**严格相等**（`max|d| = 0.000e+00`），三个检查点 190 个发出字段全部一致；跨路径容差按 ADR-0008 §4 定为 `atol = rtol = 0`（噪声测不出来），R28 判据 13 关闭；适配器成为默认入口（`yl_adapter_mode` 默认 on，release 链接 `yl_adapter_entry`），`--adapter=off` 回退开关由 `tools/yl_fallback_check.py` 四条断言守住（含「被拒绝的 deck 必须停下、不得自动回落」，该断言当场查出对外判决被压成 INIT 的缺陷）；运行存在面按 ADR-0009 机械清点建立。**legacy 侧改动 19 行且不改变任何文件行数**。**结束**了 M4-01 判据 12（求解器不链接 adapter 目标文件）——出口条件的直接后果。报告 `docs/m4/M4-02-report.md` |
+| M4-01 静力 Legacy Adapter | **ACCEPTED（M4 阶段签收，负责人 Huijun，2026-09-12）** | `src/adapter/` 的**十个解析器**（`parse_inp/cor/ele/glb/loa/man/mat/pre/sol/tem`，分布在 13 个模块中）把两个 golden deck 解析为 `problem_state_t`；L2-b 方言拒绝并入 M3-02 能力表（每行一个反例，且断言「只有该行触发」；计数随能力表增长，以 `bash tools/build.sh adapter` 为准，验收复核日实测 337/337 ×2）；L2-c 折叠把 ProblemState 那一半并入 `commit_legacy_globals` 的同一次 staging，出处账本 `NOT_MIGRATED` **118 → 0**（162 是 `model_ready` 已发出行的**总数**，不是该桶的起点）；**M4-01 自身判据（影子差分）**：`MATCH=324 MISMATCH=0 NOT_COMPARABLE=158 UNVERIFIED=56`——**仅覆盖 `model_ready`**，另两个检查点新路径不跑求解故到不了；L3-b 冻结基线对拍 `MATCH=64 MISMATCH=0`（红线，折叠十七步未动）；步 6 泄漏可检出性：**21 个内层释放站点中 6 处**（每记录数组一处）由 ASan/LeakSanitizer 阳性对照证明可报出——**工具是 ASan 不是 valgrind**（本机无法安装），且**第一次阳性对照什么都没报**（Intel OpenMP 运行时静默关闭 LeakSanitizer）。**未闭合**：R29（无门禁能验证适配器覆盖了哪些读取站点）、R30（`PROV_VIA_RUNTIME` 的来源是散文、无对账）。报告 `docs/m4/M4-01-report.md`（实现者撰写）；验收矩阵 `docs/m4/M4-01-acceptance-matrix.md`（独立于实现者编制，32 项判据 → **24 独立证据支撑 / 0 不满足 / 4 未建立 / 4 仅有断言**）。**待签收；签 M4-01 不等于签阶段 M4**——阶段四条出口条件里三条属 M4-02 |
+| M4-02 独立进程差分与默认入口 | **ACCEPTED（M4 阶段签收，负责人 Huijun，2026-09-12）** | 适配器真正驱动求解：两例 `--adapter=on` 与冻结参考**严格相等**（`max|d| = 0.000e+00`），三个检查点 190 个发出字段全部一致；跨路径容差按 ADR-0008 §4 定为 `atol = rtol = 0`（噪声测不出来），R28 判据 13 关闭；适配器成为默认入口（`yl_adapter_mode` 默认 on，release 链接 `yl_adapter_entry`），`--adapter=off` 回退开关由 `tools/yl_fallback_check.py` 四条断言守住（含「被拒绝的 deck 必须停下、不得自动回落」，该断言当场查出对外判决被压成 INIT 的缺陷）；运行存在面按 ADR-0009 机械清点建立。**legacy 侧改动 19 行且不改变任何文件行数**。**结束**了 M4-01 判据 12（求解器不链接 adapter 目标文件）——出口条件的直接后果。报告 `docs/m4/M4-02-report.md` |
 | M1～M5 实现及验收 | TODO | 尚无 checked I/O、状态比较器、现代初始化或可运行 TOML |
 | M6～M9 | BACKLOG | 按真实需求逐能力启动 |
 
