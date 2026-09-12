@@ -1166,6 +1166,16 @@ if [ "$TARGET" = solver ] && [ "$PROFILE" = "release" ] && [ "${HSTAR_SKIP_FALLB
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build.sh: fallback check failed" >&2; exit 6; }
 fi
 
+# M5 exit condition: the authoring format drives the solver from itself. Runs on the same
+# release binary and right after the fallback gate, because the two are complementary --
+# M4-02 proved the adapter can drive the legacy solver from the LEGACY deck, M5 proves the
+# new format can, with no legacy control deck in the directory at all.
+if [ "$TARGET" = solver ] && [ "$PROFILE" = "release" ] && [ "${HSTAR_SKIP_MODERN:-0}" != "1" ]; then
+    log "=== modern input end to end (M5)"
+    python3 "$ROOT/tools/yl_modern_check.py" --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build.sh: modern-input check failed" >&2; exit 6; }
+fi
+
 if [ "$PROFILE" = "trace" ] && [ "${HSTAR_SKIP_ANCHOR_ORDER:-0}" != "1" ]; then
     log "=== anchor order (M2-01 judgement 4)"
     python3 "$ROOT/tools/yl_anchor_order.py" check --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"

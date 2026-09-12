@@ -74,3 +74,6 @@ linear = "profile"
 [output]
 format = "gid"
 field  = ["u", "s"]
+# Reported nodal stresses are the direct average of the elements meeting at the node
+# (legacy average_appear=2). This changes the numbers that are reported, so it is written out.
+stress_averaging = "direct"

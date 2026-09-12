@@ -87,7 +87,7 @@ contains
     type(amplitude_builder_t) :: ab
     type(deck_context_t) :: ctx
     type(problem_state_t), allocatable :: draft
-    integer :: mark0, u_cor, u_ele, ios, i, j, n
+    integer :: mark0, u_cor, u_ele, ios, i, j, k, n, iset
     logical :: ok
     character(len=:), allocatable :: prefix
     type(case_t) :: cs
@@ -103,7 +103,7 @@ contains
     type(step_t) :: step_val
     type(activation_t) :: act
     type(nset_t) :: ns
-    integer(int32), allocatable :: ids(:)
+    integer(int32), allocatable :: ids(:), nodes(:)
 
     mark0 = errors%count()
     call builder_begin(b)
@@ -111,11 +111,15 @@ contains
 
     prefix = trim(dir)//'/'//text_at(doc, 'mesh.file')
 
-    call opt_set(cs%name, text_at(doc, 'case.name'))
+    ! ProblemState.case.name IS legacy's `probn` -- the problem name every input and output
+    ! file is prefixed with -- so it takes mesh.file, not the author's `case.name`, which is
+    ! a human label with no legacy counterpart. Mapping the label here would rename the
+    ! solver's own output files.
+    call opt_set(cs%name, text_at(doc, 'mesh.file'))
     ! units is @m5-only: no legacy record carries it, and ADR-0003 makes the explicit
     ! SI declaration mandatory. The modern path is the first one that can fill it.
     call opt_set(cs%units, text_at(doc, 'case.units'))
-    call builder_set_case(b, cs, here(line_at(doc, 'case.name')), errors)
+    call builder_set_case(b, cs, here(line_at(doc, 'mesh.file')), errors)
     call builder_set_mesh_dimension(b, int_at(doc, 'mesh.dimension'),                        &
                                     here(line_at(doc, 'mesh.dimension')), errors)
     ! interactions: the contract whitelists none, and the absence is the asserted value.
@@ -163,7 +167,7 @@ contains
     do i = 1, int(doc%count_of('material'))
       call default_material(mat)
       call opt_set(mat%id, int(i, int32))
-      call opt_set(mat%name, legacy_material_name(text_at(doc, 'material['//itoa(i)//'].model')))
+      call opt_set(mat%model, legacy_material_name(text_at(doc, 'material['//itoa(i)//'].model')))
       call opt_set(mat%density, real_at(doc, 'material['//itoa(i)//'].density'))
       call opt_set(mat%e, real_at(doc, 'material['//itoa(i)//'].E'))
       call opt_set(mat%nu, real_at(doc, 'material['//itoa(i)//'].nu'))
@@ -241,28 +245,34 @@ contains
     if (builder_failed(b)) return
 
     call default_output(outp)
-    call set_stress_averaging(outp, int(doc%count_of('section')))
+    call set_stress_averaging(outp, int(doc%count_of('section')),                             &
+                              stress_averaging_code(text_at(doc, 'output.stress_averaging')))
     call apply_output_fields(doc, outp)
     call builder_step_set_output(b, sb, outp, here(line_at(doc, 'output.format')), errors)
     if (builder_failed(b)) return
 
-    ! Boundary: one ProblemState entry per (nset, dof) pair. legacy's `.pre` has one set per
-    ! constrained direction, and the contract lets an author write `dof = [1, 2]` once --
-    ! the expansion is here, not in the input, because "which directions are fixed" is the
-    ! author's statement and "one record per direction" is the solver's storage.
+    ! Boundary: one ProblemState entry per (set, dof, node) triple -- that is the solver's
+    ! storage (prescrib%ifixset / %ifixvar / %nodfix), not the author's statement. The
+    ! contract lets an author name a node set once and write `dof = [1, 2]` once, so both
+    ! expansions happen here. dof is the outer loop because legacy's `.pre` groups one set
+    ! per constrained direction, and that grouping is what the frozen reference records.
+    ! boundary_t's component names read backwards against this: %name carries the set
+    ! ordinal, %nset carries the node number (see yl_runtime_commit.f90:1052-1061).
     do i = 1, int(doc%count_of('step[1].boundary'))
       call int_list(doc, 'step[1].boundary['//itoa(i)//'].dof', ids)
+      iset = nset_index(doc, text_at(doc, 'step[1].boundary['//itoa(i)//'].nset'))
+      call int_list(doc, 'nset['//itoa(iset)//'].nodes', nodes)
       do j = 1, size(ids)
-        call default_boundary(bnd)
-        call opt_set(bnd%nset, int(nset_index(doc,                                            &
-             text_at(doc, 'step[1].boundary['//itoa(i)//'].nset')), int32))
-        call opt_set(bnd%name, int(nset_index(doc,                                            &
-             text_at(doc, 'step[1].boundary['//itoa(i)//'].nset')), int32))
-        call opt_set(bnd%dof, ids(j))
-        call opt_set(bnd%value, real_at(doc, 'step[1].boundary['//itoa(i)//'].value'))
-        call builder_step_add_boundary(b, sb, bnd,                                            &
-             here(line_at(doc, 'step[1].boundary['//itoa(i)//'].nset')), errors)
-        if (builder_failed(b)) return
+        do k = 1, size(nodes)
+          call default_boundary(bnd)
+          call opt_set(bnd%name, int(iset, int32))
+          call opt_set(bnd%nset, nodes(k))
+          call opt_set(bnd%dof, ids(j))
+          call opt_set(bnd%value, real_at(doc, 'step[1].boundary['//itoa(i)//'].value'))
+          call builder_step_add_boundary(b, sb, bnd,                                          &
+               here(line_at(doc, 'step[1].boundary['//itoa(i)//'].nset')), errors)
+          if (builder_failed(b)) return
+        end do
       end do
     end do
 

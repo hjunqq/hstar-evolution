@@ -76,6 +76,11 @@ program yl_authoring_test
   ! a value the reader itself cannot read
   call expect_bad('unreadable value', 'increments      = 1', 'increments      = @@@', &
                   'INVALID_INPUT', 2, 'increments')
+  ! stress averaging is a whitelist, and it is the one row that moved OUT of the default
+  ! table: it decides what the reported stresses are, so an unlisted scheme is a capability
+  ! refusal rather than a silently substituted default.
+  call expect_bad('unlisted stress averaging', 'stress_averaging = "direct"', &
+                  'stress_averaging = "gauss"', 'UNSUPPORTED', 3, 'output.stress_averaging')
 
   write (output_unit, '(a)') ''
   write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'

@@ -15,7 +15,7 @@
 | M2 状态观测 | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m2/M2-acceptance-matrix.md`（23 判据） |
 | M3 ProblemState | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m3/M3-acceptance-matrix.md`（27 判据） |
 | M4 Legacy Adapter | 完成 | **ACCEPTED** 2026-09-12 | `docs/m4/M4-01-acceptance-matrix.md`（32 判据）+ `M4-02-report.md` |
-| M5 现代输入闭环 | 进行中 1/5 | — | — |
+| M5 现代输入闭环 | 进行中 4/5 | — | `docs/m5/authoring-contract.md` + `tools/yl_modern_check.py`（N1/N2/N3，release 门禁） |
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
@@ -44,7 +44,7 @@ M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是�
 
 | 功能域 | 旧字段 | 语义 | 内部结构 | 新 schema | 回归证据 | 里程碑 |
 |---|---|---|---|---|---|---|
-| **静力（2D Q4 线弹性 / 重力 / 单增量 / PROFILE）** | 已登记 157 处 | 已摸清（有具名缺口） | `ProblemState` + `deck_residue_t` + 运行存在面 | **仅 bootstrap（M5）** | **状态等价与数值等价均已证（严格相等）** | M1～M4 完成 |
+| **静力（2D Q4 线弹性 / 重力 / 单增量 / PROFILE）** | 已登记 157 处 | 已摸清（有具名缺口） | `ProblemState` + `deck_residue_t` + 运行存在面 | **v1 契约可完整表达两例** | **状态等价与数值等价均已证（严格相等）；新格式亦严格复现冻结参考** | M1～M4 完成；M5 余「用户可见诊断」一项 |
 | 荷载扩展（点/边/梁板荷载、压力面） | `.loa` 32 处 | 未开始 | — | — | — | M5.pressure / M6 |
 | 求解器变体（PARDISO 等） | `.sol` 29 + iafile 5 | 未开始 | — | — | — | M5 |
 | 输出与观测点 | `.opr` 10 | 未开始 | — | — | — | M5 |
@@ -63,12 +63,16 @@ M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是�
   `.tem` 只覆盖本路径读到的零计数记录，其余 25 处属 M8。
 - **语义**：`ProblemState.*` 98 行 + `deck_residue_t` 27 行有 owner；具名缺口——
   `nextr` 无持久留存（R25）、守卫表 5 个量不在导出面上（`yl_guard_check.py` 每次点名）。
-- **新 schema**：`schemas/case.schema.json` 是 **bootstrap**，自述「M5 之前不蕴含任何求解能力」，
-  **没有任何求解路径消费它**。v1 契约是 M5-01，未开始。**因此「新格式可表达静力」目前不成立。**
+- **新 schema**：v1 契约 `docs/m5/authoring-contract.md` + `src/authoring/`（严格 TOML 子集读取器、
+  校验器 33/33 反例、默认表即代码、authoring → ProblemState 唯一映射层）。两个 golden 算例
+  **仅凭 `case.toml` + `.cor`/`.ele`** 驱动求解，工作目录内**没有任何 legacy 控制卡**
+  （`yl_modern_check.py` N1 就是这条断言）。`schemas/case.schema.json` 仍是旧 bootstrap，
+  无人消费，待 M5 收尾时退役或对齐。
 - **回归证据**：**两条路径严格相等**——两例 DISPLACEMENT/STRESS `max|d| = 0.000e+00`，
   三个检查点的 190 个发出字段全部一致（`yl_state_diff` 两例各 `PASS compared=190`）。
   容差按 ADR-0008 §4 定为 `atol = rtol = 0`（噪声测不出来，56 对重复运行）。
-  适配器已是默认入口，`--adapter=off` 为回退开关且经门禁测试。**限定**：两个 deck。
+  适配器已是默认入口，`--adapter=off` 为回退开关且经门禁测试。
+  新格式路径同样 `max|d| = 0.000e+00`（两例 DISPLACEMENT/STRESS，严格）。**限定**：两个 deck。
 
 | 项目 | 状态 | 说明 |
 |---|---|---|

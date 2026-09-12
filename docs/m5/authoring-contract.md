@@ -29,7 +29,9 @@ case.toml  --读--> authoring AST --映射--> ProblemState --build_runtime--> ru
 
 > **一个字段只有在「它不是物理选择」时才可以有默认值。**
 
-`materials[].E` 是物理选择，必须写；`steps[0].output.stress_averaging` 是输出细节，可以默认。
+`materials[].E` 是物理选择，必须写；`steps[0].output.frequency.*` 是输出细节，可以默认。
+`steps[0].output.stress_averaging` 曾被放进默认表，后来按这条规则移出：它决定上报的节点应力
+**是什么**（Output.f90:5102），换一个取值就换一组数字，所以必须作者写。
 判断标准是可操作的:**换一个默认值会不会改变计算结果或其物理含义**——会，就必须作者写。
 `docs/00-project-charter.md` 的「30～50 行，不以隐藏物理选择为代价」就是这条规则。
 
@@ -93,13 +95,12 @@ case.toml  --读--> authoring AST --映射--> ProblemState --build_runtime--> ru
 | `steps[0].load_mode` | `"LOAD"` | 白名单只有一种加载模式 |
 | `steps[0].output.field.*`（20 个开关） | 由 `[output].field` 展开 | 作者选“要哪些场”，开关是它的编码 |
 | `steps[0].output.frequency.*` | 1 / 1 | 单增量下只有一个输出时刻 |
-| `steps[0].output.stress_averaging` | 0 | 输出后处理，不改变解 |
 | `steps[0].activation[].*` | 全激活 | 施工阶段不在白名单内（M6.7） |
 | `sections[].class` / `formulation` / `special` | 由 `element` + `formulation` 决定 | 是同一物理选择的编码 |
-| `sections[].algorithm` / `stiffness_kind` / `stress_recovery` | 5 / 0 / 0 | 数值细节，白名单内唯一取值 |
+| `sections[].algorithm` / `stiffness_kind` / `stress_recovery` | 0 / 1 / 1 | 数值细节，白名单内唯一取值 |
 | `sections[].layer` / `liquefaction` / `uplift` / `local_axes` | 0 / 0 / 0 / 0 | 相应能力不在白名单内 |
 | `sections[].thickness` | 1.0 | 平面应变按单位厚度——**这一条是边界情况**：若将来支持平面应力，厚度就是物理选择，必须移出本表 |
-| `materials[].kind` / `phase` | `"SOLID"` / `"SOLID"` | 白名单只有单相固体 |
+| `materials[].kind` / `phase` / `name` | `"MECHANICAL"` / `"SOLID"` / `"SOLID"` | 白名单只有单相固体；`name` 是 legacy `.mat` 表头词，即相名，不是作者的引用标签 |
 | `materials[].creep_model` / `wetting_kind` / `liquefaction` / `solid_ratio` / `thermal_expansion` | 0 / 0 / 0 / 1.0 / 1e-5 | 相应本构不在白名单内；取值不被消费 |
 | `solver.symmetric` / `solver.profile.*` | 0 / (0,0,1,1) | PROFILE 的固定开关 |
 | `mesh.*` 的一切计数 | 由网格文件派生 | 计数不是输入 |
@@ -121,7 +122,10 @@ controls.max_iterations,controls.tolerance_*}`、边界的 `{nset,dof,value}`、
 - 荷载只有 `gravity`
 - `amplitude.type = "linear"`
 - `solver.linear = "profile"`
-- `output.format = "gid"`；`output.field ⊆ {"u","s"}`
+- `output.format = "gid"`；`output.field ⊆ {"u","s"}`；`output.stress_averaging ∈ {"none","smoothed","direct"}`
+  （`"smoothed"` 与 `"direct"` 在本切片上不可区分：Output.f90:5128-5129 的分支只在
+  `nnode==8 .and. ndimn==3` 下成立，2-D Q4 走同一条 else 分支。实测而非推断——改成
+  `"smoothed"` 仍严格复现冻结参考，改成 `"none"` 应力偏离 1.5e5、位移不变。）
 - `[[step]]` 恰好一个
 
 白名单之外的每一条都要有**反例**，与 M4 方言门同一形态：一行一个反例，

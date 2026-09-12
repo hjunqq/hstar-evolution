@@ -33,6 +33,7 @@ module yl_authoring_defaults
   public :: default_material, default_section, default_solver, default_boundary
   public :: default_controls, default_load, default_output, default_activation
   public :: default_interactions, default_load_mode, set_stress_averaging
+  public :: stress_averaging_code
   public :: default_residue, default_existence
   public :: element_kind_of, nodes_per_element, formulation_code, amplitude_code
   public :: procedure_code, solver_code, legacy_material_name, enable_output_field
@@ -46,7 +47,10 @@ contains
     ! carries both and the whitelist admits one of each.
     call opt_set(m%kind, 'MECHANICAL')
     call opt_set(m%phase, 'SOLID')
-    call opt_set(m%model, 'ELASTIC_ISOTROPIC')
+    ! props%name is legacy's .mat header word, which IS the phase word -- not the
+    ! constitutive model and not the author's reference label (Fem.f90:258 tests it
+    ! against 'NSTOKS'). The model comes from the authored `model` key.
+    call opt_set(m%name, 'SOLID')
     call opt_set(m%creep_model, 0_int32)   ! creep is not on the whitelist
     call opt_set(m%wetting_kind, 0_int32)
     call opt_set(m%liquefaction, 0_int32)
@@ -87,7 +91,10 @@ contains
   subroutine default_boundary(b)
     type(boundary_t), intent(out) :: b
     call opt_set(b%amplitude, 0_int32)     ! a prescribed value with no curve is constant
-    call opt_set(b%record_reaction, 0_int32)
+    ! prescrib%outfix: report the reaction at this constrained dof. A pure output switch
+    ! (it changes no equation), and 1 on both frozen references, so recording is the
+    ! default rather than silently dropping reactions the legacy path reports.
+    call opt_set(b%record_reaction, 1_int32)
   end subroutine default_boundary
 
   subroutine default_controls(c)
@@ -127,13 +134,36 @@ contains
   !> One averaging flag per section, all off. Separate from default_output because the
   !> section count is not known until the sections are read, and an array sized by a guess
   !> is a bug waiting for the second section.
-  subroutine set_stress_averaging(o, nsection)
+  subroutine set_stress_averaging(o, nsection, code)
     type(output_t), intent(inout) :: o
     integer, intent(in) :: nsection
+    integer(int32), intent(in) :: code
     if (allocated(o%stress_averaging)) deallocate (o%stress_averaging)
     allocate (o%stress_averaging(max(nsection, 0)))
-    o%stress_averaging = 0_int32
+    o%stress_averaging = code
   end subroutine set_stress_averaging
+
+  !> `average_appear` (Global.f90:1023, Output.f90:5102). It decides what the reported nodal
+  !> stresses ARE, so it is a physical statement about the output and the contract requires
+  !> it in writing. legacy also admits -1/-2 (the pre-2005 variants of the same two schemes);
+  !> they are not whitelisted because no golden deck exercises them.
+  !>
+  !> On THIS slice only 0 vs non-zero is observable: the iaver==1 / iaver==2 split at
+  !> Output.f90:5128-5129 sits inside `if (nnode == 8 .and. ndimn == 3)`, so on 2-D Q4
+  !> 'smoothed' and 'direct' produce identical numbers. Measured, not assumed -- setting
+  !> 'smoothed' leaves the frozen reference reproduced exactly, setting 'none' moves the
+  !> stresses by 1.5e5 and leaves the displacements untouched. Both names are kept because
+  !> they are legacy's own two schemes and they diverge the day a 3-D 8-node element is
+  !> whitelisted; nothing here may be re-derived from the fact that they agree today.
+  pure integer(int32) function stress_averaging_code(name) result(c)
+    character(len=*), intent(in) :: name
+    select case (trim(name))
+    case ('none');     c = 0_int32
+    case ('smoothed'); c = 1_int32
+    case ('direct');   c = 2_int32
+    case default;      c = 0_int32
+    end select
+  end function stress_averaging_code
 
   subroutine enable_output_field(o, name)
     type(output_t), intent(inout) :: o
@@ -154,7 +184,10 @@ contains
 
   function default_interactions() result(x)
     type(interactions_t) :: x
-    call opt_set(x%absorbing%type, '')     ! absorbing boundaries are M7
+    ! 'FIX' is legacy's own no-absorbing-boundary sentinel (global_data init); every test on
+    ! type_ABC is against 'VIE' / 'MIF', so the word is a label, not a physical choice. Real
+    ! absorbing boundaries are M7.
+    call opt_set(x%absorbing%type, 'FIX')
   end function default_interactions
 
   pure function default_load_mode() result(s)

@@ -103,7 +103,8 @@ module yl_authoring_keys
     key_t('solver.linear',                 TV_STR,  .true.,  'profile'),                     &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
     key_t('output.field[]',                TV_STR,  .false., 'u|s'),                         &
-    key_t('output.field.count',            TV_INT,  .true.,  '')]
+    key_t('output.field.count',            TV_INT,  .true.,  ''),                            &
+    key_t('output.stress_averaging',       TV_STR,  .true.,  'none|smoothed|direct')]
 
   public :: authoring_validate, authoring_key_count, authoring_key_pattern
 
