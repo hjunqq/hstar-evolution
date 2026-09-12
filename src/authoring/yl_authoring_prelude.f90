@@ -12,33 +12,59 @@
 !   Reading twice costs nothing measurable and keeps each half able to fail on its own.
 !
 ! WHAT IT DOES NOT DO
-!   It does not validate. If the file is malformed the ENTRY says so, with the line and the
-!   key; a prelude that reported its own half of the diagnostics would give the operator two
+!   It does not validate. Every finding about CONTENT -- unknown key, wrong type, dangling
+!   reference, unwhitelisted value -- belongs to the entry, which reports it with the line
+!   and the key. A prelude that reported its own half of those would give the operator two
 !   different messages for one bad file.
+!
+! WHAT IT MUST DO, THOUGH
+!   Say so when the file cannot be READ at all. The original split assumed the entry would
+!   always get its turn, and that assumption is false exactly here: probn names every file
+!   global_data opens, so an unreadable case.toml left probn empty and the run died inside
+!   the legacy reader -- prompting `Input the problem name?` at an operator who never
+!   supplied a legacy deck, then a Fortran traceback. So readability, and only readability,
+!   is decided here; it is also the one verdict the entry could never deliver.
 subroutine yl_modern_prelude()
 
-  use iso_fortran_env, only: int32
+  use iso_fortran_env, only: int32, error_unit, output_unit
   use variable_types, only: irk
 
-  use yl_diag, only: yl_input_file
+  use yl_diag, only: yl_input_file, diag_abort, EXIT_INPUT
   use solver, only: iafile, icond, ipdchk, ising
   use global_var, only: probn, restart, relis, sysrelis, ADINA, Uopt_R, gamamax, runblks,   &
                         outplot, rmesh, level_set_problem, nflow, upliftin, outind
   use yl_authoring_toml, only: toml_doc_t, toml_read
+  use yl_authoring_report, only: authoring_render_unreadable
 
   implicit none
 
   type(toml_doc_t) :: doc
   integer(int32) :: k
 
-  ! Silence here, not a diagnostic: the entry re-reads this file and owns the verdict.
   call toml_read(trim(yl_input_file), doc)
-  if (.not. doc%failed) then
-    k = doc%find('mesh.file')
-    ! `mesh.file` is the run prefix, for the mesh pair AND for everything the solver
-    ! writes -- which is what legacy's probn has always been.
-    if (k /= 0_int32) probn = trim(doc%entry(k)%svalue)
+  if (doc%failed) then
+    write (error_unit, '(a)') authoring_render_unreadable(trim(yl_input_file),              &
+                                                          doc%fail_line, trim(doc%message))
+    flush (output_unit)
+    flush (error_unit)
+    call diag_abort('RANGE', EXIT_INPUT, 'yl_modern_prelude',                               &
+         'the --input file is not readable as the authoring contract''s TOML subset')
   end if
+
+  k = doc%find('mesh.file')
+  ! `mesh.file` is the run prefix, for the mesh pair AND for everything the solver
+  ! writes -- which is what legacy's probn has always been. Its ABSENCE is a content
+  ! finding, so it is the entry's to report; leaving probn empty here would resurrect the
+  ! very failure above, so the prelude refuses on its own behalf and says which key.
+  if (k == 0_int32) then
+    write (error_unit, '(a)') authoring_render_unreadable(trim(yl_input_file), 0_int32,     &
+         'mesh.file is required: it names the mesh pair and every file the run writes')
+    flush (output_unit)
+    flush (error_unit)
+    call diag_abort('RANGE', EXIT_INPUT, 'yl_modern_prelude',                               &
+         'the --input file does not carry mesh.file')
+  end if
+  probn = trim(doc%entry(k)%svalue)
 
   ! The `.inp` run switches. All six are pinned by the capability whitelist (the adapter
   ! refuses a deck that sets any of them), so on the modern path they are constants, not
@@ -102,12 +128,15 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
   nincs_ = 1_ink
   miter = 1_ink
   call toml_read(trim(yl_input_file), doc)
-  if (.not. doc%failed) then
-    k = doc%find('step[1].controls.increments')
-    if (k /= 0_int32) nincs_ = int(doc%entry(k)%ivalue, ink)
-    k = doc%find('step[1].controls.max_iterations')
-    if (k /= 0_int32) miter = int(doc%entry(k)%ivalue, ink)
-  end if
+  ! Unreachable in a normal run -- the prelude and the entry both read this file first --
+  ! but it must not be a SILENT fallback: `increments` and `max_iterations` are authored,
+  ! and quietly substituting 1/1 for what the author wrote would change the answer with
+  ! nothing on screen saying so.
+  if (doc%failed) call refuse_reread(doc%fail_line, trim(doc%message))
+  k = doc%find('step[1].controls.increments')
+  if (k /= 0_int32) nincs_ = int(doc%entry(k)%ivalue, ink)
+  k = doc%find('step[1].controls.max_iterations')
+  if (k /= 0_int32) miter = int(doc%entry(k)%ivalue, ink)
   ditime = 1.0_irk
   noutn = 1_ink
   noutf = 1_ink
@@ -140,7 +169,9 @@ subroutine yl_modern_tolerances(toler_force)
   toler_force = 1.0e-5_irk
   if (allocated(toler_var)) toler_var = 1.0e-5_irk
   call toml_read(trim(yl_input_file), doc)
-  if (doc%failed) return
+  ! Same reasoning as yl_modern_step_controls: a re-read that fails must say so rather
+  ! than leave the run converging on a tolerance nobody asked for.
+  if (doc%failed) call refuse_reread(doc%fail_line, trim(doc%message))
   k = doc%find('step[1].controls.tolerance_force')
   if (k /= 0_int32) toler_force = real(doc%entry(k)%rvalue, irk)
   k = doc%find('step[1].controls.tolerance_dof')
@@ -156,3 +187,21 @@ end subroutine yl_modern_tolerances
 subroutine yl_modern_after_commit()
   implicit none
 end subroutine yl_modern_after_commit
+
+
+!> The re-read verdict, for the two step-record subroutines above. A separate external
+!> subroutine rather than a copy in each: one message for one bad file is the rule the
+!> prelude's header states, and two copies drift.
+subroutine refuse_reread(line, message)
+  use iso_fortran_env, only: int32, error_unit, output_unit
+  use yl_diag, only: yl_input_file, diag_abort, EXIT_INPUT
+  use yl_authoring_report, only: authoring_render_unreadable
+  implicit none
+  integer(int32), intent(in) :: line
+  character(len=*), intent(in) :: message
+  write (error_unit, '(a)') authoring_render_unreadable(trim(yl_input_file), line, message)
+  flush (output_unit)
+  flush (error_unit)
+  call diag_abort('RANGE', EXIT_INPUT, 'yl_modern_prelude', &
+       'the --input file stopped being readable part way through the run')
+end subroutine refuse_reread

@@ -12,7 +12,16 @@ asserts exactly those:
       (atol = rtol = 0, per ADR-0008 SS4: the noise measurement found none).
   N3  a deck the contract rejects STOPS with a readable diagnostic (exit 2 INVALID_INPUT
       or 3 UNSUPPORTED) and writes no results. Without N3 the gate would be satisfied by
-      an --input that silently ignored what it could not understand.
+      an --input that silently ignored what it could not understand. Three shapes, because
+      they failed differently and one of them failed silently:
+        a  an unlisted value  -> exit 3, key and value named
+        b  a file that is not there, and one that is not the contract's TOML subset ->
+           exit 2, the name the operator typed. Both used to fall through to the LEGACY
+           reader, which prompted `Input the problem name?` and then produced a Fortran
+           traceback: probn is set before the entry runs, so the entry never got its turn.
+        c  three findings in one deck -> each rendered EXACTLY once, with its own line
+           number. They were briefly printed twice, once by the validator's caller and
+           once by the refusal, which is the sort of thing only an assertion catches.
 
 N1 is the assertion that makes this different from the M4-02 fallback gate: that one
 proved the adapter could drive the legacy solver from the legacy deck; this one proves the
@@ -111,29 +120,66 @@ def main(argv=None):
 
     # N3 -- a deck the contract rejects must stop, readably.
     name = cases()[0].split(".", 1)[1]
-    with tempfile.TemporaryDirectory(prefix="yl-modern-bad.") as td:
-        work = Path(td)
-        deck = stage(name, work)
-        text = deck.read_text(encoding="utf-8")
-        # A capability refusal, not a typo: a whitelisted key carrying an unlisted value.
-        assert 'element     = "Q4"' in text, "deck no longer carries the mutated line"
-        deck.write_text(text.replace('element     = "Q4"', 'element     = "Q8"'), encoding="utf-8")
-        cp = subprocess.run([str(binary), "--input=case.toml"], cwd=work,
-                            stdin=subprocess.DEVNULL, capture_output=True,
-                            text=True, errors="replace")
-        blob = cp.stdout + cp.stderr
-        named = "element" in blob and "Q8" in blob
-        res = work / "1.flavia.res"
-        wrote = res.is_file() and res.stat().st_size > 0
-        print(f"  N3 refused deck                rc={cp.returncode} "
-              f"names_key_and_value={'yes' if named else 'NO'} "
-              f"results_written={'YES' if wrote else 'no'}")
-        if cp.returncode not in (2, 3):
-            problems.append(f"N3 a rejected deck exited {cp.returncode}, not 2/3")
-        if not named:
-            problems.append("N3 the rejection named neither the key nor the value")
-        if wrote:
-            problems.append("N3 the rejected deck still produced results")
+
+    def rejected(label: str, arg: str, mutate=None) -> str:
+        """Run a deck that must be refused; assert the run stopped and wrote nothing.
+        Returns the combined output so the caller can assert what it SAID."""
+        with tempfile.TemporaryDirectory(prefix="yl-modern-bad.") as td:
+            work = Path(td)
+            deck = stage(name, work)
+            if mutate is not None:
+                deck.write_text(mutate(deck.read_text(encoding="utf-8")), encoding="utf-8")
+            cp = subprocess.run([str(binary), arg], cwd=work, stdin=subprocess.DEVNULL,
+                                capture_output=True, text=True, errors="replace")
+            res = work / "1.flavia.res"
+            wrote = res.is_file() and res.stat().st_size > 0
+            print(f"  N3 {label:<28} rc={cp.returncode} "
+                  f"results_written={'YES' if wrote else 'no'}")
+            if cp.returncode not in (2, 3):
+                problems.append(f"N3 {label}: exited {cp.returncode}, not 2/3 -- a deck "
+                                f"the contract refuses must stop with the input verdict")
+            if wrote:
+                problems.append(f"N3 {label}: still produced results")
+            return cp.stdout + cp.stderr
+
+    def sub(a: str, b: str):
+        def f(text: str) -> str:
+            assert a in text, f"deck no longer carries the mutated line: {a}"
+            return text.replace(a, b, 1)
+        return f
+
+    # a -- a whitelisted key carrying an unlisted value: a capability refusal, not a typo.
+    blob = rejected("unlisted value", "--input=case.toml",
+                    sub('element     = "Q4"', 'element     = "Q8"'))
+    if "element" not in blob or "Q8" not in blob:
+        problems.append("N3 unlisted value: the rejection named neither the key nor the value")
+
+    # b -- unreadable at all. The name the operator typed has to appear: these two used to
+    # fall through to the legacy reader and die there with no mention of the input file.
+    blob = rejected("file not there", "--input=absent.toml")
+    if "absent.toml" not in blob:
+        problems.append("N3 file not there: the refusal never named the file asked for")
+    if "Input the problem name" in blob:
+        problems.append("N3 file not there: fell through to the legacy reader's prompt")
+
+    blob = rejected("not the TOML subset", "--input=case.toml",
+                    lambda _: 'version = 1\n[case\nname = "x"\n')
+    if "case.toml:2" not in blob:
+        problems.append("N3 not the TOML subset: the refusal did not point at line 2")
+    if "Input the problem name" in blob:
+        problems.append("N3 not the TOML subset: fell through to the legacy reader's prompt")
+
+    # c -- several findings at once, each reported exactly once.
+    blob = rejected("three findings", "--input=case.toml",
+                    lambda t: sub("density = 2400.0", 'density = "heavy"')(
+                              sub("nu      = 0.2", "nu_typo = 0.2")(t)))
+    for want, label in (("material[1].density", "wrong type"),
+                        ("material[1].nu_typo", "unknown key"),
+                        ("material[1].nu", "missing required")):
+        n = sum(1 for line in blob.splitlines() if f"{want}:" in line)
+        if n != 1:
+            problems.append(f"N3 three findings: `{want}` ({label}) was rendered {n} times, "
+                            f"not once")
 
     for p in problems:
         print(f"FAIL {p}")

@@ -100,7 +100,7 @@ subroutine yl_adapter_override()
   end if
   if (errors%any() .or. .not. allocated(problem)) then
     if (yl_input_enabled) then
-      call fail('case.toml', errors)
+      call fail(trim(yl_input_file), errors)
     else
       call fail('adapt_legacy_deck', errors)
     end if
@@ -146,15 +146,13 @@ contains
            'case.toml is not readable as the authoring contract''s TOML subset')
     end if
 
+    ! Findings are NOT printed here. `fail` below renders every one of them, and printing
+    ! them in both places showed an operator each error twice.
     call authoring_validate(doc, trim(yl_input_file), errors)
-    if (errors%any()) then
-      do i = 1, errors%count()
-        write (error_unit, '(a)') authoring_render(errors, i)
-      end do
-      return
-    end if
+    if (errors%any()) return
 
-    call authoring_build_problem(doc, '.', problem, pmanifest, errors)
+    call authoring_build_problem(doc, '.', problem, pmanifest, errors,                       &
+                                 file=trim(yl_input_file))
     if (errors%any() .or. .not. allocated(problem)) return
 
     npoin = int(size(problem%mesh%nodes), int32)
@@ -182,10 +180,25 @@ contains
     type(problem_errors_t), intent(inout) :: errs
     integer :: i
     integer :: code
-    write (error_unit, '(a)') 'yl_adapter_override: '//stage//' raised a finding; refusing '// &
-      'to continue on legacy state.'
+    ! The header an OPERATOR reads. On the modern path they typed a file name and expect a
+    ! sentence about that file, not the name of the routine that noticed; the legacy-deck
+    ! path keeps its internal wording because its audience is this project.
+    if (yl_input_enabled) then
+      write (error_unit, '(a)') stage//' was not accepted; nothing was solved and no '// &
+        'results were written.'
+    else
+      write (error_unit, '(a)') 'yl_adapter_override: '//stage//' raised a finding; '// &
+        'refusing to continue on legacy state.'
+    end if
     do i = 1, errs%count()
-      write (error_unit, '(a)') '    '//stage//': '//errs%render(i)
+      ! An authoring finding knows its own file and line, and `authoring_render` puts them
+      ! where an editor can jump to them. A legacy-deck finding has no such location, so it
+      ! keeps the generic rendering with the stage as its prefix.
+      if (yl_input_enabled) then
+        write (error_unit, '(a)') authoring_render(errs, i)
+      else
+        write (error_unit, '(a)') '    '//stage//': '//errs%render(i)
+      end if
     end do
     flush (output_unit)
     flush (error_unit)

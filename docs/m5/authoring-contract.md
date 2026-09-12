@@ -81,6 +81,20 @@ case.toml  --读--> authoring AST --映射--> ProblemState --build_runtime--> ru
 移到这里：`problem_state_t` 是强类型派生类型，未知字段在那一层写不出来因而不可失败，
 而在文本输入这一层它是真实的、可失败的（见 `docs/m3/M3-02-pipeline.md` §4.1）。
 
+**还有三条，都是实测出来的，不是设计出来的**（2026-09-12，`tools/yl_modern_check.py` N3）：
+
+1. **文件读不出来也必须是这个错误模型**。原设计把「可读性」也交给 entry 判决，
+   但 entry 活在 `global_data` 里，而 `probn` 在此之前就要用来命名所有文件——
+   于是一个不存在或语法错的 `--input` 会掉进 **legacy reader**，对着一个从没提供过
+   legacy deck 的人打印 `Input the problem name?`，然后 Fortran traceback。
+   现在**可读性、且只有可读性**由 prelude 判决，退出码仍是 2。
+2. **一条错误只渲染一次**。曾经 validator 的调用方与拒绝路径各打印一遍，操作者看到两份。
+3. **错误里的文件名是操作者敲的那个**，不是硬编码的 `case.toml`。
+   映射层原先把 `case.toml` 写死在 source location 里。
+
+对应的门禁断言写在 `tools/yl_modern_check.py` N3 的四个形态里；
+三条都是**先观察到失败输出、再写断言**，不是先写断言再假设它有效。
+
 ## 5. 默认表
 
 每一条默认都写明**为什么它不是物理选择**。任何一条被质疑，做法是把它移出这张表、

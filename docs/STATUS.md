@@ -15,7 +15,7 @@
 | M2 状态观测 | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m2/M2-acceptance-matrix.md`（23 判据） |
 | M3 ProblemState | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m3/M3-acceptance-matrix.md`（27 判据） |
 | M4 Legacy Adapter | 完成 | **ACCEPTED** 2026-09-12 | `docs/m4/M4-01-acceptance-matrix.md`（32 判据）+ `M4-02-report.md` |
-| M5 现代输入闭环 | 进行中 4/5 | — | `docs/m5/authoring-contract.md` + `tools/yl_modern_check.py`（N1/N2/N3，release 门禁） |
+| M5 现代输入闭环 | 完成 5/5 | **待签收** | `docs/m5/authoring-contract.md` + `tools/yl_modern_check.py`（N1/N2/N3，release 门禁） |
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
@@ -44,7 +44,7 @@ M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是�
 
 | 功能域 | 旧字段 | 语义 | 内部结构 | 新 schema | 回归证据 | 里程碑 |
 |---|---|---|---|---|---|---|
-| **静力（2D Q4 线弹性 / 重力 / 单增量 / PROFILE）** | 已登记 157 处 | 已摸清（有具名缺口） | `ProblemState` + `deck_residue_t` + 运行存在面 | **v1 契约可完整表达两例** | **状态等价与数值等价均已证（严格相等）；新格式亦严格复现冻结参考** | M1～M4 完成；M5 余「用户可见诊断」一项 |
+| **静力（2D Q4 线弹性 / 重力 / 单增量 / PROFILE）** | 已登记 157 处 | 已摸清（有具名缺口） | `ProblemState` + `deck_residue_t` + 运行存在面 | **v1 契约可完整表达两例** | **状态等价与数值等价均已证（严格相等）；新格式亦严格复现冻结参考** | M1～M5 实现完成（M5 待签收） |
 | 荷载扩展（点/边/梁板荷载、压力面） | `.loa` 32 处 | 未开始 | — | — | — | M5.pressure / M6 |
 | 求解器变体（PARDISO 等） | `.sol` 29 + iafile 5 | 未开始 | — | — | — | M5 |
 | 输出与观测点 | `.opr` 10 | 未开始 | — | — | — | M5 |

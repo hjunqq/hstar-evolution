@@ -66,7 +66,11 @@ module yl_authoring_map
   implicit none
   private
 
-  character(len=*), parameter :: SITE = 'case.toml'
+  !> The DISPLAY name of the file being mapped -- what an operator typed after `--input=`.
+  !> Set once at the top of `authoring_build_problem` and read only by `here` / `fail` to
+  !> label a finding; nothing in this module branches on it. It is module state because the
+  !> alternative is threading a string through forty `here(...)` call sites for a label.
+  character(len=256) :: site_file = 'case.toml'
 
   public :: authoring_build_problem
 
@@ -75,9 +79,11 @@ contains
   !> `doc` (already validated) + the mesh files beside it -> a ProblemState.
   !> Transactional in the same sense as `adapt_legacy_deck`: on any finding, `problem` and
   !> `manifest` are left exactly as the caller passed them.
-  subroutine authoring_build_problem(doc, dir, problem, manifest, errors)
+  subroutine authoring_build_problem(doc, dir, problem, manifest, errors, file)
     type(toml_doc_t), intent(in) :: doc
     character(len=*), intent(in) :: dir
+    !> Display name for the findings; defaults to `case.toml` for callers that have none.
+    character(len=*), intent(in), optional :: file
     type(problem_state_t), allocatable, intent(inout) :: problem
     type(manifest_t), allocatable, intent(inout) :: manifest
     type(problem_errors_t), intent(inout) :: errors
@@ -104,6 +110,9 @@ contains
     type(activation_t) :: act
     type(nset_t) :: ns
     integer(int32), allocatable :: ids(:), nodes(:)
+
+    site_file = 'case.toml'
+    if (present(file)) site_file = file
 
     mark0 = errors%count()
     call builder_begin(b)
@@ -330,7 +339,7 @@ contains
     allocate (nodes(nn))
     open (newunit=u, file=prefix//'.ele', status='old', action='read', iostat=ios)
     if (ios /= 0) then
-      call fail(errors, 'mesh.file', 'cannot open '//prefix//'.ele to count sections')
+      call fail(errors, 'mesh.file', 'cannot open '//prefix//'.ele')
       return
     end if
     do
@@ -460,10 +469,10 @@ contains
 
   ! ------------------------------------------------------------------ helpers ----
 
-  pure function here(line) result(loc)
+  function here(line) result(loc)
     integer(int32), intent(in) :: line
     type(source_location_t) :: loc
-    loc = make_source_location(file=SITE, reader='authoring', line=line)
+    loc = make_source_location(file=trim(site_file), reader='authoring', line=line)
   end function here
 
   subroutine fail(errors, path, msg)
@@ -471,7 +480,7 @@ contains
     character(len=*), intent(in) :: path, msg
     call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage='authoring',              &
          object_path=path, message=msg, exit_class=PE_EXIT_INPUT,                             &
-         source=make_source_location(file=SITE, reader='authoring')))
+         source=make_source_location(file=trim(site_file), reader='authoring')))
   end subroutine fail
 
   pure function itoa(v) result(out)

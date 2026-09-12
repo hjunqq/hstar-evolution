@@ -21,7 +21,7 @@ module yl_authoring_report
   implicit none
   private
 
-  public :: authoring_render
+  public :: authoring_render, authoring_render_unreadable
 
 contains
 
@@ -57,6 +57,20 @@ contains
       if (len(want) > 0) text = text//'expected '//want
     end if
   end function authoring_render
+
+  !> The one-line verdict for a file the reader could not read at all -- missing, or not
+  !> the contract's TOML subset. Same shape as `authoring_render`, so an operator sees one
+  !> form of message whichever half of the path rejected the file. `line == 0` is the
+  !> reader's "no line to point at" (the open failed), and printing `:0:` would be a
+  !> location that does not exist.
+  pure function authoring_render_unreadable(file, line, message) result(text)
+    character(len=*), intent(in) :: file, message
+    integer(int32), intent(in) :: line
+    character(len=:), allocatable :: text
+    text = trim(file)
+    if (line > 0_int32) text = text//':'//itoa(line)
+    text = text//': INVALID_INPUT: '//trim(message)
+  end function authoring_render_unreadable
 
   !> An opt_text's value, or `fallback` when unset. opt_value_or needs a same-kind
   !> default and this reads better at four call sites than four inline opt_get pairs.
