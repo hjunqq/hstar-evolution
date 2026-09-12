@@ -24,6 +24,8 @@ module yl_authoring_defaults
   use yl_problem_optional, only: opt_set
   use yl_problem_types, only: material_t, section_t, solver_t, boundary_t, controls_t,       &
                               load_t, output_t, activation_t, interactions_t
+  use yl_problem_deck_residue, only: deck_residue_t
+  use yl_problem_existence, only: deck_existence_t
 
   implicit none
   private
@@ -31,6 +33,7 @@ module yl_authoring_defaults
   public :: default_material, default_section, default_solver, default_boundary
   public :: default_controls, default_load, default_output, default_activation
   public :: default_interactions, default_load_mode, set_stress_averaging
+  public :: default_residue, default_existence
   public :: element_kind_of, nodes_per_element, formulation_code, amplitude_code
   public :: procedure_code, solver_code, legacy_material_name, enable_output_field
 
@@ -39,7 +42,9 @@ contains
   !> Everything about a material except density/E/nu, which are physical and authored.
   subroutine default_material(m)
     type(material_t), intent(out) :: m
-    call opt_set(m%kind, 'SOLID')          ! the whitelist has one phase kind
+    ! kind is the PROPERTY family and phase is the material phase; legacy's .mat record
+    ! carries both and the whitelist admits one of each.
+    call opt_set(m%kind, 'MECHANICAL')
     call opt_set(m%phase, 'SOLID')
     call opt_set(m%model, 'ELASTIC_ISOTROPIC')
     call opt_set(m%creep_model, 0_int32)   ! creep is not on the whitelist
@@ -156,6 +161,66 @@ contains
     character(len=:), allocatable :: s
     s = 'LOAD'
   end function default_load_mode
+
+  !> The deck values ProblemState does not model, at their whitelisted values.
+  !>
+  !> Every one of these is a PINNED GUARD: docs/m2/M2-01-checkpoints.md SS1 lists them with
+  !> the branch each one decides, and the adapter's dialect gate refuses a deck that
+  !> carries anything else. So on the modern path they are constants of the whitelist,
+  !> exactly as SS5 of the contract says -- not values an author was spared writing.
+  !>
+  !> `npoinb` is the exception in form only: it is a COUNT (the golden decks carry
+  !> npoinb == npoin), so it is derived from the mesh rather than pinned.
+  subroutine default_residue(r, npoin)
+    type(deck_residue_t), intent(out) :: r
+    integer(int32), intent(in) :: npoin
+    call opt_set(r%restart, 0_int32);        call opt_set(r%relis, 0_int32)
+    call opt_set(r%adina, 0_int32);          call opt_set(r%runblks, 1_int32)
+    call opt_set(r%ninit, 0_int32);          call opt_set(r%nlinks, 0_int32)
+    call opt_set(r%block_stab, 0_int32);     call opt_set(r%nbackf, 0_int32)
+    call opt_set(r%ebody, 0_int32);          call opt_set(r%nlayer, 0_int32)
+    call opt_set(r%state_change, 0_int32);   call opt_set(r%bparameter, 0_int32)
+    call opt_set(r%ntrans, 0_int32)
+    ! 99999 is a DISABLE SENTINEL, not a zero: stab_initialize never runs on this path.
+    call opt_set(r%stab_matde, 99999_int32)
+    call opt_set(r%npoinb, npoin)
+    call opt_set(r%nsmat, 1_int32)           ! stiffness reformed on the first iteration only
+    call opt_set(r%nplgroup, 0_int32);       call opt_set(r%nedge, 0_int32)
+    call opt_set(r%edge_load_group, 0_int32); call opt_set(r%delgroup, 0_int32)
+    call opt_set(r%nbeamload, 0_int32);      call opt_set(r%nplateload, 0_int32)
+    call opt_set(r%ntemp_surface, 0_int32);  call opt_set(r%ntedge, 0_int32)
+    call opt_set(r%ntelgroup, 0_int32);      call opt_set(r%npipe, 0_int32)
+    if (allocated(r%uinitial)) deallocate (r%uinitial)
+    allocate (r%uinitial(1))
+    r%uinitial = 0_int32
+  end subroutine default_residue
+
+  !> The runtime state manifest's rows (ADR-0009) at their whitelisted values.
+  !> Sizes come from the mesh and the sections; values are zero because every one of these
+  !> is a switch the whitelist pins off. The scalars carrier default-initialises itself.
+  subroutine default_existence(e, nelem, ngroup, mdofn)
+    type(deck_existence_t), intent(out) :: e
+    integer(int32), intent(in) :: nelem, ngroup, mdofn
+    allocate (e%order_time_mdofn(max(int(mdofn), 0)));  e%order_time_mdofn = 0_int32
+    allocate (e%tension_joint(max(int(nelem), 0)));     e%tension_joint = 0_int32
+    allocate (e%group_order_time(2, 1, max(int(ngroup), 0))); e%group_order_time = 0_int32
+    allocate (e%group_type_mass(1, max(int(ngroup), 0)));     e%group_type_mass = 0_int32
+    allocate (e%modf_dis_blocks(1));                    e%modf_dis_blocks = 0_int32
+    allocate (e%tlink(2, 0))
+    allocate (e%equvs_process(max(int(ngroup), 0)));    e%equvs_process = 0_int32
+    allocate (e%force_process(max(int(ngroup), 0)));    e%force_process = 0_int32
+    ! The .glb scalars the whitelist leaves non-zero. Taken from the golden decks' own
+    ! records; every other scalar is zero by the carrier's own initialisation.
+    e%scalars%nmass = 1_int32
+    e%scalars%nhmat = 1_int32
+    e%scalars%nqmat = 1_int32
+    e%scalars%nswkw = 1_int32
+    e%scalars%ntsmat = 999_int32
+    e%scalars%nthmat = 999_int32
+    e%scalars%beeta1 = 0.5_real64
+    e%scalars%beeta2 = 0.25_real64
+    e%scalars%theta1 = 1.0_real64
+  end subroutine default_existence
 
   ! --- the authoring vocabulary -> the legacy codes the solver reads ---------------
   ! These are TRANSLATIONS, not defaults: the author writes the physical choice in CAE

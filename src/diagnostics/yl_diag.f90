@@ -60,6 +60,11 @@ module yl_diag
   ! the documented fallback switch after that default flips (M4 exit condition
   ! "回退开关经过测试，但不会自动触发" -- it never turns itself on or off).
   logical, save, protected, public :: yl_adapter_mode = .true.
+  ! M5: `--input=FILE` makes the adapter entry build ProblemState from a modern case.toml
+  ! instead of the legacy deck. It is the SOURCE that changes, nothing else: the same
+  ! builder, the same prepare_problem, the same commit. Unset means "read the deck".
+  logical, save, protected, public :: yl_input_enabled = .false.
+  character(len=256), save, protected, public :: yl_input_file = ''
 
   integer, parameter :: LEN_CODE = 16, LEN_MSG = 512
   integer, parameter :: LEN_SITE = 64, LEN_FIELD = 256
@@ -120,6 +125,8 @@ contains
   ! Scan every command-line argument. Accepted, in any order:
   !   --check-legacy       check mode
   !   --max-entities=N     N decimal, 1..huge(0_ink); overrides diag_max_entities
+  !   --input=FILE         M5 modern input: build ProblemState from case.toml instead of
+  !                        the legacy deck. At most once.
   !   --adapter=on|off     M4-02 adapter entry (default off); no other spelling is
   !                        accepted, and it may appear at most once, so a typo can
   !                        never be read as "off"
@@ -134,6 +141,7 @@ contains
     character(len=*), parameter :: OPT_ME = '--max-entities='
     character(len=*), parameter :: OPT_DS = '--dump-state='
     character(len=*), parameter :: OPT_AD = '--adapter='
+    character(len=*), parameter :: OPT_IN = '--input='
     character(len=LEN_VALUE) :: arg
     integer :: i, l, st, k
     integer(i8) :: n
@@ -145,7 +153,16 @@ contains
       if (st /= 0 .or. l > len(arg)) then
         call argv_error(i, arg(1:min(l, len(arg))), 'argument too long or unreadable')
       end if
-      if (l > len(OPT_AD) .and. arg(1:len(OPT_AD)) == OPT_AD) then
+      if (l > len(OPT_IN) .and. arg(1:len(OPT_IN)) == OPT_IN) then
+        if (yl_input_enabled) then
+          call argv_error(i, arg(1:l), 'repeated --input=FILE option')
+        end if
+        if (l - len(OPT_IN) > len(yl_input_file)) then
+          call argv_error(i, arg(1:l), 'path of --input=FILE is too long')
+        end if
+        yl_input_file = arg(len(OPT_IN) + 1:l)
+        yl_input_enabled = .true.
+      else if (l > len(OPT_AD) .and. arg(1:len(OPT_AD)) == OPT_AD) then
         if (seen_adapter) then
           call argv_error(i, arg(1:l), 'repeated --adapter=on|off option')
         end if
@@ -217,7 +234,8 @@ contains
     d%index = i
     d%field = 'argv'
     d%value = arg
-    d%allowed = '--check-legacy | --max-entities=N | --dump-state=DIR | --adapter=on|off'
+    d%allowed = '--check-legacy | --max-entities=N | --dump-state=DIR | '// &
+                '--adapter=on|off | --input=FILE'
     d%message = message
     call diag_emit(d)
     call diag_exit(d%exit_code)

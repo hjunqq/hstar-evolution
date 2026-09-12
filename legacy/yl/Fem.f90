@@ -92,16 +92,16 @@
 
 
     call diag_set_mode_from_argv()
-    open(inpunit,file='inp',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,'inp','inpunit','Fem.f90:95')
-    read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) text
-    call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_title_1,0)
-    read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) restart,relis,sysrelis,ADINA,Uopt_R,gamamax !20231215YL
-    call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_run_control,0)
-    read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) text
-    call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_title_2,0)
-    read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) probn
-    call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_problem_name,0)
+    if (yl_input_enabled) call yl_modern_prelude(); if (.not. yl_input_enabled) open(inpunit,file='inp',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,'inp','inpunit','Fem.f90:95')
+    if (.not. yl_input_enabled) read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) text
+    if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_title_1,0)
+    if (.not. yl_input_enabled) read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) restart,relis,sysrelis,ADINA,Uopt_R,gamamax !20231215YL
+    if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_run_control,0)
+    if (.not. yl_input_enabled) read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) text
+    if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_title_2,0)
+    if (.not. yl_input_enabled) read (inpunit,*,iostat=yl_ios,iomsg=yl_msg) probn
+    if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_INP_FEM90_problem_name,0)
     !	adina=0
 
     !mystatus=0
@@ -3590,10 +3590,10 @@
     if(Bparameter/=0.and.iblks==1)rewind(upliftunit)
 
 
-    read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)text
-    call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_title_1,0)
-    read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)nincs
-    call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_nincs,0)
+    if (.not. yl_input_enabled) read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)text
+    if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_title_1,0)
+    if (.not. yl_input_enabled) read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)nincs; if (yl_input_enabled) call yl_modern_step_controls(nincs,miter,ditime,noutn,noutf,nstep,inc_step,nresta,cwater,Qstatic)
+    if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_nincs,0)
     call diag_range(RD_MAN_STATIC_U_nincs,0,'nincs',int(nincs,i8),1_i8,diag_max_entities())   ! M1-03: increment loop bound
     call diag_flush_stage()
 
@@ -3624,14 +3624,14 @@
     do iincs=lincs+1,nincs
         print *,'iincs=',iincs,'lincs=',lincs
 
-        read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)miter,ditime,noutn,noutf,nstep,inc_step,nresta,cwater,Qstatic
-        call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_increment_control,iincs)
+        if (.not. yl_input_enabled) read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)miter,ditime,noutn,noutf,nstep,inc_step,nresta,cwater,Qstatic; if (yl_input_enabled) call yl_modern_step_controls(nincs,miter,ditime,noutn,noutf,nstep,inc_step,nresta,cwater,Qstatic)
+        if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_increment_control,iincs)
         call diag_range(RD_MAN_STATIC_U_increment_control,iincs,'miter',int(miter,i8),1_i8,diag_max_entities())   ! M1-03: loop bounds
         call diag_range(RD_MAN_STATIC_U_increment_control,iincs,'nstep',int(nstep,i8),1_i8,diag_max_entities())
         call diag_range(RD_MAN_STATIC_U_increment_control,iincs,'inc_step',int(inc_step,i8),1_i8,diag_max_entities())
         call diag_flush_stage()
-        read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)toler_force,toler_var(1:mdofn)
-        call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_tolerances,iincs)
+        if (.not. yl_input_enabled) read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)toler_force,toler_var(1:mdofn); if (yl_input_enabled) call yl_modern_tolerances(toler_force)
+        if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_MAN_STATIC_U_tolerances,iincs)
         if(cwater/=0.and.delgroup>0)then
             allocate(coef_water(delgroup,nstep))
             do idelgroup=1,delgroup

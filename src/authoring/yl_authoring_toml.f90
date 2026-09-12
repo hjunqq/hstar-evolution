@@ -294,7 +294,7 @@ contains
     integer(int32), intent(in) :: nline
     character(len=:), allocatable :: body, item
     integer :: i, n, depth, start
-    logical :: ok
+    logical :: ok, at_end, split
 
     if (val(1:1) == '[') then
       if (val(len_trim(val):len_trim(val)) /= ']') then
@@ -307,12 +307,20 @@ contains
       n = 0
       depth = 0
       start = 1
+      ! `at_end` is computed first and the split test never touches body(i:i) past the
+      ! end. Fortran does not short-circuit .or., so the obvious
+      !   `if (i > len_trim(body) .or. body(i:i) == ',')`
+      ! evaluates body(i:i) at i = len+1 on every array in the file -- invisible at -O2 and
+      ! a segfault under -check bounds. Found by the debug build of the modern path.
       do i = 1, len_trim(body) + 1
-        if (i <= len_trim(body)) then
+        at_end = (i > len_trim(body))
+        split = at_end
+        if (.not. at_end) then
           if (body(i:i) == '[') depth = depth + 1
           if (body(i:i) == ']') depth = depth - 1
+          split = (body(i:i) == ',' .and. depth == 0)
         end if
-        if (i > len_trim(body) .or. (body(i:i) == ',' .and. depth == 0)) then
+        if (split) then
           item = trim(adjustl(body(start:i - 1)))
           if (len_trim(item) > 0) then
             n = n + 1

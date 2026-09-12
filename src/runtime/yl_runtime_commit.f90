@@ -94,6 +94,7 @@ module yl_runtime_commit
                         coord, appear_process, matno_process, average_appear,                   &
                         lmdofn, lcdofn, nodfn, iffix, fixed, order_time_mdofn, tension_joint,   &
                         modf_dis_blocks, tlink, equvs_process, force_process,                   &
+                        pnorm, prot, icpnorm, lelenrt, icpspring,                              &
                         listglocbeam, links, trans_c, tension_contact,                          &
                         result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
                         line_load_block, line_temp_block, lineload, linet,                      &
@@ -520,6 +521,8 @@ contains
     integer(ink), allocatable :: s_ex_modf_dis_blocks(:)
     integer(ink), allocatable :: s_ex_tlink(:,:), s_ex_equvs(:), s_ex_force_process(:)
     integer(ink), allocatable :: s_ex_listglocbeam(:), s_ex_tension_contact(:)
+    integer(ink), allocatable :: s_ex_icpnorm(:), s_ex_lelenrt(:), s_ex_icpspring(:)
+    real(irk), allocatable :: s_ex_pnorm(:,:), s_ex_prot(:,:,:)
     ! staging: the ProblemState half's plain arrays (M4-01 step 3)
     real(irk), allocatable :: s_coord(:,:), s_factg(:)
     integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
@@ -1353,6 +1356,15 @@ contains
     s_ex_listglocbeam = 0_ink
     allocate (s_ex_tension_contact(s_nelem))
     s_ex_tension_contact = 0_ink
+    ! Global.f90:708-710 allocates these five and zeroes them. On the ADAPTER path legacy
+    ! still does it and commit's move_alloc simply replaces the (identical) zeros; on the
+    ! MODERN path the read block they sit in is skipped, so commit is the only thing that
+    ! can establish them -- and out_gid_write reads icpnorm while writing the results.
+    allocate (s_ex_pnorm(s_ndimn, s_npoin));           s_ex_pnorm = 0.0_irk
+    allocate (s_ex_prot(s_ndimn, s_ndimn, s_npoin));   s_ex_prot = 0.0_irk
+    allocate (s_ex_icpnorm(s_npoin));                  s_ex_icpnorm = 0_ink
+    allocate (s_ex_lelenrt(s_nelem));                  s_ex_lelenrt = 0_ink
+    allocate (s_ex_icpspring(s_npoin));                s_ex_icpspring = 0_ink
 
     call verify_residue_against_gates(residue, errors, ok)
     if (.not. ok) return
@@ -1437,6 +1449,11 @@ contains
     call move_alloc(s_ex_force_process, force_process)         !@existence: force_process
     call move_alloc(s_ex_listglocbeam, listglocbeam)           !@existence: listglocbeam
     call move_alloc(s_ex_tension_contact, tension_contact)     !@existence: tension_contact
+    call move_alloc(s_ex_pnorm, pnorm)                         !@existence: pnorm
+    call move_alloc(s_ex_prot, prot)                           !@existence: prot
+    call move_alloc(s_ex_icpnorm, icpnorm)                     !@existence: icpnorm
+    call move_alloc(s_ex_lelenrt, lelenrt)                     !@existence: lelenrt
+    call move_alloc(s_ex_icpspring, icpspring)                 !@existence: icpspring
     ! links and trans_c are derived-type arrays legacy allocates unconditionally
     ! (Global.f90:1138, :1772). nlinks is 0 on the whitelist, so links is empty; trans_c
     ! is per-node and legacy sets only %nintf = 0 right after allocating it.
@@ -1591,6 +1608,11 @@ contains
     if (allocated(force_process)) deallocate (force_process)         !@existence: force_process
     if (allocated(listglocbeam)) deallocate (listglocbeam)           !@existence: listglocbeam
     if (allocated(tension_contact)) deallocate (tension_contact)     !@existence: tension_contact
+    if (allocated(pnorm)) deallocate (pnorm)                         !@existence: pnorm
+    if (allocated(prot)) deallocate (prot)                           !@existence: prot
+    if (allocated(icpnorm)) deallocate (icpnorm)                     !@existence: icpnorm
+    if (allocated(lelenrt)) deallocate (lelenrt)                     !@existence: lelenrt
+    if (allocated(icpspring)) deallocate (icpspring)                 !@existence: icpspring
     if (allocated(links)) deallocate (links)                         !@existence: links
     if (allocated(trans_c)) deallocate (trans_c)                     !@existence: trans_c
     if (allocated(lmdofn)) deallocate (lmdofn)

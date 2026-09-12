@@ -43,9 +43,12 @@
 !   thing a fallback switch must never do.
 subroutine yl_adapter_override()
 
-  use iso_fortran_env, only: output_unit, error_unit
+  use iso_fortran_env, only: int32, output_unit, error_unit
 
-  use yl_diag, only: diag_abort, EXIT_INIT, EXIT_INPUT, EXIT_UNSUPPORTED
+  use yl_problem_optional, only: opt_get
+
+  use yl_diag, only: diag_abort, EXIT_INIT, EXIT_INPUT, EXIT_UNSUPPORTED,                     &
+                     yl_input_enabled, yl_input_file
 
   ! Deck-INDEPENDENT legacy initialisation that global_data happens to perform on its
   ! way through the readers (Global.f90:1190). kinddefine builds the element-kind
@@ -65,6 +68,11 @@ subroutine yl_adapter_override()
   use yl_problem_manifest, only: manifest_t
   use yl_problem_errors, only: problem_errors_t
   use yl_adapter_driver, only: adapt_legacy_deck
+  use yl_authoring_toml, only: toml_doc_t, toml_read
+  use yl_authoring_keys, only: authoring_validate
+  use yl_authoring_report, only: authoring_render
+  use yl_authoring_map, only: authoring_build_problem
+  use yl_authoring_defaults, only: default_residue, default_existence
 
   use yl_runtime_types, only: runtime_state_t
   use yl_runtime_contract, only: CONTRACT_TAG
@@ -85,8 +93,18 @@ subroutine yl_adapter_override()
 
   call kinddefine
 
-  call adapt_legacy_deck('.', problem, residue, existence, pmanifest, errors)
-  if (errors%any() .or. .not. allocated(problem)) call fail('adapt_legacy_deck', errors)
+  if (yl_input_enabled) then
+    call from_modern_input(problem, residue, existence, pmanifest, errors)
+  else
+    call adapt_legacy_deck('.', problem, residue, existence, pmanifest, errors)
+  end if
+  if (errors%any() .or. .not. allocated(problem)) then
+    if (yl_input_enabled) then
+      call fail('case.toml', errors)
+    else
+      call fail('adapt_legacy_deck', errors)
+    end if
+  end if
 
   call build_runtime(problem, CONTRACT_TAG, rt, rmanifest, errors)
   if (errors%any() .or. .not. allocated(rt)) call fail('build_runtime', errors)
@@ -94,10 +112,70 @@ subroutine yl_adapter_override()
   call commit_legacy_globals(problem, residue, existence, rt, errors)
   if (errors%any()) call fail('commit_legacy_globals', errors)
 
+  ! The modern values that need a size commit computes.
+  if (yl_input_enabled) call yl_modern_after_commit()
+
   write (output_unit, '(a)') 'yl_adapter_override: commit ok; the solve below runs on '// &
     'adapter state.'
 
 contains
+
+  !> The modern path: read, validate, map. The residue and the runtime-state manifest are
+  !> filled from the contract's default table rather than from a deck -- they are constants
+  !> of the capability whitelist (yl_authoring_defaults), which is exactly why the modern
+  !> input does not have to carry them.
+  subroutine from_modern_input(problem, residue, existence, pmanifest, errors)
+    type(problem_state_t), allocatable, intent(inout) :: problem
+    type(deck_residue_t), intent(out) :: residue
+    type(deck_existence_t), intent(out) :: existence
+    type(manifest_t), allocatable, intent(inout) :: pmanifest
+    type(problem_errors_t), intent(inout) :: errors
+    type(toml_doc_t) :: doc
+    integer :: i
+    integer(int32) :: npoin, nelem, ngroup, mdofn
+
+    write (output_unit, '(a)') 'yl_adapter_override: modern input '//trim(yl_input_file)
+
+    call toml_read(trim(yl_input_file), doc)
+    if (doc%failed) then
+      write (error_unit, '(a,i0,a)') trim(yl_input_file)//':', doc%fail_line, &
+        ': INVALID_INPUT: '//trim(doc%message)
+      flush (output_unit)
+      flush (error_unit)
+      call diag_abort('RANGE', EXIT_INPUT, 'yl_adapter_override', &
+           'case.toml is not readable as the authoring contract''s TOML subset')
+    end if
+
+    call authoring_validate(doc, trim(yl_input_file), errors)
+    if (errors%any()) then
+      do i = 1, errors%count()
+        write (error_unit, '(a)') authoring_render(errors, i)
+      end do
+      return
+    end if
+
+    call authoring_build_problem(doc, '.', problem, pmanifest, errors)
+    if (errors%any() .or. .not. allocated(problem)) return
+
+    npoin = int(size(problem%mesh%nodes), int32)
+    nelem = int(size(problem%mesh%elements), int32)
+    ngroup = int(size(problem%sections), int32)
+    mdofn = int(int_at_dim(problem), int32)
+    call default_residue(residue, npoin)
+    call default_existence(existence, nelem, ngroup, mdofn)
+  end subroutine from_modern_input
+
+  !> mdofn: degrees of freedom per node. On the whitelist it is the spatial dimension --
+  !> a displacement field in 2-D. Read from the problem rather than pinned, so the day a
+  !> pressure field is whitelisted this is where it stops being the dimension.
+  integer function int_at_dim(problem) result(n)
+    type(problem_state_t), intent(in) :: problem
+    integer(int32) :: d
+    logical :: found
+    call opt_get(problem%mesh%dimension, d, found)
+    n = 0
+    if (found) n = int(d)
+  end function int_at_dim
 
   subroutine fail(stage, errs)
     character(len=*), intent(in) :: stage

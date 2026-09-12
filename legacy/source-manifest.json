@@ -1,9 +1,9 @@
 {
   "manifest_version": 1,
-  "generated_at": "2026-09-10T18:01:23+00:00",
+  "generated_at": "2026-09-12T00:17:58+00:00",
   "root": "legacy",
   "file_count": 39,
-  "total_bytes": 55714432,
+  "total_bytes": 55716226,
   "excludes": [
     "BASELINE.md",
     "source-manifest.json"
@@ -35,13 +35,13 @@
     },
     {
       "path": "yl/Fem.f90",
-      "bytes": 724770,
-      "sha256": "5849cc00b38b5eb4902c84c421c318ee1b089fa50248489d222fe1a25d7c1ff2"
+      "bytes": 725626,
+      "sha256": "b13d83c647c860a820059280c46233a6c77df520317a500b9534189aa2d32a4c"
     },
     {
       "path": "yl/Global.f90",
-      "bytes": 209061,
-      "sha256": "a0bb36de502d60616ff6318cad7fe270440c12b27ee72892d4bd5c38a8797f49"
+      "bytes": 209887,
+      "sha256": "2017ce5b82c54e4fe93fee9ddabf06a444ab7023002fb192b5012b141bb7ace7"
     },
     {
       "path": "yl/Level.f90",
@@ -80,8 +80,8 @@
     },
     {
       "path": "yl/Solver.f90",
-      "bytes": 407634,
-      "sha256": "e80a8b603f6883cf993c945afeef7ae8aeb88c6f1d95bd8cb51fa6d6e3944035"
+      "bytes": 407746,
+      "sha256": "8fad2a9cd5172db19c0a67e683751c62740247b5bb50c162a25a76fc9300a174"
     },
     {
       "path": "yl/Stiff.f90",

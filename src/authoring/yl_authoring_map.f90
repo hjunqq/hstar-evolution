@@ -33,7 +33,7 @@ module yl_authoring_map
   use iso_fortran_env, only: int32, real64
 
   use yl_problem_optional, only: opt_set, opt_int, opt_real, opt_text
-  use yl_problem_types, only: problem_state_t, material_t, section_t, amplitude_t,           &
+  use yl_problem_types, only: problem_state_t, case_t, material_t, section_t, amplitude_t,  &
                               amplitude_point_t, solver_t, boundary_t, controls_t,           &
                               gravity_t, load_t, output_t, output_field_t, step_t,           &
                               activation_t, nset_t
@@ -90,6 +90,7 @@ contains
     integer :: mark0, u_cor, u_ele, ios, i, j, n
     logical :: ok
     character(len=:), allocatable :: prefix
+    type(case_t) :: cs
     type(material_t) :: mat
     type(section_t) :: sec
     type(amplitude_t) :: amp
@@ -110,7 +111,11 @@ contains
 
     prefix = trim(dir)//'/'//text_at(doc, 'mesh.file')
 
-    call builder_set_case(b, text_at(doc, 'case.name'), here(line_at(doc, 'case.name')), errors)
+    call opt_set(cs%name, text_at(doc, 'case.name'))
+    ! units is @m5-only: no legacy record carries it, and ADR-0003 makes the explicit
+    ! SI declaration mandatory. The modern path is the first one that can fill it.
+    call opt_set(cs%units, text_at(doc, 'case.units'))
+    call builder_set_case(b, cs, here(line_at(doc, 'case.name')), errors)
     call builder_set_mesh_dimension(b, int_at(doc, 'mesh.dimension'),                        &
                                     here(line_at(doc, 'mesh.dimension')), errors)
     ! interactions: the contract whitelists none, and the absence is the asserted value.
@@ -211,15 +216,23 @@ contains
     call opt_set(ctrl%increments,      int_at(doc, 'step[1].controls.increments'))
     call opt_set(ctrl%max_iterations,  int_at(doc, 'step[1].controls.max_iterations'))
     call opt_set(ctrl%tolerance_force, real_at(doc, 'step[1].controls.tolerance_force'))
-    call opt_set(ctrl%tolerance_dof,   real_at(doc, 'step[1].controls.tolerance_dof'))
+    ! tolerance_dof is one value PER DEGREE OF FREEDOM and gravity%amplitude one id PER
+    ! SECTION: legacy stores both as arrays, and the contract lets the author write one
+    ! number because "the same tolerance everywhere" is what they mean. The fan-out is
+    ! here, where the counts are known, not in the input.
+    if (allocated(ctrl%tolerance_dof)) deallocate (ctrl%tolerance_dof)
+    allocate (ctrl%tolerance_dof(int(int_at(doc, 'mesh.dimension'))))
+    ctrl%tolerance_dof = real_at(doc, 'step[1].controls.tolerance_dof')
     call builder_step_set_controls(b, sb, ctrl, here(line_at(doc, 'step[1].controls.increments')), errors)
     if (builder_failed(b)) return
 
     call default_load(ld)
     call opt_set(ld%gravity%enabled, 1_int32)
     call opt_set(ld%gravity%magnitude, real_at(doc, 'step[1].load.gravity.magnitude'))
-    call opt_set(ld%gravity%amplitude,                                                        &
-                 int(amplitude_index(doc, text_at(doc, 'step[1].load.gravity.amplitude')), int32))
+    if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
+    allocate (ld%gravity%amplitude(int(doc%count_of('section'))))
+    ld%gravity%amplitude = int(amplitude_index(doc,                                           &
+                               text_at(doc, 'step[1].load.gravity.amplitude')), int32)
     if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
     allocate (ld%gravity%direction(2))
     ld%gravity%direction(1) = real_at(doc, 'step[1].load.gravity.direction[1]')

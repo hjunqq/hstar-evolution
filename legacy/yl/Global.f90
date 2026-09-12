@@ -628,25 +628,25 @@
     print *,'Input the problem name?'
     !   read *,probn
     len1=len_trim(probn)
-    open(gunit,     file=probn(1:len1)//'.glb',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.glb','gunit','Global.f90:631')
-    open(cunit,     file=probn(1:len1)//'.cor',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.cor','cunit','Global.f90:633')
-    open(eunit,     file=probn(1:len1)//'.ele',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ele','eunit','Global.f90:635')
-    open(punit,     file=probn(1:len1)//'.pre',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.pre','punit','Global.f90:637')
-    open(munit,     file=probn(1:len1)//'.mat',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.mat','munit','Global.f90:639')
-    open(loadunit,  file=probn(1:len1)//'.loa',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.loa','loadunit','Global.f90:641')
+    if (.not. yl_input_enabled) open(gunit,     file=probn(1:len1)//'.glb',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.glb','gunit','Global.f90:631')
+    if (.not. yl_input_enabled) open(cunit,     file=probn(1:len1)//'.cor',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.cor','cunit','Global.f90:633')
+    if (.not. yl_input_enabled) open(eunit,     file=probn(1:len1)//'.ele',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ele','eunit','Global.f90:635')
+    if (.not. yl_input_enabled) open(punit,     file=probn(1:len1)//'.pre',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.pre','punit','Global.f90:637')
+    if (.not. yl_input_enabled) open(munit,     file=probn(1:len1)//'.mat',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.mat','munit','Global.f90:639')
+    if (.not. yl_input_enabled) open(loadunit,  file=probn(1:len1)//'.loa',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.loa','loadunit','Global.f90:641')
     open(chkunit,   file=probn(1:len1)//'.chk')
-    open(solveunit, file=probn(1:len1)//'.sol',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.sol','solveunit','Global.f90:644')
-    open(mainunit,  file=probn(1:len1)//'.man',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.man','mainunit','Global.f90:646')
-    open(outpread,  file=probn(1:len1)//'.opr',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.opr','outpread','Global.f90:648')
+    if (.not. yl_input_enabled) open(solveunit, file=probn(1:len1)//'.sol',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.sol','solveunit','Global.f90:644')
+    if (.not. yl_input_enabled) open(mainunit,  file=probn(1:len1)//'.man',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.man','mainunit','Global.f90:646')
+    if (.not. yl_input_enabled) open(outpread,  file=probn(1:len1)//'.opr',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.opr','outpread','Global.f90:648')
     open(outpwrite, file=probn(1:len1)//'.opw')
     open(outewrite, file=probn(1:len1)//'.oew')
     open(outgwrite, file=probn(1:len1)//'.ogw')
@@ -658,16 +658,16 @@
     open(initwunit,  file=probn(1:len1)//'.inw')  !20210207
     if(Uopt_R==1) &
         open(vcor_unit,  file=probn(1:len1)//'.vcor')  !20210502
-    open(tunit,     file=probn(1:len1)//'.tem',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.tem','tunit','Global.f90:661')
+    if (.not. yl_input_enabled) open(tunit,     file=probn(1:len1)//'.tem',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.tem','tunit','Global.f90:661')
     open(ftfunit,   file=probn(1:len1)//'.ftf')
-    open(ftfread,   file=probn(1:len1)//'.ftr',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ftr','ftfread','Global.f90:664')
-    open(ifsunit,   file=probn(1:len1)//'.ifs',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ifs','ifsunit','Global.f90:666')
+    if (.not. yl_input_enabled) open(ftfread,   file=probn(1:len1)//'.ftr',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ftr','ftfread','Global.f90:664')
+    if (.not. yl_input_enabled) open(ifsunit,   file=probn(1:len1)//'.ifs',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.ifs','ifsunit','Global.f90:666')
     open(mwaqu_unit,file=probn(1:len1)//'.aqu')  !20220330
-    open(nrtunit,   file=probn(1:len1)//'.nrt',status='old',iostat=yl_ios,iomsg=yl_msg)
-    call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.nrt','nrtunit','Global.f90:669')
+    if (.not. yl_input_enabled) open(nrtunit,   file=probn(1:len1)//'.nrt',status='old',iostat=yl_ios,iomsg=yl_msg)
+    if (.not. yl_input_enabled) call diag_check_open(yl_ios,yl_msg,probn(1:len1)//'.nrt','nrtunit','Global.f90:669')
     open(outbar,    file=probn(1:len1)//'.bar')
     open(outbeam,   file=probn(1:len1)//'.bem')
     open(outcontact,file=probn(1:len1)//'.ctr')
@@ -687,7 +687,7 @@
     open(faiunit,  file=probn(1:len1)//'.fai',FORM='UNFORMATTED')
     recttunit=35
     open(recttunit,file=probn(1:len1)//'.ctt',FORM='UNFORMATTED') !ctt2005
-
+    if (yl_input_enabled) goto 8090   ! M5: no .glb to read; see yl_authoring_prelude
     read(gunit,*,iostat=yl_ios,iomsg=yl_msg)text
     call diag_check_read(yl_ios,yl_msg,RD_GLB_global_data_title_1,0)
     print *,text
@@ -728,7 +728,7 @@
         allocate(ndefault(abs(rmesh)))
         read(gunit,*)ndefault
     endif              !2004/7/12
-
+8090 continue
     if (outplot(1:3)=='GID')then
         out_gid_msh=39
         open(out_gid_msh,file=probn(1:len1)//'.flavia.msh',buffered='YES',blocksize=1048576)

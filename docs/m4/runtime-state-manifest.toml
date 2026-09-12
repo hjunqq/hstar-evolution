@@ -840,3 +840,78 @@ tools/yl_runtime_scan.py once the scan was taught to see inner-component allocat
 before that fix `element(ie)%field(1)%stres0` and friends were hidden behind their base
 name, which the commit layer already writes.
 """
+
+[[array]]
+symbol = "pnorm"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "ndimn,npoin"
+dtype = "r64"
+legacy_allocation = "Global.f90:708, zeroed at :710"
+why = """
+Allocated and zeroed by global_data before the adapter entry, so the ADAPTER path never
+needed it from commit. The MODERN path (--input=case.toml) skips that whole read block --
+there is no .glb -- so commit becomes the only thing that can establish it. out_gid_write
+reads icpnorm while writing the results, which is how the class announced itself.
+"""
+
+[[array]]
+symbol = "prot"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "ndimn,ndimn,npoin"
+dtype = "r64"
+legacy_allocation = "Global.f90:708, zeroed at :710"
+why = """
+Allocated and zeroed by global_data before the adapter entry, so the ADAPTER path never
+needed it from commit. The MODERN path (--input=case.toml) skips that whole read block --
+there is no .glb -- so commit becomes the only thing that can establish it. out_gid_write
+reads icpnorm while writing the results, which is how the class announced itself.
+"""
+
+[[array]]
+symbol = "icpnorm"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "npoin"
+dtype = "i32"
+legacy_allocation = "Global.f90:708, zeroed at :710"
+why = """
+Allocated and zeroed by global_data before the adapter entry, so the ADAPTER path never
+needed it from commit. The MODERN path (--input=case.toml) skips that whole read block --
+there is no .glb -- so commit becomes the only thing that can establish it. out_gid_write
+reads icpnorm while writing the results, which is how the class announced itself.
+"""
+
+[[array]]
+symbol = "lelenrt"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "nelem"
+dtype = "i32"
+legacy_allocation = "Global.f90:708, zeroed at :710"
+why = """
+Allocated and zeroed by global_data before the adapter entry, so the ADAPTER path never
+needed it from commit. The MODERN path (--input=case.toml) skips that whole read block --
+there is no .glb -- so commit becomes the only thing that can establish it. out_gid_write
+reads icpnorm while writing the results, which is how the class announced itself.
+"""
+
+[[array]]
+symbol = "icpspring"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "npoin"
+dtype = "i32"
+legacy_allocation = "Global.f90:708, zeroed at :710"
+why = """
+Allocated and zeroed by global_data before the adapter entry, so the ADAPTER path never
+needed it from commit. The MODERN path (--input=case.toml) skips that whole read block --
+there is no .glb -- so commit becomes the only thing that can establish it. out_gid_write
+reads icpnorm while writing the results, which is how the class announced itself.
+"""
