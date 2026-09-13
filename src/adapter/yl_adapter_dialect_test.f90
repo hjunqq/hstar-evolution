@@ -143,7 +143,10 @@ program yl_adapter_dialect_test
     call run_case('A-GLB', 'nlayer-nonzero', 'glb', 8, 'Q  PROFILE  LOAD  5  0  2  0  0  0  0  0', 'W')
     call run_case('A-GLB', 'state_change-nonzero', 'glb', 8, 'Q  PROFILE  LOAD  5  0  0  0  1  0  0  0', 'W')
     call run_case('A-GLB', 'Bparameter-nonzero', 'glb', 8, 'Q  PROFILE  LOAD  5  0  0  0  0  1  0  0', 'W')
-    call run_case('A-GLB', 'nonlinear-type-not-5', 'glb', 8, 'Q  PROFILE  LOAD  4  0  0  0  0  0  0  0', 'W')
+    ! 9, not 4: 4 became whitelisted with the material domain (full Newton), so the old
+    ! counter-example stopped being one. A row whose counter-example silently starts passing
+    ! is a row that no longer asserts anything.
+    call run_case('A-GLB', 'nonlinear-type-not-5', 'glb', 8, 'Q  PROFILE  LOAD  9  0  0  0  0  0  0  0', 'W')
     call run_case('A-GLB', 'mdofn-mismatch', 'glb', 16, '  3', 'W')
     ! The extra trailing 1 is listglocbeam(1): with nlocalbeam=1 the record's io-list grows
     ! by one item, and a counter-example that omitted it was caught by the malformed-record
@@ -189,6 +192,20 @@ program yl_adapter_dialect_test
     call run_case('A-MAT', 'model', 'mat', 20, &
                   'MOHR_COULOMB       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000'//   &
                   'E-01       1.000E-05  0  0  0', &
+                  'W')
+    ! The two CLASSICALEP rows need a deck that REACHES them, so the mutation turns the
+    ! golden deck's material line into a CLASSICALEP one and appends the branch's records;
+    ! a criterion counter-example on an ELASTIC_ISOTROPIC deck would never be evaluated.
+    call run_case('A-MAT', 'plasticity-criterion', 'mat', 20, &
+                  'CLASSICALEP       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000'//   &
+                  'E-01       1.000E-05  0  0  0'//new_line('a')//'  0  0       1.000E+03'//new_line('a')//   &
+                  '  VM  5.0e4  0.0', &
+                  'W')
+    call run_case('A-MAT', 'plasticity-curves', 'mat', 20, &
+                  'CLASSICALEP       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000'//   &
+                  'E-01       1.000E-05  0  0  0'//new_line('a')//'  0  0       1.000E+03'//new_line('a')//   &
+                  '  MC  5.0e4  0.0'//new_line('a')//'  30.0  15.0'//new_line('a')//'  1'//   &
+                  new_line('a')//'  0  0', &
                   'W')
     call run_case('A-SOL', 'pivot-file', 'sol', 2, '  1  0  1  1', 'W')
     call run_case('A1', 'stochastic-curve-modifier-unsupported', 'loa', 3, '  2  LINEAR  1  2', 'W')

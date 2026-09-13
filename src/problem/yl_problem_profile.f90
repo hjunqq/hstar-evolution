@@ -436,7 +436,9 @@ module yl_problem_profile
     capability_item_t(rule_id='A-GLB', condition='nonlinear-type-not-5',                                            &
                       item='glb.type_nl', object_path='steps[0].controls',                                          &
                       field='nonlinear_type', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                  &
-                      message='only the ALGORT fixed-iteration static path (type_nl=5) is reproduced'),             &
+                      message='ALGORT rebuilds the stiffness on the first iteration (type_nl=5) '//   &
+                              'or on every one (type_nl=4); the other schemes depend on step '//   &
+                              'and block structure this build does not model'),                                     &
     capability_item_t(rule_id='A-GLB', condition='mdofn-mismatch',                                                  &
                       item='glb.mdofn', object_path='derived.counts',                                               &
                       field='mdofn', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &
@@ -561,8 +563,20 @@ module yl_problem_profile
                       item='mat.material', object_path='materials',                                                 &
                       field='model', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &
                       message='material_select (Material.f90:457) has a branch per constitutive model, each '//   &
-                              'with its own extra records; only ELASTIC_ISOTROPIC is whitelisted (capability '//   &
-                              'row G3 material.model)'),                                                            &
+                              'with its own extra records; only ELASTIC_ISOTROPIC and CLASSICALEP are '//   &
+                              'whitelisted (capability row G3 material.model)'),                                    &
+    capability_item_t(rule_id='A-MAT', condition='plasticity-criterion',                                            &
+                      item='mat.criteria', object_path='materials',                                                 &
+                      field='plasticity.criterion', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,            &
+                      message='CLASSICALEP branches again on the criterion (Material.f90:620-654) and the '//   &
+                              'record shape DEPENDS on that branch, so a wrong guess desynchronises every '//   &
+                              'later read; only MC is whitelisted'),                                               &
+    capability_item_t(rule_id='A-MAT', condition='plasticity-curves',                                               &
+                      item='mat.csigma0', object_path='materials',                                                  &
+                      field='plasticity.yield_stress_curve', stage=CAP_STAGE_ADAPT,                                 &
+                      value_kind=PROFILE_KIND_NONE,                                                                 &
+                      message='a non-zero curve index makes the yield stress or an angle follow a material '//   &
+                              'property curve (nscurve), which is itself outside the whitelist'),                   &
     capability_item_t(rule_id='A-SOL', condition='pivot-file',                                                      &
                       item='sol.iafile', object_path='solver',                                                      &
                       field='profile.pivot_file', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,              &

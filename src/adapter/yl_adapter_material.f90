@@ -127,10 +127,13 @@ contains
     character(len=200) :: text
     character(len=200) :: iomsg_buf
     character(len=30) :: property, name, phase, material
+    character(len=20) :: criteria
     integer(int32) :: ios, nscurve, nline, iline, mmats, jmat
     integer(int32) :: imat, nphase, icreep, kind_wt, jliqu
     integer(int32) :: iE_switch, iNu_switch
+    integer(int32) :: csigma0, cfrict, cdilan
     real(real64) :: density, ratio, thickness, e, nu, alfa, density_w
+    real(real64) :: sigma0, hardening, frict_angle, dilan_angle
     real(real64), allocatable :: mat_thickness(:)   ! thickness by material id, filled below
     type(material_t) :: mat
     type(source_location_t) :: loc
@@ -276,9 +279,17 @@ contains
         call mat_reject(errors, 'nonlinear-normal-stiffness', 450_int32, trim(name), rec=jmat)
         return
       end if
-      if (trim(material) /= 'ELASTIC_ISOTROPIC') then
+      ! material_select (Material.f90:457): one branch per constitutive model, each with
+      ! its own extra records. ELASTIC_ISOTROPIC reads nothing more, which is the only
+      ! reason the static slice could ignore this select entirely.
+      if (trim(material) /= 'ELASTIC_ISOTROPIC' .and. trim(material) /= 'CLASSICALEP') then
         call mat_reject(errors, 'model', 457_int32, trim(material), rec=jmat)
         return
+      end if
+      if (trim(material) == 'CLASSICALEP') then
+        call read_classicalep(unit, jmat, criteria, sigma0, hardening, frict_angle,           &
+                              dilan_angle, csigma0, cfrict, cdilan, errors)
+        if (errors%any()) return
       end if
 
       call opt_set(mat%id, imat)
@@ -294,6 +305,20 @@ contains
       call opt_set(mat%creep_model, icreep)             ! == 0, checked above
       call opt_set(mat%liquefaction, jliqu)              ! == 0, checked above
       call opt_set(mat%wetting_kind, kind_wt)            ! == 0, checked above
+      if (trim(material) == 'CLASSICALEP') then
+        ! Only the fields the criterion actually read. `criteria(1:2) == 'MC'` gates two
+        ! of the four records in legacy, so leaving the others UNSET is the truthful
+        ! shape: opt_ absence says "this criterion has no such parameter", which 0.0
+        ! would not (0 degrees of friction is a real material).
+        call opt_set(mat%plasticity%criterion, trim(criteria))
+        call opt_set(mat%plasticity%yield_stress, sigma0)
+        call opt_set(mat%plasticity%hardening_modulus, hardening)
+        call opt_set(mat%plasticity%friction_angle, frict_angle)
+        call opt_set(mat%plasticity%dilation_angle, dilan_angle)
+        call opt_set(mat%plasticity%yield_stress_curve, csigma0)
+        call opt_set(mat%plasticity%friction_angle_curve, cfrict)
+        call opt_set(mat%plasticity%dilation_angle_curve, cdilan)
+      end if
       ! `thickness` (Material.f90:319) is NOT a materials[] field -- its ProblemState
       ! owner is sections[].thickness (docs/m2/state-field-map.toml id
       ! "sections.thickness") -- but it MUST still be captured here: this is the
@@ -310,6 +335,62 @@ contains
 
     call resolve_section_thickness(errors, ctx, mat_thickness, secparts)
   end subroutine parse_mat
+
+  !> The CLASSICALEP branch of material_select (Material.f90:618-654).
+  !>
+  !> Four records for the MC criterion, two of them gated on the criterion itself, which is
+  !> why this cannot be a flat list of reads: the cursor position after this routine depends
+  !> on what the FIRST record said. Getting that wrong desynchronises every read after it in
+  !> the file rather than producing a wrong number, so the criterion whitelist is checked
+  !> between the first record and the second, not afterwards.
+  !>
+  !> Only `MC` is whitelisted. legacy also has TC / VM / DP / MCC / DPC / MCJOINT; DP shares
+  !> MC's record shape, the other four do not, and none of them has a real deck here.
+  subroutine read_classicalep(unit, jmat, criteria, sigma0, hardening, frict_angle,          &
+                              dilan_angle, csigma0, cfrict, cdilan, errors)
+    integer, intent(in) :: unit
+    integer(int32), intent(in) :: jmat
+    character(len=*), intent(out) :: criteria
+    real(real64), intent(out) :: sigma0, hardening, frict_angle, dilan_angle
+    integer(int32), intent(out) :: csigma0, cfrict, cdilan
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=200) :: iomsg_buf
+    integer(int32) :: ios
+
+    ! RD: MAT.material_set.classicalep_criteria (Material.f90:620)
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) criteria, sigma0, hardening
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.classicalep_criteria',   &
+                          620_int32, rec=jmat)) return
+    if (trim(criteria) /= 'MC') then
+      call mat_reject(errors, 'plasticity-criterion', 620_int32, trim(criteria), rec=jmat)
+      return
+    end if
+
+    ! RD: MAT.material_set.classicalep_angles (Material.f90:625) -- MC and DP only.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) frict_angle, dilan_angle
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.classicalep_angles',     &
+                          625_int32, rec=jmat)) return
+
+    ! RD: MAT.material_set.classicalep_csigma0 (Material.f90:645)
+    ! A CURVE INDEX. legacy declares it integer(ink) and the deck writes `0.0`; ifx
+    ! list-directed read accepts that into an integer as 0 -- measured, not assumed -- and
+    ! reading it as an integer here is what keeps this parser byte-compatible with legacy's.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) csigma0
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.classicalep_csigma0',    &
+                          645_int32, rec=jmat)) return
+
+    ! RD: MAT.material_set.classicalep_angle_curves (Material.f90:647) -- MC and DP only.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) cfrict, cdilan
+    if (.not. mat_read_ok(errors, ios, iomsg_buf,                                            &
+                          'MAT.material_set.classicalep_angle_curves', 647_int32,            &
+                          rec=jmat)) return
+
+    if (csigma0 /= 0_int32 .or. cfrict /= 0_int32 .or. cdilan /= 0_int32) then
+      call mat_reject(errors, 'plasticity-curves', 645_int32,                                &
+                      itoa(csigma0)//','//itoa(cfrict)//','//itoa(cdilan), rec=jmat)
+      return
+    end if
+  end subroutine read_classicalep
 
   ! Section -> material -> thickness (adapter-contract.md §2.4). Positional: section
   ! `igroup` is `secparts%sections(igroup)`, whose material is `ctx%group_matno(igroup)`

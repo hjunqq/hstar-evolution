@@ -464,13 +464,17 @@ contains
     if (Bparameter /= 0_int32) then
       call reject_pinned(errors, loc, 'Bparameter-nonzero', Bparameter); return
     end if
-    ! type_nl: no capability-gate row (checked). ALGORT's kresl=1-at-first-iteration path
-    ! (state-field-map.toml note, Fem.f90:15451) is only confirmed for the value 5; any
-    ! other value changes iteration control this build's ProblemState.controls does not
-    ! model narrowly enough to trust.
-    if (type_nl /= 5_int32) then
+    ! type_nl selects WHEN ALGORT rebuilds the stiffness (Fem.f90:15450-15458, kresl):
+    !   5  kresl=1 on the first iteration only -- modified Newton / initial stiffness
+    !   4  kresl=1 on EVERY iteration          -- full Newton
+    ! Both are single unconditional lines in ALGORT with no other state, which is why the
+    ! pair can be whitelisted together while 1/2/6/7/8/9/10 cannot: those depend on istep,
+    ! iblks, inc_step or iiter>=2, i.e. on step and block structure that this build's
+    ! ProblemState.controls does not model narrowly enough to trust. 4 arrives with the
+    ! material domain: a plastic material needs the tangent rebuilt every iteration.
+    if (type_nl /= 5_int32 .and. type_nl /= 4_int32) then
       call reject_dialect(errors, 'A-GLB', 'nonlinear-type-not-5', loc, actual=itoa(type_nl), &
-                          expected='5')
+                          expected='4 or 5')
       return
     end if
     call opt_set(parts%procedure_, trim(type_problem))

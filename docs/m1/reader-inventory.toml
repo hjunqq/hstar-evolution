@@ -2305,6 +2305,78 @@ hits = {"static_2d.cooks_membrane" = 1, "static_2d.lame_cylinder" = 1}
 note = "0 -> no surfaces"
 
 [[reader]]
+id = "MAT.material_set.classicalep_criteria"
+site = "Material.f90:620"
+anchor = "13d9ac7ba1b1"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)props(imat)%mechanical%solid%ClassicalEP%criteria,props(imat)%mechanical%solid%ClassicalEP%sigma0,props(imat)%mechanical%solid%ClassicalEP%hardening"
+seq = 13
+fields = ["criteria:str:materials[].plasticity.criterion", "sigma0:real:materials[].plasticity.yield_stress", "hardening:real:materials[].plasticity.hardening_modulus"]
+format = "list_directed"
+guard = "material=='CLASSICALEP'"
+phase = "startup"
+consumers = "STIFF_U / RESIDU"
+state_target = "materials[]"
+executed_by = ["plasticity.mini_mc"]
+hits = {"static_2d.cooks_membrane" = 0, "static_2d.lame_cylinder" = 0, "plasticity.mini_mc" = 1}
+
+[[reader]]
+id = "MAT.material_set.classicalep_angles"
+site = "Material.f90:625"
+anchor = "bae6c2b5b5fd"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)props(imat)%mechanical%solid%ClassicalEP%frict_angle,props(imat)%mechanical%solid%ClassicalEP%dilan_angle"
+seq = 14
+fields = ["frict_angle:real:materials[].plasticity.friction_angle", "dilan_angle:real:materials[].plasticity.dilation_angle"]
+format = "list_directed"
+guard = "material=='CLASSICALEP' .and. (criteria(1:2)=='MC' .or. criteria(1:2)=='DP')"
+phase = "startup"
+consumers = "STIFF_U / RESIDU"
+state_target = "materials[]"
+executed_by = ["plasticity.mini_mc"]
+hits = {"static_2d.cooks_membrane" = 0, "static_2d.lame_cylinder" = 0, "plasticity.mini_mc" = 1}
+
+[[reader]]
+id = "MAT.material_set.classicalep_csigma0"
+site = "Material.f90:645"
+anchor = "b736504d18f3"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)props(imat)%mechanical%solid%ClassicalEP%csigma0"
+seq = 15
+fields = ["csigma0:int:materials[].plasticity.yield_stress_curve"]
+format = "list_directed"
+guard = "material=='CLASSICALEP'"
+phase = "startup"
+consumers = "STIFF_U"
+state_target = "materials[]"
+executed_by = ["plasticity.mini_mc"]
+hits = {"static_2d.cooks_membrane" = 0, "static_2d.lame_cylinder" = 0, "plasticity.mini_mc" = 1}
+
+[[reader]]
+id = "MAT.material_set.classicalep_angle_curves"
+site = "Material.f90:647"
+anchor = "f7c6a008ad8b"
+file = ".mat"
+unit_var = "munit"
+routine = "material_set"
+statement = "read(munit,*)props(imat)%mechanical%solid%ClassicalEP%cfrict,props(imat)%mechanical%solid%ClassicalEP%cdilan"
+seq = 16
+fields = ["cfrict:int:materials[].plasticity.friction_angle_curve", "cdilan:int:materials[].plasticity.dilation_angle_curve"]
+format = "list_directed"
+guard = "material=='CLASSICALEP' .and. (criteria(1:2)=='MC' .or. criteria(1:2)=='DP')"
+phase = "startup"
+consumers = "STIFF_U"
+state_target = "materials[]"
+executed_by = ["plasticity.mini_mc"]
+hits = {"static_2d.cooks_membrane" = 0, "static_2d.lame_cylinder" = 0, "plasticity.mini_mc" = 1}
+
+[[reader]]
 id = "PRE.prescrib_set.title#1"
 site = "Prescrib.f90:211"
 anchor = "40fdd2d2bce8"

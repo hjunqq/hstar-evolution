@@ -139,7 +139,13 @@ SITE = re.compile(r"^([A-Za-z_0-9.]+\.[fF]90):(\d+)$")
 #               (the Gauss-point Jacobian, coordinates and Cartesian shape-function derivatives).
 DERIVED_RULES = {"count", "index_map", "renumber", "legacy_default", "dof_expand", "geometry"}
 DTYPES = {"i32", "i64", "f64", "str", "bool"}
-UNITS = {"1", "id", "m", "N", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K"}
+# "deg" is deliberately NOT the SI radian. legacy stores the friction and dilation angles
+# in degrees and consumes them with `tand()` (Stiff.f90), so ProblemState keeps degrees:
+# a deg -> rad -> deg round trip is not bit-exact in binary, and the material domain's
+# acceptance criterion IS bit-exactness. Converting would insert a rounding step between
+# the author's number and the solver for no physical gain. The authoring contract states
+# the unit on the field instead.
+UNITS = {"1", "id", "m", "N", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
 DETERMINISM = {"deterministic", "uninitialized", "pointer", "order_dependent"}
 COMPARE_RULES = {"exact", "abs_tol", "rel_tol", "hash", "ignore"}
 OWNER_BUCKETS = {"derived", "not_migrated"}   # owners that are labels, not paths (rule 21)

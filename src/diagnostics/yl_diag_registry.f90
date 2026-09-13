@@ -12,7 +12,7 @@ module yl_diag_registry
   implicit none
   public
 
-  integer, parameter :: YL_NREADERS = 157
+  integer, parameter :: YL_NREADERS = 161
   integer, parameter :: YL_LEN_READER_ID = 96
   integer, parameter :: YL_LEN_READER_SITE = 32
   integer, parameter :: YL_LEN_READER_FILE = 16
@@ -145,39 +145,43 @@ module yl_diag_registry
   integer, parameter :: RD_LOA_external_load_1_point_load_count = 122
   integer, parameter :: RD_LOA_external_load_1_title_3 = 123
   integer, parameter :: RD_LOA_external_load_1_edge_count = 124
-  integer, parameter :: RD_PRE_prescrib_set_title_1 = 125
-  integer, parameter :: RD_PRE_prescrib_set_set_count = 126
-  integer, parameter :: RD_PRE_prescrib_set_reached_only_Prescrib_213 = 127
-  integer, parameter :: RD_PRE_prescrib_set_set_header = 128
-  integer, parameter :: RD_PRE_prescrib_set_set_nodes = 129
-  integer, parameter :: RD_PRE_prescrib_set_set_values = 130
-  integer, parameter :: RD_LOA_external_load_2_title_1 = 131
-  integer, parameter :: RD_LOA_external_load_2_title_2 = 132
-  integer, parameter :: RD_LOA_external_load_2_edge_load_groups = 133
-  integer, parameter :: RD_LOA_external_load_2_title_3 = 134
-  integer, parameter :: RD_LOA_external_load_2_gravity = 135
-  integer, parameter :: RD_LOA_external_load_2_gravity_curve_title = 136
-  integer, parameter :: RD_LOA_external_load_2_gravity_curves = 137
-  integer, parameter :: RD_LOA_external_load_2_title_4 = 138
-  integer, parameter :: RD_LOA_external_load_2_beam_load_count = 139
-  integer, parameter :: RD_LOA_external_load_2_title_5 = 140
-  integer, parameter :: RD_LOA_external_load_2_plate_load_count = 141
-  integer, parameter :: RD_TEM_boundt_title_1 = 142
-  integer, parameter :: RD_TEM_boundt_temp_surface_count = 143
-  integer, parameter :: RD_TEM_boundt_title_2 = 144
-  integer, parameter :: RD_TEM_boundt_temp_edge_count = 145
-  integer, parameter :: RD_TEM_boundt_label11_title = 146
-  integer, parameter :: RD_TEM_boundt_title_3 = 147
-  integer, parameter :: RD_TEM_boundt_temp_elgroup_count = 148
-  integer, parameter :: RD_TEM_boundt_title_4 = 149
-  integer, parameter :: RD_TEM_boundt_title_5 = 150
-  integer, parameter :: RD_TEM_boundt_pipe_count = 151
-  integer, parameter :: RD_SOL_PROFILE_title_1 = 152
-  integer, parameter :: RD_SOL_PROFILE_profile_control = 153
-  integer, parameter :: RD_MAN_STATIC_U_title_1 = 154
-  integer, parameter :: RD_MAN_STATIC_U_nincs = 155
-  integer, parameter :: RD_MAN_STATIC_U_increment_control = 156
-  integer, parameter :: RD_MAN_STATIC_U_tolerances = 157
+  integer, parameter :: RD_MAT_material_set_classicalep_criteria = 125
+  integer, parameter :: RD_MAT_material_set_classicalep_angles = 126
+  integer, parameter :: RD_MAT_material_set_classicalep_csigma0 = 127
+  integer, parameter :: RD_MAT_material_set_classicalep_angle_curves = 128
+  integer, parameter :: RD_PRE_prescrib_set_title_1 = 129
+  integer, parameter :: RD_PRE_prescrib_set_set_count = 130
+  integer, parameter :: RD_PRE_prescrib_set_reached_only_Prescrib_213 = 131
+  integer, parameter :: RD_PRE_prescrib_set_set_header = 132
+  integer, parameter :: RD_PRE_prescrib_set_set_nodes = 133
+  integer, parameter :: RD_PRE_prescrib_set_set_values = 134
+  integer, parameter :: RD_LOA_external_load_2_title_1 = 135
+  integer, parameter :: RD_LOA_external_load_2_title_2 = 136
+  integer, parameter :: RD_LOA_external_load_2_edge_load_groups = 137
+  integer, parameter :: RD_LOA_external_load_2_title_3 = 138
+  integer, parameter :: RD_LOA_external_load_2_gravity = 139
+  integer, parameter :: RD_LOA_external_load_2_gravity_curve_title = 140
+  integer, parameter :: RD_LOA_external_load_2_gravity_curves = 141
+  integer, parameter :: RD_LOA_external_load_2_title_4 = 142
+  integer, parameter :: RD_LOA_external_load_2_beam_load_count = 143
+  integer, parameter :: RD_LOA_external_load_2_title_5 = 144
+  integer, parameter :: RD_LOA_external_load_2_plate_load_count = 145
+  integer, parameter :: RD_TEM_boundt_title_1 = 146
+  integer, parameter :: RD_TEM_boundt_temp_surface_count = 147
+  integer, parameter :: RD_TEM_boundt_title_2 = 148
+  integer, parameter :: RD_TEM_boundt_temp_edge_count = 149
+  integer, parameter :: RD_TEM_boundt_label11_title = 150
+  integer, parameter :: RD_TEM_boundt_title_3 = 151
+  integer, parameter :: RD_TEM_boundt_temp_elgroup_count = 152
+  integer, parameter :: RD_TEM_boundt_title_4 = 153
+  integer, parameter :: RD_TEM_boundt_title_5 = 154
+  integer, parameter :: RD_TEM_boundt_pipe_count = 155
+  integer, parameter :: RD_SOL_PROFILE_title_1 = 156
+  integer, parameter :: RD_SOL_PROFILE_profile_control = 157
+  integer, parameter :: RD_MAN_STATIC_U_title_1 = 158
+  integer, parameter :: RD_MAN_STATIC_U_nincs = 159
+  integer, parameter :: RD_MAN_STATIC_U_increment_control = 160
+  integer, parameter :: RD_MAN_STATIC_U_tolerances = 161
 
   character(len=96), parameter :: YL_READER_ID(YL_NREADERS) = [character(len=96) :: &
     'INP.FEM90.title#1', &
@@ -304,6 +308,10 @@ module yl_diag_registry
     'LOA.external_load_1.point_load_count', &
     'LOA.external_load_1.title#3', &
     'LOA.external_load_1.edge_count', &
+    'MAT.material_set.classicalep_criteria', &
+    'MAT.material_set.classicalep_angles', &
+    'MAT.material_set.classicalep_csigma0', &
+    'MAT.material_set.classicalep_angle_curves', &
     'PRE.prescrib_set.title#1', &
     'PRE.prescrib_set.set_count', &
     'PRE.prescrib_set.reached_only_Prescrib_213', &
@@ -464,6 +472,10 @@ module yl_diag_registry
     'Load.f90:242', &
     'Load.f90:364', &
     'Load.f90:366', &
+    'Material.f90:620', &
+    'Material.f90:625', &
+    'Material.f90:645', &
+    'Material.f90:647', &
     'Prescrib.f90:211', &
     'Prescrib.f90:213', &
     'Prescrib.f90:218', &
@@ -624,6 +636,10 @@ module yl_diag_registry
     '.loa', &
     '.loa', &
     '.loa', &
+    '.mat', &
+    '.mat', &
+    '.mat', &
+    '.mat', &
     '.pre', &
     '.pre', &
     '.pre', &
@@ -784,6 +800,10 @@ module yl_diag_registry
     'loadunit', &
     'loadunit', &
     'loadunit', &
+    'munit', &
+    'munit', &
+    'munit', &
+    'munit', &
     'punit', &
     'punit', &
     'punit', &
@@ -835,6 +855,10 @@ module yl_diag_registry
     'startup', &
     'startup', &
     'reached_only', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
     'startup', &
     'startup', &
     'startup', &
@@ -1123,6 +1147,13 @@ module yl_diag_registry
     'nplgroup:int,kpload:int', &
     'text:str', &
     'nedge:int', &
+    'criteria:str:materials[].plasticity.criterion,sigma0:real:materials[].plasticity.yield_stress,ha&
+    &rdening:real:materials[].plasticity.hardening_modulus', &
+    'frict_angle:real:materials[].plasticity.friction_angle,dilan_angle:real:materials[].plasticity.d&
+    &ilation_angle', &
+    'csigma0:int:materials[].plasticity.yield_stress_curve', &
+    'cfrict:int:materials[].plasticity.friction_angle_curve,cdilan:int:materials[].plasticity.dilatio&
+    &n_angle_curve', &
     'text:str', &
     'nfixsets:int,nline:int', &
     '', &
@@ -1174,10 +1205,10 @@ module yl_diag_registry
     4, 5, 6, 7, 8, 9, 10, 11, 12, 70, 71, 72, &
     73, 74, 75, 1, 2, 3, 4, 5, 6, 7, 8, 1, &
     2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, &
-    6, 7, 8, 9, 1, 2, 0, 4, 5, 6, 9, 10, &
-    11, 12, 13, 14, 15, 16, 17, 18, 19, 1, 2, 3, &
-    4, 5, 6, 7, 8, 9, 10, 1, 2, 1, 2, 3, &
-    4 &
+    6, 7, 8, 9, 13, 14, 15, 16, 1, 2, 0, 4, &
+    5, 6, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, &
+    19, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, &
+    2, 1, 2, 3, 4 &
     ]
 
 end module yl_diag_registry
