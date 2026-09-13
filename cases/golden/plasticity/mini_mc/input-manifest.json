@@ -1,0 +1,107 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-13T12:15:35+00:00",
+  "root": "cases/golden/plasticity/mini_mc/legacy",
+  "file_count": 16,
+  "total_bytes": 8862,
+  "excludes": [],
+  "meta": {
+    "case_id": "plasticity.mini_mc",
+    "source_repository": "/home/huijun/HSTAR_Next/cases",
+    "source_commit": "d3e921cb416722d8b46ab64dab177dee1e17abe3",
+    "source_path": "cases/mini_mc",
+    "actually_opened_load_file": "1.loa",
+    "note": "Solver inputs only; the source dir also holds run outputs and VTK exports that were not imported"
+  },
+  "case_insensitive_collisions": [
+    {
+      "paths": [
+        "1.LOA",
+        "1.loa"
+      ],
+      "identical_bytes": true
+    }
+  ],
+  "files": [
+    {
+      "path": "1.LOA",
+      "bytes": 378,
+      "sha256": "a1bd82adbcc9c8708fda7af1dc13c98bffe2a023c55cc7560b2887e19e4dbc29"
+    },
+    {
+      "path": "1.aqu",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "1.cor",
+      "bytes": 792,
+      "sha256": "21bd65638372dd192d87266734a2e4ac9105720fed493401df46ebb34655d508"
+    },
+    {
+      "path": "1.ele",
+      "bytes": 411,
+      "sha256": "99f5ce7223de89d9a8ddb194dadcc0932acab634fc96ee81163b153969fa8dd1"
+    },
+    {
+      "path": "1.ftr",
+      "bytes": 74,
+      "sha256": "5b814f989887fabfe216e9f6f1b2d4a87c87b676570d894927fe38ca9d4e0123"
+    },
+    {
+      "path": "1.glb",
+      "bytes": 2626,
+      "sha256": "8ebe0242082676e1e51fbb1c4bc5d0aa06a227eb1026e46d2280d048e2a158bf"
+    },
+    {
+      "path": "1.ifs",
+      "bytes": 81,
+      "sha256": "ef4e28497d67ecfa223c9bcc12ed6d936506019083a3a1576cc97c2c2c43ab99"
+    },
+    {
+      "path": "1.loa",
+      "bytes": 378,
+      "sha256": "a1bd82adbcc9c8708fda7af1dc13c98bffe2a023c55cc7560b2887e19e4dbc29"
+    },
+    {
+      "path": "1.man",
+      "bytes": 100,
+      "sha256": "58339b7b9b26c6e8f7ae666bbc0a2a39ff075b07f7c086ed5e09544ea9714036"
+    },
+    {
+      "path": "1.mat",
+      "bytes": 1086,
+      "sha256": "814ab169a2f17938ea5ee20952bea58277eb3b433c60084e438c11237fa6de6e"
+    },
+    {
+      "path": "1.nrt",
+      "bytes": 94,
+      "sha256": "da4b5df40a30a8be842f92d024f584ecb9c3bba48929aae0fa216d4b959a47f2"
+    },
+    {
+      "path": "1.opr",
+      "bytes": 228,
+      "sha256": "1db774362ec2fce45cafd51c6aeb44be1c6dda1a1ab198adc94f533b0c855c20"
+    },
+    {
+      "path": "1.pre",
+      "bytes": 164,
+      "sha256": "55d62a52ef8bc6ff7a54b21a8c6e1eda7c93cc1510ae129a048df4669cf08d15"
+    },
+    {
+      "path": "1.sol",
+      "bytes": 2100,
+      "sha256": "1147dcb4a7287342699cb4b79990a687fa68dfb0f876ee3013f7d20d19538f45"
+    },
+    {
+      "path": "1.tem",
+      "bytes": 279,
+      "sha256": "759f17eafd1a804f2618a761748a2e3fab6b13cae146593489e6420fc55fc4c3"
+    },
+    {
+      "path": "inp",
+      "bytes": 71,
+      "sha256": "fec43e97e94d091f2327003dae2f5a86a9f41c996294efeb5778fb45fe0f58fe"
+    }
+  ]
+}

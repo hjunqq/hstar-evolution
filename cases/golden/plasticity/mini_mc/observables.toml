@@ -1,0 +1,36 @@
+# 观察量登记。按 M0-05a 的纪律：在任何结果数值被查看之前登记。
+# 本文件登记的是**结构**（块名、分量名、节点数），不是数值；分量名取自
+# 1.flavia.res 的块头，节点/单元数取自 1.glb 的 NPOIN/NELEM。
+version = 1
+case_id = "plasticity.mini_mc"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 30
+expected_element_count = 20
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较；.rtt/.stf/.res 为二进制，不解析"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true
+
+[[observable]]
+id = "plastic_strain"
+kind = "nodal_scalar"
+components = ["PLASTICSTRAIN"]
+unit = "1"
+required = true
+note = "本算例相对静力两例**新增**的块，且正是塑性能力本身的观察量：弹性材料不会写出它。任何声称「CLASSICALEP/MC 迁移完成」的判据都必须包含这一块，否则等价性可以在塑性完全没发生的情况下成立"

@@ -26,6 +26,22 @@ status = "reference-frozen"
 verification = "B02-repeat-exact-pass"
 reference = "reference/"
 
+[[case]]
+id = "plasticity.mini_mc"
+path = "golden/plasticity/mini_mc"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/mini_mc"
+source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
+input_manifest = "golden/plasticity/mini_mc/input-manifest.json"
+purpose = "material domain: the CLASSICALEP/MC record, two materials and two sections, nonlinear_type=4"
+migration_phase = "M6.4"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# The deck stays ELASTIC: PLASTICSTRAIN is present and identically zero (measured, see
+# docs/m6/material-domain.md SS4). It establishes the material-domain plumbing, not the
+# plastic return-mapping; the deck that yields is named there too.
+
 [[planned_case]]
 id = "static_3d.mini_3d"
 migration_phase = "M6.1"
@@ -37,10 +53,6 @@ migration_phase = "M7.1"
 [[planned_case]]
 id = "dynamic_fixed.mini_dynamic"
 migration_phase = "M7.2"
-
-[[planned_case]]
-id = "plasticity.mini_mc"
-migration_phase = "M6.4"
 
 [[planned_case]]
 id = "reinforcement.mini_rebar"

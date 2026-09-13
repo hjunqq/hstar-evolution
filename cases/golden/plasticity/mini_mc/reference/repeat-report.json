@@ -1,0 +1,38 @@
+{
+ "case_id": "plasticity.mini_mc",
+ "test_id": "B02",
+ "frozen_at": "2026-09-13T12:19:25+00:00",
+ "binary_sha256": "d44ae1a346bac0c0a503ae6d74140a30e81ced0808953ff2c7646f1b295c482f",
+ "build_profile": "release",
+ "entry": "--adapter=off (legacy readers); the reference is what LEGACY produces",
+ "threads": {
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "runs": [
+  {
+   "label": "ref1",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "87ce65c8a60e781a93626a878bd56744924780a189846d5716e89f23f174f388"
+  },
+  {
+   "label": "ref2",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "87ce65c8a60e781a93626a878bd56744924780a189846d5716e89f23f174f388"
+  },
+  {
+   "label": "ref3",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "87ce65c8a60e781a93626a878bd56744924780a189846d5716e89f23f174f388"
+  }
+ ],
+ "all_completed": true,
+ "flavia_res_identical": true,
+ "comparison_rule": "atol = rtol = 0 (B02)"
+}
