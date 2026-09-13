@@ -67,12 +67,15 @@ Check rules
    4 forward coverage: every exported `ProblemState.*` owner path resolves, via the
      owner-path rule below, to exactly one declared leaf field. Zero matches is a FAIL;
      a path that stops on a non-leaf (a `type(T)` component) is a FAIL
-   5 reverse coverage: every declared leaf field traces back to at least one map field id
-     or carries an `!@m5-only: <reason>` marker. An unmarked orphan is a FAIL
+   5 reverse coverage: every declared leaf field traces back to at least one map field id,
+     or carries an `!@m5-only: <reason>` marker, or an `!@off-face: <id>` marker naming a
+     map row that exists but is NOT exported. An unmarked orphan is a FAIL
    6 marker discipline: markers parse under the marker grammar below; an `@m5-only`
      reason is >= 12 printable characters; an `@m5-only` field that DOES resolve to a map
      id is a FAIL (stale marker); an `@map:` marker naming an id absent from the exported
-     set is a FAIL
+     set is a FAIL; an `@off-face:` marker must name an id that EXISTS in the map and is
+     NOT exported -- an id that does not exist, or one that is exported (and therefore
+     reachable the ordinary way), is a FAIL
    7 injectivity, both directions: no two map fields may resolve to the same type field
      (this is what catches the `sections[].material` and `steps[0].output.frequency`
      owner collisions), and no map id may be claimed by two type fields
@@ -177,6 +180,13 @@ Marker grammar (the trailing comment of a component declaration)
                    | "@required:" <reason>     why a mapped field may be a bare intrinsic
                    | "@map:" <field-id>        explicit provenance for a field the owner
                                                path cannot reach mechanically
+                   | "@off-face:" <field-id>  a field with a real legacy counterpart whose
+                                               map row is deliberately off the observation
+                                               face (compare=ignore, emit=none), per
+                                               ADR-0009. NOT the same as @m5-only, which
+                                               means no legacy record carries the field at
+                                               all; conflating the two would let a field
+                                               with legacy state hide behind "modern only"
                    | "@repr:" <to> "from" <from> ";" <reason>
                                                a declared representation change; <to> and
                                                <from> are map dtypes, must differ, and
@@ -288,7 +298,8 @@ PROLOGUE_OK = re.compile(
 
 MARKER_M5 = "m5-only"
 MARKER_REPR = "repr"
-MARKER_NAMES = {MARKER_M5, "optional", "required", "map", MARKER_REPR}
+MARKER_OFF = "off-face"
+MARKER_NAMES = {MARKER_M5, "optional", "required", "map", MARKER_REPR, MARKER_OFF}
 REPR_VALUE = re.compile(r"^([a-z0-9]+)\s+from\s+([a-z0-9]+)\s*;\s*(.+)$", re.I)
 MARKER = re.compile(r"^@([a-z0-9-]+)\s*(?::\s*(.*))?$")
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9]*(\.[A-Za-z0-9_]+)+$")
@@ -754,6 +765,7 @@ class Parser:
             if not m or m.group(1) not in MARKER_NAMES:
                 self.tfail(td, f"{where}: in type `{td.name}`: malformed marker {piece!r}; "
                           f"expected @m5-only:<reason> | @optional | @required:<reason> | @map:<id> "
+                          f"| @off-face:<id> "
                           f"| @repr:<dtype> from <dtype>; <reason> "
                           f"(rule 6)")
                 continue
@@ -791,9 +803,9 @@ class Parser:
                               f">= {M5_REASON_MIN} printable characters (rule 6)")
                     continue
                 val = f"{to} from {frm}; {why}"
-            elif key == "map":
+            elif key in ("map", MARKER_OFF):
                 if not val or not FIELD_ID_RE.match(val):
-                    self.tfail(td, f"{where}: in type `{td.name}`: @map needs a field id, "
+                    self.tfail(td, f"{where}: in type `{td.name}`: @{key} needs a field id, "
                               f"got {val!r} (rule 6)")
                     continue
             elif val:
@@ -1081,6 +1093,9 @@ class Checker:
     # rules 5 and 6
     def rule5_6(self):
         ids = {str(f["id"]) for f in self.rows}
+        # Every id in the map, exported or not. @off-face names a row that exists but is
+        # deliberately not exported, so it needs the full set, not the exported one.
+        all_ids = {str(f["id"]) for f in self.doc.get("field", [])}
         for key, f in self.fields.items():
             mk = f.comp.markers
             if "map" in mk:
@@ -1091,6 +1106,17 @@ class Checker:
                 else:
                     self.by_type[key].append(mid)
                     self.by_id.setdefault(mid, key)
+            if MARKER_OFF in mk:
+                oid = mk[MARKER_OFF]
+                if oid not in all_ids:
+                    self.fail(f"{f.comp.where}: @off-face:{oid} is not a map field id at all "
+                              f"(rule 6)")
+                elif oid in ids:
+                    self.fail(f"{f.comp.where}: @off-face:{oid} names an EXPORTED map field; "
+                              f"an off-face marker is for a row that is deliberately not on "
+                              f"the observation face (rule 6)")
+                else:
+                    continue
             mapped = bool(self.by_type.get(key))
             if MARKER_M5 in mk:
                 if mapped:
@@ -1100,7 +1126,7 @@ class Checker:
                 continue
             if not mapped:
                 self.fail(f"{f.comp.where}: orphan field `{self.show(key)}` traces to no map id and "
-                          f"carries no @m5-only marker (rule 5)")
+                          f"carries no @m5-only / @off-face marker (rule 5)")
 
     # rule 7
     def rule7(self):
@@ -1279,9 +1305,11 @@ class Checker:
     # reporting
     def summary(self) -> str:
         m5 = sum(1 for f in self.fields.values() if MARKER_M5 in f.comp.markers)
+        off = sum(1 for f in self.fields.values() if MARKER_OFF in f.comp.markers)
         opt = sum(1 for f in self.fields.values() if self.is_opt(f.comp))
         return (f"PASS: {len(self.rows)} exported ProblemState fields, "
-                f"{len(self.fields)} type fields ({opt} optional, {m5} M5-only), "
+                f"{len(self.fields)} type fields ({opt} optional, {m5} M5-only, "
+                f"{off} off-face), "
                 f"{len(self.reachable)} types, "
                 f"deny list {len(self.deny)}/{self.deny_raw} legacy slot names, "
                 f"{len(self.p.manifest or ())} derive-rule constants")
@@ -1672,6 +1700,17 @@ def self_cases() -> list:
         return build(sub("    type(opt_real) :: density\n",
                          "    type(opt_real) :: density   !@map: materials.no_such_row\n"))
 
+    def off_face_unknown():
+        """@off-face naming an id that is in no map row at all."""
+        return build(sub("    type(opt_real) :: density\n",
+                         "    type(opt_real) :: density   !@off-face: materials.no_such_row\n"))
+
+    def off_face_exported():
+        """@off-face naming a row that IS exported -- reachable the ordinary way, so the
+        marker would be excusing something that needs no excuse."""
+        return build(sub("    type(opt_real) :: density\n",
+                         "    type(opt_real) :: density   !@off-face: materials.density\n"))
+
     def unknown_decl():
         return build(sub(DIM, "    integer, pointer :: dimension\n"))
 
@@ -1855,6 +1894,8 @@ def self_cases() -> list:
         ("rule 13 no `has` component", "declares no `has` component",        wrapper_no_has),
         ("rule 13 wrapper not private", "does not make its components",      wrapper_not_private),
         ("rule 13 wrapper undeclared", "used but its type is not declared", wrapper_missing),
+        ("rule 6 off-face unknown id", "is not a map field id at all",       off_face_unknown),
+        ("rule 6 off-face is exported", "names an EXPORTED map field",        off_face_exported),
         ("rule 10 legacy slot name",   "is a legacy slot name",              slot_name),
         ("rule 11 case collision",     "Fortran is",                         case_collision),
     ]

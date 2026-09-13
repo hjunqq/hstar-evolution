@@ -460,6 +460,21 @@ PT_PY
         exit 6
     fi
 
+    # ... and the checker itself, on the REAL map and the REAL types. Wiring the self-test
+    # in 2026-09-09 fixed the smaller half of that gap: the suite that guards the tool ran,
+    # the tool did not. Found 2026-09-13, when eight new material-domain components landed
+    # with no map row and `bash tools/build.sh problem-types` stayed green; running the
+    # checker by hand reported all eight immediately.
+    log "--- cross-check: tools/yl_problem_check.py check"
+    set +e
+    python3 "$ROOT/tools/yl_problem_check.py" check 2>&1 | tee -a "$LOG" | tail -12
+    PT_XCHECK_RC=${PIPESTATUS[0]}
+    set -e
+    if [ "$PT_XCHECK_RC" -ne 0 ]; then
+        log "=== yl_problem_check CROSS-CHECK FAILED ($TARGET/$PROFILE) rc=$PT_XCHECK_RC"
+        exit 6
+    fi
+
     # The BACKWARD half of the rule-table bijection (M3-03). The self-test asserts the
     # forward and injective halves in Fortran and exports its table as RULES|/RULE|
     # lines; only Python can read docs/m2/state-field-map.toml and answer the other

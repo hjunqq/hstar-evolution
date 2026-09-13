@@ -92,7 +92,43 @@ module yl_problem_types
   end type mesh_t
 
   ! --- materials --------------------------------------------------------------
-  ! ProblemState.materials[] (13 mapped components)
+  ! ProblemState.materials[] (13 mapped components + 8 in plasticity_t)
+  !
+  ! `plasticity` is the FIRST per-model parameter block. The shape matters more than the
+  ! eight fields: legacy's `.mat` reads a COMMON solid record for every material and then
+  ! branches per constitutive model (Material.f90:457), each branch with its own extra
+  ! records. ProblemState mirrors that -- the common fields sit on material_t, the
+  ! model-specific ones in a block that is only meaningful for its model. The next model
+  ! adds a sibling block, not eight more optional components on material_t.
+  !
+  ! Every component is `opt_*`, so "CLASSICALEP was not the model" and "the criterion did
+  ! not call for a friction angle" are both representable as absence rather than as 0.0,
+  ! which is a real friction angle.
+
+  ! The component names are the MODERN spellings, not legacy's abbreviations -- ADR-0003,
+  ! and rule 10 of yl_problem_check forbids harvesting a legacy slot name into the types.
+  ! Legacy's own names are in the map rows' `legacy_symbol`, which is where they belong.
+  !
+  !   criterion              the yield criterion; 'MC' is the whitelist, legacy also has
+  !                          TC / VM / DP / MCC / DPC / MCJOINT (legacy `criteria`)
+  !   yield_stress           Pa; for MC this is the cohesion c (legacy `sigma0`)
+  !   hardening_modulus      Pa (legacy `hardening`)
+  !   friction_angle  deg }  read only when criteria(1:2) is 'MC' or 'DP'
+  !   dilation_angle  deg }  (Material.f90:624), hence opt_ rather than a 0.0 default
+  !   *_curve                CURVE INDICES, not values: legacy declares them integer(ink)
+  !                          and 0 means "no curve". The golden deck writes them as `0.0`,
+  !                          which ifx list-directed read accepts into an integer as 0 --
+  !                          measured 2026-09-13, not assumed.
+  type, public :: plasticity_t
+    type(opt_text) :: criterion              !@off-face: materials.plasticity.criteria
+    type(opt_real) :: yield_stress           !@off-face: materials.plasticity.sigma0
+    type(opt_real) :: hardening_modulus      !@off-face: materials.plasticity.hardening
+    type(opt_real) :: friction_angle         !@off-face: materials.plasticity.frict_angle
+    type(opt_real) :: dilation_angle         !@off-face: materials.plasticity.dilan_angle
+    type(opt_int) :: yield_stress_curve      !@off-face: materials.plasticity.csigma0
+    type(opt_int) :: friction_angle_curve    !@off-face: materials.plasticity.cfrict
+    type(opt_int) :: dilation_angle_curve    !@off-face: materials.plasticity.cdilan
+  end type plasticity_t
 
   type, public :: material_t
     type(opt_int) :: id
@@ -108,6 +144,8 @@ module yl_problem_types
     type(opt_int) :: creep_model
     type(opt_int) :: liquefaction
     type(opt_int) :: wetting_kind
+    !> Set only when `model` is a plasticity model; absent for ELASTIC_ISOTROPIC.
+    type(plasticity_t) :: plasticity
   end type material_t
 
   ! --- sections ---------------------------------------------------------------

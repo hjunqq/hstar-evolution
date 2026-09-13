@@ -596,6 +596,150 @@ snapshot_file = "materials.json"
 note = "char(20), compare trim()ed. 'NSTOKS' test at Fem.f90:258."
 
 [[field]]
+id = "materials.plasticity.criteria"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%criteria"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.materials[].plasticity.criterion"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "yield criterion; 'MC' is the whitelist. char(20), compare trim()ed"
+
+[[field]]
+id = "materials.plasticity.sigma0"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%sigma0"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].plasticity.yield_stress"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "cohesion / yield stress"
+
+[[field]]
+id = "materials.plasticity.hardening"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%hardening"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].plasticity.hardening_modulus"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "hardening modulus; 0 on mini_mc"
+
+[[field]]
+id = "materials.plasticity.frict_angle"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%frict_angle"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "deg"
+owner = "ProblemState.materials[].plasticity.friction_angle"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "read only when criteria(1:2) is 'MC' or 'DP' (Material.f90:624)"
+
+[[field]]
+id = "materials.plasticity.dilan_angle"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%dilan_angle"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "deg"
+owner = "ProblemState.materials[].plasticity.dilation_angle"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "read only when criteria(1:2) is 'MC' or 'DP' (Material.f90:624)"
+
+[[field]]
+id = "materials.plasticity.csigma0"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%csigma0"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.materials[].plasticity.yield_stress_curve"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "curve index for sigma0, 0 = none; legacy declares it integer and the deck writes 0.0, which ifx list-directed read accepts as 0"
+
+[[field]]
+id = "materials.plasticity.cfrict"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%cfrict"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.materials[].plasticity.friction_angle_curve"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "curve index for the friction angle, 0 = none"
+
+[[field]]
+id = "materials.plasticity.cdilan"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%ClassicalEP%cdilan"
+source = ["MAT.material_set.classicalep"]
+consumers = ["STIFF_U", "RESIDU"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.materials[].plasticity.dilation_angle_curve"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model plasticity parameter; the static_2d slice has no CLASSICALEP material, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "curve index for the dilation angle, 0 = none"
+
+[[field]]
 id = "derived.counts.nphase"
 checkpoint = "model_ready"
 legacy_symbol = "materials.props%mechanical%solid"
