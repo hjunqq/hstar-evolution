@@ -132,13 +132,30 @@ ft, cft, sigmat, csigmat                        ! criteria 为 'MCC'/'DPC'/'MCJO
 deck = `cases/golden/plasticity/mini_mc`（即 `cases/manifest.toml` 早已规划的 M6.4 算例），
 30 节点 / 20 个 Q4 / 2 材料 / 2 单元组，重力单增量。
 
-差值是**测**出来的，不是读代码估的：把 deck 交给现有适配器，它只报两条拒绝——
+差值是**测**出来的，不是读代码估的。但**第一次测量不完整，这里如实记下来**：
 
-1. `steps[0].controls.nonlinear_type`：deck 为 4，白名单只有 5；
-2. `materials[2].model`：deck 为 `CLASSICALEP`，白名单只有 `ELASTIC_ISOTROPIC`。
+- 第一次把 deck 交给适配器，只报两条拒绝——`nonlinear_type=4` 与 `materials[2].model`。
+  当时据此写下「`nmats=2`、`ngroup=2` 一律已经支持」。
+- **这个结论是错的。** 流水线**阶段间失败即止**：`.glb` 的 `type_nl` 拒绝发生在
+  `.mat` 之前，`.mat` 的拒绝又发生在 M3-02 能力表之前。把前面的逐条放开之后，
+  能力表又报出**第三、第四条**：`materials[].model` 的能力行（与适配器方言表是两张不同的表）
+  和 **`sections.size` 必须为 1**。
 
-**其余一律已经支持**：`nmats=2`、`ngroup=2`（多材料、多单元组）在静力阶段就已经是数组，
-不需要任何改动。这是「统一输入模型能否承载第二类物理能力」这个问题的第一个正面证据。
+所以真实差值是**四条**，不是两条：
+
+1. `steps[0].controls.nonlinear_type`：deck 为 4（full Newton），白名单只有 5；
+2. 适配器方言表 `A-MAT/model`：`CLASSICALEP` 不在白名单内；
+3. 能力表 `G3 material.model`：同一件事的另一张表；
+4. 能力表 `sections.size`：只允许 1 个单元组，deck 有 2 个。
+
+**教训与 M5 的「反例失效」同形**：一个 fail-fast 管线上的「只报了两条」不等于「只有两条」。
+要得到真实差值，必须逐条放开再测，直到通过为止；只测一次就下结论，会**系统性低估**。
+
+第 4 条**不是**放开一个数字就行：`sections.size` 那一行旁边写着一段警告——finalize 会为每个
+section 派生一个单元集，两个 section 若元素全属第一个，第二个就会成为「显式的空集合」，
+ADR-0002 禁止；而且**没有校验规则守它**（因为这行读 1 时该情况不可达）。
+所以抬高它**必须先补那条校验规则并配反例**，否则用户写的第一个双 section 模型
+会收到一个 internal fault。
 
 ### 3.4 这个 deck 的**限定**，实测，不是推断
 

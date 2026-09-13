@@ -114,7 +114,8 @@ module yl_runtime_commit
                           nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
-  use materials, only: props, material_property, mechanical_property, solid_skeleton
+  use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
+                       material_1
 
   use yl_problem_types, only: problem_state_t
   use yl_problem_deck_residue, only: deck_residue_t
@@ -1168,6 +1169,23 @@ contains
         sk%icreep = int(opt_or(problem%materials(id_)%creep_model), ink)
         sk%jliqu = int(opt_or(problem%materials(id_)%liquefaction), ink)
         sk%kind_wt = int(opt_or(problem%materials(id_)%wetting_kind), ink)
+        ! The per-model block, a THIRD pointer level. Allocated only for the model that
+        ! has one: null_solid nullified every model pointer above, and legacy itself tests
+        ! `associated(...%ClassicalEP)` rather than re-reading the model name, so an
+        ! unconditional allocate here would announce a plasticity model on an elastic
+        ! material. commit_release unwinds it innermost-first, like the other two levels.
+        if (opt_is_set(problem%materials(id_)%plasticity%criterion)) then
+          allocate (sk%ClassicalEP)
+          call poison_classicalep(sk%ClassicalEP)
+          sk%ClassicalEP%criteria = opt_text_or(problem%materials(id_)%plasticity%criterion)
+          sk%ClassicalEP%sigma0 = real(opt_or_real(problem%materials(id_)%plasticity%yield_stress), irk)
+          sk%ClassicalEP%hardening = real(opt_or_real(problem%materials(id_)%plasticity%hardening_modulus), irk)
+          sk%ClassicalEP%frict_angle = real(opt_or_real(problem%materials(id_)%plasticity%friction_angle), irk)
+          sk%ClassicalEP%dilan_angle = real(opt_or_real(problem%materials(id_)%plasticity%dilation_angle), irk)
+          sk%ClassicalEP%csigma0 = int(opt_or(problem%materials(id_)%plasticity%yield_stress_curve), ink)
+          sk%ClassicalEP%cfrict = int(opt_or(problem%materials(id_)%plasticity%friction_angle_curve), ink)
+          sk%ClassicalEP%cdilan = int(opt_or(problem%materials(id_)%plasticity%dilation_angle_curve), ink)
+        end if
       end associate
     end do
     ! sections[].thickness is authored on the SECTION and stored on the MATERIAL
@@ -1586,7 +1604,13 @@ contains
     if (allocated(props)) then
       do i = 1, size(props)
         if (associated(props(i)%mechanical)) then
-          if (associated(props(i)%mechanical%solid)) deallocate (props(i)%mechanical%solid)
+          if (associated(props(i)%mechanical%solid)) then
+            ! Third level first: the per-model block this module allocated for a plasticity
+            ! material. Every other model pointer on the skeleton is still null (null_solid).
+            if (associated(props(i)%mechanical%solid%ClassicalEP))                            &
+              deallocate (props(i)%mechanical%solid%ClassicalEP)
+            deallocate (props(i)%mechanical%solid)
+          end if
           deallocate (props(i)%mechanical)
         end if
       end do
@@ -2079,6 +2103,26 @@ contains
                   'wetting_kind, name or model')
         return
       end if
+      ! The plasticity block is CONDITIONAL, and the condition is its own presence:
+      ! `criterion` set is what makes the staging pass allocate ClassicalEP, so from that
+      ! point on the other seven are read and must all be set. An elastic material reaches
+      ! none of this. Checking them unconditionally would demand a friction angle of every
+      ! linear-elastic deck; not checking them at all would let an unset one publish 0.0 --
+      ! and 0 degrees of friction is a real material, not an obvious blank.
+      if (opt_is_set(problem%materials(i)%plasticity%criterion)) then
+        if (.not. opt_is_set(problem%materials(i)%plasticity%yield_stress) .or.                &
+            .not. opt_is_set(problem%materials(i)%plasticity%hardening_modulus) .or.           &
+            .not. opt_is_set(problem%materials(i)%plasticity%friction_angle) .or.              &
+            .not. opt_is_set(problem%materials(i)%plasticity%dilation_angle) .or.              &
+            .not. opt_is_set(problem%materials(i)%plasticity%yield_stress_curve) .or.          &
+            .not. opt_is_set(problem%materials(i)%plasticity%friction_angle_curve) .or.        &
+            .not. opt_is_set(problem%materials(i)%plasticity%dilation_angle_curve)) then
+          call fail(errors, 'materials['//itoa(i)//'].plasticity has a criterion but an '//    &
+                    'unset yield_stress, hardening_modulus, friction_angle, '//                &
+                    'dilation_angle or curve index')
+          return
+        end if
+      end if
     end do
     ok = .true.
   end subroutine verify_problem_inputs
@@ -2451,6 +2495,24 @@ contains
   ! mechanical_property itself. Nulled for the same reason as every other legacy record
   ! here -- the type has no default initialisation, so `associated()` on an unset component
   ! is undefined, and yl_state_dump reaches into props(i)%mechanical%solid.
+  ! material_1 (Material.f90:18) has 14 components. This module ASSIGNS eight of them --
+  ! the MC subset -- so those eight are what it poisons; the other six (ft, sigmat, cft,
+  ! csigmat and the three *_ini) belong to criteria outside the whitelist and to the
+  ! kstab/MCJOINT path, and poisoning a component nobody assigns would publish a sentinel
+  ! into a legacy record (rule 1 of the STAGE_POISON note). They are left as whatever the
+  ! allocate gave, exactly as legacy leaves them on an MC deck.
+  subroutine poison_classicalep(ep)
+    type(material_1), intent(inout) :: ep
+    ep%criteria = ''
+    ep%sigma0 = STAGE_POISON_R
+    ep%hardening = STAGE_POISON_R
+    ep%frict_angle = STAGE_POISON_R
+    ep%dilan_angle = STAGE_POISON_R
+    ep%csigma0 = STAGE_POISON_I
+    ep%cfrict = STAGE_POISON_I
+    ep%cdilan = STAGE_POISON_I
+  end subroutine poison_classicalep
+
   subroutine null_solid(sk)
     type(solid_skeleton), intent(inout) :: sk
     nullify (sk%normalstress, sk%normale, sk%gap_define)
