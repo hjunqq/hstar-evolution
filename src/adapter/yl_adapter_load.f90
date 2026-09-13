@@ -12,7 +12,7 @@
 !   skipped, never guessed, never defaulted (docs/m4/adapter-contract.md SS5).
 !
 !   Every read below carries the reader-inventory id it reproduces
-!   (docs/m1/reader-inventory.toml) in an adjacent `! RD:` comment, with the
+!   (docs/m1/reader-inventory.toml) in an adjacent marker comment, with the
 !   legacy line number, per contract SS3. `A-IO/*` rule ids are this module's
 !   own I/O-failure namespace; `A1`.. are this module's whitelist-rejection
 !   rule ids (contract SS4's `A<n>/<condition>` shape -- no repository-wide
@@ -377,8 +377,8 @@ contains
         return
       end if
 
-      ! RD: same reader id, Load.f90:231 -- the LINEAR branch reads a SECOND
-      ! record (the dfact_curve factors) right after curve_points. It has no
+      ! RD: LOA.external_load_1.curve_factors (Load.f90:231) -- the LINEAR branch reads a
+      ! SECOND record (the dfact_curve factors) right after curve_points. It has no
       ! diag_check_read of its own, is absent from the 152-reader inventory,
       ! and was swept into the .loa "not_on_path" bucket by a blanket reason
       ! that does not actually cover it -- a real M1 census gap, confirmed by
@@ -388,7 +388,7 @@ contains
       ! runs), so it is reproduced here; skipping it would desynchronise
       ! every read after it.
       read (unit, *, iostat=ios) dfact_curve(1:ntime)
-      call check_io(errors, ios, 'LOA.external_load_1.curve_points', SRC_LOA, 231, 'amplitudes', &
+      call check_io(errors, ios, 'LOA.external_load_1.curve_factors', SRC_LOA, 231, 'amplitudes', &
                     io_ok, record=int(itcurve, int32))
       if (.not. io_ok) then
         deallocate (ttime_curve, dfact_curve)

@@ -6,7 +6,8 @@
 !   filter `file = ".glb"` -- confirmed 75 by `python3 tools/yl_io_inventory.py`-style
 !   count against the toml, not just grep, since a naive text split over-counts by one
 !   entry that belongs to `.man`). Every read below carries that site's `id` and legacy
-!   `site` in an adjacent comment (contract SS3); grep for "RD:" to enumerate all 75.
+!   `site` in an adjacent comment (contract SS3); grep for the marker prefix to
+!   enumerate all 75. `tools/yl_coverage_check.py` is the mechanical form of that grep.
 !
 !   Two sites the golden-deck evidence in reader-inventory marks `reached_only = false`
 !   (never taken on either golden deck) are NOT read as data here: `rmesh/=0` (would read
@@ -161,7 +162,8 @@ module yl_adapter_model
 
 contains
 
-  ! RD: many (see below) -- one call per .glb record, in legacy call order.
+  ! One marker per .glb record below, in legacy call order; this header carries none,
+  ! because a marker means a read and a summary is not a read.
   !
   ! `ctx` (adapter-contract.md SS2.2) is intent(inout) here -- this is the ONE parser that
   ! FILLS it, from the group-1 element kind and the switches every other parser needs to
@@ -879,28 +881,34 @@ contains
     ! separate unit. No action for this parser.
     ! ---------------------------------------------------------------------------------
 
-    ! seq 56-60 -- RD: GLB.global_data.title#30..#34 (Global.f90:1192,1195,1197,1199,1201)
-    ! -- five group-section title lines, read once regardless of ngroup.
+    ! Five group-section title lines, read once regardless of ngroup. One marker per
+    ! read, spelling the id out: a range (`title#30..#34`) reads fine to a human and is
+    ! invisible to the coverage gate, which is how four of these looked unadapted.
+    ! seq 56 -- RD: GLB.global_data.title#30 (Global.f90:1192)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
     loc = here(1192_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'case', 'title', iomsg_buf); return
     end if
+    ! seq 57 -- RD: GLB.global_data.title#31 (Global.f90:1195)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
     loc = here(1195_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'case', 'title', iomsg_buf); return
     end if
+    ! seq 58 -- RD: GLB.global_data.title#32 (Global.f90:1197)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
     loc = here(1197_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'case', 'title', iomsg_buf); return
     end if
+    ! seq 59 -- RD: GLB.global_data.title#33 (Global.f90:1199)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
     loc = here(1199_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'case', 'title', iomsg_buf); return
     end if
+    ! seq 60 -- RD: GLB.global_data.title#34 (Global.f90:1201)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
     loc = here(1201_int32)
     if (ios /= 0) then

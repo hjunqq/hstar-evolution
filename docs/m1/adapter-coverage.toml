@@ -1,0 +1,149 @@
+# HSTAR Evolution — adapter coverage registry (R29)
+#
+# WHAT THIS FILE IS FOR
+#   `docs/m1/reader-inventory.toml` says which legacy reads happen on the static path.
+#   `src/adapter/**` reproduces them, each read carrying an `RD: <inventory id>` marker.
+#   Until 2026-09-13 nothing checked the two against each other, so every statement of the
+#   form "the adapter covers all the reads" was neither provable nor refutable — R29.
+#   `tools/yl_coverage_check.py` now checks it, and this file is the ONLY way an on-path
+#   reader is allowed to have no adapter parser: by being written down, with a reason.
+#
+# WHY A REGISTRY RATHER THAN A NUMBER
+#   R29 was opened because two independent counts of "uncovered readers" disagreed (28 vs
+#   36), and at least one entry in the gap was covered all along — the marker just spelled
+#   the id differently (`curve_points` for `LOA.external_load_1.curve_factors`). A count
+#   cannot be reviewed. A named list can, and the gate prints it in full on every run.
+#
+# WHAT A ROW MAY NOT HIDE
+#   `state_target` is copied from the inventory and the gate REJECTS a row whose copy has
+#   drifted, so a row cannot quietly follow the census somewhere else. A row whose target
+#   is not `title_skip` or `empty_section` — i.e. one that carries a real value — must
+#   additionally carry `evidence`, measured, not argued.
+#
+# HOW A ROW GETS DELETED
+#   By writing the parser. Add the `RD: <id>` marker at the read that reproduces it and
+#   remove the row here; the gate fails if an id is both marked and registered.
+
+version = 1
+
+# ---------------------------------------------------------------------------- .ftr ----
+# Surface-force / gap-safety section. `ebody`-guarded in legacy, empty on both golden
+# decks. Not opened at all on the modern path (Global.f90:631-649 opens are guarded).
+
+[[not_adapted]]
+id = "FTR.global_data.title#1"
+state_target = "title_skip"
+reason = "title line of an empty .ftr section; no value reaches ProblemState"
+
+[[not_adapted]]
+id = "FTR.global_data.force_counts"
+state_target = "empty_section"
+reason = "the count record of an empty section; zero on both golden decks, so no surface-force or gap record follows it"
+
+# ---------------------------------------------------------------------------- .nrt ----
+# Interpolation ("transgroup") section. Same shape: a count that is zero on both decks.
+
+[[not_adapted]]
+id = "NRT.global_data.title#1"
+state_target = "title_skip"
+reason = "title line of an empty .nrt section"
+
+[[not_adapted]]
+id = "NRT.global_data.title#2"
+state_target = "title_skip"
+reason = "title line of an empty .nrt section"
+
+[[not_adapted]]
+id = "NRT.global_data.transgroup"
+state_target = "empty_section"
+reason = "interpolation-group count, zero on both golden decks"
+
+# ---------------------------------------------------------------------------- .ifs ----
+# Fluid-structure interaction and absorbing boundaries (M7 scope). Four sections, each a
+# title plus a count, all zero on both decks. The whitelist admits no FSI capability, and
+# `interactions.absorbing.type` is pinned to legacy's own no-absorbing sentinel 'FIX'.
+
+[[not_adapted]]
+id = "IFS.stiff_interface_fluid_solid.title#1"
+state_target = "title_skip"
+reason = "title line of an empty .ifs section (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_interface_fluid_solid.ifs_group_count"
+state_target = "empty_section"
+reason = "fluid-solid interface group count, zero on both golden decks (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_absorb_fluid.title#1"
+state_target = "title_skip"
+reason = "title line of an empty .ifs section (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_absorb_fluid.absorb_fluid_count"
+state_target = "empty_section"
+reason = "absorbing-fluid boundary count, zero on both golden decks (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_absorb_solid.title#1"
+state_target = "title_skip"
+reason = "title line of an empty .ifs section (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_absorb_solid.absorb_solid_count"
+state_target = "empty_section"
+reason = "absorbing-solid boundary count, zero on both golden decks (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_ifs2006.title#1"
+state_target = "title_skip"
+reason = "title line of an empty .ifs section (M7 scope)"
+
+[[not_adapted]]
+id = "IFS.stiff_ifs2006.ifs_edge_count"
+state_target = "empty_section"
+reason = "ifs2006 edge count, zero on both golden decks (M7 scope)"
+
+# ---------------------------------------------------------------------------- .opr ----
+# Observation-point output control. This is the one section here that carries a REAL
+# value, so its row carries measured evidence rather than an argument.
+
+[[not_adapted]]
+id = "OPR.output_read.title#1"
+state_target = "title_skip"
+reason = "title line of the .opr control section"
+
+[[not_adapted]]
+id = "OPR.output_read.title#2"
+state_target = "title_skip"
+reason = "title line of the .opr control section"
+
+[[not_adapted]]
+id = "OPR.output_read.output_control"
+state_target = "output_control"
+reason = "five flags selecting the observation-point writers (.opw/.oew/.ogw/.ojw). The authoring contract whitelists one output format (GIDR), so the modern path has no way to ask for these and does not read them."
+evidence = "measured 2026-09-13: all five flags are 0 on both golden decks (`1.opr` line 3), and 1.opw / 1.oew / 1.ogw / 1.ojw are ZERO BYTES after a legacy-deck run AND after a modern-input run. Nothing is lost on these decks. A deck that set a flag WOULD lose that output on the modern path -- which is the reason .opr is outside the whitelist rather than a defect hidden by this row."
+
+[[not_adapted]]
+id = "OPR.output_read.title#3"
+state_target = "title_skip"
+reason = "title line of the .opr control section"
+
+[[not_adapted]]
+id = "OPR.output_read.title#4"
+state_target = "title_skip"
+reason = "title line of the .opr control section"
+
+[[not_adapted]]
+id = "OPR.output_read.label1_title"
+state_target = "title_skip"
+reason = "label line of an empty .opr group section"
+
+[[not_adapted]]
+id = "OPR.output_read.label2_title"
+state_target = "title_skip"
+reason = "label line of an empty .opr element section"
+
+[[not_adapted]]
+id = "OPR.output_read.label3_title"
+state_target = "title_skip"
+reason = "label line of an empty .opr gap section"

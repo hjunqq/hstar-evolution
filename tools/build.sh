@@ -1003,13 +1003,21 @@ RB_PY
         # yl_adapter_shadow is built, not run: the L3-c differential needs two child
         # processes in two directories and is driven by tools/yl_shadow_diff.py.
         log "--- yl_adapter_shadow built (not run here; see tools/yl_shadow_diff.py)"
+        # R29: the reader-inventory / adapter-marker cross-check. Its self-test runs first,
+        # for the same reason every other suite here runs one: a gate nobody has seen fail
+        # is a gate nobody has tested.
+        log "--- adapter reader coverage (R29)"
+        python3 "$ROOT/tools/yl_coverage_check.py" --selftest 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== COVERAGE SELF-TEST FAILED"; exit 6; }
+        python3 "$ROOT/tools/yl_coverage_check.py" 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== COVERAGE CHECK FAILED"; exit 6; }
         # Nothing this target does may write into the golden inputs.
         if [ -n "$(git -C "$ROOT" status --porcelain cases/ 2>/dev/null)" ]; then
             log "=== FAILED: this target modified cases/; that is never allowed"
             git -C "$ROOT" status --porcelain cases/ | tee -a "$LOG"
             exit 6
         fi
-        log "=== BUILD OK (adapter/$PROFILE) $T0 -> $T1: bridge + dialect suites passed on both golden decks"
+        log "=== BUILD OK (adapter/$PROFILE) $T0 -> $T1: bridge + dialect suites passed on both golden decks; reader coverage accounted for"
         exit 0
     fi
 
