@@ -52,6 +52,11 @@
 module yl_runtime_build
 
   use iso_fortran_env, only: int32, int64, real64
+  ! The ONE legacy dependency of this module, and it is a pure computation: `jacob`
+  ! writes no global and reads none. See evaluate_rule for why it is reused rather
+  ! than mirrored.
+  use variable_types, only: irk, ink
+  use elements, only: jacob
   use yl_problem_optional, only: opt_int, opt_real, opt_get, opt_set, opt_is_set
   use yl_problem_types, only: problem_state_t, boundary_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
@@ -1357,9 +1362,12 @@ contains
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
 
-    real(real64) :: values(4), gradients(2, 4), xjacm(2, 2), xjaci(2, 2)
-    real(real64) :: djacb, acc
-    integer :: ngaus, igaus, id, jd, inode
+    real(real64) :: values(4), gradients(2, 4)
+    real(real64) :: djacb
+    integer :: ngaus, igaus, id, inode
+    ! legacy kinds, because `jacob` is legacy's and takes its own. Sized for the one
+    ! element shape this build admits (Q4 in 2-D), like everything else in this routine.
+    real(irk) :: elcod_l(2, 4), deriv_l(2, 4), cartd_l(2, 4), xjaci_l(2, 2), djacb_l
 
     ok = .false.
     ngaus = size(weights)
@@ -1369,28 +1377,38 @@ contains
 
     do igaus = 1, ngaus
       call q4_shape_functions(points(1, igaus), points(2, igaus), values, gradients)
+      elcod_l(1:shape%ndimn, 1:shape%nnode) = real(elcod(1:shape%ndimn, 1:shape%nnode), irk)
+      deriv_l(1:shape%ndimn, 1:shape%nnode) = real(gradients(1:shape%ndimn, 1:shape%nnode), irk)
 
       do id = 1, shape%ndimn                                   ! Elements.f90:1259-1261
         rule%point_coordinates(id, igaus) =                                                     &
           sum(elcod(id, 1:shape%nnode)*values(1:shape%nnode))
       end do
 
-      do id = 1, shape%ndimn                                   ! Elements.f90:3245-3253
-        do jd = 1, shape%ndimn
-          acc = 0.0_real64
-          do inode = 1, shape%nnode
-            acc = acc + gradients(id, inode)*elcod(jd, inode)
-          end do
-          xjacm(id, jd) = acc
-        end do
-      end do
-
-      djacb = xjacm(1, 1)*xjacm(2, 2) - xjacm(1, 2)*xjacm(2, 1)   ! Elements.f90:3263
+      ! THE JACOBIAN, ITS INVERSE AND THE CARTESIAN DERIVATIVES ARE LEGACY'S OWN `jacob`.
+      !
+      ! They used to be re-implemented here, line for line: same loop order, same formula,
+      ! same inversion. That was not enough. Given bit-identical inputs -- coord, posgp,
+      ! deriv, elcod and djacb were all measured identical -- the two routines still
+      ! produced cartd values 1 to 2 ULP apart, because -O2 applies its reassociation and
+      ! reciprocal-substitution choices differently to a routine accumulating into a scalar
+      ! local and one accumulating into an array element. On train05b_slope_srm that seeded
+      ! a divergence at STEP ONE which the 8-digit output hid for 74 steps and the plastic
+      ! path then amplified to max|d| = 6.5e7. -fp-model=precise made it vanish, which is
+      ! the proof that the formulas agreed and only the machine code did not.
+      !
+      ! Two same-meaning implementations cannot be kept in step by review, and absorbing
+      ! their machine-level difference with a tolerance would be paying forever for a
+      ! duplicate nobody needs. So there is one implementation, and it is legacy's.
+      call jacob(int(ie, ink), int(shape%ndimn, ink), int(shape%nnode, ink),                     &
+                 elcod_l, deriv_l, cartd_l, djacb_l, xjaci_l)
+      djacb = real(djacb_l, real64)
 
       ! B3 -- legacy prints a warning here and integrates anyway (Elements.f90:3264-3271).
       ! A non-positive determinant means the connectivity is not counter-clockwise under
       ! the contract's node order, and every quantity derived from this element is then
-      ! meaningless; refusing is the whole point of having the rule.
+      ! meaningless; refusing is the whole point of having the rule. The check stays HERE:
+      ! `jacob` warns and continues, and the refusal is this build's, not legacy's.
       if (djacb <= 0.0_real64) then
         call raise_row(errors, 'B3', 'negative-jacobian',                                        &
                        'the Jacobian determinant is not positive at a Gauss point: the '//       &
@@ -1399,19 +1417,10 @@ contains
         return
       end if
 
-      xjaci(1, 1) = xjacm(2, 2)/djacb                          ! Elements.f90:3272-3275
-      xjaci(2, 2) = xjacm(1, 1)/djacb
-      xjaci(1, 2) = -xjacm(1, 2)/djacb
-      xjaci(2, 1) = -xjacm(2, 1)/djacb
-
-      if (with_gradients) then                                 ! Elements.f90:3310-3318
+      if (with_gradients) then
         do id = 1, shape%ndimn
           do inode = 1, shape%nnode
-            acc = 0.0_real64
-            do jd = 1, shape%ndimn
-              acc = acc + xjaci(id, jd)*gradients(jd, inode)
-            end do
-            rule%shape_gradient(id, inode, igaus) = acc
+            rule%shape_gradient(id, inode, igaus) = real(cartd_l(id, inode), real64)
           end do
         end do
       end if

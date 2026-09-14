@@ -398,3 +398,45 @@ PASS  blocks=600 values=541200 mismatches=0 max|d|=0.000e+00
 - `HSTAR_EXTRA_LEGACY`:允许把一个额外源文件加进 legacy 编译列表,
   使探针无需弄脏被跟踪的 legacy 树。默认为空。
 - **没有**把塑性积分器纳入观测面,**没有**新增常设门禁。
+
+## 8. 裁定执行:`evaluate_rule` 复用 legacy `jacob`(2026-09-14)
+
+按裁定采用方案一。改动是最小复用:`evaluate_rule` 不再自己算雅可比、求逆和笛卡尔导数,
+改为 `call jacob(...)`,并把 `cartd` 抄进 `shape_gradient`。
+**没有重构 `jacob`**;B3(雅可比非正)判据**留在本层**——legacy 只告警继续,拒绝是本 build 的决定。
+
+### 8.1 确认(默认编译选项,未启用 `-fp-model=precise`)
+
+```
+PASS  blocks=600 values=541200 mismatches=0 max|d|=0.000e+00
+```
+
+600 块、541 200 个数值,**严格 `max|d| = 0`**。判据未修改。
+
+### 8.2 一处必须单独报告的边界代价
+
+`tools/build.sh` 里 `runtime` 目标原本的注释写着两条理由:
+
+> 「Keeping it out here is what makes this target buildable **without the legacy tree**,
+> and it is also the mechanical guarantee that **no self-test in this binary can write a
+> legacy global**。」
+
+**第二条完好**:`jacob` 是纯计算,不读不写任何全局。
+**第一条被打破**:该目标此前**不含任何 legacy 源文件**,现在需要
+`variable_types`、`arrayutil`、`elements` 及其依赖的诊断模块——共 5 个文件。
+
+也就是说:**「不写 legacy 状态」的安全性质保住了,「不依赖 legacy 树」的构建独立性没保住。**
+这是本次复用的真实代价,不是顺带清理。是否长期接受由负责人裁定;
+注释已写在该目标旁,使后来者看到的是代价而不是一份更长的文件清单。
+
+### 8.3 顺带修掉的一个工具脆弱点
+
+`runtime` 目标开始编译 legacy 源之后,构建日志里混进了 latin-1/GBK 注释字节,
+而 `yl_state_map.py runtime-rules --export` 以 UTF-8 读取该日志,直接 `UnicodeDecodeError`。
+它要解析的 `RULE|` 行是纯 ASCII,日志别处的一个字节不该成为关于规则表的结论——改为
+`errors="replace"`。
+
+### 8.4 边界维持
+
+临时浮点探针与 `initzero` / `nofma` / `fpprecise` 三个 profile **仍为非默认**,
+未升级为常设治理设施;未新增常设门禁;塑性积分器未纳入观测面。

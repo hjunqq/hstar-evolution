@@ -289,12 +289,30 @@ if [ "$TARGET" = problem-types ] || [ "$TARGET" = runtime ]; then
         # its manifest; then the runtime types, the versioned execution contract, the
         # walkable build-rule table and build_runtime itself.
         #
-        # yl_runtime_commit.f90 is deliberately ABSENT: it USEs the legacy modules, so
-        # it belongs to the `runtime-bridge` target and to nothing else. Keeping it out
-        # here is what makes this target buildable without the legacy tree, and it is
-        # also the mechanical guarantee that no self-test in this binary can write a
-        # legacy global.
-        PT_SRCS=("${PT_PROBLEM_SRCS[@]}"
+        # yl_runtime_commit.f90 is deliberately ABSENT: it WRITES the legacy globals, so
+        # it belongs to the `runtime-bridge` target and to nothing else. Keeping it out is
+        # the mechanical guarantee that no self-test in this binary can write a legacy
+        # global, and that guarantee is unchanged.
+        #
+        # WHAT CHANGED ON 2026-09-14, AND IT IS A REAL COST.
+        # This target used to build with NO legacy source at all. It no longer does:
+        # yl_runtime_build.f90 now calls legacy's `jacob` instead of mirroring it, on the
+        # owner's ruling, because two same-meaning implementations drifted by 1 ULP under
+        # -O2 and no amount of review keeps them in step (docs/m6/material-domain.md SS7).
+        # So four legacy modules come in -- variable_types, arrayutil, elements and the
+        # diagnostics they use.
+        #
+        # `jacob` is a PURE COMPUTATION: it reads no global and writes none, so the
+        # guarantee above survives intact. What is lost is build independence, which was
+        # the other half of why the list was short. Whether that trade stands is the
+        # owner's call; this comment exists so the next person sees the cost rather than
+        # a longer list.
+        PT_SRCS=(src/diagnostics/yl_diag_registry.f90
+                 src/diagnostics/yl_diag.f90
+                 legacy/yl/Vartype.f90
+                 legacy/yl/Array.f90
+                 legacy/yl/Elements.f90
+                 "${PT_PROBLEM_SRCS[@]}"
                  src/runtime/yl_runtime_types.f90
                  src/runtime/yl_runtime_contract.f90
                  src/runtime/yl_runtime_rules.f90

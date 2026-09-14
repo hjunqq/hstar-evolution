@@ -2369,7 +2369,12 @@ def cmd_commit_provenance(a) -> int:
         print(f"FAIL: 1 problems\n  {map_path}: {e}")
         return 1
     try:
-        text = Path(a.export).read_text(encoding="utf-8") if a.export else sys.stdin.read()
+        # errors="replace": the export is scraped out of the BUILD LOG, and since the
+        # runtime target started compiling legacy sources that log carries their latin-1 /
+        # GBK comment bytes. The RULE| lines this parses are pure ASCII; a decode error on
+        # an unrelated byte elsewhere in the log is not a finding about the rule table.
+        text = (Path(a.export).read_text(encoding="utf-8", errors="replace")
+                if a.export else sys.stdin.read())
     except OSError as e:
         print(f"FAIL: 1 problems\n  {a.export}: {e}")
         return 1
@@ -2421,7 +2426,12 @@ def cmd_runtime_rules(a) -> int:
         print(f"FAIL: 1 problems\n  {map_path}: {e}")
         return 1
     try:
-        text = Path(a.export).read_text(encoding="utf-8") if a.export else sys.stdin.read()
+        # errors="replace": the export is scraped out of the BUILD LOG, and since the
+        # runtime target started compiling legacy sources that log carries their latin-1 /
+        # GBK comment bytes. The RULE| lines this parses are pure ASCII; a decode error on
+        # an unrelated byte elsewhere in the log is not a finding about the rule table.
+        text = (Path(a.export).read_text(encoding="utf-8", errors="replace")
+                if a.export else sys.stdin.read())
     except OSError as e:
         print(f"FAIL: 1 problems\n  {a.export}: {e}")
         return 1
