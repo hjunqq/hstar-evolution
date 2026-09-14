@@ -711,8 +711,8 @@ contains
     call cmp_i32(unit, 'steps0.controls.nonlinear_type', &
                 cand%steps(1)%controls%nonlinear_type, ref%steps(1)%controls%nonlinear_type)
 
-    call cmp_i32(unit, 'steps0.load.gravity.enabled', cand%steps(1)%load%gravity%enabled, &
-                ref%steps(1)%load%gravity%enabled)
+    call cmp_i32(unit, 'steps0.load.gravity.enabled', cand%steps(1)%load%gravity%recompute_every, &
+                ref%steps(1)%load%gravity%recompute_every)
     call cmp_r64(unit, 'steps0.load.gravity.magnitude', &
                 cand%steps(1)%load%gravity%magnitude, ref%steps(1)%load%gravity%magnitude)
     call cmp_real64_alloc(unit, 'steps0.load.gravity.direction', &

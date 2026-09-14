@@ -1157,7 +1157,7 @@ contains
         call gate_text(errors, 'analysis.procedure', 'steps', 'procedure', &
                        state%steps(i)%procedure, i)
         call gate_int(errors, 'load.gravity_enabled', 'steps['//itoa(i)//'].load.gravity', &
-                      'enabled', state%steps(i)%load%gravity%enabled)
+                      'enabled', state%steps(i)%load%gravity%recompute_every)
         call gate_int(errors, 'analysis.increments', 'steps['//itoa(i)//'].controls', &
                       'increments', state%steps(i)%controls%increments)
       end do

@@ -714,7 +714,7 @@ contains
 
     ! steps0.load.gravity
     loc = make_source_location(file='1.loa', reader='external_load_2', line=1268_int32)
-    call opt_set(ld%gravity%enabled, int(NGRAV, int32))
+    call opt_set(ld%gravity%recompute_every, int(NGRAV, int32))
     call opt_set(ld%gravity%magnitude, real(gravy, real64))
     if (.not. allocated(factg)) then
       call fail_missing(b, errors, 'steps0.load.gravity.direction', &

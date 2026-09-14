@@ -510,7 +510,7 @@ contains
     end if
     ! load.gravity.enabled: real content (0 or 1), gated downstream (capability item
     ! 'load.gravity_enabled'). Stored as-is.
-    call opt_set(parts%load%gravity%enabled, NGRAV)
+    call opt_set(parts%load%gravity%recompute_every, NGRAV)
 
     ! seq 14 -- RD: GLB.global_data.title#8 (Global.f90:818) -- nfreeflownode title
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text

@@ -252,8 +252,17 @@ module yl_problem_profile
                       PROFILE_KIND_TEXT, 0_int32, 'PROFILE', .false.),                              &
     capability_item_t('G4', 'solver.symmetric', 'solver', 'symmetric',                              &
                       PROFILE_KIND_LOGICAL, 0_int32, '', .true.),                                   &
-    capability_item_t('G5', 'load.gravity_enabled', 'steps[].load.gravity', 'enabled',              &
-                      PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
+    ! `load.gravity_enabled` was REMOVED on 2026-09-14. It required NGRAV == 1 and its
+    ! counter-example set NGRAV = 0 -- a value legacy defines as "recompute every step"
+    ! (Fem.f90:15582), so the rule refused a legal deck while claiming gravity was off.
+    ! NGRAV is a FREQUENCY: every non-negative value is meaningful and the commit passes it
+    ! straight through to ALGORT, which is the only code that reads it. There is nothing
+    ! here to restrict.
+    !
+    ! What replaces it is a judgement that can tell a frequency from a flag, which an
+    ! equality row on 1 never could: the bridge suite commits recompute_every = 7 and
+    ! asserts the landed NGRAV is 7. A build that went back to treating it as a boolean
+    ! would land 0 or 1 and go red.
     ! The section-count limit was REMOVED on 2026-09-14, and the note it replaces said
     ! exactly what had to happen first: "RAISING THE SUPPORTED SECTION COUNT ABOVE ONE
     ! REQUIRES A RULE FOR THAT CASE". That rule is V26 (a section no element belongs to),

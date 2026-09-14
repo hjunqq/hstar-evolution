@@ -54,7 +54,7 @@
 !           precedence, and the reason the map is the authority and this is a summary.
 !     controls%nonlinear_type          .glb
 !     controls%(the other eight)       .man
-!     load%gravity%enabled             .glb
+!     load%gravity%recompute_every             .glb
 !     load%gravity%magnitude/direction/amplitude   .loa
 !     boundary(:)       .pre
 !

@@ -553,7 +553,7 @@ contains
     end if
 
     ! Leaf ownership (yl_adapter_step_parts.f90 module header): this module
-    ! owns load%gravity%magnitude/direction/amplitude. load%gravity%enabled
+    ! owns load%gravity%magnitude/direction/amplitude. load%gravity%recompute_every
     ! (NGRAV, GLB.global_data.material_class_counts) belongs to the .glb
     ! parser and is deliberately left untouched here -- writing it would be a
     ! second, silent writer of a leaf this module does not own.

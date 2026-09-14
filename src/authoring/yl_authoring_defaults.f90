@@ -129,7 +129,11 @@ contains
 
   subroutine default_load(l)
     type(load_t), intent(out) :: l
-    call opt_set(l%gravity%enabled, 0_int32)
+    ! legacy NGRAV: how often gravity is RECOMPUTED, not whether it is on. This used to
+    ! read 0, which under the corrected semantics means "recompute EVERY step" -- the
+    ! opposite of the "off" it was meant to say. The map layer overwrites it per deck;
+    ! 1 is the static decks' value and the only one a single-step analysis can observe.
+    call opt_set(l%gravity%recompute_every, 1_int32)
   end subroutine default_load
 
   !> Every GiD switch off; `enable_output_field` turns on what the author asked for.

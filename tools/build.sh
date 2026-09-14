@@ -1087,7 +1087,23 @@ LOG="$OUT/build.log"; : > "$LOG"
 T0=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
 log() { echo "$*" | tee -a "$LOG"; }
-run() { log "\$ $*"; "$@" >>"$LOG" 2>&1; }
+# Compiler diagnostics land in $LOG, not on the terminal, so a failed compile used to
+# leave the caller with a bare exit 1 and a list of ifx command lines -- the last one
+# being the file that did NOT build, which reads exactly like the one that did. The
+# problem-types path already had `pt_run` for this, with the same comment; the solver
+# path did not, and it cost a debugging session on 2026-09-14. Same fix, same place.
+run() {
+    local rc diag
+    log "\$ $*"
+    set +e; "$@" >>"$LOG" 2>&1; rc=$?; set -e
+    [ "$rc" -eq 0 ] && return 0
+    # Read the log before appending to it, so the message cannot feed its own grep.
+    diag="$(grep -E "error #|catastrophic|compilation aborted|undefined reference" "$LOG" | tail -20)"
+    log "=== COMPILE/LINK FAILED ($PROFILE): $1 ... (rc=$rc)"
+    log "--- diagnostics (full log: $LOG):"
+    printf '%s\n' "$diag" | tee -a "$LOG" >&2
+    exit 7
+}
 
 log "=== HSTAR Evolution build: profile=$PROFILE src=$SRC out=$OUT"
 log "FC: $HSTAR_FC ($("$HSTAR_FC" --version | head -1))"

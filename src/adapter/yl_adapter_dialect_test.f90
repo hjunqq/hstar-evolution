@@ -256,15 +256,17 @@ contains
 
     write (output_unit, '(a)') '-- table shape'
 
-    ! 13, not M3-02's 15. Two rows have been removed, each with its reason recorded where
-    ! it lived: model.section_count (2026-09-14, once V26 made a section-count limit
-    ! unjustifiable) and element.type (2026-09-14, a whitelist on a label legacy overwrites
-    ! before use). The number is pinned deliberately -- a row appearing or vanishing
+    ! 12, not M3-02's 15. Three rows have been removed, each with its reason recorded
+    ! where it lived: model.section_count (once V26 made a section-count limit
+    ! unjustifiable), element.type (a whitelist on a label legacy overwrites before use)
+    ! and load.gravity_enabled (an equality on 1 for a value that is a FREQUENCY, whose
+    ! counter-example used 0 -- a legal deck meaning "recompute every step"). All three
+    ! 2026-09-14. The number is pinned deliberately -- a row appearing or vanishing
     ! unnoticed is exactly what this assertion is for -- so it moves only together with the
     ! reason, never to make a build go green.
     call check('T1  the gate partition still has the M3-02 row count, less the removed '//   &
                'section-count row',                                                           &
-               capability_count() == 13)
+               capability_count() == 12)
     call check('T2  every table row is accounted for by exactly one partition',               &
                capability_count() + dialect_count() == CAPABILITY_ROW_TOTAL)
     call check('T3  the adapter declares at least one dialect', dialect_count() > 0)

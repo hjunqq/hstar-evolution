@@ -955,11 +955,10 @@ contains
     call expect_rule('G4  unsupported unsymmetric solve', 'G4', PE_UNSUPPORTED, &
                      'solver', 'symmetric', d)
 
-    ! G5 -- gravity switched off: the only load kind on this path.
-    call good_draft(d)
-    call opt_set(d%steps(1)%load%gravity%enabled, 0_int32)
-    call expect_rule('G5  unsupported load configuration', 'G5', PE_UNSUPPORTED, &
-                     'steps[1].load.gravity', 'enabled', d)
+    ! There used to be a G5 row here requiring NGRAV == 1, with a counter-example that set
+    ! it to 0. Both were wrong: NGRAV is a recompute FREQUENCY and 0 means "every step"
+    ! (Fem.f90:15582), so the rule refused a legal deck. Removed 2026-09-14; the judgement
+    ! that replaces it lives in the bridge suite, where a value of 7 must round-trip as 7.
 
     ! G6 -- more than one increment.
     call good_draft(d)
@@ -1893,7 +1892,7 @@ contains
       end do
     end if
 
-    if (.not. opt_equal(a%load%gravity%enabled, b%load%gravity%enabled)) return
+    if (.not. opt_equal(a%load%gravity%recompute_every, b%load%gravity%recompute_every)) return
     if (.not. opt_equal(a%load%gravity%magnitude, b%load%gravity%magnitude)) return
     if (.not. same_real_list(a%load%gravity%direction, b%load%gravity%direction)) return
     if (.not. same_int_list(a%load%gravity%amplitude, b%load%gravity%amplitude)) return
@@ -2164,7 +2163,7 @@ contains
     call builder_step_set_controls(b, sb, ct, loc, errors)
 
     ! .loa body force: g 9.81, direction (0, -1), curve 1 for the one group.
-    call opt_set(ld%gravity%enabled, 1_int32)
+    call opt_set(ld%gravity%recompute_every, 1_int32)
     call opt_set(ld%gravity%magnitude, 9.81_real64)
     allocate (ld%gravity%direction(2))
     ld%gravity%direction = [0.0_real64, -1.0_real64]

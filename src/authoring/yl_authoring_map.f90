@@ -262,7 +262,7 @@ contains
     if (builder_failed(b)) return
 
     call default_load(ld)
-    call opt_set(ld%gravity%enabled, 1_int32)
+    call opt_set(ld%gravity%recompute_every, 1_int32)
     call opt_set(ld%gravity%magnitude, real_at(doc, 'step[1].load.gravity.magnitude'))
     if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
     allocate (ld%gravity%amplitude(int(doc%count_of('section'))))

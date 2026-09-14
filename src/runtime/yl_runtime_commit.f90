@@ -1255,7 +1255,7 @@ contains
     s_type_load = opt_text_or(problem%steps(1)%load_mode)
     s_type_abc = opt_text_or(problem%interactions%absorbing%type)
     s_type_nl = int(opt_or(problem%steps(1)%controls%nonlinear_type), ink)
-    s_ngrav = int(opt_or(problem%steps(1)%load%gravity%enabled), ink)
+    s_ngrav = int(opt_or(problem%steps(1)%load%gravity%recompute_every), ink)
     s_gravy = real(opt_or_real(problem%steps(1)%load%gravity%magnitude), irk)
 
     ! nonsym IS INVERTED, and the map says so: solver.symmetric is a logical, the legacy
@@ -2049,7 +2049,7 @@ contains
         .not. opt_is_set(problem%steps(1)%load_mode) .or.                                     &
         .not. opt_is_set(problem%steps(1)%output%format) .or.                                 &
         .not. opt_is_set(problem%steps(1)%controls%nonlinear_type) .or.                       &
-        .not. opt_is_set(problem%steps(1)%load%gravity%enabled) .or.                          &
+        .not. opt_is_set(problem%steps(1)%load%gravity%recompute_every) .or.                          &
         .not. opt_is_set(problem%steps(1)%load%gravity%magnitude)) then
       call fail(errors, 'an unset top-level control this commit reads (case.name, '//         &
                 'solver.linear, solver.symmetric, interactions.absorbing.type, '//            &

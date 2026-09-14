@@ -255,7 +255,12 @@ module yl_problem_types
   end type controls_t
 
   type, public :: gravity_t
-    type(opt_int) :: enabled
+    !> legacy `NGRAV`: how often the gravity load is RECOMPUTED, not whether it is on.
+    !> ALGORT (Fem.f90:15582) sets KGRAV=1 when NGRAV == 0, or on the first iteration of
+    !> the first step, or every NGRAV-th step. It was modelled as `enabled` because the
+    !> static slice has ONE step, where "recompute every step" and "on" are the same
+    !> value -- the same shape as materials[].name in M5. Renamed 2026-09-14.
+    type(opt_int) :: recompute_every
     type(opt_real) :: magnitude            ! m/s2
     real(real64), allocatable :: direction(:)       ! 1, one per spatial dimension
     integer(int32), allocatable :: amplitude(:)     ! id, one amplitude reference per section

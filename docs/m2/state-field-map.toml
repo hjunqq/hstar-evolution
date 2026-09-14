@@ -2196,13 +2196,13 @@ consumers = ["external_load_2", "gravity"]
 shape = []
 dtype = "i32"
 unit = "1"
-owner = "ProblemState.steps[0].load.gravity.enabled"
+owner = "ProblemState.steps[0].load.gravity.recompute_every"
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "loads.sha256"
-note = "1 on both cases: enables the .loa gravity records."
+note = "NGRAV is a RECOMPUTE FREQUENCY, not an on/off flag: ALGORT (Fem.f90:15582) sets KGRAV=1 when NGRAV==0, on the first iteration of the first step, or every NGRAV-th step. 1 on both static cases, 999 on train05b_slope_srm. The field id keeps the spelling `enabled` because it is the WIRE name baked into the frozen M2-03 baselines; the owner and this note carry the meaning."
 
 [[field]]
 id = "derived.counts.mdofn"

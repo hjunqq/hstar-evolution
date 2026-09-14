@@ -537,7 +537,7 @@ contains
     ct%tolerance_dof = [1.0e-5_real64, 1.0e-5_real64]
     call builder_step_set_controls(b, sb, ct, loc, errors)
 
-    call opt_set(ld%gravity%enabled, 1_int32)
+    call opt_set(ld%gravity%recompute_every, 7_int32)   ! a frequency, deliberately not 0 or 1
     call opt_set(ld%gravity%magnitude, 9.81_real64)
     if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
     allocate (ld%gravity%direction(2))
@@ -1112,8 +1112,11 @@ contains
               trim(type_ABC) == trim(opt_value_or(problem%interactions%absorbing%type, '')))
     call check('type_nl is steps[0].controls.nonlinear_type',                                   &
               type_nl == int(opt_value_or(problem%steps(1)%controls%nonlinear_type, 0_int32), ink))
-    call check('NGRAV is steps[0].load.gravity.enabled',                                        &
-              NGRAV == int(opt_value_or(problem%steps(1)%load%gravity%enabled, 0_int32), ink))
+    ! 7, not 1: NGRAV is a recompute FREQUENCY and this is the judgement that says so. An
+    ! equality gate on 1 could not tell a frequency from a flag; a fixture carrying 7 goes
+    ! red the moment anything coerces it to a boolean.
+    call check('NGRAV is steps[0].load.gravity.recompute_every, frequency and all',              &
+              NGRAV == int(opt_value_or(problem%steps(1)%load%gravity%recompute_every, 0_int32), ink))
     call check('gravy is steps[0].load.gravity.magnitude',                                      &
               gravy == real(opt_value_or(problem%steps(1)%load%gravity%magnitude, 0.0_real64), irk))
     ! THE INVERSION, asserted as an inversion: the fixture authors symmetric = .true., so
