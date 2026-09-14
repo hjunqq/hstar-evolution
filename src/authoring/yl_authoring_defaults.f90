@@ -37,6 +37,7 @@ module yl_authoring_defaults
   public :: default_residue, default_existence
   public :: element_kind_of, nodes_per_element, formulation_code, amplitude_code
   public :: procedure_code, solver_code, legacy_material_name, enable_output_field
+  public :: stiffness_update_code, criterion_code
 
 contains
 
@@ -97,9 +98,29 @@ contains
     call opt_set(b%record_reaction, 1_int32)
   end subroutine default_boundary
 
+  !> `type_nl`: WHEN ALGORT rebuilds the tangent (Fem.f90:15450-15458).
+  !> No longer a default -- see the contract's SS5 note. Both values are legacy's own.
+  pure integer(int32) function stiffness_update_code(name) result(c)
+    character(len=*), intent(in) :: name
+    select case (trim(name))
+    case ('first_iteration'); c = 5_int32     ! modified Newton / initial stiffness
+    case ('every_iteration'); c = 4_int32     ! full Newton
+    case default;             c = 5_int32
+    end select
+  end function stiffness_update_code
+
+  !> `criteria`: legacy's spelling of the yield criterion. Only MC is whitelisted.
+  pure function criterion_code(name) result(s)
+    character(len=*), intent(in) :: name
+    character(len=:), allocatable :: s
+    select case (trim(name))
+    case ('mohr_coulomb'); s = 'MC'
+    case default;          s = ''
+    end select
+  end function criterion_code
+
   subroutine default_controls(c)
     type(controls_t), intent(out) :: c
-    call opt_set(c%nonlinear_type, 5_int32)      ! kresl set on the first iteration only
     call opt_set(c%steps, 1_int32)
     call opt_set(c%step_increment, 1_int32)
     call opt_set(c%time_increment, 1.0_real64)   ! static: the curve's abscissa, no more
@@ -169,8 +190,12 @@ contains
     type(output_t), intent(inout) :: o
     character(len=*), intent(in) :: name
     select case (trim(name))
-    case ('u'); call opt_set(o%field%u, 1_int32)
-    case ('s'); call opt_set(o%field%s, 1_int32)
+    case ('u');  call opt_set(o%field%u, 1_int32)
+    case ('s');  call opt_set(o%field%s, 1_int32)
+    ! Equivalent plastic strain. A plasticity model is what makes it meaningful, and it is
+    ! the one output that says whether the material actually yielded -- which is why the
+    ! material domain's acceptance compares it rather than only displacement and stress.
+    case ('ep'); call opt_set(o%field%ep, 1_int32)
     end select
   end subroutine enable_output_field
 
@@ -317,6 +342,7 @@ contains
     character(len=:), allocatable :: s
     select case (trim(model))
     case ('elastic_isotropic'); s = 'ELASTIC_ISOTROPIC'
+    case ('classicalep');        s = 'CLASSICALEP'
     case default; s = ''
     end select
   end function legacy_material_name

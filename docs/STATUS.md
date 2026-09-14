@@ -16,6 +16,7 @@
 | M3 ProblemState | 完成 | **ACCEPTED（有条件）** 2026-09-10 | `docs/m3/M3-acceptance-matrix.md`（27 判据） |
 | M4 Legacy Adapter | 完成 | **ACCEPTED** 2026-09-12 | `docs/m4/M4-01-acceptance-matrix.md`（32 判据）+ `M4-02-report.md` |
 | M5 现代输入闭环 | 完成 5/5 | **ACCEPTED（窄口径）** 2026-09-13 | `docs/m5/M5-report.md` + `docs/m5/authoring-contract.md` + `tools/yl_modern_check.py`（N1/N2/N3，release 门禁） |
+| M6.4 材料域第一能力（CLASSICALEP/MC） | 完成 5/5 | **待签收** | `docs/m6/material-domain.md` + `cases/golden/plasticity/mini_mc`（三块严格相等，含 PLASTICSTRAIN） |
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。

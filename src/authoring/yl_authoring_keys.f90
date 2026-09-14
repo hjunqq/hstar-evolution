@@ -67,15 +67,23 @@ module yl_authoring_keys
     key_t('mesh.format',                   TV_STR,  .true.,  'hstar-legacy-cor-ele'),        &
     key_t('mesh.dimension',                TV_INT,  .true.,  '2'),                           &
     key_t('elset[].name',                  TV_STR,  .true.,  ''),                            &
-    key_t('elset[].mesh_group',            TV_INT,  .true.,  ''),                            &
+    key_t('elset[].element_count',         TV_INT,  .true.,  ''),                            &
     key_t('nset[].name',                   TV_STR,  .true.,  ''),                            &
     key_t('nset[].nodes[]',                TV_INT,  .false., ''),                            &
     key_t('nset[].nodes.count',            TV_INT,  .true.,  ''),                            &
     key_t('material[].name',               TV_STR,  .true.,  ''),                            &
-    key_t('material[].model',              TV_STR,  .true.,  'elastic_isotropic'),           &
+    key_t('material[].model',              TV_STR,  .true.,  'elastic_isotropic|classicalep'), &
     key_t('material[].density',            TV_REAL, .true.,  ''),                            &
     key_t('material[].E',                  TV_REAL, .true.,  ''),                            &
     key_t('material[].nu',                 TV_REAL, .true.,  ''),                            &
+    ! The plasticity block: OPTIONAL as keys, because an elastic material has none of it,
+    ! and REQUIRED-TOGETHER by model_requires below. Declaring them required here would
+    ! demand a friction angle of every linear-elastic deck.
+    key_t('material[].criterion',          TV_STR,  .false., 'mohr_coulomb'),                &
+    key_t('material[].cohesion',           TV_REAL, .false., ''),                            &
+    key_t('material[].hardening',          TV_REAL, .false., ''),                            &
+    key_t('material[].friction_angle',     TV_REAL, .false., ''),                            &
+    key_t('material[].dilation_angle',     TV_REAL, .false., ''),                            &
     key_t('section[].name',                TV_STR,  .true.,  ''),                            &
     key_t('section[].elset',               TV_STR,  .true.,  ''),                            &
     key_t('section[].element',             TV_STR,  .true.,  'Q4'),                          &
@@ -92,6 +100,11 @@ module yl_authoring_keys
     key_t('step[].controls.max_iterations', TV_INT, .true.,  ''),                            &
     key_t('step[].controls.tolerance_force', TV_REAL, .true., ''),                           &
     key_t('step[].controls.tolerance_dof', TV_REAL, .true.,  ''),                            &
+    ! WHEN the tangent is rebuilt. It was in the default table (pinned to legacy's
+    ! type_nl=5) with the reason "the value does not reach the result" -- true for one
+    ! linear-elastic iteration, FALSE the moment a material is non-linear. By the contract's
+    ! own admission rule it therefore cannot be a default, so the author writes it.
+    key_t('step[].controls.stiffness_update', TV_STR, .true., 'first_iteration|every_iteration'), &
     key_t('step[].boundary[].nset',        TV_STR,  .true.,  ''),                            &
     key_t('step[].boundary[].dof[]',       TV_INT,  .false., '1|2'),                         &
     key_t('step[].boundary[].dof.count',   TV_INT,  .true.,  ''),                            &
@@ -102,7 +115,7 @@ module yl_authoring_keys
     key_t('step[].load.gravity.amplitude', TV_STR,  .true.,  ''),                            &
     key_t('solver.linear',                 TV_STR,  .true.,  'profile'),                     &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
-    key_t('output.field[]',                TV_STR,  .false., 'u|s'),                         &
+    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep'),                      &
     key_t('output.field.count',            TV_INT,  .true.,  ''),                            &
     key_t('output.stress_averaging',       TV_STR,  .true.,  'none|smoothed|direct')]
 
@@ -169,6 +182,7 @@ contains
     call resolve(doc, 'section', 'material', 'material', file, errors)
     call resolve_nested(doc, 'step', 'boundary', 'nset', 'nset', file, errors)
     call resolve_step_amplitude(doc, file, errors)
+    call model_requires(doc, file, errors)
 
     ! --- the one arity the contract fixes -----------------------------------------
     if (doc%count_of('step') /= 1_int32) then
@@ -177,6 +191,57 @@ contains
                  '1')
     end if
   end subroutine authoring_validate
+
+  !> Per-model fields are required TOGETHER with their model and forbidden without it.
+  !>
+  !> This is the first conditional requirement in the contract, and the material domain is
+  !> where it had to appear: legacy reads a common solid record and then branches per
+  !> constitutive model, so "required" stops being a property of the key and becomes a
+  !> property of the (key, model) pair. Both directions are checked -- a missing one is a
+  !> MISSING_FIELD, and a friction angle on an elastic material is an unknown-in-context
+  !> key rather than something silently ignored.
+  subroutine model_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), parameter :: FIELDS(4) = [character(len=15) ::                          &
+      'cohesion', 'hardening', 'friction_angle', 'dilation_angle']
+    integer(int32) :: i, k, kc
+    character(len=TOML_LEN_PATH) :: base
+    logical :: plastic
+    integer :: f
+
+    do i = 1_int32, doc%count_of('material')
+      base = 'material['//itoa(i)//']'
+      k = doc%find(trim(base)//'.model')
+      if (k == 0_int32) cycle                  ! a missing model is require_all's finding
+      plastic = trim(doc%entry(k)%svalue) == 'classicalep'
+      kc = doc%find(trim(base)//'.criterion')
+      if (plastic .and. kc == 0_int32) then
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+                   trim(base)//'.criterion',                                                  &
+                   'model "classicalep" needs a yield criterion', '', 'mohr_coulomb')
+      end if
+      if (.not. plastic .and. kc /= 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(kc)%line,         &
+                   trim(base)//'.criterion',                                                  &
+                   'only a plasticity model takes a yield criterion',                         &
+                   trim(doc%entry(k)%svalue), 'classicalep')
+      end if
+      do f = 1, size(FIELDS)
+        k = doc%find(trim(base)//'.'//trim(FIELDS(f)))
+        if (plastic .and. k == 0_int32) then
+          call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, 0_int32,                  &
+                     trim(base)//'.'//trim(FIELDS(f)),                                        &
+                     'the mohr_coulomb criterion needs this parameter', '', 'a real number')
+        else if (.not. plastic .and. k /= 0_int32) then
+          call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,        &
+                     trim(base)//'.'//trim(FIELDS(f)),                                        &
+                     'only a plasticity model takes this parameter', '', '')
+        end if
+      end do
+    end do
+  end subroutine model_requires
 
   ! ------------------------------------------------------------------ checks ----
 

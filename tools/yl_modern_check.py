@@ -42,12 +42,26 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MAP = ROOT / "docs/m2/state-field-map.toml"
-GOLDEN = ROOT / "cases/golden/static_2d"
+MANIFEST = ROOT / "cases/manifest.toml"
 
 
-def cases() -> list[str]:
-    return tomllib.loads(MAP.read_text(encoding="utf-8"))["cases"]
+def cases() -> list[tuple[str, Path]]:
+    """(case id, case directory) for every frozen case that has a modern deck.
+
+    Read from cases/manifest.toml rather than from the state field map's `cases` list:
+    that list is the STATIC pair, because it drives the M2 state comparison, and a
+    material-domain case has no state baseline by design. Driving this gate from it would
+    have quietly skipped every case after the first domain.
+    """
+    doc = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
+    out = []
+    for c in doc.get("case", []):
+        d = ROOT / "cases" / c["path"]
+        if (d / "modern/case.toml").is_file():
+            out.append((c["id"], d))
+    if not out:
+        raise SystemExit(f"{MANIFEST}: no frozen case carries modern/case.toml")
+    return out
 
 
 def mesh_prefix(deck: Path) -> str:
@@ -61,12 +75,12 @@ def mesh_prefix(deck: Path) -> str:
     raise SystemExit(f"{deck}: no `file = \"...\"` line under [mesh]")
 
 
-def stage(name: str, work: Path) -> Path:
+def stage(case_dir: Path, work: Path) -> Path:
     """The mesh and the contract deck. Nothing else -- see N1."""
-    deck = GOLDEN / name / "modern/case.toml"
+    deck = case_dir / "modern/case.toml"
     prefix = mesh_prefix(deck)
     for suffix in (".cor", ".ele"):
-        src = GOLDEN / name / "legacy" / (prefix + suffix)
+        src = case_dir / "legacy" / (prefix + suffix)
         shutil.copyfile(src, work / src.name)
     shutil.copyfile(deck, work / "case.toml")
     return work / "case.toml"
@@ -90,12 +104,11 @@ def main(argv=None):
 
     problems: list[str] = []
 
-    for cid in cases():
-        name = cid.split(".", 1)[1]
-        ref = GOLDEN / name / "reference/results.json"
+    for cid, case_dir in cases():
+        ref = case_dir / "reference/results.json"
         with tempfile.TemporaryDirectory(prefix="yl-modern.") as td:
             work = Path(td)
-            stage(name, work)
+            stage(case_dir, work)
             cp = subprocess.run([str(binary), "--input=case.toml"], cwd=work,
                                 stdin=subprocess.DEVNULL, capture_output=True,
                                 text=True, errors="replace")
@@ -119,14 +132,14 @@ def main(argv=None):
                 problems.append(f"N2 {cid}: the modern path does not reproduce the reference")
 
     # N3 -- a deck the contract rejects must stop, readably.
-    name = cases()[0].split(".", 1)[1]
+    bad_id, bad_dir = cases()[0]
 
     def rejected(label: str, arg: str, mutate=None) -> str:
         """Run a deck that must be refused; assert the run stopped and wrote nothing.
         Returns the combined output so the caller can assert what it SAID."""
         with tempfile.TemporaryDirectory(prefix="yl-modern-bad.") as td:
             work = Path(td)
-            deck = stage(name, work)
+            deck = stage(bad_dir, work)
             if mutate is not None:
                 deck.write_text(mutate(deck.read_text(encoding="utf-8")), encoding="utf-8")
             cp = subprocess.run([str(binary), arg], cwd=work, stdin=subprocess.DEVNULL,
@@ -168,6 +181,13 @@ def main(argv=None):
         problems.append("N3 not the TOML subset: the refusal did not point at line 2")
     if "Input the problem name" in blob:
         problems.append("N3 not the TOML subset: fell through to the legacy reader's prompt")
+
+    # b2 -- a mapping-stage finding, which the validator suite cannot reach: it runs the
+    # validator alone, and this rule reads the MESH file to check the author's counts.
+    blob = rejected("element counts do not add up", "--input=case.toml",
+                    sub("element_count = 256", "element_count = 255"))
+    if "element_count" not in blob:
+        problems.append("N3 element counts: the refusal did not name the key")
 
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",

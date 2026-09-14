@@ -25,6 +25,18 @@ case.toml  --读--> authoring AST --映射--> ProblemState --build_runtime--> ru
 `ProblemState` 有 98 个已登记字段，而本契约要求作者写的只有其中的**物理选择**。
 其余由**声明式默认**补齐——每一条默认都登记在 §5，并进入 manifest，可溯源。
 
+**材料域补充（2026-09-14）**：本契约第一次出现**按模型条件必填**的字段。
+legacy 读一条公共 SOLID 记录后再按本构模型分支，所以「必填」不再是键的属性，
+而是（键, 模型）这一对的属性。规则 `model_requires` 两个方向都检查：
+塑性模型缺参数是 `MISSING_FIELD`，弹性材料上写塑性参数是 `INVALID_INPUT`——
+**不是静默忽略**，否则作者会以为那个摩擦角生效了。
+
+另有两行**移出默认表**，都是按下面那条准入规则移的：
+`steps[0].controls.nonlinear_type`（何时重装切线刚度）原写着「取值不进入结果」——
+这在线性弹性单次迭代下成立，**材料非线性时立刻不成立**；
+一个「是否无害取决于材料」的默认不是默认。现由作者写 `step.controls.stiffness_update`。
+（另一行是 `output.stress_averaging`，见下。）
+
 **默认的准入规则（这条比默认表本身重要）**：
 
 > **一个字段只有在「它不是物理选择」时才可以有默认值。**
@@ -102,7 +114,6 @@ case.toml  --读--> authoring AST --映射--> ProblemState --build_runtime--> ru
 
 | ProblemState 字段 | 默认 | 为什么不是物理选择 |
 |---|---|---|
-| `steps[0].controls.nonlinear_type` | 5 | 线性静力下 `algort` 只在首次迭代置 `kresl=1`，取值不进入结果 |
 | `steps[0].controls.steps` / `step_increment` | 1 / 1 | 单增量静力的定义本身 |
 | `steps[0].controls.time_increment` | 1.0 | 静力无时间尺度；只用于曲线求值的横坐标 |
 | `steps[0].controls.restart_frequency` | 1 | 重启不在白名单内 |
@@ -130,13 +141,17 @@ controls.max_iterations,controls.tolerance_*}`、边界的 `{nset,dof,value}`、
 
 - `mesh.dimension = 2`；`mesh.format = "hstar-legacy-cor-ele"`
 - `section.element = "Q4"`；`section.formulation = "plane_strain"`
-- `material.model = "elastic_isotropic"`
+- `material.model ∈ {"elastic_isotropic", "classicalep"}`；
+  `classicalep` 需要 `criterion = "mohr_coulomb"` 及 `cohesion` / `hardening` /
+  `friction_angle` / `dilation_angle`（**角度单位是度**，legacy 直接 `tand()`），
+  且这些字段**只允许**出现在塑性材料上——两个方向都有反例
 - `step.procedure = "static"`；`step.controls.increments = 1`
+- `step.controls.stiffness_update ∈ {"first_iteration", "every_iteration"}`（legacy `type_nl` 5 / 4）
 - 边界只有给定位移（`value`），`dof ∈ {1,2}`
 - 荷载只有 `gravity`
 - `amplitude.type = "linear"`
 - `solver.linear = "profile"`
-- `output.format = "gid"`；`output.field ⊆ {"u","s"}`；`output.stress_averaging ∈ {"none","smoothed","direct"}`
+- `output.format = "gid"`；`output.field ⊆ {"u","s","ep"}`；`output.stress_averaging ∈ {"none","smoothed","direct"}`
   （`"smoothed"` 与 `"direct"` 在本切片上不可区分：Output.f90:5128-5129 的分支只在
   `nnode==8 .and. ndimn==3` 下成立，2-D Q4 走同一条 else 分支。实测而非推断——改成
   `"smoothed"` 仍严格复现冻结参考，改成 `"none"` 应力偏离 1.5e5、位移不变。）

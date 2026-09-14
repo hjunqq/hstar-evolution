@@ -22,7 +22,7 @@ program yl_authoring_test
 
   integer :: pass, fail
   character(len=512) :: deck, scratch, mode
-  logical :: clean_only
+  logical :: clean_only, plastic
 
   pass = 0
   fail = 0
@@ -32,6 +32,7 @@ program yl_authoring_test
   ! running the full suite there would need a conditional skip, and a skipped check that
   ! still prints is how a suite quietly stops testing something.
   clean_only = (trim(mode) == '--clean-only')
+  plastic = (trim(mode) == '--plastic')
 
   write (output_unit, '(a)') '== yl_authoring_test =='
   write (output_unit, '(a)') '   deck    : '//trim(deck)
@@ -42,6 +43,33 @@ program yl_authoring_test
 
   if (clean_only) then
     write (output_unit, '(a)') '-- counter-examples: not on this deck (--clean-only)'
+    write (output_unit, '(a)') ''
+    write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
+    if (fail > 0) then
+      write (output_unit, '(a,i0,a)') '== FAIL (', fail, ' checks failed) =='
+      error stop 1
+    end if
+    write (output_unit, '(a)') '== PASS =='
+    stop
+  end if
+
+  ! --plastic: the counter-examples that need a deck with a PLASTICITY material. They
+  ! cannot live on the elastic decks -- a criterion counter-example on a deck with no
+  ! plasticity model would be testing the other direction of the same rule, which the
+  ! elastic run already covers.
+  if (plastic) then
+    write (output_unit, '(a)') '-- counter-examples that need a plasticity deck'
+    ! an unlisted yield criterion is a capability refusal, not a typo
+    call expect_bad('unlisted criterion', 'criterion      = "mohr_coulomb"', &
+                    'criterion      = "drucker_prager"', 'UNSUPPORTED', 3, 'criterion')
+    ! the model is there, the criterion is not: a conditional requirement, both halves
+    call expect_bad('plastic model without a criterion', 'criterion      = "mohr_coulomb"', &
+                    '# criterion removed', 'MISSING_FIELD', 2, 'criterion')
+    call expect_bad('plastic model without an angle', 'friction_angle = 30.0', &
+                    '# friction_angle removed', 'MISSING_FIELD', 2, 'friction_angle')
+    ! The element-count rule is NOT here: it lives in the mapping layer, which reads the
+    ! mesh file, and this suite runs the validator alone. Its counter-example is N3 in
+    ! tools/yl_modern_check.py, where the real binary runs against a real mesh.
     write (output_unit, '(a)') ''
     write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
     if (fail > 0) then
@@ -76,6 +104,15 @@ program yl_authoring_test
   ! a value the reader itself cannot read
   call expect_bad('unreadable value', 'increments      = 1', 'increments      = @@@', &
                   'INVALID_INPUT', 2, 'increments')
+  ! the other direction of the conditional requirement: a plasticity parameter on a
+  ! material that has no plasticity model. Silently ignoring it is the failure this
+  ! catches -- the author would believe a friction angle was in effect.
+  call expect_bad('plasticity parameter on an elastic material', 'nu      = 0.2', &
+                  'friction_angle = 30.0', 'INVALID_INPUT', 2, 'friction_angle')
+  ! when the tangent is rebuilt: a whitelist, and the row that moved out of the default
+  ! table because its innocence depended on the material
+  call expect_bad('unlisted stiffness update', 'stiffness_update = "first_iteration"', &
+                  'stiffness_update = "sometimes"', 'UNSUPPORTED', 3, 'stiffness_update')
   ! stress averaging is a whitelist, and it is the one row that moved OUT of the default
   ! table: it decides what the reported stresses are, so an unlisted scheme is a capability
   ! refusal rather than a silently substituted default.

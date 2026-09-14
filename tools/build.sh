@@ -561,6 +561,11 @@ if [ "$TARGET" = authoring ]; then
     "$OUT/yl_authoring_test" "$ROOT/cases/golden/static_2d/lame_cylinder/modern/case.toml" \
         "$OUT/scratch" 2>&1 | tee -a "$LOG"
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (lame_cylinder)" >&2; exit 6; }
+    # The conditional-requirement rules need a deck that HAS a plasticity material; the
+    # elastic decks can only exercise the other direction of the same rule.
+    "$OUT/yl_authoring_test" "$ROOT/cases/golden/plasticity/mini_mc/modern/case.toml" \
+        "$OUT/scratch" --plastic 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (mini_mc)" >&2; exit 6; }
     T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     log "=== BUILD OK (authoring/$PROFILE) $T0 -> $T1: contract validator suite passed"
     exit 0

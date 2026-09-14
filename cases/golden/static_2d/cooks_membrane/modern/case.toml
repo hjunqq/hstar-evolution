@@ -13,7 +13,7 @@ dimension = 2
 
 [[elset]]
 name       = "body"
-mesh_group = 1
+element_count = 256   # elements are taken from 1.ele in file order, legacy's own rule
 
 [[nset]]
 name  = "clamped_edge"
@@ -47,6 +47,10 @@ increments      = 1
 max_iterations  = 5
 tolerance_force = 1.0e-5
 tolerance_dof   = 1.0e-5
+# WHEN the tangent is rebuilt (legacy type_nl). Written out rather than defaulted:
+# on a linear-elastic run the choice cannot change the answer, on a non-linear one it can,
+# and a default whose innocence depends on the material is not a default.
+stiffness_update = "first_iteration"
 
 [[step.boundary]]
 nset  = "clamped_edge"

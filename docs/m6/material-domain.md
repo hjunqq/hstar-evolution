@@ -187,3 +187,30 @@ ADR-0002 禁止；而且**没有校验规则守它**（因为这行读 1 时该�
 5. 两个静力算例**不受影响**（既有门禁全绿）。
 
 **不以「`.mat` 读取点研究完毕」作为进度指标。**
+
+## 5. 结果（2026-09-14）
+
+五条判据全部达成：
+
+| 判据 | 实测 |
+|---|---|
+| 1 新格式完整表达 | `cases/golden/plasticity/mini_mc/modern/case.toml` |
+| 2 新白名单行各有反例 | authoring 套件 41 + 11（塑性 deck 专用一组）；方言套件 372/372 ×2；流水线 490/490（含 V26） |
+| 3 仅凭 `case.toml` + 网格驱动 | 门禁 **N1**，工作目录内无任何 legacy 控制卡 |
+| 4 与冻结参考严格相等 | 门禁 **N2**：`DISPLACEMENT` / `STRESS` / **`PLASTICSTRAIN`** 三块均 `max|d| = 0.000e+00` |
+| 5 两个静力算例不受影响 | 同一次 N1/N2 通过，fallback 门禁亦全绿 |
+
+**结论边界，照旧不放宽**：`PLASTICSTRAIN` 三十个值仍全为 0——**这个 deck 不屈服**。
+本次确立的是 **CLASSICALEP/MC 的输入、映射、按模型分派与求解链路成立**，
+**不是**塑性回映已被验证。下一能力用 `train05b_slope_srm`（真正屈服）来验证那一半。
+
+### 5.1 这一能力实际改动的边界
+
+- 白名单新增：`material.model` 增 `CLASSICALEP`；`criterion` 只收 `MC`；
+  `stiffness_update` 两个取值（legacy `type_nl` 5/4）；`output.field` 增 `ep`。
+- 白名单**移除**：`model.section_count`（原钉死 1）。移除的前提是新增校验 **V26**
+  「每个 section 至少拥有一个单元」——那行旁边写着的正是这个前提。
+- 契约首次出现**按模型条件必填**：`model_requires` 两个方向都查。
+- `elset[].mesh_group` 改为 `elset[].element_count`：前者是**死键**（声明了、从没被读过），
+  而单元归属在 legacy 里本来就是**按文件顺序、每组取 nelgroup 个**；
+  `.ele` 是否带组号列因算例而异（`lame_cylinder` 带、`mini_mc` 不带），legacy 两种都忽略。

@@ -1,0 +1,113 @@
+# Two-material slope block under self-weight, elastic base + Mohr-Coulomb slope.
+# See docs/m5/authoring-contract.md and docs/m6/material-domain.md.
+#
+# This is the material domain's first deck. It carries a PLASTICSTRAIN result block that
+# the two static cases do not -- and every one of its values is zero, because the deck does
+# not yield. Reproducing it exactly establishes the .mat reading, mapping and per-model
+# dispatch chain; it does NOT establish the plastic return mapping, which never runs.
+version = 1
+
+[case]
+name        = "mini_mc"
+units       = "SI"
+description = "30-node, 20-element 2D Q4 plane-strain block: elastic base and a CLASSICALEP/MC slope, gravity only, full-Newton iteration"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+# Elements are taken from 1.ele in FILE ORDER, legacy's own rule: read_element walks the
+# file group by group taking this many each. The first ten are the base, the last ten the
+# slope. 1.ele here carries no group column at all, which is why membership is stated.
+[[elset]]
+name          = "base"
+element_count = 10
+
+[[elset]]
+name          = "slope"
+element_count = 10
+
+# x = 0 edge slides in y; y = 0 edge slides in x.
+[[nset]]
+name  = "sym_x"
+nodes = [1, 6, 7, 12, 13, 18, 19, 24, 25, 30]
+
+[[nset]]
+name  = "sym_y"
+nodes = [1, 2, 3, 4, 5, 6]
+
+[[material]]
+name    = "rock"
+model   = "elastic_isotropic"
+density = 2500.0
+E       = 2.0e10
+nu      = 0.25
+
+[[material]]
+name           = "soil"
+model          = "classicalep"
+density        = 2000.0
+E              = 5.0e7
+nu             = 0.35
+criterion      = "mohr_coulomb"
+cohesion       = 5.0e4      # Pa
+hardening      = 0.0        # Pa
+friction_angle = 30.0       # degrees, not radians: the solver takes tand() of this
+dilation_angle = 15.0       # degrees
+
+[[section]]
+name        = "base"
+elset       = "base"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "rock"
+
+[[section]]
+name        = "slope"
+elset       = "slope"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "soil"
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[step]]
+name      = "self_weight"
+procedure = "static"
+
+[step.controls]
+increments      = 1
+max_iterations  = 10
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+# A plastic material needs the tangent rebuilt every iteration.
+stiffness_update = "every_iteration"
+
+[[step.boundary]]
+nset  = "sym_x"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "sym_y"
+dof   = [2]
+value = 0.0
+
+[step.load.gravity]
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+
+[solver]
+linear = "profile"
+
+[output]
+format = "gid"
+field  = ["u", "s", "ep"]   # ep = equivalent plastic strain; the block that says whether it yielded
+# Reported nodal stresses are the direct average of the elements meeting at the node
+# (legacy average_appear=2). This changes the numbers that are reported, so it is written out.
+stress_averaging = "direct"

@@ -1371,43 +1371,33 @@ contains
                 index(message, 'nodes and the runtime numbers') == 0)
     end if
 
-    ! --- arm 4: the sections arm is UNREACHABLE, and this is what says so -----
-    ! The sections arm of the agreement gate cannot be fired: to reach it a problem must
-    ! carry a section count the runtime does not, and the capability gate admits exactly
-    ! ONE section ("sections.size: 2 is not in {1} for build capability static-q4/1"). No
-    ! admissible problem has two sections, so no admissible pair can disagree about the
-    ! count.
+    ! --- arm 4: the sections arm is REACHABLE as of 2026-09-14 --------------
+    ! It used to be unreachable: the capability gate admitted exactly ONE section, so no
+    ! admissible problem could disagree with the runtime about the count. That row was
+    ! removed when V26 (every section owns an element) made a section-count limit
+    ! unjustifiable, and the note below asked whoever widened it to confirm the claim
+    ! "widen the gate and this goes red" -- which is what happened: this assertion went
+    ! red on the first build after the removal, and it was inverted here, not deleted.
     !
     ! That is a claim about the GATE, so it is asserted against the gate rather than
     ! written in a comment that would quietly stop being true: the draft below really does
     ! carry two sections and prepare_problem really does refuse it, so the check goes red
     ! the moment that refusal stops happening.
     !
-    ! STRUCTURALLY SOUND, NOT EMPIRICALLY VERIFIED -- and the difference is recorded here
-    ! rather than rounded up. The team lead tried to confirm "widen the gate and this goes
-    ! red" by setting model.section_count to 2. That control was INVALID: the capability
-    ! table matches by EXACT EQUALITY, so the edit did not widen the gate to allow two, it
-    ! required two, and what went red was the single-section baseline draft instead
-    ! (docs/07, failure for the wrong reason). Widening is not a one-value edit under the
-    ! current table -- it needs the entry's shape changed from equality to a set or range.
-    ! So: the mechanism is sound by construction and the "it will go red" claim is not yet
-    ! measured. Whoever widens the capability should confirm it then, when it costs a line.
+    ! The earlier note recorded that the "widen it and this goes red" claim was NOT
+    ! measured, because the capability table matched by exact equality and setting the row
+    ! to 2 made it REQUIRE two rather than admit two -- a control that failed for the wrong
+    ! reason. It is measured now: the row is gone, and a two-section draft whose sections
+    ! each own elements is ACCEPTED.
     call errors%clear()
     call draft_of(2, draft2, two_sections=.true.)
     call prepare_problem(draft2, PROFILE_TAG, problem_split, pmanifest, errors)
-    call check('a two-section draft is refused by the capability gate', errors%any())
+    call check('a two-section draft whose sections both own elements is accepted',              &
+               .not. errors%any())
     if (errors%any()) then
-      ! render(), not the message alone: `sections.size` is the error's LOCATION and the
-      ! message is only "2 is not in {1} for build capability ...". Checking the message
-      ! for it failed, which is how this line came to be right -- and why the check below
-      ! about {1} is kept separate from the one that names WHICH capability.
       message = errors%render(1)
-      call check('the two-section refusal names the section-count capability',                  &
-                index(message, 'sections.size') > 0)
-      ! WHEN THIS GOES RED, the capability now admits more than one section and the
-      ! sections arm of the agreement gate has become reachable and must be fired here.
-      call check('while sections.size is capped at 1 the sections arm cannot be fired',         &
-                index(message, 'is not in {1}') > 0)
+      call check('...and if it is not, the reason is printed', .false.)
+      write (output_unit, '(a)') '      '//trim(message)
     end if
 
     ! The globals must be exactly as section 2 left them: a refusal writes nothing. That

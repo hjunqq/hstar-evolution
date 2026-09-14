@@ -180,6 +180,26 @@ contains
       call opt_set(mat%density, real_at(doc, 'material['//itoa(i)//'].density'))
       call opt_set(mat%e, real_at(doc, 'material['//itoa(i)//'].E'))
       call opt_set(mat%nu, real_at(doc, 'material['//itoa(i)//'].nu'))
+      ! The per-model block, set only for the model that has one. `criterion` being set is
+      ! what makes the commit allocate legacy's ClassicalEP record, so the whole block is
+      ! written together or not at all -- the validator has already refused a half of it.
+      if (doc%find('material['//itoa(i)//'].criterion') /= 0_int32) then
+        call opt_set(mat%plasticity%criterion,                                                &
+             criterion_code(text_at(doc, 'material['//itoa(i)//'].criterion')))
+        call opt_set(mat%plasticity%yield_stress, real_at(doc, 'material['//itoa(i)//'].cohesion'))
+        call opt_set(mat%plasticity%hardening_modulus,                                        &
+             real_at(doc, 'material['//itoa(i)//'].hardening'))
+        call opt_set(mat%plasticity%friction_angle,                                           &
+             real_at(doc, 'material['//itoa(i)//'].friction_angle'))
+        call opt_set(mat%plasticity%dilation_angle,                                           &
+             real_at(doc, 'material['//itoa(i)//'].dilation_angle'))
+        ! Curve indices: the contract does not admit material property curves at all
+        ! (nscurve must be 0), so "no curve" is the only representable answer and 0 is
+        ! not a hidden physical choice.
+        call opt_set(mat%plasticity%yield_stress_curve, 0_int32)
+        call opt_set(mat%plasticity%friction_angle_curve, 0_int32)
+        call opt_set(mat%plasticity%dilation_angle_curve, 0_int32)
+      end if
       call builder_add_material(b, mat, here(line_at(doc, 'material['//itoa(i)//'].name')), errors)
       if (builder_failed(b)) return
     end do
@@ -228,6 +248,8 @@ contains
     call default_controls(ctrl)
     call opt_set(ctrl%increments,      int_at(doc, 'step[1].controls.increments'))
     call opt_set(ctrl%max_iterations,  int_at(doc, 'step[1].controls.max_iterations'))
+    call opt_set(ctrl%nonlinear_type,                                                         &
+         stiffness_update_code(text_at(doc, 'step[1].controls.stiffness_update')))
     call opt_set(ctrl%tolerance_force, real_at(doc, 'step[1].controls.tolerance_force'))
     ! tolerance_dof is one value PER DEGREE OF FREEDOM and gravity%amplitude one id PER
     ! SECTION: legacy stores both as arrays, and the contract lets the author write one
@@ -334,20 +356,42 @@ contains
     ctx%nbackdt = 0_int32
     nn = int(ctx%nnode)
 
+    ! Element-to-section membership is POSITIONAL, which is legacy's own rule: read_element
+    ! walks the file group by group, taking nelgroup elements for each. Some `.ele` files
+    ! carry a trailing group column and some do not (lame_cylinder does, mini_mc does not),
+    ! and legacy ignores it either way -- so the modern path cannot read membership out of
+    ! the mesh file. The author states it, one count per element set, and this routine only
+    ! checks that the counts add up to the file.
+    ! Indexed by SECTION, not by elset ordinal: a section names its elset, and the two
+    ! collections are not required to be in the same order.
     allocate (counts(max(nsec, 1)))
     counts = 0_int32
+    do i = 1, nsec
+      g = int(collection_index(doc, 'elset', text_at(doc, 'section['//itoa(i)//'].elset')), int32)
+      if (g == 0_int32) return        ! a dangling elset reference is the validator's finding
+      counts(i) = int_at(doc, 'elset['//itoa(int(g))//'].element_count')
+    end do
+
     allocate (nodes(nn))
     open (newunit=u, file=prefix//'.ele', status='old', action='read', iostat=ios)
     if (ios /= 0) then
       call fail(errors, 'mesh.file', 'cannot open '//prefix//'.ele')
       return
     end if
+    g = 0_int32
     do
-      read (u, *, iostat=ios) id, nodes(1:nn), g
+      read (u, *, iostat=ios) id, nodes(1:nn)
       if (ios /= 0) exit
-      if (g >= 1 .and. g <= nsec) counts(g) = counts(g) + 1_int32
+      g = g + 1_int32
     end do
     close (u)
+
+    if (g /= sum(counts(1:nsec))) then
+      call fail(errors, 'elset[].element_count',                                              &
+                'the element counts add up to '//itoa(int(sum(counts(1:nsec))))//             &
+                ' but '//prefix//'.ele holds '//itoa(int(g))//' elements')
+      return
+    end if
 
     if (allocated(ctx%nelgroup)) deallocate (ctx%nelgroup)
     if (allocated(ctx%group_matno)) deallocate (ctx%group_matno)
