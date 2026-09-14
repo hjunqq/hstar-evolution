@@ -128,7 +128,7 @@ PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""; TARGET=solver
 SRC_GIVEN=0; ALLOW_EXTERNAL_OUT=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        release|trace|debug|strict|sanitize|asan) PROFILE="$1";;
+        release|trace|debug|strict|sanitize|asan|initzero) PROFILE="$1";;
         problem-types) TARGET=problem-types;;
         runtime) TARGET=runtime;;
         runtime-bridge) TARGET=runtime-bridge;;
@@ -137,7 +137,7 @@ while [ $# -gt 0 ]; do
         solver-adapter) TARGET=solver-adapter;;
         --profile)
             case "$2" in
-                release|trace|debug|strict|sanitize|asan) PROFILE="$2";;
+                release|trace|debug|strict|sanitize|asan|initzero) PROFILE="$2";;
                 *) echo "build.sh: unknown profile: $2" >&2; exit 2;;
             esac
             shift;;
@@ -174,6 +174,13 @@ case "$PROFILE" in
     strict)   FFLAGS=(-O0 -g -traceback -check bounds,pointers -init=snan,arrays -fpe0);;
     sanitize) FFLAGS=(-O0 -g -traceback -check bounds,pointers,uninit -init=snan,arrays -fpe0);;
     asan)     FFLAGS=(-O1 -g -fsanitize=address);;
+    # initzero: the DIFFERENCING instrument for "does this path read uninitialised local
+    # storage?". `strict` cannot answer it on a plasticity deck -- train05b_slope_srm
+    # divides by zero inside fwds_euler (Residu.f90:2879) in NORMAL operation, so -fpe0
+    # traps on the legacy path before any comparison can start. Zero-filling instead of
+    # trapping keeps both paths running and makes uninitialised locals deterministic, so a
+    # difference that survives is a difference in the model, not in the garbage.
+    initzero) FFLAGS=(-O2 -init=zero,arrays);;
 esac
 LDFLAGS=(-qopenmp "-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
          "-L$HSTAR_IOMP_LIBDIR" -liomp5 -lpthread -lm -ldl

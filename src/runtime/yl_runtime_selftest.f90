@@ -279,6 +279,7 @@ contains
     call builder_step_set_controls(b, sb, ct, loc, errors)
 
     call opt_set(ld%gravity%recompute_every, 1_int32)
+    call opt_set(ld%strength_reduction, 0_int32)   ! no strength reduction
     call opt_set(ld%gravity%magnitude, 9.81_real64)
     if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
     allocate (ld%gravity%direction(2)); ld%gravity%direction = [0.0_real64, -1.0_real64]

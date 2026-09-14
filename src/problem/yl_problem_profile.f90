@@ -364,11 +364,11 @@ capability_item_t('G6', 'analysis.step_count', 'steps', 'size',                 
                       field='ntlink', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                          &
                       message='pinned guard: value 0 keeps control flow on static_2d path '//   &
                               '(docs/m2/state-field-map.toml, control.glb.ntlink)'),                                &
-    capability_item_t(rule_id='A-GLB', condition='mat_curve-nonzero',                                               &
-                      item='glb.mat_curve', object_path='control.glb.mat_curve',                                    &
-                      field='mat_curve', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                       &
-                      message='pinned guard: value 0 keeps control flow on static_2d path '//   &
-                              '(docs/m2/state-field-map.toml, control.glb.mat_curve)'),                             &
+    ! `mat_curve-nonzero` was REMOVED on 2026-09-14: mat_curve is not a pinned guard, it
+    ! NAMES the amplitude that drives strength reduction (Stiff.f90:5779 under
+    ! type_load == 'MAT_DE'). It is carried to ProblemState.steps[0].load.strength_reduction
+    ! and committed. What it needs is a RANGE check against the amplitudes the deck
+    ! declares, which belongs where that collection is known -- see V27 in the pipeline.
     capability_item_t(rule_id='A-GLB', condition='meshc-nonzero',                                                   &
                       item='glb.meshc', object_path='control.glb.meshc',                                            &
                       field='meshc', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &

@@ -2188,6 +2188,24 @@ snapshot_file = "control.json"
 note = "CORRECTED 2026-09-09 (M4-01 L2-c design review): the earlier text claimed this field is 0 on both cases. It is 1 on both. Both golden decks carry NSMAT=1 (1.glb, the record labelled `NMASS NSMAT NHMAT NQMAT NLDFL KGMAT NSWKW UWCPL NGRAV nflow ECWPIPE`, field 2), the frozen model_ready baseline records values=1 for both cases, and it is read at Global.f90:815. The description of what the field IS was right: Fem.f90:15499 `IF (NSMAT.EQ.0 .OR. (istep==inc_step .AND. IITER.EQ.1)) KSMAT=1` is the stiffness-reform cadence. But the wrong value inverted the control-flow conclusion, exactly as the stab_matde defect did: with NSMAT=0 the disjunction is TRUE unconditionally and the stiffness is reformed every time, whereas at the actual NSMAT=1 it is reformed only on the first iteration of inc_step. Other material_class_counts items are unused switches."
 
 [[field]]
+id = "steps0.load.strength_reduction"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.mat_curve"
+source = ["GLB.global_data.sizes_and_switches"]
+consumers = ["STIFF_U"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.strength_reduction"
+index_by = "component"
+compare = { rule = "ignore", reason = "strength-reduction curve index; the static_2d slice has no MAT_DE step, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "strength-reduction curve index; the static_2d slice has no MAT_DE step, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The material domain accepts on final numerical equivalence instead"
+note = "mat_curve indexes tcurves(:): with type_load == 'MAT_DE', Stiff.f90:5779 scales sigma0 and tand(frict)/tand(dilan) by that curve's dfact, so the curve is the reduction schedule. 0 on both static cases, 2 on train05b_slope_srm."
+
+[[field]]
 id = "steps0.load.gravity.enabled"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.NGRAV"

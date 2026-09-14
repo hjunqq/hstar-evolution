@@ -283,3 +283,46 @@ mask 覆盖前一条并把两条都留在 `prescrib` 里，作者在输出里看
 并补上**另一半断言**——「完全相同的重复必须被接受」：一条只会 fire 的规则，
 不能说明它 admit 什么；没有这条，收窄与删除无法区分。
 原反例恰好是「完全相同的重复」，收窄后它**变绿却什么都不再断言**，已改为取值不同。
+
+### 6.5 `mat_curve` 能力已接入，但**等价性尚未达成**
+
+`mat_curve` 不是开关，是**索引**：`type_load == 'MAT_DE'` 时，
+`Stiff.f90:5779` 取 `tcurves(mat_curve)%dfact` 去缩放 `sigma0` 与 `tand(frict)/tand(dilan)`——
+**那条曲线就是强度折减的进度表**。本 deck 的 `.loa` 有两条曲线：
+第 1 条 (0,1)→(1,1) 驱动重力，第 2 条 (0,1)→(1,**0.5**) 就是折减曲线。
+
+已落地：`ProblemState.steps[0].load.strength_reduction`（off-face 映射行）、
+适配器承载、commit 写回 `mat_curve`、**V27**（非零值必须指向已声明的 amplitude——
+legacy 用它直接索引 `tcurves(:)` 且**从不检查**）。原「pinned guard」方言行已删除:
+它拒绝一切非零值，而真正需要的是**范围检查**。
+
+**适配器现在接受这个 deck 并跑完(rc=0)，但与 legacy 路径不等价**，如实记录：
+
+```
+FAIL  blocks=600 values=541200 mismatches=104135 max|d|=6.544e+07
+  first mismatch: DISPLACEMENT step=0.75 node=4 comp=1
+                  reference=-0.22071836 actual=-0.22071835
+```
+
+**前 74 个 step 逐位相同**，从第 75 步开始出现最后一位有效数字的差异并迅速放大
+（这是个跑到破坏的算例，塑性路径对扰动极敏感）。
+
+### 6.6 已经**排除**的原因（每条都是测出来的）
+
+| 假设 | 测法 | 结论 |
+|---|---|---|
+| 非确定性（线程等） | 两条路径各跑两遍 | **排除**：各自逐字节相同 |
+| model_ready 状态不同 | `yl_state_diff`，3 个检查点 | **排除**：`mismatch=0 compared=160`，唯一差异是 section 键（deck 把组名写成 `'  1'`，适配器给 `1`）——标签 |
+| 幅值曲线搬运有误 | 直接看两边 dump 的 `amplitudes.*` | **排除**：含第 2 条折减曲线在内逐位相同 |
+| 读到未初始化的局部存储 | 新增 `initzero` profile（`-init=zero,arrays`）两条路径同跑 | **排除**：差异仍在（且提前到 step 0.48） |
+
+**顺带测到一件必须记下的事**：`strict`（`-init=snan -fpe0`）**在这个 deck 上不能用作差分工具**——
+**legacy 路径自己**就在 `fwds_euler`（`Residu.f90:2879`）触发 floating divide by zero。
+塑性积分器在正常运行中就依赖 IEEE 非停止算术，release build 把结果吸收掉了。
+这也是新增 `initzero` profile 的原因：不陷入陷阱、但让未初始化局部变量确定化。
+
+**尚未排除**：commit 未复现的、不在观测面上的某个值，且只在塑性充分发展后才被读到。
+下一步的工具是**更晚的检查点**或对已提交状态做二分，而不是继续猜。
+
+**结论边界**：本能力**未达成**。`mat_curve` 链路成立且被 V27 守住，
+但 `train05b_slope_srm` 的严格等价**没有**达成，非零 `PLASTICSTRAIN` 的判据也**不能**据此宣称。

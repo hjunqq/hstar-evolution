@@ -419,6 +419,7 @@ contains
     call validate_set_keys(state, errors)             ! V24
     call validate_elset_members(state, errors)        ! V25
     call validate_sections_populated(state, errors)   ! V26
+    call validate_strength_reduction(state, errors)   ! V27
     call validate_declared(state, declared, errors)   ! V21 V22
   end subroutine validate_problem
 
@@ -981,6 +982,40 @@ contains
                  actual='0 elements', expected='at least 1 element')
     end do
   end subroutine validate_sections_populated
+
+  ! V27. The strength-reduction curve must be one the deck declares.
+  !
+  ! legacy's `mat_curve` is a bare index into tcurves(:) and nothing checks it: with
+  ! type_load == 'MAT_DE', Stiff.f90:5779 reads tcurves(mat_curve)%dfact directly, so an
+  ! out-of-range index reads past the array and scales the cohesion by whatever it finds.
+  ! That is the exact shape V4/V5/V25 exist for on the other reference fields, and it is
+  ! the check the removed `mat_curve-nonzero` capability row was standing in for -- badly,
+  ! since it refused every non-zero value rather than the wrong ones.
+  !
+  ! 0 is "no strength reduction" and always legal; a non-zero value must address
+  ! amplitudes[]. The rule does NOT require load_mode == 'MAT_DE': naming a curve that does
+  ! not exist is a defect whether or not the analysis would have read it.
+  subroutine validate_strength_reduction(state, errors)
+    type(problem_state_t), intent(in) :: state
+    type(problem_errors_t), intent(inout) :: errors
+
+    integer(int32) :: k
+    integer :: n
+    logical :: found
+
+    if (.not. allocated(state%steps)) return
+    call opt_get(state%steps(1)%load%strength_reduction, k, found)
+    if (.not. found) return           ! requiredness is V1's, not this rule's
+    if (k == 0_int32) return
+    n = 0
+    if (allocated(state%amplitudes)) n = size(state%amplitudes)
+    if (int(k) >= 1 .and. int(k) <= n) return
+    call raise(errors, PE_DANGLING_REF, PE_STAGE_VALIDATE, 'V27', 'steps[1].load', &
+               field='strength_reduction', &
+               message='the strength-reduction curve must be one of the '//itoa(n)// &
+               ' declared amplitudes; legacy indexes tcurves(:) with it unchecked', &
+               actual=itoa(int(k)), expected='0 (none) or 1..'//itoa(n))
+  end subroutine validate_strength_reduction
 
   ! V24. A boundary record's set ordinal is a KEY: finalize turns the distinct ordinals
   ! of a step into that step's node sets, positionally. So the ordinals must be exactly

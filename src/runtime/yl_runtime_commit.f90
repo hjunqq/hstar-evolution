@@ -102,6 +102,7 @@ module yl_runtime_commit
                         element_lib, group_of_elements, group_of_dvide_ipoin,                   &
                         interpolation_group, unode_elements,                                    &
                         probn, outplot, type_problem, type_solver, type_load, type_ABC,         &
+                        mat_curve,                                                              &
                         type_nl, nonsym, NGRAV, nmats, nblks, uinitial,                         &
                         gid_u, gid_s, gid_ms, gid_f, gid_rot, gid_v, gid_a, gid_T, gid_P,       &
                         gid_Pv, gid_ep, gid_Y, gid_FC, gid_Ns, gid_Ss, gid_Mxy, gid_bem,        &
@@ -544,6 +545,7 @@ contains
     character(len=20) :: s_outplot
     character(len=50) :: s_type_problem, s_type_solver, s_type_load, s_type_abc
     integer(ink) :: s_type_nl, s_nonsym, s_ngrav, s_nmats, s_nblks, s_nfixsets
+    integer(ink) :: s_mat_curve
     integer(ink) :: s_gid_u, s_gid_s, s_gid_ms, s_gid_f, s_gid_rot, s_gid_v, s_gid_a
     integer(ink) :: s_gid_t, s_gid_p, s_gid_pv, s_gid_ep, s_gid_y, s_gid_fc, s_gid_ns
     integer(ink) :: s_gid_ss, s_gid_mxy, s_gid_bem, s_gid_wh, s_gid_wv, s_gid_bcs
@@ -1243,6 +1245,7 @@ contains
     ! states: there is no integer sentinel for a character(20), so for those the detection
     ! of a missing write is the bridge test's trim() comparison.
     s_type_nl = STAGE_POISON_I;   s_nonsym = STAGE_POISON_I;   s_ngrav = STAGE_POISON_I
+    s_mat_curve = STAGE_POISON_I
     s_nmats = STAGE_POISON_I;     s_nblks = STAGE_POISON_I;    s_nfixsets = STAGE_POISON_I
     s_gravy = STAGE_POISON_R
     s_probn = '';  s_outplot = '';  s_type_problem = '';  s_type_solver = ''
@@ -1256,6 +1259,10 @@ contains
     s_type_abc = opt_text_or(problem%interactions%absorbing%type)
     s_type_nl = int(opt_or(problem%steps(1)%controls%nonlinear_type), ink)
     s_ngrav = int(opt_or(problem%steps(1)%load%gravity%recompute_every), ink)
+    ! 0, not the poison, when there is no strength reduction: `mat_curve = 0` is legacy's
+    ! own "no curve" and is what both static decks carry. opt_or would give 0 anyway; the
+    ! line is explicit because the field is absent on every deck but one.
+    s_mat_curve = int(opt_or(problem%steps(1)%load%strength_reduction), ink)
     s_gravy = real(opt_or_real(problem%steps(1)%load%gravity%magnitude), irk)
 
     ! nonsym IS INVERTED, and the map says so: solver.symmetric is a logical, the legacy
@@ -1401,7 +1408,7 @@ contains
     ! nothing here that can fail.
     probn = s_probn;  outplot = s_outplot
     type_problem = s_type_problem;  type_solver = s_type_solver
-    type_load = s_type_load;  type_ABC = s_type_abc
+    type_load = s_type_load;  type_ABC = s_type_abc;  mat_curve = s_mat_curve
     type_nl = s_type_nl;  nonsym = s_nonsym;  NGRAV = s_ngrav
     nmats = s_nmats;  nblks = s_nblks;  nfixsets = s_nfixsets;  gravy = s_gravy
     gid_u = s_gid_u;  gid_s = s_gid_s;  gid_ms = s_gid_ms;  gid_f = s_gid_f
@@ -2050,11 +2057,13 @@ contains
         .not. opt_is_set(problem%steps(1)%output%format) .or.                                 &
         .not. opt_is_set(problem%steps(1)%controls%nonlinear_type) .or.                       &
         .not. opt_is_set(problem%steps(1)%load%gravity%recompute_every) .or.                          &
-        .not. opt_is_set(problem%steps(1)%load%gravity%magnitude)) then
+        .not. opt_is_set(problem%steps(1)%load%gravity%magnitude) .or.                        &
+        .not. opt_is_set(problem%steps(1)%load%strength_reduction)) then
       call fail(errors, 'an unset top-level control this commit reads (case.name, '//         &
                 'solver.linear, solver.symmetric, interactions.absorbing.type, '//            &
                 'steps[0].procedure, .load_mode, .output.format, '//                          &
-                '.controls.nonlinear_type, .load.gravity.enabled or .magnitude)')
+                '.controls.nonlinear_type, .load.gravity.recompute_every, .magnitude '//      &
+                'or .load.strength_reduction)')
       return
     end if
     ! The 20 GiD switches, named individually for the same reason they are staged

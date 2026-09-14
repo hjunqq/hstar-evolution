@@ -762,6 +762,13 @@ contains
     call expect_rule('V26 a section owns no element', 'V26', PE_INVALID_INPUT, &
                      'sections', 'elset', d)
 
+    ! -- V27, a strength-reduction curve the deck never declares. legacy indexes
+    !    tcurves(:) with this value and never checks it (Stiff.f90:5779).
+    call good_draft(d)
+    call opt_set(d%steps(1)%load%strength_reduction, 9_int32)
+    call expect_rule('V27 strength-reduction curve out of range', 'V27', PE_DANGLING_REF, &
+                     'steps[1].load', 'strength_reduction', d)
+
     ! -- V21 fans out to eight declared counts through one raise site. The node
     !    count is covered in 2b; here are the other seven.
     call good_draft(d)
@@ -2164,6 +2171,7 @@ contains
 
     ! .loa body force: g 9.81, direction (0, -1), curve 1 for the one group.
     call opt_set(ld%gravity%recompute_every, 1_int32)
+    call opt_set(ld%strength_reduction, 0_int32)   ! no strength reduction
     call opt_set(ld%gravity%magnitude, 9.81_real64)
     allocate (ld%gravity%direction(2))
     ld%gravity%direction = [0.0_real64, -1.0_real64]

@@ -134,6 +134,9 @@ contains
     ! opposite of the "off" it was meant to say. The map layer overwrites it per deck;
     ! 1 is the static decks' value and the only one a single-step analysis can observe.
     call opt_set(l%gravity%recompute_every, 1_int32)
+    ! legacy `mat_curve` = 0: no strength reduction. Not a physical choice being hidden --
+    ! it is the absence of one, and the deck that HAS strength reduction names the curve.
+    call opt_set(l%strength_reduction, 0_int32)
   end subroutine default_load
 
   !> Every GiD switch off; `enable_output_field` turns on what the author asked for.

@@ -98,9 +98,6 @@ program yl_adapter_dialect_test
     call run_case('A-GLB', 'ntlink-nonzero', 'glb', 2, &
                   '  289  289  256  2  1  1  1  GIDR  0.0  0  0  0  0  0  99999', &
                   'W')
-    call run_case('A-GLB', 'mat_curve-nonzero', 'glb', 2, &
-                  '  289  289  256  2  1  1  0  GIDR  0.0  1  0  0  0  0  99999', &
-                  'W')
     call run_case('A-GLB', 'meshc-nonzero', 'glb', 2, &
                   '  289  289  256  2  1  1  0  GIDR  0.0  0  1  0  0  0  99999', &
                   'W')

@@ -328,9 +328,11 @@ contains
     if (ntlink /= 0_int32) then
       call reject_pinned(errors, loc, 'ntlink-nonzero', ntlink); return
     end if
-    if (mat_curve /= 0_int32) then
-      call reject_pinned(errors, loc, 'mat_curve-nonzero', mat_curve); return
-    end if
+    ! mat_curve is NOT a pinned guard any more: it names the amplitude that drives strength
+    ! reduction (Stiff.f90:5779, under type_load == 'MAT_DE'). Carried, and range-checked
+    ! against the amplitudes the deck actually declares -- that check lives in the pipeline
+    ! (V27), where the amplitude collection is known; here the .loa has not been read yet.
+    call opt_set(parts%load%strength_reduction, mat_curve)
     if (meshc /= 0_int32) then
       call reject_pinned(errors, loc, 'meshc-nonzero', meshc); return
     end if

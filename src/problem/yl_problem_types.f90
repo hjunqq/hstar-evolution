@@ -268,6 +268,12 @@ module yl_problem_types
 
   type, public :: load_t
     type(gravity_t) :: gravity
+    !> legacy `mat_curve`: WHICH amplitude drives strength reduction. Only meaningful when
+    !> `load_mode` is 'MAT_DE', where Stiff.f90:5779 takes that curve's current factor and
+    !> scales the cohesion and tan(friction) / tan(dilation) by it -- so the curve IS the
+    !> reduction schedule. An amplitude id, 1-based, like every other amplitude reference;
+    !> unset means no strength reduction, which is what `mat_curve = 0` says.
+    type(opt_int) :: strength_reduction   !@off-face: steps0.load.strength_reduction
   end type load_t
 
   ! Output request selectors, not results: each is an integer request level, so a
