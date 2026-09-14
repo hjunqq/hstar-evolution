@@ -221,8 +221,17 @@ module yl_problem_profile
   ! Text values are the canonical upper-case spellings produced by normalize rule
   ! N1, so the gate compares canonical against canonical and never case-folds here.
   type(capability_item_t), parameter :: GATE_ROWS(*)      = [                                        &
-    capability_item_t('G1', 'element.type', 'sections[]', 'element',                                &
-                      PROFILE_KIND_TEXT, 0_int32, 'Q4', .false.),                                   &
+    ! `element.type` (sections[].element = legacy group%name) was REMOVED on 2026-09-14.
+    ! It whitelisted a LABEL: legacy assigns group%name to a local at Global.f90:1272 and
+    ! overwrites it with group%sptype seven lines later -- both marked `!why` by legacy's
+    ! own author -- and dispatches on `index`. train05b_slope_srm labels a 4-node Q4 group
+    ! "B8" and legacy solves it without noticing; the row refused a deck over its spelling.
+    !
+    ! The real check is the row below: element_kind IS group%index, and it is also what the
+    ! adapter derives the node count from (yl_adapter_model.f90:1060), so a wrong kind is a
+    ! visible failure rather than a guessed node count. On the modern path `element` is the
+    ! AUTHOR's statement of the element type and is whitelisted in the authoring key table,
+    ! which is where a statement by the author belongs.
     capability_item_t('G1', 'element.kind_code', 'sections[]', 'element_kind',                      &
                       PROFILE_KIND_INT, 5_int32, '', .false.),                                      &
     capability_item_t('G1', 'element.class', 'sections[]', 'class',                                 &

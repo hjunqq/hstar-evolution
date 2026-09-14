@@ -869,25 +869,22 @@ contains
     ! precise, cannot tell two rows of the same rule apart. Each row therefore
     ! gets its own draft, mutating exactly the one field that row reads.
 
-    ! G1 row 1 of 4 -- the element type name.
-    call good_draft(d)
-    call opt_set(d%sections(1)%element, 'Q8')
-    call expect_rule('G1  unsupported element type', 'G1', PE_UNSUPPORTED, &
-                     'sections', 'element', d)
-
-    ! G1 row 2 of 4 -- the element kind code.
+    ! G1 row 1 of 3 -- the element kind code. There used to be a row above this one on
+    ! sections[].element (legacy group%name); it was removed on 2026-09-14 because it
+    ! whitelisted a label legacy overwrites before use. The kind code is the real dispatch,
+    ! and it is what the node count is derived from.
     call good_draft(d)
     call opt_set(d%sections(1)%element_kind, 9_int32)
     call expect_rule('G1  unsupported element kind code', 'G1', PE_UNSUPPORTED, &
                      'sections', 'element_kind', d)
 
-    ! G1 row 3 of 4 -- the element class. BM is a beam, not a continuum.
+    ! G1 row 2 of 3 -- the element class. BM is a beam, not a continuum.
     call good_draft(d)
     call opt_set(d%sections(1)%class, 'BM')
     call expect_rule('G1  unsupported element class', 'G1', PE_UNSUPPORTED, &
                      'sections', 'class', d)
 
-    ! G1 row 4 of 4 -- the field set. P adds pore pressure to displacement.
+    ! G1 row 3 of 3 -- the field set. P adds pore pressure to displacement.
     call good_draft(d)
     call opt_set(d%sections(1)%fields, 'P')
     call expect_rule('G1  unsupported field set', 'G1', PE_UNSUPPORTED, &
