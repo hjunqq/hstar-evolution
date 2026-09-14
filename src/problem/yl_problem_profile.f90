@@ -238,29 +238,26 @@ module yl_problem_profile
     capability_item_t('G3', 'material.kind', 'materials[]', 'kind',                                 &
                       PROFILE_KIND_TEXT, 0_int32, 'MECHANICAL', .false.),                           &
     capability_item_t('G3', 'material.model', 'materials[]', 'model',                               &
-                      PROFILE_KIND_TEXT, 0_int32, 'ELASTIC_ISOTROPIC', .false.),                    &
+                      PROFILE_KIND_TEXT, 0_int32, 'ELASTIC_ISOTROPIC|CLASSICALEP', .false.),        &
     capability_item_t('G4', 'solver.linear', 'solver', 'linear',                                    &
                       PROFILE_KIND_TEXT, 0_int32, 'PROFILE', .false.),                              &
     capability_item_t('G4', 'solver.symmetric', 'solver', 'symmetric',                              &
                       PROFILE_KIND_LOGICAL, 0_int32, '', .true.),                                   &
     capability_item_t('G5', 'load.gravity_enabled', 'steps[].load.gravity', 'enabled',              &
                       PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
-    ! READ THIS BEFORE RAISING THE SECTION COUNT.
-    ! This row is load-bearing beyond the gate. finalize derives one element set
-    ! per section, and a draft with two sections whose elements ALL belong to the
-    ! first would make the second set an allocated zero-length set -- an explicit
-    ! empty where nothing was authored, which ADR-0002 forbids. No validation rule
-    ! guards that case, on purpose: while this row reads 1 the case is
-    ! unreachable, and a rule that nothing can fail is the defect this milestone
-    ! exists to remove. The net today is the pipeline's INV-EMPTY-DERIVED
-    ! assertion, which reports the situation as an INTERNAL fault -- the wrong
-    ! class for what is really an input defect, and acceptable only because it
-    ! cannot fire. So raising this above 1 REQUIRES adding that validation rule
-    ! first, with a counter-example draft; otherwise the first two-section model a
-    ! user writes is answered with an internal fault.
-    capability_item_t('G6', 'model.section_count', 'sections', 'size',                              &
-                      PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
-    capability_item_t('G6', 'analysis.step_count', 'steps', 'size',                                 &
+    ! The section-count limit was REMOVED on 2026-09-14, and the note it replaces said
+    ! exactly what had to happen first: "RAISING THE SUPPORTED SECTION COUNT ABOVE ONE
+    ! REQUIRES A RULE FOR THAT CASE". That rule is V26 (a section no element belongs to),
+    ! with its own counter-example. Before it, a draft whose two sections shared all their
+    ! elements would have reached finalize and been answered with INV-EMPTY-DERIVED -- an
+    ! INTERNAL fault at exit class 6 for what is plainly an input defect.
+    !
+    ! Removed rather than raised to some number, because after V26 there is no remaining
+    ! reason for a limit: the adapter reads per-group records in a loop, ProblemState holds
+    ! sections as an array, and the thickness resolution is keyed by material. A row
+    ! asserting a bound nobody can justify is worse than no row -- it reads as a measured
+    ! limit. INV-EMPTY-DERIVED stays where it is, as the assertion that V26 did its job.
+capability_item_t('G6', 'analysis.step_count', 'steps', 'size',                                 &
                       PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
     capability_item_t('G6', 'analysis.increments', 'steps[].controls', 'increments',                &
                       PROFILE_KIND_INT, 1_int32, '', .false.)]

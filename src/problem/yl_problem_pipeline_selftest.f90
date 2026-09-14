@@ -737,6 +737,31 @@ contains
     call expect_rule('V25 element set names a missing element', 'V25', PE_DANGLING_REF, &
                      'mesh.elsets', 'elements[2]', d)
 
+    ! -- V26, a section no element belongs to. It takes a SECOND section to build,
+    !    because with one section every element necessarily points at it -- which is
+    !    exactly why this case was unreachable while the capability row pinned the
+    !    section count to 1, and why the rule had to exist before that row could move.
+    !    V26 runs during validate, so the capability gate never sees this draft.
+    !    The draft has to leave mesh.elsets UNSET, which is the shape the adapter path
+    !    actually produces: there, element%elset comes from the .ele group column and the
+    !    element sets are DERIVED by finalize. Authoring two sets instead would trip N4
+    !    (one set per section) or N6 (an element in two sets) before this rule is reached.
+    call good_draft(d)
+    block
+      type(section_t), allocatable :: two(:)
+      integer :: ei
+      allocate (two(2))
+      two(1) = d%sections(1)
+      two(2) = d%sections(1)
+      call move_alloc(two, d%sections)
+      if (allocated(d%mesh%elsets)) deallocate (d%mesh%elsets)
+      do ei = 1, size(d%mesh%elements)
+        call opt_set(d%mesh%elements(ei)%elset, 1_int32)
+      end do
+    end block
+    call expect_rule('V26 a section owns no element', 'V26', PE_INVALID_INPUT, &
+                     'sections', 'elset', d)
+
     ! -- V21 fans out to eight declared counts through one raise site. The node
     !    count is covered in 2b; here are the other seven.
     call good_draft(d)
@@ -954,13 +979,15 @@ contains
     call expect_rule('G6  unsupported step count', 'G6', PE_UNSUPPORTED, &
                      'steps', 'size', d)
 
-    ! G6 -- no sections at all. This one is the gate's job alone: no validate
-    ! rule requires the section collection to exist, so before the gate counted
-    ! an absent collection as zero, such a draft passed the gate and failed much
-    ! later in finalize with a confusing missing-elset finding.
+    ! No sections at all. This WAS the capability gate's job -- it counted an absent
+    ! collection as zero and called it an unsupported section count -- and it moved to
+    ! V26 when the section-count row was removed. Removing the row turned exactly this
+    ! counter-example red, which is how the hole was found rather than reasoned about.
+    ! The code changed with the reporter: an absent section list is a missing input,
+    ! not an unsupported one.
     call good_draft(d)
     deallocate (d%sections)
-    call expect_rule('G6  no sections at all', 'G6', PE_UNSUPPORTED, &
+    call expect_rule('V26 no sections at all', 'V26', PE_MISSING_FIELD, &
                      'sections', 'size', d)
 
     ! Mechanical, not a one-time audit: every declared row must have been hit by

@@ -256,8 +256,13 @@ contains
 
     write (output_unit, '(a)') '-- table shape'
 
-    call check('T1  the gate partition still has the M3-02 row count',                        &
-               capability_count() == 15)
+    ! 14, not M3-02's 15: model.section_count was removed on 2026-09-14 once V26 made a
+    ! section-count limit unjustifiable. The number is pinned deliberately -- a row
+    ! appearing or vanishing unnoticed is exactly what this assertion is for -- so it
+    ! moves only together with the reason, never to make a build go green.
+    call check('T1  the gate partition still has the M3-02 row count, less the removed '//   &
+               'section-count row',                                                           &
+               capability_count() == 14)
     call check('T2  every table row is accounted for by exactly one partition',               &
                capability_count() + dialect_count() == CAPABILITY_ROW_TOTAL)
     call check('T3  the adapter declares at least one dialect', dialect_count() > 0)

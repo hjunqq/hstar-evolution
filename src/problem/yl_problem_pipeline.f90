@@ -418,6 +418,7 @@ contains
     call validate_semantics(state, errors)            ! V16 V17 V19
     call validate_set_keys(state, errors)             ! V24
     call validate_elset_members(state, errors)        ! V25
+    call validate_sections_populated(state, errors)   ! V26
     call validate_declared(state, declared, errors)   ! V21 V22
   end subroutine validate_problem
 
@@ -906,6 +907,81 @@ contains
     end do
   end subroutine validate_elset_members
 
+  ! V26. Every section must own at least one element.
+  !
+  ! This rule is the precondition for raising the supported section count above one, and
+  ! the note beside that capability row says so: finalize derives ONE element set per
+  ! section, so two sections whose elements all point at the first make the second an
+  ! allocated zero-length set -- an explicitly empty collection the author never declared,
+  ! which ADR-0002 forbids. Until now the only net was INV-EMPTY-DERIVED in
+  ! derive_element_sets, which reports an INTERNAL fault at exit class 6. That is the wrong
+  ! class for what is plainly an input defect, and it was acceptable only while the
+  ! capability row made the case unreachable.
+  !
+  ! So the rule reports it where it belongs: as an INVALID_INPUT during validate, naming
+  ! the section that has nothing in it. INV-EMPTY-DERIVED stays exactly where it is -- it
+  ! is the assertion that this rule did its job, and an assertion that can still fire is
+  ! worth more than one that has been deleted because it "cannot".
+  subroutine validate_sections_populated(state, errors)
+    type(problem_state_t), intent(in) :: state
+    type(problem_errors_t), intent(inout) :: errors
+
+    integer :: j, i, n
+    integer(int32) :: s
+    logical :: found
+
+    ! Second condition: a model with NO sections. This used to be the capability gate's
+    ! job -- it counted an absent collection as zero and rejected it as an unsupported
+    ! section count -- and removing that row would have dropped the check entirely, since
+    ! no validate rule requires the collection to exist. Measured, not assumed: taking the
+    ! row out turned exactly one counter-example red, which is how this landed here. The
+    ! code changes with the reporter: an absent section list is a missing input, not an
+    ! unsupported one.
+    if (.not. allocated(state%sections)) then
+      call raise(errors, PE_MISSING_FIELD, PE_STAGE_VALIDATE, 'V26', 'sections', &
+                 field='size', &
+                 message='a model needs at least one section; nothing would give an '// &
+                 'element its formulation or its material', &
+                 actual='no sections', expected='at least 1 section')
+      return
+    end if
+    if (size(state%sections) == 0) then
+      call raise(errors, PE_MISSING_FIELD, PE_STAGE_VALIDATE, 'V26', 'sections', &
+                 field='size', &
+                 message='the section collection is present but empty', &
+                 actual='0 sections', expected='at least 1 section')
+      return
+    end if
+    if (.not. allocated(state%mesh%elements)) return
+
+    ! Only on a well-formed map. An element whose elset ordinal is OUT OF RANGE also
+    ! leaves some section empty, but the defect there is the dangling reference, not the
+    ! empty section -- F-IM2 names it at finalize with the right code (DANGLING_REF) and
+    ! the right object (the element, not the section). Reporting "this section is empty"
+    ! for that draft would name a consequence and hide the cause. Found by the F-IM2
+    ! counter-example, which this rule shadowed on its first run.
+    do i = 1, size(state%mesh%elements)
+      call opt_get(state%mesh%elements(i)%elset, s, found)
+      if (.not. found) cycle
+      if (int(s) < 1 .or. int(s) > size(state%sections)) return
+    end do
+
+    do j = 1, size(state%sections)
+      n = 0
+      do i = 1, size(state%mesh%elements)
+        call opt_get(state%mesh%elements(i)%elset, s, found)
+        if (.not. found) cycle        ! an unset elset is V1's finding, not this rule's
+        if (int(s) == j) n = n + 1
+      end do
+      if (n > 0) cycle
+      call raise(errors, PE_INVALID_INPUT, PE_STAGE_VALIDATE, 'V26', 'sections', &
+                 idx=int(j, int32), field='elset', &
+                 message='no element references this section, so finalize would derive an '// &
+                 'empty element set for it', &
+                 actual='0 elements', expected='at least 1 element')
+    end do
+  end subroutine validate_sections_populated
+
   ! V24. A boundary record's set ordinal is a KEY: finalize turns the distinct ordinals
   ! of a step into that step's node sets, positionally. So the ordinals must be exactly
   ! 1..n with no gap and no value below 1.
@@ -1092,26 +1168,11 @@ contains
     ! The section count is checked UNCONDITIONALLY, unset included. No validate rule
     ! requires sections to exist at all -- V1, V8 and the arity rules are each guarded
     ! by `allocated(sections)` and say nothing when the collection is absent -- so this
-    ! is the only place a model with no sections can be caught, and skipping the check
-    ! when the collection is unset let such a draft through the gate and fail later in
-    ! finalize with a confusing missing-elset finding instead. For a CAPABILITY count
-    ! the three states collapse honestly: unset and explicitly empty both mean "not the
-    ! one section this build supports", and the gate reports the count it found.
-    !
-    ! The step count keeps its guard because V20 already rejects an unset or empty step
-    ! list during validate, so the gate is never reached with one.
-    ! DEPENDENCY, and it has an expiry date. This row is the only thing preventing a
-    ! draft with two sections whose elements all point at the first, which would make
-    ! finalize derive an EMPTY element set for the second and manufacture the
-    ! explicitly-empty state the author never declared. That is an accident of the
-    ! supported combination, not a rule that intends to stop it.
-    !
-    ! RAISING THE SUPPORTED SECTION COUNT ABOVE ONE REQUIRES A RULE FOR THAT CASE.
-    ! Until then INV-EMPTY-DERIVED in derive_element_sets is the net, and it will fire
-    ! as an internal fault rather than as the input defect it really is. The capability
-    ! row itself lives in yl_problem_profile.f90; this note sits at the gate that reads
-    ! it because that is the code which depends on the limit.
-    call gate_size(errors, 'model.section_count', 'sections', size_or_zero_sections(state))
+    ! The step count keeps its capability row because a second step is a genuinely
+    ! different analysis shape. The SECTION count no longer has one: see the note in
+    ! yl_problem_profile.f90 where that row was removed, and V26, which is what made the
+    ! removal safe. "A model with no sections at all" is not a capability question either
+    ! -- it is a missing collection, which V8 reports during validate with the right code.
     if (allocated(state%steps)) then
       call gate_size(errors, 'analysis.step_count', 'steps', size(state%steps))
     end if
@@ -1158,9 +1219,32 @@ contains
     if (.not. found) return
     if (.not. opt_is_set(value)) return
     got = opt_value_or(value, '')
-    if (got == want) return
+    ! `want` may name SEVERAL admissible values, separated by `|`, which is the same
+    ! spelling the authoring key table uses for a whitelist. A row with one value reads
+    ! and behaves exactly as before; the material domain is what first needed two.
+    if (text_in_set(got, want)) return
     call gate_reject(errors, item, object, field, '"'//got//'"', '"'//want//'"', idx)
   end subroutine gate_text
+
+  !> Is `got` one of the `|`-separated alternatives in `set`? Exact match per alternative,
+  !> no trimming beyond the separator's own: a capability value with a stray space is a
+  !> defect in the table, and silently accepting it would hide that.
+  pure logical function text_in_set(got, set) result(yes)
+    character(len=*), intent(in) :: got, set
+    integer :: from, bar
+    yes = .true.
+    from = 1
+    do
+      bar = index(set(from:), '|')
+      if (bar == 0) then
+        if (set(from:) == got) return
+        exit
+      end if
+      if (set(from:from + bar - 2) == got) return
+      from = from + bar
+    end do
+    yes = .false.
+  end function text_in_set
 
   subroutine gate_logical(errors, item, object, field, value, idx)
     type(problem_errors_t), intent(inout) :: errors
