@@ -128,7 +128,7 @@ PROFILE=release; SRC="$ROOT/legacy/yl"; OUT=""; LABEL=""; TARGET=solver
 SRC_GIVEN=0; ALLOW_EXTERNAL_OUT=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        release|trace|debug|strict|sanitize|asan|initzero) PROFILE="$1";;
+        release|trace|debug|strict|sanitize|asan|initzero|nofma|fpprecise) PROFILE="$1";;
         problem-types) TARGET=problem-types;;
         runtime) TARGET=runtime;;
         runtime-bridge) TARGET=runtime-bridge;;
@@ -137,7 +137,7 @@ while [ $# -gt 0 ]; do
         solver-adapter) TARGET=solver-adapter;;
         --profile)
             case "$2" in
-                release|trace|debug|strict|sanitize|asan|initzero) PROFILE="$2";;
+                release|trace|debug|strict|sanitize|asan|initzero|nofma|fpprecise) PROFILE="$2";;
                 *) echo "build.sh: unknown profile: $2" >&2; exit 2;;
             esac
             shift;;
@@ -181,6 +181,14 @@ case "$PROFILE" in
     # trapping keeps both paths running and makes uninitialised locals deterministic, so a
     # difference that survives is a difference in the model, not in the garbage.
     initzero) FFLAGS=(-O2 -init=zero,arrays);;
+    # nofma: the CONTRACTION control. See docs/m6 -- the adapter and legacy compute the
+    # same shape-gradient formula in the same loop order, one accumulating into a scalar
+    # and one into an array element, which lets the compiler contract a*b+c into an FMA in
+    # one and not the other. Turning contraction off is how that hypothesis is tested.
+    nofma)    FFLAGS=(-O2 -fma-);;
+    # fpprecise: forbids reassociation AND reciprocal substitution, not just contraction.
+    # `nofma` left the divergence bit-for-bit unchanged, so contraction was not it.
+    fpprecise) FFLAGS=(-O2 -fp-model=precise);;
 esac
 LDFLAGS=(-qopenmp "-L$MKL_LIB" -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
          "-L$HSTAR_IOMP_LIBDIR" -liomp5 -lpthread -lm -ldl
@@ -517,7 +525,7 @@ DIAG_SRCS=(src/diagnostics/yl_diag_registry.f90 src/diagnostics/yl_diag.f90)
 # it reads and before Fem.f90 (M2-02).
 SRCS=(Vartype.f90 Array.f90 Elements.f90 gidpost.F90 vsl_gauss_module.f90
       Global.f90 Material.f90 meshfine.f90 Load.f90 Prescrib.f90 Solver.f90
-      Output.f90 Temper.f90 Stiff.f90 Residu.f90 Level.f90)
+      Output.f90 Temper.f90 Stiff.f90 Residu.f90 Level.f90 ${HSTAR_EXTRA_LEGACY:-})
 MAIN_SRCS=(Fem.f90)
 
 # --- target: authoring (M5) ---------------------------------------------------
