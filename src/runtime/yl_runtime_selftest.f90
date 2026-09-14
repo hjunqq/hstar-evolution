@@ -538,6 +538,7 @@ contains
     call check_b2()
     call check_b3()
     call check_b6()
+    call check_b6_identical_ok()
     call check_b8()
   end subroutine section_b_neg
 
@@ -683,11 +684,21 @@ contains
     type(problem_state_t) :: bad
     type(boundary_t), allocatable :: grown(:)
     integer :: n
+    ! The duplicate must carry a DIFFERENT VALUE. B6 was narrowed on 2026-09-14: an
+    ! identical duplicate is what real decks write where two constrained edges meet
+    ! (train05b_slope_srm prescribes ux = 0 on two overlapping node sets), legacy runs it
+    ! without ambiguity, and refusing it refused the deck. What stays refused is the case
+    ! that is genuinely ambiguous -- two records, one pair, two different values, and
+    ! which one wins is a property of record order.
+    !
+    ! This fixture USED to append an identical copy, and narrowing the rule turned it
+    ! green while asserting nothing. Changing the value is what keeps it a counter-example.
     bad = good1
     n = size(bad%steps(1)%boundary)
     allocate (grown(n + 1))
     grown(1:n) = bad%steps(1)%boundary
     grown(n + 1) = bad%steps(1)%boundary(1)
+    call opt_set(grown(n + 1)%value, 1.0e-3_real64)
     call move_alloc(grown, bad%steps(1)%boundary)
     ! The duplicate is appended as record n+1 = 5 (good1 derives 4 records); the loop
     ! finds the earlier match at j=1 when it reaches i=5, so the finding names record 5,
@@ -695,6 +706,48 @@ contains
     call expect_build_rule('B6', 'B6/duplicate-prescribed-pair', PE_DUPLICATE_REF, &
                            'steps[].boundary[]', 'dof', bad, expected_idx=5)
   end subroutine check_b6
+
+  !> The other half of the narrowing, and the reason it is its own check: a rule that only
+  !> ever fires says nothing about what it ADMITS. Without this, narrowing B6 would be
+  !> indistinguishable from deleting it.
+  subroutine check_b6_identical_ok()
+    type(problem_state_t) :: ok
+    type(boundary_t), allocatable :: grown(:)
+    type(runtime_state_t), allocatable :: rt
+    type(manifest_t), allocatable :: man
+    type(problem_errors_t) :: errors
+    type(problem_error_t) :: finding
+    type(opt_int) :: ndofix
+    integer :: n, i
+    logical :: found
+
+    ok = good1
+    n = size(ok%steps(1)%boundary)
+    allocate (grown(n + 1))
+    grown(1:n) = ok%steps(1)%boundary
+    grown(n + 1) = ok%steps(1)%boundary(1)          ! value included: an EXACT duplicate
+    call move_alloc(grown, ok%steps(1)%boundary)
+
+    call opt_set(ndofix, int(n + 1, int32))
+    call build_runtime(ok, CONTRACT_TAG, rt, man, errors, declared_ndofix=ndofix)
+    ! Not "no findings at all" -- any other rule firing would be a different defect and
+    ! should be reported as such. The claim is specifically that B6 stays silent.
+    found = .false.
+    do i = 1, errors%count()
+      call errors%get(i, finding, found)
+      if (.not. found) cycle
+      if (opt_value_or(finding%rule_id, '') == 'B6/duplicate-prescribed-pair') exit
+      found = .false.
+    end do
+    call check('B6 an IDENTICAL duplicate is admitted', .not. found)
+    call check('B6 identical duplicate -- the build still succeeded', &
+               .not. errors%any() .and. allocated(rt))
+    if (errors%any()) then
+      do i = 1, errors%count()
+        write (output_unit, '(a)') '      '//errors%render(i)
+      end do
+    end if
+  end subroutine check_b6_identical_ok
 
   ! B8 -- the deck's declared prescribed-record count disagreeing with the derived
   ! one. No mutation of the problem itself: `good1` derives exactly 4 records, and

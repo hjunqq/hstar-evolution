@@ -53,7 +53,7 @@ module yl_runtime_build
 
   use iso_fortran_env, only: int32, int64, real64
   use yl_problem_optional, only: opt_int, opt_real, opt_get, opt_set, opt_is_set
-  use yl_problem_types, only: problem_state_t
+  use yl_problem_types, only: problem_state_t, boundary_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_DANGLING_REF, PE_DUPLICATE_REF, PE_COUNT_MISMATCH,            &
                                PE_INVALID_INPUT, PE_INTERNAL, PE_EXIT_INTERNAL
@@ -853,17 +853,29 @@ contains
         return
       end if
 
-      ! B6 -- the same (node, component) prescribed twice. Legacy would write the second
-      ! record's mask over the first and keep both in `prescrib`, so the deck would run
-      ! with a constraint the author cannot see in the output.
+      ! B6 -- the same (node, component) prescribed twice WITH A DIFFERENT VALUE. Legacy
+      ! writes the second record's mask over the first and keeps both in `prescrib`, so a
+      ! deck like that runs with a constraint the author cannot see in the output, and
+      ! which of the two wins is a property of record order rather than of the model.
+      !
+      ! When the two values AGREE there is nothing invisible: the constraint is exactly
+      ! what both records say, and keeping both records is what reproduces legacy (ndofix
+      ! counts records, duplicates included). Real decks do this at the corner where two
+      ! constrained edges meet -- train05b_slope_srm prescribes ux = 0 on two overlapping
+      ! node sets -- and refusing them refused a deck legacy runs without ambiguity.
+      ! Narrowed 2026-09-14; the rule still fires, on the case that is genuinely ambiguous.
       do j = 1, i - 1
         if (int_or_zero(problem%steps(1)%boundary(j)%nset) == node_id .and.                     &
             int_or_zero(problem%steps(1)%boundary(j)%dof) == comp) then
-                    call raise_row(errors, 'B6', 'duplicate-prescribed-pair',                              &
-                          'this (node, component) pair is already prescribed by an earlier record',&
-                          actual='node '//itoa(int(node_id))//' component '//itoa(int(comp)),    &
-                          idx=i)
-          return
+          if (prescribed_value(problem%steps(1)%boundary(j)) /=                                 &
+              prescribed_value(problem%steps(1)%boundary(i))) then
+                      call raise_row(errors, 'B6', 'duplicate-prescribed-pair',                            &
+                            'this (node, component) pair is already prescribed by an earlier '// &
+                            'record with a different value',                                     &
+                            actual='node '//itoa(int(node_id))//' component '//itoa(int(comp)),  &
+                            idx=i)
+            return
+          end if
         end if
       end do
 
@@ -2230,6 +2242,15 @@ contains
     end do
     dense = all(hit)
   end function is_dense_permutation
+
+  !> A boundary record's prescribed value, with absence read as 0.0 -- the same reading
+  !> the commit gives it. Only ever compared against another record's, never published.
+  pure real(real64) function prescribed_value(b) result(v)
+    type(boundary_t), intent(in) :: b
+    logical :: found
+    call opt_get(b%value, v, found)
+    if (.not. found) v = 0.0_real64
+  end function prescribed_value
 
   pure integer(int32) function int_or_zero(x) result(v)
     type(opt_int), intent(in) :: x

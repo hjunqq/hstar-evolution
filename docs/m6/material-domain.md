@@ -231,3 +231,55 @@ ADR-0002 禁止；而且**没有校验规则守它**（因为这行读 1 时该�
 - `elset[].mesh_group` 改为 `elset[].element_count`：前者是**死键**（声明了、从没被读过），
   而单元归属在 legacy 里本来就是**按文件顺序、每组取 nelgroup 个**；
   `.ele` 是否带组号列因算例而异（`lame_cylinder` 带、`mini_mc` 不带），legacy 两种都忽略。
+
+## 6. 下一个能力：`train05b_slope_srm`（强度折减，真正屈服）
+
+deck：451 节点 / 400 个 Q4 / 1 材料 1 组，`CLASSICALEP` + `MC`，`PROFILE`，
+`TYPE_LOAD = MAT_DE`（强度折减），100 个 step × 最多 40 次迭代。
+legacy 跑出 **600 个结果块**（6 种 × 100 step）、**541 200 个数值、非有限值 0 个**。
+`PLASTICSTRAIN` 非零值 11 803 个——**这才是塑性真正发生的算例**。
+
+### 6.1 能力差值：逐轮放开测出来的，不是读代码估的
+
+fail-fast 管线一次只报一层，所以按 M6.4 学到的做法**逐轮放开、重测**，直到通过：
+
+| 轮 | 报出 | 性质 |
+|---|---|---|
+| 1 | `control.glb.mat_curve = 2` | **真能力**：材料属性曲线 |
+| 2 | `sections[1].element = "B8"`；`steps[1].load.gravity.enabled = 999` | 见 §6.2、§6.3 |
+| 3 | `build_runtime B6` 重复 (node, dof) | **已修**，见 §6.4 |
+| 4 | *（无）* rc=0 | — |
+
+**第 4 轮是关键**：`TYPE_LOAD = MAT_DE`、`nstep = 100`、`miter = 40`、`ditime = 0.01`、
+以及 `.glb` 里那一排 `999` 计数，**全部早已被接受**，不需要任何改动。
+把放开后的 probe deck 交给两条路径对拍，**600 个块的每一个有限值 `max|d| = 0.000e+00`**
+（probe 改过物理，两条路径同样发散，非有限值两边一致出现——这只说明适配器忠实，
+不说明 probe 的结果有意义）。
+
+所以真实差值只有**三项**，其中两项不是「新能力」而是**旧判据错了**。
+
+### 6.2 `sections[].element` 的白名单管错了字段
+
+deck 的组头第一个词是 `B8`，而 `INDEX = 5`（= Q4），`.ele` 每单元 4 个节点——
+**这是个标签写错的 deck**，legacy 毫不在意：`group%name` 在 `Global.f90:1272` 赋给一个局部量，
+**七行之后就被 `group%sptype` 覆盖**（两处都被 legacy 作者自己标了 `!why`），
+真正的分派靠 `index`。能力表里已经有 `element.kind_code`（`index == 5`）这条**正确**的判据；
+`element.name` 这条约束的是一个**被覆盖前从未使用的标签**。
+
+### 6.3 `NGRAV` 是频率，不是开关
+
+映射表把 `global_var.NGRAV` 记作 `steps0.load.gravity.enabled`，note 写「1 on both cases」。
+`Fem.f90:15582` 里 NGRAV 决定的是**每隔几个 step 重算一次重力**：
+`NGRAV == 0` 或首个 step 的首次迭代 → `KGRAV = 1`，否则每 NGRAV 个 step 一次。
+**静力切片分不出频率和开关，因为它只有一个 step。** 这与 §1.2 的 `elastic_isotropic`
+命名、M5 的 `materials[].name` 是同一类：**单点观测下两种语义恰好同值。**
+
+### 6.4 B6 已按实测收窄（本轮唯一已落地的改动）
+
+`build_runtime` 原先拒绝任何重复的 (node, component)。理由写的是「legacy 会用后一条的
+mask 覆盖前一条并把两条都留在 `prescrib` 里，作者在输出里看不见」——**这在两条记录取值
+不同时成立**。取值相同时没有任何东西被藏起来，而真实 deck 正是在**两条受约束边相交的角点**
+上这么写的（本 deck 在两个重叠节点集上都写 `ux = 0`）。已收窄为「重复且**取值不同**才拒绝」，
+并补上**另一半断言**——「完全相同的重复必须被接受」：一条只会 fire 的规则，
+不能说明它 admit 什么；没有这条，收窄与删除无法区分。
+原反例恰好是「完全相同的重复」，收窄后它**变绿却什么都不再断言**，已改为取值不同。
