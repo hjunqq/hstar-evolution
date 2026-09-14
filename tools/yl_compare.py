@@ -10,6 +10,13 @@ of tolerances. Tolerances default to exact equality (atol = rtol = 0), which is 
 B02 repeat criterion; per-block tolerances can be supplied via --tolerances
 (tolerances.toml section given by --section, e.g. cross_path).
 
+Reporting is split on purpose. The REPORT FILE (-o) keeps everything, block by block and
+value by value, so a result can be audited afterwards. STDOUT keeps only what a person can
+act on: how many blocks, how many values, how many mismatched, the largest difference, and
+-- only when something failed -- where the first mismatch is. A strength-reduction deck
+runs to 600 blocks and half a million values, and a per-block line each would bury the one
+fact that matters.
+
 Usage:
   yl_compare.py REFERENCE.json ACTUAL.json [--tolerances tolerances.toml --section cross_path]
                 [-o report.json]
@@ -32,7 +39,9 @@ def load(path: Path) -> dict:
 
 
 def compare(ref: dict, act: dict, tol: dict[str, dict[str, float]]) -> dict:
-    report = {"structure_ok": True, "problems": [], "blocks": [], "passed": False}
+    report = {"structure_ok": True, "problems": [], "blocks": [], "passed": False,
+              "n_blocks": 0, "n_values": 0, "n_mismatch": 0, "max_abs_diff": 0.0,
+              "first_mismatch": None}
     rb, ab = ref["blocks"], act["blocks"]
     if [b["name"] for b in rb] != [b["name"] for b in ab]:
         report["structure_ok"] = False
@@ -40,8 +49,10 @@ def compare(ref: dict, act: dict, tol: dict[str, dict[str, float]]) -> dict:
         return report
     for r, a in zip(rb, ab):
         name = r["name"]
-        entry = {"name": name, "ok": True, "n_values": 0, "max_abs_diff": 0.0, "max_abs_diff_at": None,
-                 "max_norm_diff": 0.0, "max_norm_diff_at": None, "atol": 0.0, "rtol": 0.0}
+        entry = {"name": name, "ok": True, "n_values": 0, "n_mismatch": 0,
+                 "max_abs_diff": 0.0, "max_abs_diff_at": None,
+                 "max_norm_diff": 0.0, "max_norm_diff_at": None, "atol": 0.0, "rtol": 0.0,
+                 "step": r.get("step")}
         for key in ("result_type", "ncomp", "components"):
             if r.get(key) != a.get(key):
                 report["structure_ok"] = False
@@ -65,7 +76,8 @@ def compare(ref: dict, act: dict, tol: dict[str, dict[str, float]]) -> dict:
                 entry["n_values"] += 1
                 if not (math.isfinite(x) and math.isfinite(y)):
                     entry["ok"] = False
-                    report["problems"].append(f"{name}: non-finite at node {nid} comp {k + 1}")
+                    entry["n_mismatch"] += 1
+                    note(report, entry, nid, k + 1, x, y, "non-finite")
                     continue
                 d = abs(y - x)
                 if d > entry["max_abs_diff"]:
@@ -76,13 +88,29 @@ def compare(ref: dict, act: dict, tol: dict[str, dict[str, float]]) -> dict:
                     entry["max_norm_diff"], entry["max_norm_diff_at"] = norm, {"node": int(nid), "component": k + 1}
                 if d > bound:
                     entry["ok"] = False
-        if not entry["ok"] and not any(p.startswith(name) for p in report["problems"]):
-            report["problems"].append(f"{name}: tolerance exceeded, max |diff| {entry['max_abs_diff']:.6e} at {entry['max_abs_diff_at']}")
+                    entry["n_mismatch"] += 1
+                    note(report, entry, nid, k + 1, x, y, "outside tolerance")
         if entry["max_norm_diff"] == math.inf:
             entry["max_norm_diff"] = "inf"
         report["blocks"].append(entry)
+    for b in report["blocks"]:
+        report["n_values"] += b["n_values"]
+        report["n_mismatch"] += b["n_mismatch"]
+        if isinstance(b["max_abs_diff"], float):
+            report["max_abs_diff"] = max(report["max_abs_diff"], b["max_abs_diff"])
+    report["n_blocks"] = len(report["blocks"])
     report["passed"] = report["structure_ok"] and all(b["ok"] for b in report["blocks"]) and bool(report["blocks"])
     return report
+
+
+def note(report: dict, entry: dict, nid: str, comp: int, x: float, y: float, why: str) -> None:
+    """Record WHERE the first mismatch is, once. Blocks are walked in file order and nodes
+    in id order, so `first` is deterministic and not merely "whichever we noticed"."""
+    if report["first_mismatch"] is not None:
+        return
+    report["first_mismatch"] = {"block": entry["name"], "step": entry.get("step"),
+                                "node": int(nid), "component": comp,
+                                "reference": x, "actual": y, "why": why}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -103,9 +131,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.output:
         Path(args.output).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     verdict = "PASS" if report["passed"] else "FAIL"
-    print(f"{verdict}  " + "; ".join(f"{b['name']}: n={b['n_values']} max|d|={b['max_abs_diff']:.3e}" for b in report["blocks"]))
-    for p in report["problems"]:
-        print("  " + p)
+    print(f"{verdict}  blocks={report['n_blocks']} values={report['n_values']} "
+          f"mismatches={report['n_mismatch']} max|d|={report['max_abs_diff']:.3e}")
+    if not report["passed"]:
+        for p in report["problems"][:5]:
+            print("  structure: " + p)
+        if len(report["problems"]) > 5:
+            print(f"  structure: +{len(report['problems']) - 5} more (see the report file)")
+        fm = report["first_mismatch"]
+        if fm:
+            where = f"{fm['block']}"
+            if fm.get("step") is not None:
+                where += f" step={fm['step']}"
+            print(f"  first mismatch: {where} node={fm['node']} comp={fm['component']} "
+                  f"{fm['why']}: reference={fm['reference']!r} actual={fm['actual']!r}")
+        if not args.output:
+            print("  (re-run with -o report.json for the full per-block detail)")
     return 0 if report["passed"] else 1
 
 
