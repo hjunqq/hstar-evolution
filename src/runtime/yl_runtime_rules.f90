@@ -216,6 +216,11 @@ module yl_runtime_rules
   !       Add node 5 at (2,0), put it alone in an nset, point boundary(1) at it.
   !   B2  a boundary dof beyond the formulation's dof count. Set boundary(1)%dof = 3
   !       against the two dofs of PE.
+  !   B3  LEFT THIS TABLE on 2026-09-15. Clockwise connectivity gives det J < 0, but the
+  !       Jacobian is legacy's arithmetic and is no longer computed here -- it moved to
+  !       yl_runtime_geometry, called from the commit layer. The refusal moved with it and
+  !       its counter-example now lives in the bridge suite, which links legacy. The
+  !       original note is kept below because the CONDITION has not changed:
   !   B3  clockwise connectivity, det J < 0 at all four Gauss points. Connectivity
   !       1,4,3,2 instead of 1,2,3,4.
   !   B6  the same (node, dof) prescribed twice in one step. Duplicate boundary(1) as
@@ -254,9 +259,6 @@ module yl_runtime_rules
                  '', '', '', BR_REACHABLE, ''),                                                                                   &
     build_rule_t('B2', BR_CHECK, 'dof-out-of-range',                                                                              &
                  'steps[].boundary[]', 'dof', PE_INVALID_INPUT,                                                                   &
-                 '', '', '', BR_REACHABLE, ''),                                                                                   &
-    build_rule_t('B3', BR_CHECK, 'negative-jacobian',                                                                             &
-                 'mesh.elements[]', 'nodes', PE_INVALID_INPUT,                                                                    &
                  '', '', '', BR_REACHABLE, ''),                                                                                   &
     build_rule_t('B6', BR_CHECK, 'duplicate-prescribed-pair',                                                                     &
                  'steps[].boundary[]', 'dof', PE_DUPLICATE_REF,                                                                   &
@@ -339,21 +341,6 @@ module yl_runtime_rules
     build_rule_t('D-TOPOLOGY-UNODE-PATCH-NOD', BR_DERIVE, 'unallocated',                                                          &
                  'runtime.topology.unode', 'patch_nod', '',                                                                       &
                  'runtime.topology.unode_patch_nod', MANIFEST_KIND_DERIVED, MANIFEST_RULE_INDEX_MAP, BR_REACHABLE, ''),           &
-    build_rule_t('D-GAUSS-DJACB', BR_DERIVE, 'built',                                                                             &
-                 'runtime.gauss', 'djacb', '',                                                                                    &
-                 'runtime.gauss.djacb', MANIFEST_KIND_DERIVED, MANIFEST_RULE_GEOMETRY, BR_REACHABLE, ''),                         &
-    build_rule_t('D-GAUSS-GPCOD', BR_DERIVE, 'built',                                                                             &
-                 'runtime.gauss', 'gpcod', '',                                                                                    &
-                 'runtime.gauss.gpcod', MANIFEST_KIND_DERIVED, MANIFEST_RULE_GEOMETRY, BR_REACHABLE, ''),                         &
-    build_rule_t('D-GAUSS-CARTD', BR_DERIVE, 'built',                                                                             &
-                 'runtime.gauss', 'cartd', '',                                                                                    &
-                 'runtime.gauss.cartd', MANIFEST_KIND_DERIVED, MANIFEST_RULE_GEOMETRY, BR_REACHABLE, ''),                         &
-    build_rule_t('D-GAUSS-DJACB-MASS', BR_DERIVE, 'built',                                                                        &
-                 'runtime.gauss', 'djacb_mass', '',                                                                               &
-                 'runtime.gauss.djacb_mass', MANIFEST_KIND_DERIVED, MANIFEST_RULE_GEOMETRY, BR_REACHABLE, ''),                    &
-    build_rule_t('D-GAUSS-GPCOD-MASS', BR_DERIVE, 'built',                                                                        &
-                 'runtime.gauss', 'gpcod_mass', '',                                                                               &
-                 'runtime.gauss.gpcod_mass', MANIFEST_KIND_DERIVED, MANIFEST_RULE_GEOMETRY, BR_REACHABLE, ''),                    &
     build_rule_t('D-ELEMENT-ELCOD-F', BR_DERIVE, 'built',                                                                         &
                  'runtime.element', 'elcod_f', '',                                                                                &
                  'runtime.element.elcod_f', MANIFEST_KIND_DERIVED, MANIFEST_RULE_INDEX_MAP, BR_REACHABLE, ''),                    &

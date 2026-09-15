@@ -47,9 +47,11 @@
 !   `grep -a` / `sed -n`; they are latin-1, not UTF-8.
 !
 ! The numbers are LEGACY'S, called, not transcribed (changed 2026-09-15)
-!   `q4_stiffness_quadrature`, `q4_mass_quadrature` and `q4_shape_functions` used to hold
-!   their own copy of the abscissae, the weights and the bilinear shape functions,
-!   transcribed from Elements.f90 line by line. They now call `getgauss` and `shfunc`.
+!   This module used to carry `q4_stiffness_quadrature`, `q4_mass_quadrature` and
+!   `q4_shape_functions`, each holding its own copy of the abscissae, the weights and the
+!   bilinear shape functions, transcribed from Elements.f90 line by line. They are gone.
+!   The geometry that needed them calls legacy's `getgauss` and `shfunc` directly, from
+!   yl_runtime_geometry, which is the one module allowed to know they exist.
 !
 !   The transcriptions were correct, and that was the problem. On 2026-09-14 the same
 !   pattern one level down -- `evaluate_rule` mirroring `jacob` -- produced cartd values
@@ -76,14 +78,6 @@
 module yl_runtime_contract
 
   use iso_fortran_env, only: int32, real64
-  ! The quadrature rule and the shape functions are LEGACY'S, called rather than mirrored.
-  ! They used to be transcribed here from Elements.f90, line by line, and that is exactly
-  ! the shape of duplicate that produced the 2026-09-14 `jacob` divergence: two
-  ! same-meaning implementations that -O2 compiled differently, drifting 1-2 ULP and
-  ! seeding a failure 74 printed steps later. A transcription cannot be kept in step by
-  ! review, so there is one implementation of each and it is the one the solver uses.
-  use variable_types, only: irk, ink
-  use elements, only: getgauss, shfunc
 
   implicit none
   private
@@ -91,7 +85,6 @@ module yl_runtime_contract
   public :: runtime_contract_entry_t
   public :: contract_entry_count, contract_entry, contract_find, contract_entry_text
   public :: contract_expect_int, contract_expect_real, contract_expect_text, contract_expect_logical
-  public :: q4_stiffness_quadrature, q4_mass_quadrature, q4_shape_functions
 
   integer, parameter :: LEN_CLASS = 1
   integer, parameter :: LEN_KEY = 48
@@ -162,8 +155,8 @@ module yl_runtime_contract
   ! G -- Q4 quadrature and shape functions
   !   Scalars only. The point coordinates and weights themselves are not table rows,
   !   because reproducing the legacy arithmetic bit-for-bit matters more than storing a
-  !   transcribed decimal: they come from `q4_stiffness_quadrature` and
-  !   `q4_mass_quadrature`, and the table records the family, the abscissa expression and
+  !   transcribed decimal: legacy's `getgauss` produces them, and the table records the
+  !   family, the abscissa expression and
   !   the literal precision that make those accessors auditable.
   ! Implied-shape (F2008): the entry count is never written down, so it cannot be
   ! transcribed wrongly. `contract_entry_count()` is the one place it is computed.
@@ -406,82 +399,9 @@ contains
 
   ! --- Q4 quadrature ----------------------------------------------------------
 
-  !> The 2x2 Gauss-Legendre rule the static_2d path integrates with.
-  !> `points(dimension, point)` in natural coordinates, `weights(point)`.
-  !>
-  !> Transcribed from Elements.f90:2352-2363, including its arithmetic and its point
-  !> ORDER, which runs counter-clockwise (--, +-, ++, -+) and is not the lexicographic
-  !> order a fresh implementation would pick. The order is load-bearing: every per-point
-  !> array in the frozen baseline is indexed by it.
-  !>
-  !> `abscissa` is evaluated in DEFAULT REAL and then widened, because that is what the
-  !> legacy statement does under a build with no `-r8`. See the module header; do not
-  !> "fix" this to real64 without also refreshing the frozen baseline.
-  subroutine q4_stiffness_quadrature(points, weights)
-    real(real64), intent(out) :: points(2, 4)
-    real(real64), intent(out) :: weights(4)
-    real(irk) :: p(2, 4), w(4)
 
-    call getgauss(int(2, ink), int(4, ink), int(4, ink), p, w)
-    points = real(p, real64)
-    weights = real(w, real64)
-  end subroutine q4_stiffness_quadrature
-
-  !> The 4x4 Gauss-Legendre rule Q4 declares as its second ('mass') rule.
-  !> `points(dimension, point)`, `weights(point)`.
-  !>
-  !> Transcribed from Elements.f90:2380-2401, tables LK16 / LI16 at :2213 included. The
-  !> static_2d path never CONSUMES this rule -- `order_intrules=(/1,1/)` at :377 routes
-  !> every consumer to the stiffness rule -- but read_element still evaluates its geometry
-  !> for every element, so build_runtime must produce it to hold a complete RuntimeState.
-  !> Its two map rows are snapshot-excluded, which is why their ledger state is DEFINED
-  !> and not compared.
-  !>
-  !> The four abscissae and weights carry no kind suffix in the legacy source
-  !> (:2381-2382, :2396-2397), so they too are default-real values widened to double.
-  subroutine q4_mass_quadrature(points, weights)
-    real(real64), intent(out) :: points(2, 16)
-    real(real64), intent(out) :: weights(16)
-    real(irk) :: p(2, 16), w(16)
-
-    ! ngaus = 16 selects the 4x4 rule; nnode = 4 selects the quadrilateral family.
-    call getgauss(int(2, ink), int(4, ink), int(16, ink), p, w)
-    points = real(p, real64)
-    weights = real(w, real64)
-  end subroutine q4_mass_quadrature
 
   ! --- Q4 shape functions -----------------------------------------------------
 
-  !> Bilinear Q4 shape functions and their NATURAL-coordinate gradients at (s, t).
-  !> `values(local node)`, `gradients(dimension, local node)`.
-  !>
-  !> Transcribed statement for statement from Elements.f90:2924-2935, with the auxiliary
-  !> `st = s*t` from :2613. The expressions are kept in their legacy algebraic form --
-  !> `(1-t-s+st)*0.25` rather than the factored `0.25*(1-s)*(1-t)` -- because the two are
-  !> equal in exact arithmetic and NOT bitwise equal in floating point, and the frozen
-  !> Gauss baseline is compared at rtol 1e-12.
-  !>
-  !> `s` and `t` are real64, so the unsuffixed literals promote and this routine, unlike
-  !> the quadrature ones above, involves no default-real evaluation.
-  !>
-  !> Node order follows those expressions: node 1 at (-1,-1), 2 at (+1,-1), 3 at (+1,+1),
-  !> 4 at (-1,+1) -- counter-clockwise. build_runtime must reject an element whose
-  !> connectivity makes the Jacobian determinant non-positive under this order rather than
-  !> silently integrating a folded element.
-  !>
-  !> This routine deliberately does NOT compute the physical gradients or the Jacobian:
-  !> those need the element coordinates, which belong to build_runtime, not to a contract.
-  subroutine q4_shape_functions(s, t, values, gradients)
-    real(real64), intent(in) :: s, t
-    real(real64), intent(out) :: values(4)
-    real(real64), intent(out) :: gradients(2, 4)
-    real(irk) :: sh(4), dv(2, 4)
-
-    ! `u` is the third parent coordinate and is unused in 2-D; legacy passes it too
-    ! (Elements.f90:2067). 0 is what its callers on this path hold.
-    call shfunc(int(2, ink), int(4, ink), real(s, irk), real(t, irk), 0.0_irk, sh, dv)
-    values = real(sh, real64)
-    gradients = real(dv, real64)
-  end subroutine q4_shape_functions
 
 end module yl_runtime_contract

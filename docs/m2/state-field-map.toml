@@ -4049,13 +4049,13 @@ consumers = ["STIFF_U", "gravity", "RESIDU_F"]
 shape = ["ngaus", "nelem"]
 dtype = "f64"
 unit = "1"
-owner = "RuntimeState.gauss.djacb"
+owner = "derived"
 index_by = "mesh.elements[].id"
 compare = { rule = "abs_tol", atol = 1e-14, rtol = 1e-12, basis = "same coordinates and the same Q4 Gauss tables; bitwise exact on a repeat run of the legacy binary, tolerance only against the modern evaluation" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "mesh.sha256"
-note = "egaus(1) only (ikg=1 'stiff' rule, 4 points; Elements.f90:379-380). Stored value is djacb*weigp (Elements.f90:1363: `element(ielem)%egaus(ikg)%djacb(ig)=djacb*weigp`), i.e. the weighted Jacobian determinant, not the bare determinant; the AX branch :1361 is not taken (name='Q4'). egaus(2) is the separate row runtime.gauss.djacb_mass. Physical dimension m^2 is outside the closed unit set; recorded dimensionless."
+note = "Computed by LEGACY (yl_runtime_geometry -> getgauss/shfunc/jacob) inside the commit layer as of 2026-09-15; it was a RuntimeState row until then, which meant the modern side held a second implementation of legacy arithmetic. The dumped value has always been the legacy global, so this row did not change. egaus(1) only (ikg=1 'stiff' rule, 4 points; Elements.f90:379-380). Stored value is djacb*weigp (Elements.f90:1363: `element(ielem)%egaus(ikg)%djacb(ig)=djacb*weigp`), i.e. the weighted Jacobian determinant, not the bare determinant; the AX branch :1361 is not taken (name='Q4'). egaus(2) is the separate row runtime.gauss.djacb_mass. Physical dimension m^2 is outside the closed unit set; recorded dimensionless."
 
 [[field]]
 id = "runtime.gauss.gpcod"
@@ -4067,13 +4067,13 @@ consumers = ["gravity", "OUT_GID_WRITE"]
 shape = ["ndimn", "ngaus", "nelem"]
 dtype = "f64"
 unit = "m"
-owner = "RuntimeState.gauss.gpcod"
+owner = "derived"
 index_by = "mesh.elements[].id"
 compare = { rule = "abs_tol", atol = 1e-14, rtol = 1e-12, basis = "same coordinates and shape functions; bitwise exact on a repeat run" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "mesh.sha256"
-note = "egaus(1) only (ikg=1 'stiff' rule, 4 points). Gauss-point coordinates (Elements.f90:1229-1230 allocation, filled in the ig loop ending :1365). egaus(2) is the separate row runtime.gauss.gpcod_mass."
+note = "Computed by LEGACY (yl_runtime_geometry -> getgauss/shfunc/jacob) inside the commit layer as of 2026-09-15; it was a RuntimeState row until then, which meant the modern side held a second implementation of legacy arithmetic. The dumped value has always been the legacy global, so this row did not change. egaus(1) only (ikg=1 'stiff' rule, 4 points). Gauss-point coordinates (Elements.f90:1229-1230 allocation, filled in the ig loop ending :1365). egaus(2) is the separate row runtime.gauss.gpcod_mass."
 
 [[field]]
 id = "runtime.gauss.cartd"
@@ -4085,13 +4085,13 @@ consumers = ["STIFF_U", "RESIDU_F"]
 shape = ["ndimn", "nnode", "ngaus", "nelem"]
 dtype = "f64"
 unit = "1"
-owner = "RuntimeState.gauss.cartd"
+owner = "derived"
 index_by = "mesh.elements[].id"
 compare = { rule = "abs_tol", atol = 1e-14, rtol = 1e-12, basis = "same coordinates and shape-function derivatives; bitwise exact on a repeat run" }
 emit = "generated"
 determinism = "deterministic"
 snapshot_file = "mesh.sha256"
-note = "egaus(1) only: cartd is allocated only for rules whose name is not 'mass' (Elements.f90:1232) and stored at :1359, so egaus(2)%cartd is UNALLOCATED and must not be dereferenced (associated() guard, see M2-01 §6). Physical dimension 1/m outside the closed unit set, recorded dimensionless."
+note = "Computed by LEGACY (yl_runtime_geometry -> getgauss/shfunc/jacob) inside the commit layer as of 2026-09-15; it was a RuntimeState row until then, which meant the modern side held a second implementation of legacy arithmetic. The dumped value has always been the legacy global, so this row did not change. egaus(1) only: cartd is allocated only for rules whose name is not 'mass' (Elements.f90:1232) and stored at :1359, so egaus(2)%cartd is UNALLOCATED and must not be dereferenced (associated() guard, see M2-01 §6). Physical dimension 1/m outside the closed unit set, recorded dimensionless."
 
 [[field]]
 id = "runtime.gauss.djacb_mass"
@@ -4103,13 +4103,13 @@ consumers = ["read_element"]
 shape = ["ngaus_mass", "nelem"]
 dtype = "f64"
 unit = "1"
-owner = "RuntimeState.gauss.djacb_mass"
+owner = "derived"
 index_by = "mesh.elements[].id"
 compare = { rule = "ignore", reason = "egaus(2) 'mass' rule (16 points) is computed by read_element but never consumed on static_2d: q4 order_intrules=(/1,1/) (Elements.f90:377) routes every consumer to egaus(1)" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "mesh.sha256"
-note = "Weighted determinant djacb*weigp of the ikg=2 rule (Elements.f90:1363). Deterministic (same coordinates and Gauss tables as ikg=1) but unobserved; ignored rather than compared so the modern side need not evaluate a rule it does not use."
+note = "Computed by LEGACY (yl_runtime_geometry -> getgauss/shfunc/jacob) inside the commit layer as of 2026-09-15; it was a RuntimeState row until then, which meant the modern side held a second implementation of legacy arithmetic. The dumped value has always been the legacy global, so this row did not change. Weighted determinant djacb*weigp of the ikg=2 rule (Elements.f90:1363). Deterministic (same coordinates and Gauss tables as ikg=1) but unobserved; ignored rather than compared so the modern side need not evaluate a rule it does not use."
 
 [[field]]
 id = "runtime.gauss.gpcod_mass"
@@ -4121,13 +4121,13 @@ consumers = ["read_element"]
 shape = ["ndimn", "ngaus_mass", "nelem"]
 dtype = "f64"
 unit = "m"
-owner = "RuntimeState.gauss.gpcod_mass"
+owner = "derived"
 index_by = "mesh.elements[].id"
 compare = { rule = "ignore", reason = "egaus(2) 'mass' rule (16 points) is computed by read_element but never consumed on static_2d: q4 order_intrules=(/1,1/) (Elements.f90:377) routes every consumer to egaus(1)" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "mesh.sha256"
-note = "Gauss-point coordinates of the ikg=2 rule. egaus(2)%cartd is not allocated (Elements.f90:1232), so no cartd_mass row exists."
+note = "Computed by LEGACY (yl_runtime_geometry -> getgauss/shfunc/jacob) inside the commit layer as of 2026-09-15; it was a RuntimeState row until then, which meant the modern side held a second implementation of legacy arithmetic. The dumped value has always been the legacy global, so this row did not change. Gauss-point coordinates of the ikg=2 rule. egaus(2)%cartd is not allocated (Elements.f90:1232), so no cartd_mass row exists."
 
 [[field]]
 id = "runtime.element.elcod_f"

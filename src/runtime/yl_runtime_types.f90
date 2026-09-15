@@ -286,41 +286,19 @@ module yl_runtime_types
     type(opt_real) :: factor                                  !@map: runtime.amplitudes.dfact
   end type amplitude_state_t
 
-  ! --- gauss ------------------------------------------------------------------
-  ! RuntimeState.gauss (5 mapped rows), one entry per element. Two integration rules per
-  ! element: `stiffness` is the rule the static_2d path integrates with, `mass` is the
-  ! second declared rule whose geometry legacy still evaluates but never consumes here.
+  ! --- gauss: NOT HERE ANY MORE (2026-09-15) ----------------------------------
+  ! RuntimeState carried five Gauss-geometry rows -- the weighted Jacobian, the point
+  ! coordinates and the shape gradients for two integration rules -- computed by
+  ! build_runtime from transcriptions of Elements.f90. That was a second implementation of
+  ! legacy arithmetic living on the modern side, and on 2026-09-14 it drifted 1-2 ULP from
+  ! legacy's and cost a whole investigation (yl_runtime_geometry's header).
+  !
+  ! RuntimeState's job is to say what must EXIST and to carry values across the seam.
+  ! Gauss geometry is neither: it is legacy's algorithm, so it is computed by legacy, in
+  ! yl_runtime_geometry, called from the commit layer, straight into `element%egaus`. The
+  ! observation face is unaffected -- runtime.gauss.* always dumped the LEGACY globals
+  ! (`global_var.element%egaus%djacb` and siblings), never these components.
 
-  !> One integration rule's evaluated geometry for one element.
-  type, public :: integration_rule_t
-    !> Per point: det(J) * weight, already weighted (Elements.f90:1363). Not the bare
-    !> determinant -- the name says so because the value does.
-    real(real64), allocatable :: weighted_jacobian(:)
-    !> (dimension, point), in metres: sum over local nodes of N_i * x_i
-    !> (Elements.f90:1260).
-    real(real64), allocatable :: point_coordinates(:,:)
-    !> (dimension, local node, point): shape-function gradients in physical coordinates.
-    !> Legacy stores this only for a rule whose name is not 'mass' (Elements.f90:1359),
-    !> so on the mass rule it stays UNALLOCATED and its ledger state is ABSENT. It has no
-    !> map row at all for that rule, which is why it carries an `!@unmapped:` marker
-    !> there rather than a missing one.
-    real(real64), allocatable :: shape_gradient(:,:,:)
-  end type integration_rule_t
-
-  type, public :: element_gauss_t
-    !> The 2x2 rule actually integrated on this path.
-    !> weighted_jacobian  !@map: runtime.gauss.djacb
-    !> point_coordinates  !@map: runtime.gauss.gpcod
-    !> shape_gradient     !@map: runtime.gauss.cartd
-    type(integration_rule_t) :: stiffness
-    !> The second declared rule. Deterministic and computed, but snapshot-excluded.
-    !> weighted_jacobian  !@map: runtime.gauss.djacb_mass
-    !> point_coordinates  !@map: runtime.gauss.gpcod_mass
-    !> shape_gradient     !@unmapped: legacy never allocates cartd for the mass rule
-    !>                    (Elements.f90:1232, :1359), so the map has no cartd_mass row
-    !>                    and this component must stay unallocated (ledger ABSENT).
-    type(integration_rule_t) :: mass
-  end type element_gauss_t
 
   ! --- element ----------------------------------------------------------------
   ! RuntimeState.element (5 mapped rows), one entry per element.
@@ -386,7 +364,6 @@ module yl_runtime_types
     type(activation_t) :: activation
     type(increment_t) :: increment
     type(amplitude_state_t), allocatable :: amplitudes(:)
-    type(element_gauss_t), allocatable :: gauss(:)
     type(element_state_t), allocatable :: element(:)
     type(vectors_t) :: vectors
     type(cursor_t) :: cursor
@@ -427,7 +404,6 @@ contains
     is_empty = .not. allocated(runtime%field_status) .and.       &
                .not. allocated(runtime%boundary) .and.           &
                .not. allocated(runtime%amplitudes) .and.         &
-               .not. allocated(runtime%gauss) .and.              &
                .not. allocated(runtime%element) .and.            &
                .not. allocated(runtime%topology%sections) .and.  &
                .not. allocated(runtime%dof%node_variables) .and. &

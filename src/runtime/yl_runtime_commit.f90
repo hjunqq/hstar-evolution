@@ -125,6 +125,8 @@ module yl_runtime_commit
   use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_logical, opt_get, opt_is_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_INTERNAL, PE_EXIT_INTERNAL
+  use yl_runtime_geometry, only: geometry_rule
+  use yl_runtime_contract, only: contract_expect_int
   use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
                               RUNTIME_VALUE_DEFINED, RUNTIME_VALUE_RESERVED,                    &
                               RUNTIME_VALUE_ABSENT
@@ -454,9 +456,9 @@ module yl_runtime_commit
     commit_provenance_t('runtime.topology.unode_ipoin', COMMIT_FROM_RUNTIME, ''),                                               &
     commit_provenance_t('runtime.topology.unode_ne_unode', COMMIT_FROM_RUNTIME, ''),                                            &
     commit_provenance_t('runtime.topology.unode_list', COMMIT_FROM_RUNTIME, ''),                                                &
-    commit_provenance_t('runtime.gauss.djacb', COMMIT_FROM_RUNTIME, ''),                                                        &
-    commit_provenance_t('runtime.gauss.gpcod', COMMIT_FROM_RUNTIME, ''),                                                        &
-    commit_provenance_t('runtime.gauss.cartd', COMMIT_FROM_RUNTIME, ''),                                                        &
+    commit_provenance_t('runtime.gauss.djacb', COMMIT_DERIVED, 'det(J)*weight from the element coordinate gather, via legacy getgauss/jacob'),                                                        &
+    commit_provenance_t('runtime.gauss.gpcod', COMMIT_DERIVED, 'shape functions mapped through the element coordinate gather, via legacy shfunc'),                                                        &
+    commit_provenance_t('runtime.gauss.cartd', COMMIT_DERIVED, 'legacy jacob on the element coordinate gather'),                                                        &
     commit_provenance_t('runtime.vectors.result_zero', COMMIT_FROM_RUNTIME, ''),                                                &
     commit_provenance_t('runtime.vectors.tofor', COMMIT_FROM_RUNTIME, ''),                                                      &
     commit_provenance_t('runtime.vectors.stfor', COMMIT_FROM_RUNTIME, ''),                                                      &
@@ -530,6 +532,12 @@ contains
     integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
     integer(ink), allocatable :: s_average_appear(:), s_tcurvegravity(:)
     type(material_property), allocatable :: s_props(:)
+    ! Gauss geometry scratch: sized for the one element shape this build admits (Q4 in
+    ! 2-D, 4-point stiffness rule and 16-point mass rule), like every other fixed extent
+    ! in this routine.
+    real(real64) :: g_djacb(16), g_gpcod(2, 16), g_cartd(2, 4, 4), g_djmin
+    integer(int32) :: c_i32
+    logical :: c_found
     ! n_materials / n_steps, NOT nmats / nblks. Those two names are use-associated from
     ! global_var, and a local of the same name silently shadows the global: step 5b's
     ! `nmats = s_nmats` assigned the LOCAL and the legacy global kept its old value, with
@@ -632,8 +640,20 @@ contains
     s_ndimn = int(size(runtime%element(1)%field_coordinates, 1), ink)
     nnode = size(runtime%element(1)%field_coordinates, 2)
     nevab = size(runtime%dof%element_variables(1)%values)
-    ngaus = size(runtime%gauss(1)%stiffness%weighted_jacobian)
-    ngaus_mass = size(runtime%gauss(1)%mass%weighted_jacobian)
+    ! The two rule sizes are the CONTRACT's, not a RuntimeState array's extent: the Gauss
+    ! geometry is no longer carried in RuntimeState, so there is nothing here to measure.
+    call contract_expect_int('integration.stiffness.point_count', c_i32, c_found)
+    if (.not. c_found) then
+      call fail(errors, 'the execution contract declares no stiffness Gauss point count')
+      return
+    end if
+    ngaus = int(c_i32, ink)
+    call contract_expect_int('integration.mass.point_count', c_i32, c_found)
+    if (.not. c_found) then
+      call fail(errors, 'the execution contract declares no mass Gauss point count')
+      return
+    end if
+    ngaus_mass = int(c_i32, ink)
     s_ntotv = int(size(runtime%dof%fixed_mask), ink)
     s_ndofix = int(size(runtime%boundary), ink)
     s_ntcurve = int(size(runtime%amplitudes), ink)
@@ -845,6 +865,13 @@ contains
       allocate (s_element(ie)%field(1)%khandmc(1)%fstif(nevab, nevab))   !@existence: element_field_khandmc_fstif
       s_element(ie)%field(1)%khandmc(1)%fstif = 0.0_irk
 
+      ! GAUSS GEOMETRY IS COMPUTED HERE, BY LEGACY, AND IS NOT CARRIED IN RuntimeState.
+      ! It used to be: build_runtime evaluated the quadrature, the shape functions and the
+      ! Jacobian itself and published five rows, and commit copied them across. That made
+      ! the modern side hold a second implementation of legacy arithmetic, which is what
+      ! produced the 2026-09-14 cartd divergence (yl_runtime_geometry's header has the
+      ! story). RuntimeState's job is existence and transport; this is neither, so it moved
+      ! out and `build_runtime` no longer needs the legacy tree to build.
       allocate (s_element(ie)%egaus(2))
       call null_gauss(s_element(ie)%egaus(1))
       call null_gauss(s_element(ie)%egaus(2))
@@ -854,15 +881,29 @@ contains
       s_element(ie)%egaus(1)%djacb = STAGE_POISON_R
       s_element(ie)%egaus(1)%gpcod = STAGE_POISON_R
       s_element(ie)%egaus(1)%cartd = STAGE_POISON_R
-      s_element(ie)%egaus(1)%djacb = real(runtime%gauss(ie)%stiffness%weighted_jacobian, irk)
-      s_element(ie)%egaus(1)%gpcod = real(runtime%gauss(ie)%stiffness%point_coordinates, irk)
-      s_element(ie)%egaus(1)%cartd = real(runtime%gauss(ie)%stiffness%shape_gradient, irk)
+      call geometry_rule(int(s_ndimn), nnode, int(ngaus),                                       &
+                         real(s_element(ie)%field(1)%elcod_f, real64), .true., ie,              &
+                         g_djacb(1:ngaus), g_gpcod(1:s_ndimn, 1:ngaus),                         &
+                         g_cartd(1:s_ndimn, 1:nnode, 1:ngaus), g_djmin)
+      if (g_djmin <= 0.0_real64) then
+        call fail(errors, 'element '//itoa(ie)//' has a non-positive Jacobian determinant '//   &
+                  'at a Gauss point; the connectivity is not counter-clockwise under the '//    &
+                  'contract node order')
+        return
+      end if
+      s_element(ie)%egaus(1)%djacb = real(g_djacb(1:ngaus), irk)
+      s_element(ie)%egaus(1)%gpcod = real(g_gpcod(1:s_ndimn, 1:ngaus), irk)
+      s_element(ie)%egaus(1)%cartd = real(g_cartd(1:s_ndimn, 1:nnode, 1:ngaus), irk)
       allocate (s_element(ie)%egaus(2)%djacb(ngaus_mass))
       allocate (s_element(ie)%egaus(2)%gpcod(s_ndimn, ngaus_mass))
       s_element(ie)%egaus(2)%djacb = STAGE_POISON_R
       s_element(ie)%egaus(2)%gpcod = STAGE_POISON_R
-      s_element(ie)%egaus(2)%djacb = real(runtime%gauss(ie)%mass%weighted_jacobian, irk)
-      s_element(ie)%egaus(2)%gpcod = real(runtime%gauss(ie)%mass%point_coordinates, irk)
+      call geometry_rule(int(s_ndimn), nnode, int(ngaus_mass),                                  &
+                         real(s_element(ie)%field(1)%elcod_f, real64), .false., ie,             &
+                         g_djacb(1:ngaus_mass), g_gpcod(1:s_ndimn, 1:ngaus_mass),               &
+                         g_cartd(1:s_ndimn, 1:nnode, 1:1), g_djmin)
+      s_element(ie)%egaus(2)%djacb = real(g_djacb(1:ngaus_mass), irk)
+      s_element(ie)%egaus(2)%gpcod = real(g_gpcod(1:s_ndimn, 1:ngaus_mass), irk)
       ! egaus(2)%cartd stays null: legacy allocates cartd only for a rule whose name is
       ! not 'mass' (Elements.f90:1232), so an allocated one here would be a shape the
       ! solver never sees and a leak the releaser would have to guess at.
@@ -1833,34 +1874,28 @@ contains
       call fail(errors, 'the runtime dof group is incomplete')
       return
     end if
-    if (.not. allocated(runtime%element) .or. .not. allocated(runtime%gauss) .or.               &
+    if (.not. allocated(runtime%element) .or.                                                   &
         .not. allocated(runtime%boundary) .or. .not. allocated(runtime%amplitudes) .or.         &
         .not. allocated(runtime%topology%sections) .or.                                         &
         .not. allocated(runtime%activation%section_state)) then
       call fail(errors, 'a top-level runtime collection is not allocated')
       return
     end if
-    if (size(runtime%element) < 1 .or. size(runtime%gauss) < 1 .or.                             &
+    if (size(runtime%element) < 1 .or.                                                          &
         size(runtime%activation%section_state) < 1) then
       call fail(errors, 'a top-level runtime collection is empty')
       return
     end if
-    if (.not. allocated(runtime%gauss(1)%stiffness%shape_gradient)) then
-      call fail(errors, 'the stiffness rule carries no shape gradients')
-      return
-    end if
-    ! W1 fix: both checks below used to look only at index 1. That made them spot checks,
-    ! not invariants -- a loop-index bug that only regressed element 2, or section 2, or
-    ! node 2 of some section, would sail through unexamined and get committed blind. Every
-    ! element's mass rule and every node of every section is checked now, and the failure
-    ! names the offending index so a regression is locatable from the message alone.
-    do i = 1, size(runtime%gauss)
-      if (allocated(runtime%gauss(i)%mass%shape_gradient)) then
-        call fail(errors, 'the mass rule carries shape gradients for gauss('//itoa(i)//         &
-                  '), which legacy never allocates for it')
-        return
-      end if
-    end do
+    ! The two shape-gradient checks that stood here -- "the stiffness rule carries them"
+    ! and "the mass rule carries none for any element" -- were assertions about
+    ! RuntimeState's Gauss arrays. Those arrays are gone (2026-09-15): the geometry is
+    ! legacy's and is computed below, straight into `egaus`, so the property they guarded
+    ! is now a property of THIS routine's own staging. It is enforced where it is created:
+    ! egaus(1)%cartd is allocated and filled, egaus(2)%cartd is left null, and null_gauss
+    ! nulls both first so a miss is a null pointer rather than a stale one.
+    ! W1 fix, kept: the section-node check below examines EVERY node of every section, not
+    ! index 1. A loop-index bug that only regressed node 2 of section 2 would otherwise
+    ! sail through and be committed blind.
     if (allocated(runtime%topology%sections)) then
       do i = 1, size(runtime%topology%sections)
         if (.not. allocated(runtime%topology%sections(i)%nodes)) cycle

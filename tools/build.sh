@@ -292,27 +292,18 @@ if [ "$TARGET" = problem-types ] || [ "$TARGET" = runtime ]; then
         # yl_runtime_commit.f90 is deliberately ABSENT: it WRITES the legacy globals, so
         # it belongs to the `runtime-bridge` target and to nothing else. Keeping it out is
         # the mechanical guarantee that no self-test in this binary can write a legacy
-        # global, and that guarantee is unchanged.
+        # global.
         #
-        # WHAT CHANGED ON 2026-09-14, AND IT IS A REAL COST.
-        # This target used to build with NO legacy source at all. It no longer does:
-        # yl_runtime_build.f90 now calls legacy's `jacob` instead of mirroring it, on the
-        # owner's ruling, because two same-meaning implementations drifted by 1 ULP under
-        # -O2 and no amount of review keeps them in step (docs/m6/material-domain.md SS7).
-        # So four legacy modules come in -- variable_types, arrayutil, elements and the
-        # diagnostics they use.
-        #
-        # `jacob` is a PURE COMPUTATION: it reads no global and writes none, so the
-        # guarantee above survives intact. What is lost is build independence, which was
-        # the other half of why the list was short. Whether that trade stands is the
-        # owner's call; this comment exists so the next person sees the cost rather than
-        # a longer list.
-        PT_SRCS=(src/diagnostics/yl_diag_registry.f90
-                 src/diagnostics/yl_diag.f90
-                 legacy/yl/Vartype.f90
-                 legacy/yl/Array.f90
-                 legacy/yl/Elements.f90
-                 "${PT_PROBLEM_SRCS[@]}"
+        # THIS TARGET BUILDS WITH NO LEGACY SOURCE, AND THAT IS AGAIN A REAL PROPERTY.
+        # It stopped being one on 2026-09-14, when build_runtime started calling legacy's
+        # `jacob` -- the right call, because the alternative was its own transcription,
+        # which had just been caught drifting 1-2 ULP. Four legacy modules came in with it
+        # and R31 recorded the cost. On 2026-09-15 the geometry left build_runtime
+        # altogether: it is legacy's arithmetic, so it lives in yl_runtime_geometry and is
+        # called from the commit layer. build_runtime went back to registering existence
+        # and carrying values, which needs no legacy at all, and the list below is short
+        # again for the reason it was always supposed to be short.
+        PT_SRCS=("${PT_PROBLEM_SRCS[@]}"
                  src/runtime/yl_runtime_types.f90
                  src/runtime/yl_runtime_contract.f90
                  src/runtime/yl_runtime_rules.f90
@@ -645,6 +636,7 @@ if [ "$TARGET" = solver ] || [ "$TARGET" = solver-adapter ]; then
                       src/runtime/yl_runtime_contract.f90
                       src/runtime/yl_runtime_rules.f90
                       src/runtime/yl_runtime_build.f90
+                      src/runtime/yl_runtime_geometry.f90
                       src/runtime/yl_runtime_commit.f90
                       src/adapter/yl_adapter_parts.f90
                       src/adapter/yl_adapter_mesh.f90
@@ -698,7 +690,8 @@ state_dump_provenance_check() {
 # --- target: runtime-bridge (M3-03) -------------------------------------------
 # The ISOLATED bridge executable. It links the REAL legacy modules -- the same
 # sources, in the same order, as the solver -- plus src/state (the M2 observers),
-# src/problem, src/runtime AND src/runtime/yl_runtime_commit.f90, and its own
+# src/problem, src/runtime INCLUDING yl_runtime_geometry.f90 and
+# yl_runtime_commit.f90, and its own
 # PROGRAM instead of Fem.f90. It is the only target that compiles the commit
 # module, because that module is the only repository file that USEs global_var.
 #
@@ -756,7 +749,8 @@ if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
                   src/runtime/yl_runtime_contract.f90
                   src/runtime/yl_runtime_rules.f90
                   src/runtime/yl_runtime_build.f90
-                  src/runtime/yl_runtime_commit.f90
+                  src/runtime/yl_runtime_geometry.f90
+                      src/runtime/yl_runtime_commit.f90
                   # Global.f90 now calls the external yl_adapter_override() behind
                   # `if (yl_adapter_mode)`, so EVERY target that links the legacy tree
                   # needs one implementation of it. These test programs never set the

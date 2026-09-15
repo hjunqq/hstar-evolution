@@ -2033,6 +2033,11 @@ PROV_OBTAINABLE_ROWS = {
     "derived.counts.nphase", "amplitudes.points.count", "derived.dof.cdofn",
     "derived.dof.lcdofn", "derived.counts.ndofix", "derived.counts.nstre",
     "derived.dof.active_flags",
+    # The Gauss geometry, obtainable because the COMMIT LAYER computes it -- by calling
+    # legacy's getgauss / shfunc / jacob (yl_runtime_geometry), not by a transcription.
+    # These were RuntimeState rows until 2026-09-15, which is why they used to reach the
+    # ledger as FROM_RUNTIME; they are DERIVED now, from the element coordinate gather.
+    "runtime.gauss.djacb", "runtime.gauss.gpcod", "runtime.gauss.cartd",
 }
 
 RUNTIME_TYPES_SRC = REPO_ROOT / "src" / "runtime" / "yl_runtime_types.f90"

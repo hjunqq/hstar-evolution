@@ -52,11 +52,6 @@
 module yl_runtime_build
 
   use iso_fortran_env, only: int32, int64, real64
-  ! The ONE legacy dependency of this module, and it is a pure computation: `jacob`
-  ! writes no global and reads none. See evaluate_rule for why it is reused rather
-  ! than mirrored.
-  use variable_types, only: irk, ink
-  use elements, only: jacob
   use yl_problem_optional, only: opt_int, opt_real, opt_get, opt_set, opt_is_set
   use yl_problem_types, only: problem_state_t, boundary_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
@@ -69,13 +64,12 @@ module yl_runtime_build
                                  MANIFEST_KIND_CHECK
   use yl_runtime_types, only: runtime_state_t, index_list_t, element_field_dofs_t,              &
                               boundary_record_t, section_node_t, section_nodes_t,               &
-                              integration_rule_t, element_gauss_t, element_state_t,             &
+                              element_state_t,             &
                               runtime_status_set, runtime_status_get, runtime_status_count,     &
                               RUNTIME_VALUE_UNSET, RUNTIME_VALUE_DEFINED,                       &
                               RUNTIME_VALUE_RESERVED, RUNTIME_VALUE_ABSENT
   use yl_runtime_contract, only: CONTRACT_TAG, contract_expect_int, contract_expect_real,       &
-                                 contract_expect_text, contract_expect_logical,                 &
-                                 q4_stiffness_quadrature, q4_mass_quadrature, q4_shape_functions
+                                 contract_expect_text, contract_expect_logical
   use yl_runtime_rules, only: build_rule_t, build_rule_row, build_rule_count, build_rule_key,   &
                               build_rule_expected_state,                                        &
                               build_rule_producer_of, build_rule_input_count_for,               &
@@ -1195,74 +1189,19 @@ contains
       return
     end if
 
-    call q4_stiffness_quadrature(stiff_points, stiff_weights)
-    call q4_mass_quadrature(mass_points, mass_weights)
-
-    allocate (cand%gauss(shape%nelem))
-    allocate (elcod(shape%ndimn, shape%nnode))
-
-    do ie = 1, shape%nelem
-      do inode = 1, shape%nnode
-        kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
-        if (kpoin < 1) then
-                    call raise_row(errors, 'INV-GATED-SHAPE', 'gated-problem-matches-contract-shape',      &
-                          'element references a node that is not in the mesh', idx=ie)
-          return
-        end if
-        elcod(:, inode) = shape%coord(:, kpoin)
-      end do
-
-      call evaluate_rule(shape, elcod, stiff_points(:, 1:shape%ngaus),                          &
-                         stiff_weights(1:shape%ngaus), .true., cand%gauss(ie)%stiffness,        &
-                         ie, errors, ok)
-      if (.not. ok) return
-      call evaluate_rule(shape, elcod, mass_points(:, 1:shape%ngaus_mass),                      &
-                         mass_weights(1:shape%ngaus_mass), .false., cand%gauss(ie)%mass,        &
-                         ie, errors, ok)
-      if (.not. ok) return
-    end do
-
-    ! --- record the Gauss rows ---------------------------------------------
-    allocate (flat(shape%ngaus*shape%nelem))
-    do ie = 1, shape%nelem
-      flat((ie - 1)*shape%ngaus + 1:ie*shape%ngaus) = cand%gauss(ie)%stiffness%weighted_jacobian
-    end do
-    call publish_f64_list(cand, record, 'runtime.gauss.djacb', flat, RUNTIME_VALUE_DEFINED, errors)
-    deallocate (flat)
-
-    n = shape%ndimn*shape%ngaus
-    allocate (flat(n*shape%nelem))
-    do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = reshape(cand%gauss(ie)%stiffness%point_coordinates, [n])
-    end do
-    call publish_f64_list(cand, record, 'runtime.gauss.gpcod', flat, RUNTIME_VALUE_DEFINED, errors)
-    deallocate (flat)
-
-    n = shape%ndimn*shape%nnode*shape%ngaus
-    allocate (flat(n*shape%nelem))
-    do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = reshape(cand%gauss(ie)%stiffness%shape_gradient, [n])
-    end do
-    call publish_f64_list(cand, record, 'runtime.gauss.cartd', flat, RUNTIME_VALUE_DEFINED, errors)
-    deallocate (flat)
-
-    allocate (flat(shape%ngaus_mass*shape%nelem))
-    do ie = 1, shape%nelem
-      flat((ie - 1)*shape%ngaus_mass + 1:ie*shape%ngaus_mass) =                                 &
-        cand%gauss(ie)%mass%weighted_jacobian
-    end do
-    call publish_f64_list(cand, record, 'runtime.gauss.djacb_mass', flat,                       &
-                          RUNTIME_VALUE_DEFINED, errors)
-    deallocate (flat)
-
-    n = shape%ndimn*shape%ngaus_mass
-    allocate (flat(n*shape%nelem))
-    do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = reshape(cand%gauss(ie)%mass%point_coordinates, [n])
-    end do
-    call publish_f64_list(cand, record, 'runtime.gauss.gpcod_mass', flat,                       &
-                          RUNTIME_VALUE_DEFINED, errors)
-    deallocate (flat)
+    ! THE GAUSS GEOMETRY IS NOT BUILT HERE ANY MORE (2026-09-15).
+    ! This routine used to evaluate the quadrature rule, the shape functions and the
+    ! Jacobian for every element and publish five RuntimeState rows; the commit layer then
+    ! copied them into legacy's `egaus`. That put a second implementation of legacy
+    ! arithmetic on the modern side, which is precisely what produced the 2026-09-14 cartd
+    ! divergence. RuntimeState registers existence and carries values across the seam; it
+    ! does not compute what legacy computes. The geometry now lives in
+    ! yl_runtime_geometry, is called by the commit layer, and uses legacy's own getgauss /
+    ! shfunc / jacob -- see that module's header for the whole story.
+    !
+    ! What stays here is `field_coordinates` below: gathering each element's node
+    ! coordinates is transport, not arithmetic, and it is the one thing the geometry needs
+    ! that only the problem knows.
 
     ! --- RuntimeState.element ----------------------------------------------
     if (injected(fail_at, BUILD_SITE_ELEMENT)) then
@@ -1342,93 +1281,6 @@ contains
     end block
   end subroutine build_geometry
 
-  ! One integration rule's geometry for one element.
-  !
-  ! `with_gradients` is .false. for the mass rule, where legacy allocates no `cartd`
-  ! (Elements.f90:1232) -- the component then stays unallocated, which is the ABSENT
-  ! state and not an omission.
-  !
-  ! The Jacobian is accumulated in explicit loops rather than with MATMUL, and the
-  ! Gauss-point coordinate uses SUM, because that is what Elements.f90:3245-3253 and
-  ! :1260 do and the two disagree in the last bits.
-  subroutine evaluate_rule(shape, elcod, points, weights, with_gradients, rule, ie, errors, ok)
-    type(build_shape_t), intent(in) :: shape
-    real(real64), intent(in) :: elcod(:,:)
-    real(real64), intent(in) :: points(:,:)
-    real(real64), intent(in) :: weights(:)
-    logical, intent(in) :: with_gradients
-    type(integration_rule_t), intent(inout) :: rule
-    integer, intent(in) :: ie
-    type(problem_errors_t), intent(inout) :: errors
-    logical, intent(out) :: ok
-
-    real(real64) :: values(4), gradients(2, 4)
-    real(real64) :: djacb
-    integer :: ngaus, igaus, id, inode
-    ! legacy kinds, because `jacob` is legacy's and takes its own. Sized for the one
-    ! element shape this build admits (Q4 in 2-D), like everything else in this routine.
-    real(irk) :: elcod_l(2, 4), deriv_l(2, 4), cartd_l(2, 4), xjaci_l(2, 2), djacb_l
-
-    ok = .false.
-    ngaus = size(weights)
-    allocate (rule%weighted_jacobian(ngaus))
-    allocate (rule%point_coordinates(shape%ndimn, ngaus))
-    if (with_gradients) allocate (rule%shape_gradient(shape%ndimn, shape%nnode, ngaus))
-
-    do igaus = 1, ngaus
-      call q4_shape_functions(points(1, igaus), points(2, igaus), values, gradients)
-      elcod_l(1:shape%ndimn, 1:shape%nnode) = real(elcod(1:shape%ndimn, 1:shape%nnode), irk)
-      deriv_l(1:shape%ndimn, 1:shape%nnode) = real(gradients(1:shape%ndimn, 1:shape%nnode), irk)
-
-      do id = 1, shape%ndimn                                   ! Elements.f90:1259-1261
-        rule%point_coordinates(id, igaus) =                                                     &
-          sum(elcod(id, 1:shape%nnode)*values(1:shape%nnode))
-      end do
-
-      ! THE JACOBIAN, ITS INVERSE AND THE CARTESIAN DERIVATIVES ARE LEGACY'S OWN `jacob`.
-      !
-      ! They used to be re-implemented here, line for line: same loop order, same formula,
-      ! same inversion. That was not enough. Given bit-identical inputs -- coord, posgp,
-      ! deriv, elcod and djacb were all measured identical -- the two routines still
-      ! produced cartd values 1 to 2 ULP apart, because -O2 applies its reassociation and
-      ! reciprocal-substitution choices differently to a routine accumulating into a scalar
-      ! local and one accumulating into an array element. On train05b_slope_srm that seeded
-      ! a divergence at STEP ONE which the 8-digit output hid for 74 steps and the plastic
-      ! path then amplified to max|d| = 6.5e7. -fp-model=precise made it vanish, which is
-      ! the proof that the formulas agreed and only the machine code did not.
-      !
-      ! Two same-meaning implementations cannot be kept in step by review, and absorbing
-      ! their machine-level difference with a tolerance would be paying forever for a
-      ! duplicate nobody needs. So there is one implementation, and it is legacy's.
-      call jacob(int(ie, ink), int(shape%ndimn, ink), int(shape%nnode, ink),                     &
-                 elcod_l, deriv_l, cartd_l, djacb_l, xjaci_l)
-      djacb = real(djacb_l, real64)
-
-      ! B3 -- legacy prints a warning here and integrates anyway (Elements.f90:3264-3271).
-      ! A non-positive determinant means the connectivity is not counter-clockwise under
-      ! the contract's node order, and every quantity derived from this element is then
-      ! meaningless; refusing is the whole point of having the rule. The check stays HERE:
-      ! `jacob` warns and continues, and the refusal is this build's, not legacy's.
-      if (djacb <= 0.0_real64) then
-        call raise_row(errors, 'B3', 'negative-jacobian',                                        &
-                       'the Jacobian determinant is not positive at a Gauss point: the '//       &
-                       'connectivity is not counter-clockwise under the contract node order',    &
-                       actual=ftoa(djacb), expected='> 0', idx=ie)
-        return
-      end if
-
-      if (with_gradients) then
-        do id = 1, shape%ndimn
-          do inode = 1, shape%nnode
-            rule%shape_gradient(id, inode, igaus) = real(cartd_l(id, inode), real64)
-          end do
-        end do
-      end if
-
-      rule%weighted_jacobian(igaus) = djacb*weights(igaus)     ! Elements.f90:1363
-    end do
-    ok = .true.
-  end subroutine evaluate_rule
 
   ! ==========================================================================
   ! vectors and cursors
@@ -1822,29 +1674,6 @@ contains
             end if
           end do
         end do outer_pn
-      end if
-
-    ! --- gauss --------------------------------------------------------------
-    case ('runtime.gauss.djacb', 'runtime.gauss.gpcod', 'runtime.gauss.cartd',                   &
-          'runtime.gauss.djacb_mass', 'runtime.gauss.gpcod_mass')
-      st%form = RS_ARRAY
-      st%is_f64 = .true.
-      st%present_ = allocated(cand%gauss)
-      if (st%present_) then
-        do i = 1, size(cand%gauss)
-          select case (map_id)
-          case ('runtime.gauss.djacb')
-            call rs_add_f64_1(st, cand%gauss(i)%stiffness%weighted_jacobian, read_values)
-          case ('runtime.gauss.gpcod')
-            call rs_add_f64_2(st, cand%gauss(i)%stiffness%point_coordinates, read_values)
-          case ('runtime.gauss.cartd')
-            call rs_add_f64_3(st, cand%gauss(i)%stiffness%shape_gradient, read_values)
-          case ('runtime.gauss.djacb_mass')
-            call rs_add_f64_1(st, cand%gauss(i)%mass%weighted_jacobian, read_values)
-          case default
-            call rs_add_f64_2(st, cand%gauss(i)%mass%point_coordinates, read_values)
-          end select
-        end do
       end if
 
     ! --- element ------------------------------------------------------------
@@ -2286,14 +2115,6 @@ contains
     if (allocated(x)) n = size(x)
   end function size_or_zero_2d
 
-  pure integer function size_or_zero_gauss(cand) result(n)
-    type(runtime_state_t), intent(in) :: cand
-    n = 0
-    if (.not. allocated(cand%gauss)) return
-    if (size(cand%gauss) < 1) return
-    if (.not. allocated(cand%gauss(1)%stiffness%weighted_jacobian)) return
-    n = size(cand%gauss(1)%stiffness%weighted_jacobian)
-  end function size_or_zero_gauss
 
   ! True when the test hook asked this site to fail.
   pure logical function injected(fail_at, site) result(yes)

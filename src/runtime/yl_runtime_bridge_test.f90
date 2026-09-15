@@ -112,6 +112,7 @@ program yl_runtime_bridge_test
   call group_extent_agreement(pr1, pr2, rs1, rt1, rt2)
 
   write (output_unit, '(a)') '-- 3. no partial commit'
+  call group_negative_jacobian(pr2, rs2, rt2)
   call group_no_partial(pr2, rs2, rt2)
 
   write (output_unit, '(a)') '-- 4. repeat load / ownership'
@@ -685,8 +686,8 @@ contains
     type(deck_residue_t), intent(in) :: residue
     logical :: ok_all
     type(runtime_state_t), intent(in) :: rt
-    integer :: ie, ig, i, n, ntv, iblk_v, lblk_v
-    logical :: found
+    integer :: ie, ig, i, n, ntv, iblk_v, lblk_v, id
+    logical :: found, ok_geom
 
     ! --- scalars, each derived from the runtime's own shape, never a literal ---------
     call check('npoin', npoin == int(size(rt%dof%node_variables, 2), ink))
@@ -739,16 +740,45 @@ contains
                     int(rt%dof%element_field_variables(ie)%fields(1)%values, ink)))
       call check('element('//itoa(ie)//')%field(1)%elcod_f',                                     &
                 all(element(ie)%field(1)%elcod_f == real(rt%element(ie)%field_coordinates, irk)))
-      call check('element('//itoa(ie)//')%egaus(1)%djacb',                                       &
-                all(element(ie)%egaus(1)%djacb == real(rt%gauss(ie)%stiffness%weighted_jacobian, irk)))
-      call check('element('//itoa(ie)//')%egaus(1)%gpcod',                                       &
-                all(element(ie)%egaus(1)%gpcod == real(rt%gauss(ie)%stiffness%point_coordinates, irk)))
-      call check('element('//itoa(ie)//')%egaus(1)%cartd',                                       &
-                all(element(ie)%egaus(1)%cartd == real(rt%gauss(ie)%stiffness%shape_gradient, irk)))
-      call check('element('//itoa(ie)//')%egaus(2)%djacb',                                       &
-                all(element(ie)%egaus(2)%djacb == real(rt%gauss(ie)%mass%weighted_jacobian, irk)))
-      call check('element('//itoa(ie)//')%egaus(2)%gpcod',                                       &
-                all(element(ie)%egaus(2)%gpcod == real(rt%gauss(ie)%mass%point_coordinates, irk)))
+      ! GAUSS GEOMETRY: asserted by VALUE, not against a copy.
+      ! These five used to read `all(egaus(1)%djacb == rt%gauss(ie)%stiffness%...)`, which
+      ! compared the landed globals against RuntimeState's copy of the same numbers. That
+      ! only ever proved the copy was faithful -- and RuntimeState no longer holds it,
+      ! because holding it is what let the modern side drift from legacy (2026-09-14).
+      ! The fixture's elements are UNIT SQUARES (nodes (0,0)-(1,1) and (1,0)-(2,1)), so the
+      ! geometry has known values and these check the geometry instead of the copying.
+      !
+      ! det(J) = 1/4 for a unit square under the bilinear map, and the 2x2 rule's weights
+      ! are 1, so every weighted Jacobian is exactly 0.25 -- exactly, in binary.
+      call check('element('//itoa(ie)//')%egaus(1)%djacb is 0.25 on a unit square',              &
+                all(element(ie)%egaus(1)%djacb == 0.25_irk))
+      ! Both rules integrate the same element, so each sums to its area. The 2x2 sum is
+      ! exact; the 4x4 Gauss-Legendre weights are decimals and its sum is not.
+      call check('element('//itoa(ie)//')%egaus(1)%djacb sums to the area',                      &
+                sum(element(ie)%egaus(1)%djacb) == 1.0_irk)
+      call check('element('//itoa(ie)//')%egaus(2)%djacb sums to the area',                      &
+                abs(sum(element(ie)%egaus(2)%djacb) - 1.0_irk) < 1.0e-12_irk)
+      ! Every Gauss point lies strictly inside the element it belongs to.
+      ok_geom = .true.
+      do ig = 1, size(element(ie)%egaus(1)%gpcod, 2)
+        do id = 1, size(element(ie)%egaus(1)%gpcod, 1)
+          if (element(ie)%egaus(1)%gpcod(id, ig) <=                                              &
+              minval(element(ie)%field(1)%elcod_f(id, :))) ok_geom = .false.
+          if (element(ie)%egaus(1)%gpcod(id, ig) >=                                              &
+              maxval(element(ie)%field(1)%elcod_f(id, :))) ok_geom = .false.
+        end do
+      end do
+      call check('element('//itoa(ie)//')%egaus(1)%gpcod lies inside the element', ok_geom)
+      ! Partition of unity: the shape functions sum to 1 everywhere, so their gradients
+      ! sum to zero. A transposed or mis-scaled cartd fails this; a faithful copy of a
+      ! wrong cartd would have passed the old assertion.
+      ok_geom = .true.
+      do ig = 1, size(element(ie)%egaus(1)%cartd, 3)
+        do id = 1, size(element(ie)%egaus(1)%cartd, 1)
+          if (abs(sum(element(ie)%egaus(1)%cartd(id, :, ig))) > 1.0e-12_irk) ok_geom = .false.
+        end do
+      end do
+      call check('element('//itoa(ie)//')%egaus(1)%cartd gradients sum to zero', ok_geom)
       ! The mass rule never gets a shape-gradient allocation in legacy (Elements.f90:1232:
       ! cartd is stored only for a rule whose name is not 'mass'); an associated pointer
       ! here would be exactly the shape the solver never sees and commit_release could
@@ -1410,6 +1440,48 @@ contains
     ! for a reason that has nothing to do with the refusals.
     call check_landed_guarded(problem_2, residue, rt_2, 'after the agreement refusals')
   end subroutine group_extent_agreement
+
+  !> B3 -- clockwise connectivity, and therefore a negative Jacobian.
+  !>
+  !> This counter-example used to live in the runtime self-test, against build_runtime's
+  !> own Jacobian. build_runtime has no Jacobian any more (2026-09-15): the geometry is
+  !> legacy's, computed in the commit layer, and the refusal moved with it. The check is
+  !> still THIS build's -- legacy warns and integrates anyway (Elements.f90:3264-3271) --
+  !> so a counter-example is still owed, and here is where it can be paid.
+  subroutine group_negative_jacobian(problem, residue, rt)
+    type(problem_state_t), intent(in) :: problem
+    type(deck_residue_t), intent(in) :: residue
+    type(runtime_state_t), intent(in) :: rt
+    type(runtime_state_t) :: bad
+    type(problem_errors_t) :: errors
+    character(len=:), allocatable :: message
+    real(real64) :: swap(2)
+    logical :: named
+    integer :: i
+
+    write (output_unit, '(a)') '-- B3: a clockwise element is refused by the commit layer'
+    ! The perturbation goes into the RUNTIME's gathered coordinates, not the problem's
+    ! connectivity, because that gather is what the geometry reads. Reversing the middle
+    ! pair of the unit square 1-2-3-4 makes it clockwise, and det J negative at every
+    ! Gauss point. Perturbing the problem instead would leave the runtime's copy
+    ! counter-clockwise and prove nothing -- which is exactly what the first draft of this
+    ! fixture did, and the lnods consistency check is what said so.
+    bad = rt
+    swap = bad%element(1)%field_coordinates(:, 2)
+    bad%element(1)%field_coordinates(:, 2) = bad%element(1)%field_coordinates(:, 4)
+    bad%element(1)%field_coordinates(:, 4) = swap
+    call errors%clear()
+    call commit_legacy_globals(problem, residue, ex, bad, errors)
+    call check('a clockwise element is refused', errors%any())
+    named = .false.
+    do i = 1, errors%count()
+      call one_error_message(errors, i, message)
+      if (index(message, 'non-positive Jacobian') > 0) named = .true.
+    end do
+    call check('the refusal says which element and why', named)
+    ! And the globals are untouched, like every other refusal in this file.
+    call check_landed_guarded(problem, residue, rt, 'after the clockwise refusal')
+  end subroutine group_negative_jacobian
 
   subroutine group_no_partial(problem, residue, rt_good)
     type(problem_state_t), intent(in) :: problem

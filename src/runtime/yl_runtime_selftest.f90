@@ -62,7 +62,7 @@ program yl_runtime_selftest
   use yl_runtime_types, only: runtime_state_t, index_list_t, section_nodes_t,                   &
                              runtime_field_status_t, runtime_free, runtime_is_empty,            &
                              runtime_status_count, runtime_status_row
-  use yl_runtime_contract, only: CONTRACT_TAG, q4_stiffness_quadrature, q4_shape_functions
+  use yl_runtime_contract, only: CONTRACT_TAG
   use yl_runtime_build
   use yl_runtime_rules
 
@@ -369,7 +369,6 @@ contains
     call check_good_build('B-ok[1]', good1)
     call check_good_build('B-ok[2]', good2)
     call check_tiny_mesh_values()
-    call check_gauss_geometry()
   end subroutine section_b_ok
 
   ! The structural half of B-ok: no findings, both outputs allocated, and the ledger
@@ -480,41 +479,13 @@ contains
   ! with a constant Jacobian of 0.25 (each physical unit spans two natural units in
   ! both directions, so det J = 0.5*0.5); this is a property of the fixture's shape,
   ! not a number carried in from anywhere else.
-  subroutine check_gauss_geometry()
-    type(runtime_state_t), allocatable :: rt
-    type(manifest_t), allocatable :: man
-    type(problem_errors_t) :: errors
-    real(real64) :: points(2, 4), weights(4)
-    real(real64) :: values(4), gradients(2, 4)
-    real(real64) :: elcod(2, 4), expect_point(2)
-    logical :: djacb_ok, gpcod_ok
-    integer :: igaus, id
-
-    call build_runtime(good1, CONTRACT_TAG, rt, man, errors)
-    if (errors%any() .or. .not. allocated(rt)) then
-      call check('B-ok[1] gauss geometry: build succeeded', .false.)
-      return
-    end if
-
-    call q4_stiffness_quadrature(points, weights)
-    elcod(:, 1) = [0.0_real64, 0.0_real64]
-    elcod(:, 2) = [1.0_real64, 0.0_real64]
-    elcod(:, 3) = [1.0_real64, 1.0_real64]
-    elcod(:, 4) = [0.0_real64, 1.0_real64]
-
-    djacb_ok = .true.
-    gpcod_ok = .true.
-    do igaus = 1, 4
-      if (rt%gauss(1)%stiffness%weighted_jacobian(igaus) /= 0.25_real64) djacb_ok = .false.
-      call q4_shape_functions(points(1, igaus), points(2, igaus), values, gradients)
-      do id = 1, 2
-        expect_point(id) = sum(elcod(id, :)*values(:))
-        if (rt%gauss(1)%stiffness%point_coordinates(id, igaus) /= expect_point(id)) gpcod_ok = .false.
-      end do
-    end do
-    call check('B-ok[1] every weighted_jacobian on the unit square is exactly 0.25', djacb_ok)
-    call check('B-ok[1] gpcod matches q4_shape_functions mapped through elcod_f', gpcod_ok)
-  end subroutine check_gauss_geometry
+  ! check_gauss_geometry lived here and asserted that a unit square's weighted Jacobians
+  ! are exactly 0.25 and that gpcod is the shape functions mapped through elcod_f. It was
+  ! checking build_runtime's own transcription of legacy's geometry. That transcription is
+  ! gone (2026-09-15): the geometry is legacy's, computed in the commit layer, and this
+  ! binary deliberately links no legacy source. The assertions did not disappear -- they
+  ! moved to the bridge suite, which links legacy and now checks them against the LANDED
+  ! globals, by value, on the same unit-square fixture.
 
   ! ==========================================================================
   ! B-neg -- one counter-example per implemented check rule
@@ -537,7 +508,6 @@ contains
     write (output_unit, '(a)') '-- 2. B-neg (one counter-example per rule)'
     call check_b1()
     call check_b2()
-    call check_b3()
     call check_b6()
     call check_b6_identical_ok()
     call check_b8()
@@ -580,7 +550,7 @@ contains
     before_manifest = manifest_count(man)
     before_ntotv = opt_value_or(rt%dof%variable_count, -1_int32)
     before_nodfn = checksum_i32_2d(rt%dof%node_variables)
-    before_djacb = checksum_gauss_djacb(rt)
+    before_djacb = checksum_elcod(rt)
 
     if (present(declared_ndofix)) then
       call build_runtime(bad_problem, CONTRACT_TAG, rt, man, bad_errors, &
@@ -623,7 +593,7 @@ contains
                   manifest_count(man) == before_manifest .and. &
                   opt_value_or(rt%dof%variable_count, -2_int32) == before_ntotv .and. &
                   checksum_i32_2d(rt%dof%node_variables) == before_nodfn .and. &
-                  checksum_gauss_djacb(rt) == before_djacb
+                  checksum_elcod(rt) == before_djacb
     call check(label//' -- the earlier good runtime survives bit-for-bit', survivor_ok)
     call check(label//' -- the manifest gained no entry', manifest_count(man) == before_manifest)
 
@@ -671,13 +641,9 @@ contains
   ! B3 -- clockwise connectivity. Reversing element 1's node order under the
   ! contract's counter-clockwise convention (yl_runtime_contract:q4_shape_functions)
   ! makes det J negative at every Gauss point of the unit square.
-  subroutine check_b3()
-    type(problem_state_t) :: bad
-    bad = good1
-    bad%mesh%elements(1)%nodes = [1_int32, 4_int32, 3_int32, 2_int32]
-    call expect_build_rule('B3', 'B3/negative-jacobian', PE_INVALID_INPUT, &
-                           'mesh.elements[]', 'nodes', bad, expected_idx=1)
-  end subroutine check_b3
+  ! check_b3 (clockwise connectivity -> negative Jacobian) moved to the bridge suite with
+  ! the geometry itself: build_runtime no longer computes a Jacobian, so it cannot refuse
+  ! one. See yl_runtime_rules.f90's B3 note.
 
   ! B6 -- the same (node, component) prescribed twice. Record 5 duplicates record 1
   ! exactly; the loop finds the earlier record at j=1 when it reaches i=5.
@@ -879,7 +845,7 @@ contains
       before_manifest = manifest_count(man)
       before_ntotv = opt_value_or(rt%dof%variable_count, -1_int32)
       before_nodfn = checksum_i32_2d(rt%dof%node_variables)
-      before_djacb = checksum_gauss_djacb(rt)
+      before_djacb = checksum_elcod(rt)
 
       block
         type(problem_errors_t) :: site_errors
@@ -891,7 +857,7 @@ contains
                       manifest_count(man) == before_manifest .and. &
                       opt_value_or(rt%dof%variable_count, -2_int32) == before_ntotv .and. &
                       checksum_i32_2d(rt%dof%node_variables) == before_nodfn .and. &
-                      checksum_gauss_djacb(rt) == before_djacb
+                      checksum_elcod(rt) == before_djacb
         call check('T01 site '//build_alloc_site_id(site)//' the survivor is bit-for-bit intact', &
                    survivor_ok)
         call check('T01 site '//build_alloc_site_id(site)//' the manifest gained no entry', &
@@ -998,21 +964,28 @@ contains
 
   ! The Gauss weighted-jacobian checksum T01 uses to prove the survivor's element
   ! geometry, and not merely its dof numbering, is untouched by an injected failure.
-  pure function checksum_gauss_djacb(rt) result(c)
+  ! The survivor discipline's float arm. It used to fold the Gauss weighted Jacobians;
+  ! those left RuntimeState on 2026-09-15 (they are legacy's arithmetic, computed in the
+  ! commit layer now), so it folds the element coordinate gather instead -- still a real
+  ! float payload produced by build_runtime, and still the thing that must be untouched
+  ! after a failed build.
+  pure function checksum_elcod(rt) result(c)
     type(runtime_state_t), intent(in) :: rt
     integer(int64) :: c
-    integer :: ie, ig, k
+    integer :: ie, i, j, k
     c = 0_int64
     k = 0
-    if (.not. allocated(rt%gauss)) return
-    do ie = 1, size(rt%gauss)
-      if (.not. allocated(rt%gauss(ie)%stiffness%weighted_jacobian)) cycle
-      do ig = 1, size(rt%gauss(ie)%stiffness%weighted_jacobian)
-        k = k + 1
-        c = c + int(transfer(rt%gauss(ie)%stiffness%weighted_jacobian(ig), 0_int64))*int(k, int64)
+    if (.not. allocated(rt%element)) return
+    do ie = 1, size(rt%element)
+      if (.not. allocated(rt%element(ie)%field_coordinates)) cycle
+      do i = 1, size(rt%element(ie)%field_coordinates, 1)
+        do j = 1, size(rt%element(ie)%field_coordinates, 2)
+          k = k + 1
+          c = c + int(transfer(rt%element(ie)%field_coordinates(i, j), 0_int64))*int(k, int64)
+        end do
       end do
     end do
-  end function checksum_gauss_djacb
+  end function checksum_elcod
 
   ! Elementwise equality of two allocatable arrays: both unallocated is equal, one
   ! allocated and not the other is not, different extents is not.
@@ -1170,27 +1143,6 @@ contains
         do i = 1, size(a%amplitudes)
           if (opt_value_or(a%amplitudes(i)%factor, -1.0_real64) /= &
               opt_value_or(b%amplitudes(i)%factor, -2.0_real64)) same = .false.
-        end do
-      end if
-    end if
-
-    if (allocated(a%gauss) .neqv. allocated(b%gauss)) then
-      same = .false.
-    else if (allocated(a%gauss)) then
-      if (size(a%gauss) /= size(b%gauss)) then
-        same = .false.
-      else
-        do i = 1, size(a%gauss)
-          if (.not. f64_1d_equal(a%gauss(i)%stiffness%weighted_jacobian, &
-                                 b%gauss(i)%stiffness%weighted_jacobian)) same = .false.
-          if (.not. f64_2d_equal(a%gauss(i)%stiffness%point_coordinates, &
-                                 b%gauss(i)%stiffness%point_coordinates)) same = .false.
-          if (.not. f64_3d_equal(a%gauss(i)%stiffness%shape_gradient, &
-                                 b%gauss(i)%stiffness%shape_gradient)) same = .false.
-          if (.not. f64_1d_equal(a%gauss(i)%mass%weighted_jacobian, &
-                                 b%gauss(i)%mass%weighted_jacobian)) same = .false.
-          if (.not. f64_2d_equal(a%gauss(i)%mass%point_coordinates, &
-                                 b%gauss(i)%mass%point_coordinates)) same = .false.
         end do
       end if
     end if
