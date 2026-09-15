@@ -46,25 +46,44 @@
 !   and never rounded to something that looked nicer. Read those files with
 !   `grep -a` / `sed -n`; they are latin-1, not UTF-8.
 !
-! The one thing a reader must not skip: literal precision
-!   The legacy build passes no `-r8` (tools/build.sh:107-111), so a Fortran literal
-!   written without a kind suffix is DEFAULT REAL -- four bytes. The Q4 abscissa is
-!   `cnst3 = 1./3.**0.5` (Elements.f90:2352) assigned into a real(real64) array, so the
-!   stored value is a single-precision 1/sqrt(3) widened to double, not the double
-!   1/sqrt(3). The two differ at about 1e-8 relative. The frozen baseline compares the
-!   Gauss geometry at rtol 1e-12 (docs/m2/state-field-map.toml, runtime.gauss.*), so a
-!   modern build that computes the abscissa honestly in real64 misses by four orders of
-!   magnitude. The quadrature accessors below therefore reproduce the legacy expression
-!   in default-real arithmetic and widen the result, and `quadrature.literal_precision`
-!   records that as a contract entry rather than as a comment somebody can delete. The
-!   same applies to the four-point Gauss-Legendre constants of the mass rule
-!   (Elements.f90:2381-2382, :2396-2397), which also carry no kind suffix.
+! The numbers are LEGACY'S, called, not transcribed (changed 2026-09-15)
+!   `q4_stiffness_quadrature`, `q4_mass_quadrature` and `q4_shape_functions` used to hold
+!   their own copy of the abscissae, the weights and the bilinear shape functions,
+!   transcribed from Elements.f90 line by line. They now call `getgauss` and `shfunc`.
+!
+!   The transcriptions were correct, and that was the problem. On 2026-09-14 the same
+!   pattern one level down -- `evaluate_rule` mirroring `jacob` -- produced cartd values
+!   1 to 2 ULP from legacy's, because -O2 applies its reassociation choices differently to
+!   a routine accumulating into a scalar local and one accumulating into an array element.
+!   On train05b_slope_srm that seeded a divergence at step ONE which eight printed digits
+!   hid for 74 steps and the plastic path amplified to max|d| = 6.5e7. A transcription
+!   cannot be kept bit-identical by review; only by not existing.
+!
+!   This also retires a hazard that used to need its own paragraph here: the legacy build
+!   passes no `-r8`, so `cnst3 = 1./3.**0.5` (Elements.f90:2352) is evaluated in DEFAULT
+!   REAL and widened -- about 1e-8 from the real64 value, against a baseline compared at
+!   rtol 1e-12. Reproducing that faithfully was delicate. Calling the routine makes the
+!   question disappear rather than answering it carefully. `quadrature.literal_precision`
+!   stays in the table below as the record of WHY, not as an instruction to re-transcribe.
+!
+! What is still declared here rather than called
+!   The G-family rows are ASSERTIONS about legacy (family names, rule shapes, the unit
+!   weight), not a second implementation. They are what goes red if legacy's own rule
+!   changes underneath us, so they earn their place; the arithmetic does not.
 !
 !   The SHAPE functions are not affected: their literals are mixed with real64 `s` and
 !   `t`, so the arithmetic promotes to real64 (Elements.f90:2924-2935).
 module yl_runtime_contract
 
   use iso_fortran_env, only: int32, real64
+  ! The quadrature rule and the shape functions are LEGACY'S, called rather than mirrored.
+  ! They used to be transcribed here from Elements.f90, line by line, and that is exactly
+  ! the shape of duplicate that produced the 2026-09-14 `jacob` divergence: two
+  ! same-meaning implementations that -O2 compiled differently, drifting 1-2 ULP and
+  ! seeding a failure 74 printed steps later. A transcription cannot be kept in step by
+  ! review, so there is one implementation of each and it is the one the solver uses.
+  use variable_types, only: irk, ink
+  use elements, only: getgauss, shfunc
 
   implicit none
   private
@@ -398,23 +417,14 @@ contains
   !> `abscissa` is evaluated in DEFAULT REAL and then widened, because that is what the
   !> legacy statement does under a build with no `-r8`. See the module header; do not
   !> "fix" this to real64 without also refreshing the frozen baseline.
-  pure subroutine q4_stiffness_quadrature(points, weights)
+  subroutine q4_stiffness_quadrature(points, weights)
     real(real64), intent(out) :: points(2, 4)
     real(real64), intent(out) :: weights(4)
-    real(real64) :: abscissa
+    real(irk) :: p(2, 4), w(4)
 
-    abscissa = real(1./3.**0.5, real64)          ! Elements.f90:2352, default-real literals
-
-    points(1, 1) = -abscissa                     ! Elements.f90:2353
-    points(2, 1) = -abscissa                     ! Elements.f90:2354
-    points(1, 2) = abscissa                      ! Elements.f90:2355
-    points(2, 2) = -abscissa                     ! Elements.f90:2356
-    points(1, 3) = abscissa                      ! Elements.f90:2357
-    points(2, 3) = abscissa                      ! Elements.f90:2358
-    points(1, 4) = -abscissa                     ! Elements.f90:2359
-    points(2, 4) = abscissa                      ! Elements.f90:2360
-
-    weights = 1.00_real64                        ! Elements.f90:2361-2363
+    call getgauss(int(2, ink), int(4, ink), int(4, ink), p, w)
+    points = real(p, real64)
+    weights = real(w, real64)
   end subroutine q4_stiffness_quadrature
 
   !> The 4x4 Gauss-Legendre rule Q4 declares as its second ('mass') rule.
@@ -429,44 +439,15 @@ contains
   !>
   !> The four abscissae and weights carry no kind suffix in the legacy source
   !> (:2381-2382, :2396-2397), so they too are default-real values widened to double.
-  pure subroutine q4_mass_quadrature(points, weights)
+  subroutine q4_mass_quadrature(points, weights)
     real(real64), intent(out) :: points(2, 16)
     real(real64), intent(out) :: weights(16)
-    ! Elements.f90:2213 -- DATA LK16/8*-1,8*1/, LI16/-1,-1,1,1,.../
-    integer(int32), parameter :: LK16(16) = [-1, -1, -1, -1, -1, -1, -1, -1, 1, 1, 1, 1, 1, 1, 1, 1]
-    integer(int32), parameter :: LI16(16) = [-1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1, -1, -1, 1, 1]
-    real(real64) :: g1, g2, w(4)
-    integer :: i, j, k
+    real(irk) :: p(2, 16), w(16)
 
-    g1 = real(0.8611363115940530, real64)        ! Elements.f90:2381
-    g2 = real(0.3399810435848560, real64)        ! Elements.f90:2382
-
-    do i = 1, 16                                 ! Elements.f90:2383-2395
-      if (i <= 4 .or. i >= 13) then
-        points(1, i) = g1*real(LK16(i), real64)
-      else
-        points(1, i) = g2*real(LK16(i), real64)
-      end if
-      if (i == 1 .or. i == 4 .or. i == 5 .or. i == 8 .or.                                          &
-          i == 9 .or. i == 12 .or. i == 13 .or. i == 16) then
-        points(2, i) = g1*real(LI16(i), real64)
-      else
-        points(2, i) = g2*real(LI16(i), real64)
-      end if
-    end do
-
-    w(1) = real(0.3478548451374540, real64)      ! Elements.f90:2396
-    w(2) = real(0.6521451548625460, real64)      ! Elements.f90:2397
-    w(3) = w(2)                                  ! Elements.f90:2398
-    w(4) = w(1)                                  ! Elements.f90:2399
-
-    k = 0                                        ! Elements.f90:2400-2401 and the K loop
-    do i = 1, 4
-      do j = 1, 4
-        k = k + 1
-        weights(k) = w(i)*w(j)
-      end do
-    end do
+    ! ngaus = 16 selects the 4x4 rule; nnode = 4 selects the quadrilateral family.
+    call getgauss(int(2, ink), int(4, ink), int(16, ink), p, w)
+    points = real(p, real64)
+    weights = real(w, real64)
   end subroutine q4_mass_quadrature
 
   ! --- Q4 shape functions -----------------------------------------------------
@@ -490,27 +471,17 @@ contains
   !>
   !> This routine deliberately does NOT compute the physical gradients or the Jacobian:
   !> those need the element coordinates, which belong to build_runtime, not to a contract.
-  pure subroutine q4_shape_functions(s, t, values, gradients)
+  subroutine q4_shape_functions(s, t, values, gradients)
     real(real64), intent(in) :: s, t
     real(real64), intent(out) :: values(4)
     real(real64), intent(out) :: gradients(2, 4)
-    real(real64) :: st
+    real(irk) :: sh(4), dv(2, 4)
 
-    st = s*t                                     ! Elements.f90:2613
-
-    values(1) = (1 - t - s + st)*0.25_real64     ! Elements.f90:2924
-    values(2) = (1 - t + s - st)*0.25_real64     ! Elements.f90:2925
-    values(3) = (1 + t + s + st)*0.25_real64     ! Elements.f90:2926
-    values(4) = (1 + t - s - st)*0.25_real64     ! Elements.f90:2927
-
-    gradients(1, 1) = (-1 + t)*0.25_real64       ! Elements.f90:2928
-    gradients(1, 2) = (+1 - t)*0.25_real64       ! Elements.f90:2929
-    gradients(1, 3) = (+1 + t)*0.25_real64       ! Elements.f90:2930
-    gradients(1, 4) = (-1 - t)*0.25_real64       ! Elements.f90:2931
-    gradients(2, 1) = (-1 + s)*0.25_real64       ! Elements.f90:2932
-    gradients(2, 2) = (-1 - s)*0.25_real64       ! Elements.f90:2933
-    gradients(2, 3) = (+1 + s)*0.25_real64       ! Elements.f90:2934
-    gradients(2, 4) = (+1 - s)*0.25_real64       ! Elements.f90:2935
+    ! `u` is the third parent coordinate and is unused in 2-D; legacy passes it too
+    ! (Elements.f90:2067). 0 is what its callers on this path hold.
+    call shfunc(int(2, ink), int(4, ink), real(s, irk), real(t, irk), 0.0_irk, sh, dv)
+    values = real(sh, real64)
+    gradients = real(dv, real64)
   end subroutine q4_shape_functions
 
 end module yl_runtime_contract
