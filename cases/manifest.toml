@@ -42,6 +42,22 @@ reference = "reference/"
 # docs/m6/material-domain.md SS4). It establishes the material-domain plumbing, not the
 # plastic return-mapping; the deck that yields is named there too.
 
+[[case]]
+id = "plasticity.slope_srm"
+path = "golden/plasticity/slope_srm"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/train05b_slope_srm"
+source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
+input_manifest = "golden/plasticity/slope_srm/input-manifest.json"
+purpose = "material domain: strength reduction (MAT_DE + a material curve) with plasticity that actually happens"
+migration_phase = "M6.5"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# The deck that mini_mc is not: 18924 of 45100 PLASTICSTRAIN values are non-zero. 100 steps
+# x 6 result blocks = 600 blocks, 541200 values; the frozen results are gzipped because the
+# reference has to stay complete and 13.5 MB of JSON does not belong in a repository.
+
 [[planned_case]]
 id = "static_3d.mini_3d"
 migration_phase = "M6.1"

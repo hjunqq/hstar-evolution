@@ -25,6 +25,7 @@ Exit 0 only when everything passed.
 from __future__ import annotations
 
 import argparse
+import gzip
 import json
 import math
 import sys
@@ -35,6 +36,15 @@ BLOCK_TO_OBSERVABLE = {"DISPLACEMENT": "displacement", "STRESS": "stress"}
 
 
 def load(path: Path) -> dict:
+    """A results file, gzipped or not.
+
+    A strength-reduction reference is 13.5 MB of JSON and 3.1 MB gzipped. The frozen
+    artefact has to stay COMPLETE -- the roll-up on stdout is a summary, the file is the
+    audit trail -- so it is compressed rather than trimmed. `.json` keeps working
+    unchanged; only the reader learned a second spelling."""
+    if path.suffix == ".gz":
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            return json.load(fh)
     return json.loads(path.read_text(encoding="utf-8"))
 
 
@@ -43,9 +53,17 @@ def compare(ref: dict, act: dict, tol: dict[str, dict[str, float]]) -> dict:
               "n_blocks": 0, "n_values": 0, "n_mismatch": 0, "max_abs_diff": 0.0,
               "first_mismatch": None}
     rb, ab = ref["blocks"], act["blocks"]
-    if [b["name"] for b in rb] != [b["name"] for b in ab]:
+    rn, an = [b["name"] for b in rb], [b["name"] for b in ab]
+    if rn != an:
         report["structure_ok"] = False
-        report["problems"].append(f"block names differ: {[b['name'] for b in rb]} vs {[b['name'] for b in ab]}")
+        # NOT the two full lists: a 100-step deck has 600 blocks and printing both names
+        # every one of them buries the fact. Counts, then the first position that differs.
+        where = next((i for i, (x, y) in enumerate(zip(rn, an)) if x != y), min(len(rn), len(an)))
+        report["problems"].append(
+            f"block names differ: reference has {len(rn)}, actual has {len(an)}; "
+            f"first difference at block {where + 1}: "
+            f"{rn[where] if where < len(rn) else '<none>'} vs "
+            f"{an[where] if where < len(an) else '<none>'}")
         return report
     for r, a in zip(rb, ab):
         name = r["name"]

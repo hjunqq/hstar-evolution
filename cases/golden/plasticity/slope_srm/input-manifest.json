@@ -1,0 +1,107 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-15T00:50:44+00:00",
+  "root": "cases/golden/plasticity/slope_srm/legacy",
+  "file_count": 16,
+  "total_bytes": 64738,
+  "excludes": [],
+  "meta": {
+    "case_id": "plasticity.slope_srm",
+    "source_repository": "/home/huijun/HSTAR_Next/cases",
+    "source_commit": "d3e921cb416722d8b46ab64dab177dee1e17abe3",
+    "source_path": "cases/train05b_slope_srm",
+    "actually_opened_load_file": "1.loa",
+    "note": "Solver inputs only; the source dir also holds run outputs and .bak variants that were not imported"
+  },
+  "case_insensitive_collisions": [
+    {
+      "paths": [
+        "1.LOA",
+        "1.loa"
+      ],
+      "identical_bytes": true
+    }
+  ],
+  "files": [
+    {
+      "path": "1.LOA",
+      "bytes": 395,
+      "sha256": "b06c060c536c0167160adaba9fd3fffaf2f63debe1d14e6b45871db4ccde2373"
+    },
+    {
+      "path": "1.aqu",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "1.cor",
+      "bytes": 22550,
+      "sha256": "176c8c1dff3485bc21ffc311c0d142fab959299004c8eb9422254f38329259af"
+    },
+    {
+      "path": "1.ele",
+      "bytes": 26800,
+      "sha256": "caee0254d25ac35e1746e865eb2514292abb415a4e1aafb64ab3201c4b2d0326"
+    },
+    {
+      "path": "1.ftr",
+      "bytes": 72,
+      "sha256": "5a6bc4c49e60511b7ab9080c1779320847979214450fa5306248bc25014e6bfc"
+    },
+    {
+      "path": "1.glb",
+      "bytes": 2414,
+      "sha256": "60b452259c88e02ca9eee30e071037a2e3051ac3dee4cd4320a6f4e8679be54f"
+    },
+    {
+      "path": "1.ifs",
+      "bytes": 73,
+      "sha256": "237a1f4f804e4815f29cb4f4b643089e363b398f6a6c4120713f22e3c728eb9b"
+    },
+    {
+      "path": "1.loa",
+      "bytes": 395,
+      "sha256": "b06c060c536c0167160adaba9fd3fffaf2f63debe1d14e6b45871db4ccde2373"
+    },
+    {
+      "path": "1.man",
+      "bytes": 99,
+      "sha256": "7200d48897afe15d234cbf60201bbab089f95d1bbda09c15e161cef323be9efa"
+    },
+    {
+      "path": "1.mat",
+      "bytes": 806,
+      "sha256": "33798b48dd49fb190cd62976af3b62b90b41f4297b30bbcd96715f62842012e1"
+    },
+    {
+      "path": "1.nrt",
+      "bytes": 91,
+      "sha256": "969193fc453109c96ba5786cc5085c77c29b3a4466e518287a86f42a2b5e25d4"
+    },
+    {
+      "path": "1.opr",
+      "bytes": 219,
+      "sha256": "2b23bff52983db51251a327e6d9e2472188df582e86993eaca3348f943b9f02c"
+    },
+    {
+      "path": "1.pre",
+      "bytes": 1654,
+      "sha256": "e53378bffb59f90a0e2cdcafe55edd2f6a1fafe13aee020b9ef3982e8841ad22"
+    },
+    {
+      "path": "1.sol",
+      "bytes": 8000,
+      "sha256": "731953774729842473e89657d1ee94b7efdd6fb83562e31bc675c39dd6573b91"
+    },
+    {
+      "path": "1.tem",
+      "bytes": 1099,
+      "sha256": "d0014ccc28e612880d39a3a81ef875b23c3d46dc3b4476ddceb5b6adb1f54421"
+    },
+    {
+      "path": "inp",
+      "bytes": 71,
+      "sha256": "fec43e97e94d091f2327003dae2f5a86a9f41c996294efeb5778fb45fe0f58fe"
+    }
+  ]
+}

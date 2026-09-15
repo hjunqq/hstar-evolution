@@ -28,6 +28,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import gzip
 import hashlib
 import json
 import os
@@ -118,7 +119,16 @@ def main(argv=None):
     parsed = json.loads((dirs[0] / "results.json").read_text(encoding="utf-8"))
     parsed["source"] = (f"{a.case_id} legacy/1.flavia.res, produced by --adapter=off, "
                         f"run ref1 of {a.runs} (see repeat-report.json)")
-    (ref / "results.json").write_text(json.dumps(parsed, indent=1) + "\n", encoding="utf-8")
+    body = json.dumps(parsed, indent=1) + "\n"
+    # Compress the big ones. A strength-reduction deck parses to 13.5 MB of JSON; the
+    # reference must stay COMPLETE, so it is gzipped rather than trimmed, and yl_compare
+    # reads either spelling. The threshold is about repository weight, nothing else.
+    if len(body) > 2_000_000:
+        with gzip.open(ref / "results.json.gz", "wt", encoding="utf-8") as fh:
+            fh.write(body)
+        print(f"  results.json.gz ({len(body)} bytes of JSON, compressed)")
+    else:
+        (ref / "results.json").write_text(body, encoding="utf-8")
     for k, d in enumerate(dirs, 1):
         shutil.copyfile(d / "run-manifest.json", ref / f"run-manifest-{k}.json")
     (ref / "repeat-report.json").write_text(json.dumps({

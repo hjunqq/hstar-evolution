@@ -1,0 +1,6417 @@
+{
+  "manifest_version": 1,
+  "case_id": "plasticity.slope_srm",
+  "case_dir": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/plasticity/slope_srm",
+  "label": "ref3",
+  "status": "COMPLETED",
+  "expected_status": "COMPLETED",
+  "expectation_met": true,
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+    "sha256": "1832d436f93385e1605869ccf0c059a55d776563a613cba29c5df30813360583"
+  },
+  "build_manifest": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/build-manifest.json",
+    "profile": "release",
+    "binary_sha256": "1832d436f93385e1605869ccf0c059a55d776563a613cba29c5df30813360583"
+  },
+  "platform": {
+    "os": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "hostname": "FemChat"
+  },
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "timeout_seconds": 600.0,
+  "input_check_before": {
+    "ok": true,
+    "problems": []
+  },
+  "input_check_after": {
+    "ok": true,
+    "problems": []
+  },
+  "process": {
+    "command": [
+      "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+      "--adapter=off"
+    ],
+    "cwd": "/tmp/yl-freeze.gr5bxlpl/plasticity.slope_srm/20260915T005205Z_e32333e8_ref3/work",
+    "started_at": "2026-09-15T00:52:05+00:00",
+    "wall_seconds": 21.77,
+    "user_seconds": 21.573103,
+    "system_seconds": 0.187053,
+    "max_rss_kib": 31320,
+    "returncode": 0,
+    "signal": null,
+    "timed_out": false,
+    "stderr_bytes": 16,
+    "stderr_unexpected_lines": [],
+    "stderr_crash_pattern": false,
+    "inputs_copied": [
+      "1.LOA",
+      "1.aqu",
+      "1.cor",
+      "1.ele",
+      "1.ftr",
+      "1.glb",
+      "1.ifs",
+      "1.loa",
+      "1.man",
+      "1.mat",
+      "1.nrt",
+      "1.opr",
+      "1.pre",
+      "1.sol",
+      "1.tem",
+      "inp"
+    ]
+  },
+  "required_output": {
+    "file": "1.flavia.res",
+    "present": true,
+    "bytes": 14923600,
+    "sha256": "8d13da36e1387f4400aace61013a4773b1e6d5f52c09684539b2f0ab0729c269",
+    "parse": {
+      "ok": true,
+      "problems": [],
+      "summary": {
+        "blocks": [
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.01,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093492
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.01,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40405278.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.01,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066425.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.01,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066500.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.01,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0041246663
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.01,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.02,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093514
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.02,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40405153.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.02,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066413.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.02,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066487.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.02,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0010392243
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.02,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.375
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.03,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093548
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.03,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404998.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.03,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066398.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.03,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066472.3
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.03,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0019255477
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.03,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.04,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093568
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.04,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404866.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.04,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066384.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.04,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066458.9
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.04,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00073916709
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.04,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.05,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093606
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.05,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404707.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.05,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066369.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.05,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066443.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.05,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0015065698
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.05,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.06,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093632
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.06,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404557.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.06,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066354.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.06,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066428.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.06,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0008201116
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.06,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.07,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093679
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.07,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404356.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.07,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066334.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.07,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066408.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.07,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0015350004
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.07,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.08,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093702
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.08,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404187.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.08,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066317.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.08,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066391.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.08,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00031202038
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.08,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.625
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.09,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093747
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.09,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40403980.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.09,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066297.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.09,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066371.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.09,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0012922377
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.09,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.09379
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40403748.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.1,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066274.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.1,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066348.3
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00014578059
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.5
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.11,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093825
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.11,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40403535.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.11,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066252.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.11,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066326.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.11,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0013814505
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.11,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.12,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093841
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.12,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40403422.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.12,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066240.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.12,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066315.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.12,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00092656897
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.12,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.625
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.13,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093926
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.13,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40403116.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.13,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066211.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.13,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066285.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.13,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0012552319
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.13,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.14,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.093952
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.14,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40403027.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.14,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066203.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.14,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066277.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.14,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00089588417
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.14,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.625
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.15,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094017
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.15,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40402716.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.15,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066172.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.15,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066246.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.15,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0014721956
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.15,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.16,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094027
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.16,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40402623.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.16,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066162.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.16,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066236.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.16,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00037489378
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.16,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.375
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.17,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094096
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.17,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40402282.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.17,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066128.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.17,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066202.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.17,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0013636233
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.17,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.18,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094116
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.18,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40402169.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.18,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066116.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.18,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066190.9
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.18,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0003708288
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.18,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.375
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.19,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.09419
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.19,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40401799.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.19,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066079.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.19,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066154.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.19,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0013510758
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.19,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094199
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40401681.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.2,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066067.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.2,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066141.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00090458919
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.21,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094274
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.21,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40401322.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.21,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066031.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.21,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066106.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.21,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0013597597
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.21,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.22,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094292
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.22,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40401156.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.22,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066014.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.22,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066088.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.22,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00058198134
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.22,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.23,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094359
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.23,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40400795.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.23,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065978.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.23,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066052.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.23,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0014087718
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.23,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.24,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094388
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.24,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40400601.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.24,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065958.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.24,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066032.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.24,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0008449495
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.24,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.25,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094448
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.25,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40400276.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.25,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065925.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.25,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4065999.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.25,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.001455993
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.25,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.26,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.094536
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.26,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40400403.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.26,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065941.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.26,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066015.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.26,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00083470832
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.26,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.27,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.097097
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.27,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40404372.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.27,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066441.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.27,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066516.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.27,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0013856441
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.27,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.28,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.103676
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.28,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40411553.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.28,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4067361.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.28,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4067437.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.28,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00094773737
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.28,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.875
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.29,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.108593
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.29,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40413323.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.29,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4067628.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.29,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4067705.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.29,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0014891452
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.29,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.113875
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40418219.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.3,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4068260.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.3,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4068337.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.00061927921
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.5
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.31,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.124749
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.31,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40414971.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.31,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4067992.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.31,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4068070.3
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.31,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0013937964
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.31,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.32,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.133228
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.32,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40423454.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.32,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4068928.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.32,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4069006.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.32,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0015296756
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.32,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.33,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.144714
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.33,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40419670.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.33,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4068466.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.33,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4068544.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.33,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0011761356
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.33,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.34,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.167536
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.34,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40431364.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.34,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4069870.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.34,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4069949.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.34,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0017084118
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.34,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.35,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.201485
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.35,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40451031.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.35,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4072400.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.35,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4072482.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.35,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0020105714
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.35,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.36,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.23756
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.36,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40457528.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.36,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4073328.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.36,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4073411.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.36,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0025604215
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.36,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.37,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.294789
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.37,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40461256.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.37,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4074066.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.37,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4074150.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.37,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0020374045
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.37,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.38,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.332003
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.38,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40483507.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.38,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4076514.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.38,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4076600.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.38,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0031821931
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.38,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.39,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.373811
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.39,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40490357.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.39,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4077691.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.39,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4077778.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.39,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0023975506
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.39,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.426506
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40520606.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.4,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4081296.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.4,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4081388.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0048657594
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.41,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.487773
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.41,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40531860.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.41,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4082680.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.41,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4082772.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.41,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0030887814
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.41,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.42,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.553417
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.42,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40567205.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.42,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4086915.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.42,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4087012.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.42,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0051355512
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.42,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.43,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.677363
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.43,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40556367.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.43,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4085753.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.43,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4085848.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.43,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0055878841
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.43,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.44,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.824479
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.44,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40554176.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.44,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4085739.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.44,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4085836.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.44,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0062358933
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.44,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.45,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 10.999098
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.45,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40502629.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.45,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4079666.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.45,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4079761.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.45,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0084041146
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.45,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.46,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 11.133126
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.46,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40509621.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.46,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4080896.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.46,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4080991.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.46,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0060398228
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.46,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.47,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 11.287365
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.47,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40467173.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.47,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4074651.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.47,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4074738.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.47,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0073782763
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.47,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.48,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 11.451742
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.48,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40469079.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.48,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4076133.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.48,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4076222.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.48,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.0079436104
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.48,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.49,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 11.621143
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.49,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40443703.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.49,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4071462.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.49,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4071545.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.49,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.010793665
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.49,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 11.810457
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40444580.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.5,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4072957.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.5,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4073038.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.014042573
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.51,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 12.005591
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.51,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40405415.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.51,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066899.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.51,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066973.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.51,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.018054806
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.51,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.52,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 12.208169
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.52,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40411136.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.52,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4068959.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.52,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4069037.3
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.52,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.025053823
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.52,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.53,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 12.453402
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.53,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40383148.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.53,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065352.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.53,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4065414.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.53,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.031200778
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.53,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.54,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 12.69731
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.54,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40390016.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.54,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065545.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.54,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4065618.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.54,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.031381128
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.54,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.55,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 12.964625
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.55,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40341223.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.55,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4059987.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.55,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4060042.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.55,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.038028962
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.55,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.56,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 13.22916
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.56,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40366216.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.56,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4062375.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.56,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4062455.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.56,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.046071485
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.56,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.57,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 13.522398
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.57,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40304696.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.57,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4059779.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.57,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4061197.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.57,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.04907002
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.57,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.58,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 13.829348
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.58,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40336217.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.58,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4058205.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.58,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4059042.9
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.58,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.051955528
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.58,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.59,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 14.225166
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.59,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40281863.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.59,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4058706.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.59,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4060053.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.59,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.054645994
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.59,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 14.526193
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40306897.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.6,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4057949.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.6,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4059219.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.062474978
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.61,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 14.920695
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.61,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40280972.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.61,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4060345.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.61,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4061677.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.61,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.081288034
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.61,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.62,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 15.29163
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.62,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40285017.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.62,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4058985.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.62,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4060237.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.62,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.067392645
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.62,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.63,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 15.732535
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.63,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40352355.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.63,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4064778.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.63,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066148.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.63,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.076139721
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.63,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.64,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 16.132682
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.64,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40334087.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.64,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4063509.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.64,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4064869.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.64,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.093123192
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.64,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.65,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 16.578798
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.65,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40364349.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.65,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065536.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.65,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4067007.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.65,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.11838816
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.65,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.66,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 17.057861
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.66,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40352822.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.66,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4063921.6
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.66,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4065348.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.66,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.11446069
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.66,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.67,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 17.562451
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.67,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40387363.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.67,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066385.4
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.67,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4067932.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.67,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.12932059
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.67,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.68,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 18.048466
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.68,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40352534.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.68,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4063749.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.68,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4065304.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.68,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.12804937
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.68,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.69,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 18.590854
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.69,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40361306.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.69,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4064371.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.69,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4065940.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.69,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.14424083
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.69,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 19.143925
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40337505.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.7,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4063135.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.7,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4064626.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.15945985
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.71,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 19.744654
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.71,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40388731.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.71,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065150.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.71,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066737.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.71,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.17539508
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.71,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.72,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 20.325893
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.72,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40386705.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.72,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4065652.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.72,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4067168.9
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.72,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.19272994
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.72,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.73,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 20.971518
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.73,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40422280.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.73,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4066726.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.73,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4068344.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.73,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.20554612
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.73,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.74,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 21.835336
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.74,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41123492.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.74,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4148204.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.74,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4148449.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.74,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.22716107
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.74,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.75,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 23.03584
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.75,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41122246.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.75,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4098849.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.75,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4099276.9
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.75,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.25573789
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.75,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.76,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 25.883779
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.76,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40371877.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.76,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4064688.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.76,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4066622.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.76,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.32534852
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.76,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.77,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 29.555587
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.77,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 39572199.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.77,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4005941.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.77,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4008432.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.77,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.43064917
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.77,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.78,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 36.907137
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.78,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 42641715.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.78,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4127687.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.78,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4127797.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.78,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 0.70117087
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.78,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.79,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 49.237887
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.79,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 39921623.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.79,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4040891.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.79,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4045570.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.79,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0400673
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.79,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 56.099805
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41406994.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.8,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4125922.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.8,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4131593.9
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.2331965
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.81,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 60.06382
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.81,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40594199.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.81,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4071484.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.81,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4073317.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.81,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.3290123
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.81,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.82,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 66.452122
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.82,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 39982561.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.82,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4166914.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.82,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4167871.1
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.82,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.4641031
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.82,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.83,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 76.508139
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.83,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 40037088.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.83,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4022842.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.83,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4023055.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.83,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.6685743
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.83,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.84,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 87.481514
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.84,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41090740.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.84,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4054791.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.84,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4055954.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.84,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.9800778
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.84,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.85,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 96.839339
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.85,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 45359591.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.85,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4548001.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.85,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4557795.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.85,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 2.5791462
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.85,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.86,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 109.38743
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.86,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41492503.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.86,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 3981377.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.86,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 3981650.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.86,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 3.0133998
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.86,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.87,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 121.07433
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.87,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41995618.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.87,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4072124.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.87,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4081593.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.87,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 3.3939105
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.87,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.88,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 136.77666
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.88,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 39251053.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.88,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4160874.0
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.88,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4165438.3
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.88,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 4.0789041
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.88,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.89,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 164.07638
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.89,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 48359486.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.89,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 6044968.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.89,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 6050754.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.89,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 5.1640802
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.89,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 235.67128
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41185390.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.9,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4210570.2
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.9,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4211727.2
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 9.2819041
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.91,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 416.19174
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.91,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 61479080.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.91,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 6021081.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.91,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 6027792.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.91,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 16.527838
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.91,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.92,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 739.32518
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.92,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 41520240.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.92,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4141775.5
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.92,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4181916.3
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.92,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 28.760057
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.92,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.93,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 1156.3213
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.93,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 47184161.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.93,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 4665279.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.93,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4665324.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.93,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 43.731906
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.93,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.94,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 1789.9762
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.94,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 42642992.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.94,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 5328341.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.94,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 5356379.7
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.94,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 65.026843
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.94,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.95,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 2472.4976
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.95,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 51128911.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.95,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 5948148.8
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.95,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 5948812.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.95,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 87.36612
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.95,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.96,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 3387.8631
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.96,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 54788836.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.96,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 5422051.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.96,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 5422817.8
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.96,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 116.60526
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.96,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.97,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4038.1022
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.97,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 92118106.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.97,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 7999984.7
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.97,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 8000133.6
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.97,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 137.97971
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.97,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.98,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 4972.5192
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.98,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 57139535.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.98,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 5651103.3
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.98,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 5651871.0
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.98,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 168.49919
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.98,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.99,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 6052.0826
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.99,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 69053637.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.99,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 7039933.1
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 0.99,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 7042569.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 0.99,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 201.93175
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.99,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 7420.7374
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 54927805.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 451,
+            "max_abs": 7010850.9
+          },
+          {
+            "name": "PRINCIPALSTRESS",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [
+              "SIGMA-1",
+              "SIGMA-2"
+            ],
+            "ncomp": 2,
+            "nodes": 451,
+            "max_abs": 7045138.4
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 243.44738
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 451,
+            "max_abs": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "outputs": [
+    {
+      "name": "1.act",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.bar",
+      "bytes": 8100,
+      "sha256": "378cd4a27f53b7dd7c83449c1e64cf68c65ff8f1085932687c142b36a608c634"
+    },
+    {
+      "name": "1.bem",
+      "bytes": 16200,
+      "sha256": "e9fffd41e02d18f191e2af2cc58449a1213cd9b1f2791ac20f5550038b1f2f36"
+    },
+    {
+      "name": "1.chk",
+      "bytes": 1789671,
+      "sha256": "b57081c335cba96d7d8e53145406bdbebc398b9e98d90cf1c963f36bca37fd49"
+    },
+    {
+      "name": "1.ctr",
+      "bytes": 25400,
+      "sha256": "f6cf629d51af2bd524e966ebb329a96f0c115b6d2fe3aa326ad615bd7b2b2ed9"
+    },
+    {
+      "name": "1.ctt",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.dis",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.fai",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.msh",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.res",
+      "bytes": 14923600,
+      "sha256": "8d13da36e1387f4400aace61013a4773b1e6d5f52c09684539b2f0ab0729c269"
+    },
+    {
+      "name": "1.ftf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.gdm",
+      "bytes": 3700,
+      "sha256": "d93ef784e7d0e0ad116079f9460742577d5253190753082e827a9000b98085a6"
+    },
+    {
+      "name": "1.gpv",
+      "bytes": 6300,
+      "sha256": "944a97db0486ff6d86e46b32259d8286adaa87f4fbc3f5825b089f9be41696bd"
+    },
+    {
+      "name": "1.ini",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.inw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.oew",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ogw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ojw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.opw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.res",
+      "bytes": 4690400,
+      "sha256": "bf27d0b473133561c2c95f0347771189108a0fd92b048af48ca7874aa0118496"
+    },
+    {
+      "name": "1.resb",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.rtt",
+      "bytes": 164908,
+      "sha256": "b199d085c0232ea03b6b3fb4be46cd02c4a2415b08fabaa4de62c94744f13165"
+    },
+    {
+      "name": "1.stf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.sto",
+      "bytes": 0,
+      "sha256": null
+    }
+  ],
+  "diagnostics": [],
+  "diagnostics_malformed": [],
+  "check_summary": null,
+  "check_malformed": [],
+  "protocol_violation": null,
+  "core_dump": false,
+  "state": null,
+  "finished_at": "2026-09-15T00:52:28+00:00",
+  "run_dir": "/tmp/yl-freeze.gr5bxlpl/plasticity.slope_srm/20260915T005205Z_e32333e8_ref3"
+}

@@ -1,0 +1,18 @@
+# 容差登记。沿用既有口径，不因为算例更大或更非线性而放宽。
+version = 1
+case_id = "plasticity.slope_srm"
+comparison_rule = "abs(actual - reference) <= atol + rtol * abs(reference), per component, after shape/ID/finite checks"
+
+[repeat]           # B02：同二进制、单线程、三次运行
+atol = 0.0
+rtol = 0.0
+
+[cross_path]       # 新旧入口路径
+# 2026-09-14 一次实测教训写在这里：本算例曾出现跨路径差异，第一处分叉是
+# `cartd`（高斯点笛卡尔形函数导数）的 1–2 ULP，原因是适配器复刻了 legacy 的 `jacob`
+# 而 `-O2` 对两份同义实现施加了不同的浮点重结合。**处置不是放宽容差**，而是让
+# `evaluate_rule` 直接复用 legacy `jacob`，两份实现合成一份（docs/m6 §7-§8）。
+# 之后在默认编译选项下 600 块 541 200 值 max|d| = 0。
+status = "strict; a divergence was fixed at its source rather than absorbed here"
+atol = 0.0
+rtol = 0.0

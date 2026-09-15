@@ -440,3 +440,45 @@ PASS  blocks=600 values=541200 mismatches=0 max|d|=0.000e+00
 
 临时浮点探针与 `initzero` / `nofma` / `fpprecise` 三个 profile **仍为非默认**,
 未升级为常设治理设施;未新增常设门禁;塑性积分器未纳入观测面。
+
+## 9. `mat_curve = 2` 能力收口:`train05b_slope_srm`(2026-09-15)
+
+### 9.1 判据
+
+| 判据 | 实测 |
+|---|---|
+| 现代输入独立驱动 | 门禁 **N1**:工作目录只有 `case.toml` + `1.cor`/`1.ele`,**无任何 legacy 控制卡**,`rc=0` |
+| 材料曲线链路成立 | `mat_curve` → `steps[0].load.strength_reduction`(按名字引用 amplitude)→ commit → `Stiff.f90:5779` |
+| **真实非零 `PLASTICSTRAIN`** | 门禁 **N4**:**18 924 / 45 100 个非零值**(冻结参考中同样) |
+| 与冻结 legacy 参考严格等价 | 门禁 **N2**:`blocks=600 values=541200 mismatches=0 max|d|=0.000e+00` |
+
+**这才是塑性真正发生的算例。** `mini_mc` 的 `PLASTICSTRAIN` 恒为 0,只能确立读取/映射/分派;
+本算例 42% 的塑性应变值非零,通过的等价比较因此**也覆盖塑性回映**。
+
+### 9.2 这一能力实际打开的白名单
+
+全部由这份真实 deck 逼出来,没有一条是预先设计的:
+
+| 行 | 取值 | 原因 |
+|---|---|---|
+| `step.load.mode` | `load` / `strength_reduction` | legacy `type_load`,后者即 `MAT_DE` |
+| `step.load.strength_reduction.amplitude` | 按名字引用 | 折减进度表;**条件必填**(有模式必须有曲线,无模式不许有曲线),两个方向各有反例 |
+| `step.controls.steps` / `time_increment` | 100 / 0.01 | **移出默认表**:它们决定分析停在折减曲线的哪一点 |
+| `material[].thermal_expansion` | 5.0e-6 | **移出默认表**:真实 deck 之间不同(静力两例是 1.0e-5) |
+| `output.field` | 增 `ms` / `f` / `y` | 主应力、节点合力(`tofor`)、屈服指示 |
+| `output.stress_averaging` | 增 `smoothed_legacy` / `direct_legacy` | legacy 的 -1/-2:同样两种方案,但只作用于通过 `Output.f90:5104` 资格判定的单元组。本 deck 用 -2 |
+
+### 9.3 三处工程性事实
+
+- **参考基线 13.5 MB**,gzip 后 3.0 MB。冻结件必须**完整**(逐块摘要不是验收要求,但审计要靠它),
+  所以压缩而不是裁剪;`yl_compare` 两种拼写都读。
+- **比较器的结构性失败也要有界**:"block names differ" 原样打印两份 600 元素列表。
+  改为只报两边的块数与**第一处不同的位置**。
+- **TOML 子集要求数组写在一行**。41 个节点号一行放得下;真要几百个节点的集合时再教读取器多行数组——**不是现在**。
+
+### 9.4 结论边界
+
+本次确立:`CLASSICALEP/MC` + 强度折减在真实 deck 上由现代输入独立驱动,
+且在**塑性确实发生**的条件下与冻结 legacy 参考严格等价。
+**未**确立:其他准则(TC/VM/DP/MCC/DPC/MCJOINT)、其他本构模型、
+以及 §2.4 那四个与模型正交的子能力族——它们仍是 legacy-only。

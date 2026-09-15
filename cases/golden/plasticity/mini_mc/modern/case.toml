@@ -43,6 +43,7 @@ model   = "elastic_isotropic"
 density = 2500.0
 E       = 2.0e10
 nu      = 0.25
+thermal_expansion = 1.0e-5   # 1/K, from the deck
 
 [[material]]
 name           = "soil"
@@ -50,6 +51,7 @@ model          = "classicalep"
 density        = 2000.0
 E              = 5.0e7
 nu             = 0.35
+thermal_expansion = 1.0e-5   # 1/K, from the deck
 criterion      = "mohr_coulomb"
 cohesion       = 5.0e4      # Pa
 hardening      = 0.0        # Pa
@@ -81,6 +83,8 @@ procedure = "static"
 
 [step.controls]
 increments      = 1
+steps           = 1     # one load step
+time_increment  = 1.0   # the curve abscissa this step advances
 max_iterations  = 10
 tolerance_force = 1.0e-5
 tolerance_dof   = 1.0e-5
@@ -96,6 +100,9 @@ value = 0.0
 nset  = "sym_y"
 dof   = [2]
 value = 0.0
+
+[step.load]
+mode = "load"   # ordinary loading; "strength_reduction" is legacy MAT_DE
 
 [step.load.gravity]
 magnitude = 9.81

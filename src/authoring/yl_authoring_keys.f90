@@ -76,6 +76,10 @@ module yl_authoring_keys
     key_t('material[].density',            TV_REAL, .true.,  ''),                            &
     key_t('material[].E',                  TV_REAL, .true.,  ''),                            &
     key_t('material[].nu',                 TV_REAL, .true.,  ''),                            &
+    ! A material property that differs between real decks (1.0e-5 on the static pair,
+    ! 5.0e-6 on slope_srm). Unconsumed without a thermal step, but changing it changes what
+    ! the material IS, so by the admission rule it cannot carry a default.
+    key_t('material[].thermal_expansion',  TV_REAL, .true.,  ''),                            &
     ! The plasticity block: OPTIONAL as keys, because an elastic material has none of it,
     ! and REQUIRED-TOGETHER by model_requires below. Declaring them required here would
     ! demand a friction angle of every linear-elastic deck.
@@ -97,6 +101,12 @@ module yl_authoring_keys
     key_t('step[].name',                   TV_STR,  .true.,  ''),                            &
     key_t('step[].procedure',              TV_STR,  .true.,  'static'),                      &
     key_t('step[].controls.increments',    TV_INT,  .true.,  '1'),                           &
+    ! How many load steps the analysis walks, and how far each advances the curve
+    ! abscissa. Both were pinned in the default table while one step was the only shape
+    ! this build admitted; a strength-reduction sweep is 100 steps of 0.01 and the values
+    ! decide where on the reduction curve the analysis ends.
+    key_t('step[].controls.steps',         TV_INT,  .true.,  ''),                            &
+    key_t('step[].controls.time_increment', TV_REAL, .true., ''),                            &
     key_t('step[].controls.max_iterations', TV_INT, .true.,  ''),                            &
     key_t('step[].controls.tolerance_force', TV_REAL, .true., ''),                           &
     key_t('step[].controls.tolerance_dof', TV_REAL, .true.,  ''),                            &
@@ -109,15 +119,21 @@ module yl_authoring_keys
     key_t('step[].boundary[].dof[]',       TV_INT,  .false., '1|2'),                         &
     key_t('step[].boundary[].dof.count',   TV_INT,  .true.,  ''),                            &
     key_t('step[].boundary[].value',       TV_REAL, .true.,  ''),                            &
+    ! legacy `type_load`. 'strength_reduction' is MAT_DE: the named amplitude's current
+    ! factor scales the cohesion and tand(friction)/tand(dilation) every step
+    ! (Stiff.f90:5779), which is what walks the model to failure.
+    key_t('step[].load.mode',              TV_STR,  .true.,  'load|strength_reduction'),     &
+    key_t('step[].load.strength_reduction.amplitude', TV_STR, .false., ''),                  &
     key_t('step[].load.gravity.magnitude', TV_REAL, .true.,  ''),                            &
     key_t('step[].load.gravity.direction[]', TV_REAL, .false., ''),                          &
     key_t('step[].load.gravity.direction.count', TV_INT, .true., '2'),                       &
     key_t('step[].load.gravity.amplitude', TV_STR,  .true.,  ''),                            &
     key_t('solver.linear',                 TV_STR,  .true.,  'profile'),                     &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
-    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep'),                      &
+    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y'),               &
     key_t('output.field.count',            TV_INT,  .true.,  ''),                            &
-    key_t('output.stress_averaging',       TV_STR,  .true.,  'none|smoothed|direct')]
+    key_t('output.stress_averaging',       TV_STR,  .true.,                                  &
+          'none|smoothed|direct|smoothed_legacy|direct_legacy')]
 
   public :: authoring_validate, authoring_key_count, authoring_key_pattern
 
@@ -183,6 +199,7 @@ contains
     call resolve_nested(doc, 'step', 'boundary', 'nset', 'nset', file, errors)
     call resolve_step_amplitude(doc, file, errors)
     call model_requires(doc, file, errors)
+    call load_mode_requires(doc, file, errors)
 
     ! --- the one arity the contract fixes -----------------------------------------
     if (doc%count_of('step') /= 1_int32) then
@@ -242,6 +259,41 @@ contains
       end do
     end do
   end subroutine model_requires
+
+  !> The strength-reduction curve is required with its mode and forbidden without it.
+  !> Same shape as `model_requires`, and the same reason: "required" is a property of the
+  !> (key, mode) pair. A curve named on a plain gravity run would be silently ignored --
+  !> legacy only reads mat_curve under MAT_DE -- and an author would never learn that the
+  !> schedule they wrote did nothing.
+  subroutine load_mode_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: km, kc
+    logical :: reducing
+
+    km = doc%find('step[1].load.mode')
+    if (km == 0_int32) return                  ! a missing mode is require_all's finding
+    reducing = trim(doc%entry(km)%svalue) == 'strength_reduction'
+    kc = doc%find('step[1].load.strength_reduction.amplitude')
+    if (reducing .and. kc == 0_int32) then
+      call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(km)%line,           &
+                 'step[1].load.strength_reduction.amplitude',                                 &
+                 'strength reduction needs the amplitude that schedules it', '',              &
+                 'an amplitude name')
+    end if
+    if (.not. reducing .and. kc /= 0_int32) then
+      ! Located on the MODE line, not on the curve. Two lines contradict each other and
+      ! this is the one the author most likely meant to change -- they wrote a reduction
+      ! schedule, so the mode is what is out of step with the intent. The message names
+      ! the other line so neither has to be guessed at.
+      call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(km)%line,           &
+                 'step[1].load.strength_reduction.amplitude',                                 &
+                 'a strength-reduction curve is named but load.mode is not '//                &
+                 '"strength_reduction", so legacy would never read it',                       &
+                 trim(doc%entry(km)%svalue), 'strength_reduction')
+    end if
+  end subroutine load_mode_requires
 
   ! ------------------------------------------------------------------ checks ----
 
@@ -377,16 +429,26 @@ contains
     integer(int32) :: n, a, k
     n = doc%count_of('step')
     do a = 1_int32, n
-      k = doc%find('step['//trim(itoa(a))//'].load.gravity.amplitude')
-      if (k == 0_int32) cycle
-      if (.not. name_exists(doc, 'amplitude', trim(doc%entry(k)%svalue))) then
-        call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(k)%line,         &
-                   'step['//trim(itoa(a))//'].load.gravity.amplitude',                       &
-                   'refers to an amplitude that this file does not define',                  &
-                   trim(doc%entry(k)%svalue), 'a declared [[amplitude]] name')
-      end if
+      call one_amplitude_ref(doc, file, 'step['//trim(itoa(a))//'].load.gravity.amplitude', errors)
+      call one_amplitude_ref(doc, file,                                                       &
+           'step['//trim(itoa(a))//'].load.strength_reduction.amplitude', errors)
     end do
   end subroutine resolve_step_amplitude
+
+  !> One amplitude reference, if present, must name a declared amplitude. Two call sites
+  !> now (gravity's curve and the strength-reduction schedule) and the same rule for both.
+  subroutine one_amplitude_ref(doc, file, path, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file, path
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: k
+    k = doc%find(path)
+    if (k == 0_int32) return
+    if (name_exists(doc, 'amplitude', trim(doc%entry(k)%svalue))) return
+    call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(k)%line, path,        &
+               'refers to an amplitude that this file does not define',                      &
+               trim(doc%entry(k)%svalue), 'a declared [[amplitude]] name')
+  end subroutine one_amplitude_ref
 
   ! ------------------------------------------------------------------ helpers ----
 

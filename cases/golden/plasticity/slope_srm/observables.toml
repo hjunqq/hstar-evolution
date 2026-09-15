@@ -1,0 +1,65 @@
+# 观察量登记。按 M0-05a 的纪律：在任何结果数值被查看之前登记。
+# 本文件登记的是**结构**——块名、分量名、节点/单元数——不是数值。
+version = 1
+case_id = "plasticity.slope_srm"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 451
+expected_element_count = 400
+note = """本算例每个 step 写出 6 个块，共 100 个 step = 600 个块、541 200 个数值。
+这是本仓第一个多 step 算例：强度折减（TYPE_LOAD=MAT_DE）沿曲线 2 把强度从 1.0 折到 0.5，
+逐步逼近破坏。逐块摘要不是验收要求；比较器只报块数/值数/mismatch 数/max|d|，
+完整逐值细节留在证据文件里。"""
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+
+[[observable]]
+id = "tofor"
+kind = "nodal_vector"
+components = ["fx", "fy"]
+unit = "N"
+required = true
+note = "节点合力；本算例相对静力两例新增"
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true
+
+[[observable]]
+id = "principal_stress"
+kind = "nodal_vector"
+components = ["SIGMA-1", "SIGMA-2"]
+unit = "Pa"
+required = true
+
+[[observable]]
+id = "plastic_strain"
+kind = "nodal_scalar"
+components = ["PLASTICSTRAIN"]
+unit = "1"
+required = true
+# The criterion, not a description: this block must contain NON-ZERO values, or the case
+# does not exercise what it exists for. Checked by tools/yl_modern_check.py (N4).
+must_be_nonzero = true
+note = """**本算例存在的理由**：`mini_mc` 的这一块恒为 0（不屈服），
+所以它只能确立读取/映射/分派链路，不能确立塑性回映。本算例必须出现**非零**塑性应变，
+否则同样的判据仍然是空的。非零是**判据**，不是观察到之后才写上的描述。"""
+
+[[observable]]
+id = "yield"
+kind = "nodal_scalar"
+components = ["Yield"]
+unit = "1"
+required = true

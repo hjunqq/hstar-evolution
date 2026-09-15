@@ -10,6 +10,11 @@ asserts exactly those:
       files the contract names (`mesh.file` -> `<prefix>.cor` / `.ele`) are present.
   N2  the results are byte-identical to the FROZEN legacy reference, strictly
       (atol = rtol = 0, per ADR-0008 SS4: the noise measurement found none).
+  N4  a block a case declares `must_be_nonzero` really carries non-zero values. Frozen
+      references make this mostly self-enforcing -- a run that stopped yielding would fail
+      N2 -- but the claim "this deck exercises plasticity" should be a checked property of
+      the case, not a sentence in a report, and it also guards against re-freezing from a
+      degenerate run.
   N3  a deck the contract rejects STOPS with a readable diagnostic (exit 2 INVALID_INPUT
       or 3 UNSUPPORTED) and writes no results. Without N3 the gate would be satisfied by
       an --input that silently ignored what it could not understand. Three shapes, because
@@ -33,6 +38,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shutil
 import subprocess
@@ -86,6 +92,26 @@ def stage(case_dir: Path, work: Path) -> Path:
     return work / "case.toml"
 
 
+def nonzero_required(case_dir: Path, results: Path) -> list[tuple[str, int]]:
+    """(block name, non-zero count) for every observable the case declares must_be_nonzero."""
+    obs = case_dir / "observables.toml"
+    if not obs.is_file():
+        return []
+    doc = tomllib.loads(obs.read_text(encoding="utf-8"))
+    wanted = {c for o in doc.get("observable", []) if o.get("must_be_nonzero")
+              for c in o.get("components", [])}
+    if not wanted:
+        return []
+    parsed = json.loads(results.read_text(encoding="utf-8"))
+    counts: dict[str, int] = {}
+    for b in parsed["blocks"]:
+        if b["name"] not in wanted:
+            continue
+        counts[b["name"]] = counts.get(b["name"], 0) + sum(
+            1 for row in b["rows"].values() for v in row if v != 0.0)
+    return sorted(counts.items())
+
+
 def compare(ref: Path, actual: Path) -> tuple[bool, str]:
     cp = subprocess.run([sys.executable, str(ROOT / "tools/yl_compare.py"), str(ref), str(actual)],
                         capture_output=True, text=True)
@@ -105,7 +131,10 @@ def main(argv=None):
     problems: list[str] = []
 
     for cid, case_dir in cases():
+        # .json or .json.gz: a big reference is compressed, and yl_compare reads either.
         ref = case_dir / "reference/results.json"
+        if not ref.is_file():
+            ref = case_dir / "reference/results.json.gz"
         with tempfile.TemporaryDirectory(prefix="yl-modern.") as td:
             work = Path(td)
             stage(case_dir, work)
@@ -130,6 +159,11 @@ def main(argv=None):
             print(f"  N2 {cid:<28} vs frozen reference  {line}")
             if not ok:
                 problems.append(f"N2 {cid}: the modern path does not reproduce the reference")
+            for block, n in nonzero_required(case_dir, out):
+                print(f"  N4 {cid:<28} {block} non-zero values: {n}")
+                if n == 0:
+                    problems.append(f"N4 {cid}: {block} is declared must_be_nonzero and is "
+                                    f"all zeros -- the case does not exercise what it is for")
 
     # N3 -- a deck the contract rejects must stop, readably.
     bad_id, bad_dir = cases()[0]

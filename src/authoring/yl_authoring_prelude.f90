@@ -127,6 +127,8 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
   integer(int32) :: k
   nincs_ = 1_ink
   miter = 1_ink
+  nstep = 1_ink
+  ditime = 1.0_irk
   call toml_read(trim(yl_input_file), doc)
   ! Unreachable in a normal run -- the prelude and the entry both read this file first --
   ! but it must not be a SILENT fallback: `increments` and `max_iterations` are authored,
@@ -137,10 +139,16 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
   if (k /= 0_int32) nincs_ = int(doc%entry(k)%ivalue, ink)
   k = doc%find('step[1].controls.max_iterations')
   if (k /= 0_int32) miter = int(doc%entry(k)%ivalue, ink)
-  ditime = 1.0_irk
+  ! nstep and ditime were pinned to 1 and 1.0 while one step was the only shape this build
+  ! admitted. A strength-reduction sweep is 100 steps of 0.01, and the two values decide
+  ! how far along the reduction curve the analysis gets -- they are the experiment, not
+  ! bookkeeping. Read here because STATIC_U's copies are routine locals.
+  k = doc%find('step[1].controls.steps')
+  if (k /= 0_int32) nstep = int(doc%entry(k)%ivalue, ink)
+  k = doc%find('step[1].controls.time_increment')
+  if (k /= 0_int32) ditime = real(doc%entry(k)%rvalue, irk)
   noutn = 1_ink
   noutf = 1_ink
-  nstep = 1_ink
   inc_step = 1_ink
   nresta = 1_ink
   cwater = 0_ink

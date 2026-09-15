@@ -180,6 +180,8 @@ contains
       call opt_set(mat%density, real_at(doc, 'material['//itoa(i)//'].density'))
       call opt_set(mat%e, real_at(doc, 'material['//itoa(i)//'].E'))
       call opt_set(mat%nu, real_at(doc, 'material['//itoa(i)//'].nu'))
+      call opt_set(mat%thermal_expansion,                                                     &
+           real_at(doc, 'material['//itoa(i)//'].thermal_expansion'))
       ! The per-model block, set only for the model that has one. `criterion` being set is
       ! what makes the commit allocate legacy's ClassicalEP record, so the whole block is
       ! written together or not at all -- the validator has already refused a half of it.
@@ -242,7 +244,8 @@ contains
     call builder_step_begin(sb)
     call builder_step_set_procedure(b, sb, procedure_code(text_at(doc, 'step[1].procedure')), &
                                     here(line_at(doc, 'step[1].procedure')), errors)
-    call builder_step_set_load_mode(b, sb, default_load_mode(), here(0_int32), errors)
+    call builder_step_set_load_mode(b, sb, load_mode_code(text_at(doc, 'step[1].load.mode')), &
+                                    here(line_at(doc, 'step[1].load.mode')), errors)
     if (builder_failed(b)) return
 
     call default_controls(ctrl)
@@ -250,6 +253,8 @@ contains
     call opt_set(ctrl%max_iterations,  int_at(doc, 'step[1].controls.max_iterations'))
     call opt_set(ctrl%nonlinear_type,                                                         &
          stiffness_update_code(text_at(doc, 'step[1].controls.stiffness_update')))
+    call opt_set(ctrl%steps,          int_at(doc, 'step[1].controls.steps'))
+    call opt_set(ctrl%time_increment, real_at(doc, 'step[1].controls.time_increment'))
     call opt_set(ctrl%tolerance_force, real_at(doc, 'step[1].controls.tolerance_force'))
     ! tolerance_dof is one value PER DEGREE OF FREEDOM and gravity%amplitude one id PER
     ! SECTION: legacy stores both as arrays, and the contract lets the author write one
@@ -263,6 +268,12 @@ contains
 
     call default_load(ld)
     call opt_set(ld%gravity%recompute_every, 1_int32)
+    ! 0 unless the author named a curve: legacy's own "no strength reduction". The
+    ! validator has already refused a curve that names nothing, and a name on a plain
+    ! gravity run.
+    call opt_set(ld%strength_reduction,                                                       &
+         int(amplitude_index(doc, text_at(doc, 'step[1].load.strength_reduction.amplitude')), &
+             int32))
     call opt_set(ld%gravity%magnitude, real_at(doc, 'step[1].load.gravity.magnitude'))
     if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
     allocate (ld%gravity%amplitude(int(doc%count_of('section'))))

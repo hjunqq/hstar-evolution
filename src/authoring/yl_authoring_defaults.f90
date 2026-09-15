@@ -37,7 +37,7 @@ module yl_authoring_defaults
   public :: default_residue, default_existence
   public :: element_kind_of, nodes_per_element, formulation_code, amplitude_code
   public :: procedure_code, solver_code, legacy_material_name, enable_output_field
-  public :: stiffness_update_code, criterion_code
+  public :: stiffness_update_code, criterion_code, load_mode_code
 
 contains
 
@@ -56,7 +56,6 @@ contains
     call opt_set(m%wetting_kind, 0_int32)
     call opt_set(m%liquefaction, 0_int32)
     call opt_set(m%solid_ratio, 1.0_real64)
-    call opt_set(m%thermal_expansion, 1.0e-5_real64)   ! unconsumed on a static path
   end subroutine default_material
 
   !> The .glb group header's non-physical columns (1.glb:59 on both golden decks).
@@ -100,6 +99,16 @@ contains
 
   !> `type_nl`: WHEN ALGORT rebuilds the tangent (Fem.f90:15450-15458).
   !> No longer a default -- see the contract's SS5 note. Both values are legacy's own.
+  !> legacy `type_load`. 'MAT_DE' is strength reduction; 'LOAD' is the ordinary one.
+  pure function load_mode_code(name) result(s)
+    character(len=*), intent(in) :: name
+    character(len=:), allocatable :: s
+    select case (trim(name))
+    case ('strength_reduction'); s = 'MAT_DE'
+    case default;                s = 'LOAD'
+    end select
+  end function load_mode_code
+
   pure integer(int32) function stiffness_update_code(name) result(c)
     character(len=*), intent(in) :: name
     select case (trim(name))
@@ -121,9 +130,7 @@ contains
 
   subroutine default_controls(c)
     type(controls_t), intent(out) :: c
-    call opt_set(c%steps, 1_int32)
     call opt_set(c%step_increment, 1_int32)
-    call opt_set(c%time_increment, 1.0_real64)   ! static: the curve's abscissa, no more
     call opt_set(c%restart_frequency, 1_int32)
   end subroutine default_controls
 
@@ -186,10 +193,16 @@ contains
   pure integer(int32) function stress_averaging_code(name) result(c)
     character(len=*), intent(in) :: name
     select case (trim(name))
-    case ('none');     c = 0_int32
-    case ('smoothed'); c = 1_int32
-    case ('direct');   c = 2_int32
-    case default;      c = 0_int32
+    case ('none');            c = 0_int32
+    case ('smoothed');        c = 1_int32
+    case ('direct');          c = 2_int32
+    ! legacy's own pre-2005 spellings (Global.f90:1023 comment): the same two schemes, but
+    ! applied only to element groups that pass the eligibility test at Output.f90:5104
+    ! (continuum, displacement field, not GOODMAN/CONTACT00, not a 2-node or index 22/26
+    ! element). A deck in the wild carries -2, so the value is real and is not a synonym.
+    case ('smoothed_legacy'); c = -1_int32
+    case ('direct_legacy');   c = -2_int32
+    case default;             c = 0_int32
     end select
   end function stress_averaging_code
 
@@ -203,6 +216,9 @@ contains
     ! the one output that says whether the material actually yielded -- which is why the
     ! material domain's acceptance compares it rather than only displacement and stress.
     case ('ep'); call opt_set(o%field%ep, 1_int32)
+    case ('ms'); call opt_set(o%field%ms, 1_int32)   ! principal stresses
+    case ('f');  call opt_set(o%field%f, 1_int32)    ! nodal force, written as `tofor`
+    case ('y');  call opt_set(o%field%y, 1_int32)    ! yield indicator
     end select
   end subroutine enable_output_field
 

@@ -113,6 +113,23 @@ program yl_authoring_test
   ! table because its innocence depended on the material
   call expect_bad('unlisted stiffness update', 'stiffness_update = "first_iteration"', &
                   'stiffness_update = "sometimes"', 'UNSUPPORTED', 3, 'stiffness_update')
+  ! the load mode is a whitelist
+  call expect_bad('unlisted load mode', 'mode = "load"', 'mode = "creep"', &
+                  'UNSUPPORTED', 3, 'mode')
+  ! a strength-reduction curve on a deck that does not reduce strength: legacy would
+  ! ignore it, and the author would never learn their schedule did nothing
+  call expect_bad('reduction curve without the mode', 'mode = "load"', &
+                  'mode = "load"'//new_line('a')//'[step.load.strength_reduction]'// &
+                  new_line('a')//'amplitude = "constant"', &
+                  'INVALID_INPUT', 2, 'strength_reduction')
+  ! the two step-count controls left the default table because a sweep needs them
+  call expect_bad('missing step count', 'steps           = 1', '# steps removed', &
+                  'MISSING_FIELD', 2, 'steps')
+  call expect_bad('missing time increment', 'time_increment  = 1.0', '# removed', &
+                  'MISSING_FIELD', 2, 'time_increment')
+  ! a material property that varies between real decks, so it cannot be defaulted
+  call expect_bad('missing thermal expansion', 'thermal_expansion = 1.0e-5', '# removed', &
+                  'MISSING_FIELD', 2, 'thermal_expansion')
   ! stress averaging is a whitelist, and it is the one row that moved OUT of the default
   ! table: it decides what the reported stresses are, so an unlisted scheme is a capability
   ! refusal rather than a silently substituted default.

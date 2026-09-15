@@ -1,0 +1,125 @@
+# Slope stability by strength reduction: gravity first, then the material's strength is
+# walked down along a curve until the slope fails. See docs/m6/material-domain.md.
+#
+# This is the deck that makes plasticity actually happen. mini_mc reads and dispatches
+# CLASSICALEP/MC but never yields -- its PLASTICSTRAIN block is thirty zeros. Here 18924 of
+# 45100 plastic-strain values are non-zero, so a comparison that passes says something
+# about the return mapping and not only about the plumbing.
+version = 1
+
+[case]
+name        = "slope_srm"
+units       = "SI"
+description = "451-node, 400-element 2D Q4 plane-strain slope, Mohr-Coulomb, 100-step strength reduction from 1.0 to 0.5"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name          = "slope"
+element_count = 400
+
+# Three prescribed sets, written as three, not folded into one with `dof = [1, 2]`.
+# legacy numbers them 1..3 and that ordinal is the record's set key; folding would renumber
+# them. Sets 2 and 3 carry the SAME nodes with different components, and set 1 shares nodes
+# 158 and 451 with them -- the corner where two constrained edges meet. Those duplicate
+# (node, component) pairs are legal because both records prescribe the same value; see B6.
+#
+# The node lists are on ONE line each because the contract's TOML subset takes arrays that
+# way. 41 ids fit; a set of several hundred would not, and that is the day the reader
+# learns multi-line arrays -- not before.
+[[nset]]
+name  = "base_and_right_x"
+nodes = [1, 3, 9, 18, 28, 42, 59, 80, 103, 130, 158, 429, 432, 436, 438, 441, 443, 445, 447, 449, 450, 451]
+
+[[nset]]
+name  = "left_face_x"
+nodes = [158, 159, 162, 166, 169, 174, 177, 185, 189, 198, 205, 210, 218, 224, 230, 237, 245, 253, 259, 268, 277, 285, 293, 301, 307, 317, 325, 334, 343, 353, 360, 370, 380, 391, 402, 412, 422, 433, 442, 448, 451]
+
+[[nset]]
+name  = "left_face_y"
+nodes = [158, 159, 162, 166, 169, 174, 177, 185, 189, 198, 205, 210, 218, 224, 230, 237, 245, 253, 259, 268, 277, 285, 293, 301, 307, 317, 325, 334, 343, 353, 360, 370, 380, 391, 402, 412, 422, 433, 442, 448, 451]
+
+[[material]]
+name              = "soil"
+model             = "classicalep"
+density           = 2500.0
+E                 = 3.0e7
+nu                = 0.3
+thermal_expansion = 5.0e-6   # 1/K, from the deck; unconsumed without a thermal step
+criterion         = "mohr_coulomb"
+cohesion          = 6.0e4    # Pa
+hardening         = 0.0      # Pa
+friction_angle    = 35.0     # degrees, not radians: the solver takes tand() of this
+dilation_angle    = 35.0     # degrees
+
+[[section]]
+name        = "slope"
+elset       = "slope"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "soil"
+
+[[amplitude]]
+name   = "gravity"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+# The reduction schedule: strength falls to half over the analysis. This curve IS the
+# experiment -- legacy scales the cohesion and tand(friction)/tand(dilation) by its
+# current factor every step.
+[[amplitude]]
+name   = "reduction"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 0.5]]
+
+[[step]]
+name      = "strength_reduction"
+procedure = "static"
+
+[step.controls]
+increments      = 1
+steps           = 100    # 100 steps x 0.01 walks the curve abscissa from 0 to 1
+time_increment  = 0.01
+max_iterations  = 40
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+stiffness_update = "first_iteration"
+
+[step.load]
+mode = "strength_reduction"
+
+[step.load.strength_reduction]
+amplitude = "reduction"
+
+[[step.boundary]]
+nset  = "base_and_right_x"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "left_face_x"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "left_face_y"
+dof   = [2]
+value = 0.0
+
+[step.load.gravity]
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "gravity"
+
+[solver]
+linear = "profile"
+
+[output]
+format = "gid"
+field  = ["u", "s", "ms", "f", "ep", "y"]
+# legacy average_appear = -2: direct averaging in its pre-2005 form, which applies the
+# scheme only to element groups that pass the eligibility test at Output.f90:5104.
+stress_averaging = "direct_legacy"
