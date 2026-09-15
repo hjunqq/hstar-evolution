@@ -42,13 +42,22 @@
 !   (deliberately unallocated on this path). Fourteen rows are snapshot-excluded and the
 !   ledger is what separates the three reasons; see the yl_runtime_types header.
 !
-! ARITHMETIC FIDELITY
-!   The Gauss geometry is written as the legacy statements are written, not as a fresh
-!   implementation would write them: explicit accumulation loops where Elements.f90:3245
-!   accumulates in a loop, the SUM intrinsic where :1260 uses SUM, `djacb*weigp` in that
-!   order at :1363. The quadrature and shape functions come from yl_runtime_contract,
-!   which carries the default-real evaluation of the legacy literals. The frozen baseline
-!   is compared at rtol 1e-12; none of this is stylistic.
+! THIS MODULE DOES NO FLOATING-POINT ARITHMETIC, AND THAT IS THE RULE (2026-09-15)
+!   It used to. The Gauss geometry was written here "as the legacy statements are written"
+!   -- the same loops, the same SUM, the same `djacb*weigp` order -- and that discipline
+!   was still not enough: -O2 compiled the transcription differently from legacy's own
+!   routine and the results drifted 1-2 ULP (docs/m6/material-domain.md SS7-SS8).
+!
+!   So the rule is now structural rather than stylistic. build_runtime REGISTERS what must
+!   exist and CARRIES values across the seam; anything legacy computes, legacy computes.
+!   The geometry moved to yl_runtime_geometry, which calls getgauss / shfunc / jacob and is
+!   invoked from the commit layer. What remains here is integer and index work -- DOF
+!   numbering, connectivity compression, topology, the prescribed-set passes -- which
+!   cannot drift by a ULP: it either produces legacy's integers or it does not, and the
+!   frozen baseline says which immediately.
+!
+!   Adding a floating-point expression to this module is therefore a design decision, not
+!   an implementation detail. If legacy computes it, call legacy.
 module yl_runtime_build
 
   use iso_fortran_env, only: int32, int64, real64
@@ -1160,8 +1169,8 @@ contains
   ! ==========================================================================
 
   ! RuntimeState.gauss and RuntimeState.element.
-  ! Reproduces Elements.f90:1206-1214 (elcod_f), :1244-1367 (the point loop) and
-  ! :3245-3319 (jacob), for both declared integration rules.
+  ! Reproduces Elements.f90:1206-1214 (elcod_f) only: the coordinate GATHER. The point
+  ! loop and the Jacobian that used to be here left on 2026-09-15 -- see the module header.
   !
   ! The mass rule is evaluated even though the static_2d path never consumes it
   ! (`order_intrules = (/1,1/)`, Elements.f90:377): read_element evaluates the geometry
