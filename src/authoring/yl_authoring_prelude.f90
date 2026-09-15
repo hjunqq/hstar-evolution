@@ -143,7 +143,7 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
   ! admitted. A strength-reduction sweep is 100 steps of 0.01, and the two values decide
   ! how far along the reduction curve the analysis gets -- they are the experiment, not
   ! bookkeeping. Read here because STATIC_U's copies are routine locals.
-  k = doc%find('step[1].controls.steps')
+  k = doc%find('step[1].controls.substeps')
   if (k /= 0_int32) nstep = int(doc%entry(k)%ivalue, ink)
   k = doc%find('step[1].controls.time_increment')
   if (k /= 0_int32) ditime = real(doc%entry(k)%rvalue, irk)

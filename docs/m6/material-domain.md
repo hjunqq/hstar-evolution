@@ -472,7 +472,7 @@ PASS  blocks=600 values=541200 mismatches=0 max|d|=0.000e+00
 |---|---|---|
 | `step.load.mode` | `load` / `strength_reduction` | legacy `type_load`,后者即 `MAT_DE` |
 | `step.load.strength_reduction.amplitude` | 按名字引用 | 折减进度表;**条件必填**(有模式必须有曲线,无模式不许有曲线),两个方向各有反例 |
-| `step.controls.steps` / `time_increment` | 100 / 0.01 | **移出默认表**:它们决定分析停在折减曲线的哪一点 |
+| `step.controls.substeps` / `time_increment` | 100 / 0.01 | **移出默认表**:它们决定分析停在折减曲线的哪一点 |
 | `material[].thermal_expansion` | 5.0e-6 | **移出默认表**:真实 deck 之间不同(静力两例是 1.0e-5) |
 | `output.field` | 增 `ms` / `f` / `y` | 主应力、节点合力(`tofor`)、屈服指示 |
 | `output.stress_averaging` | 增 `smoothed_legacy` / `direct_legacy` | legacy 的 -1/-2:同样两种方案,但只作用于通过 `Output.f90:5104` 资格判定的单元组。本 deck 用 -2 |

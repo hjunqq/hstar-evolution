@@ -1,0 +1,160 @@
+# The .loa family's anchor deck: gravity, then gravity plus a rising reservoir.
+#
+# WHAT IT IS FOR, AND WHAT IT IS NOT YET
+#   This deck exists so the contract's new objects -- [[surface]], the extended
+#   [[amplitude]], and the [[step.load]] array -- have a real, complete file to be
+#   validated against, and so the .loa counter-examples have something to mutate.
+#   It is NOT executable by this build: it has two steps and a pressure load, and
+#   yl_authoring_map refuses both by name (see `executable_shape`). Lifting those two
+#   refusals, and freezing a legacy reference beside this file, is Phase 3.
+#
+#   The mesh it describes is a 4 m x 20 m wall, 3 nodes across by 5 up, elements numbered
+#   two per row from the bottom. Node and element numbers below are consistent with that;
+#   nothing in this file is checked against a mesh yet, which is exactly why "node 9999"
+#   is a mapping-layer finding rather than a validator one.
+version = 1
+
+[case]
+name        = "wall_reservoir"
+units       = "SI"
+description = "2-D Q4 gravity wall: self-weight, then a linear hydrostatic load on the upstream face"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name          = "wall"
+element_count = 8
+
+[[nset]]
+name  = "base"
+nodes = [1, 2, 3]
+
+[[nset]]
+name  = "downstream_x"
+nodes = [3, 6, 9, 12, 15]
+
+[[material]]
+name              = "concrete"
+model             = "elastic_isotropic"
+density           = 2400.0
+E                 = 2.5e10
+nu                = 0.167
+thermal_expansion = 1.0e-5
+
+[[section]]
+name        = "wall"
+elset       = "wall"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+# The upstream face, written out edge by edge: [n1, n2, element].
+# The element is stated, not looked up -- see authoring-contract section 8.1.
+[[surface]]
+name  = "upstream_face"
+kind  = "edge2"
+edges = [[1, 4, 1], [4, 7, 3], [7, 10, 5], [10, 13, 7]]
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+# A WATERLEVEL curve carries the same (t, f) points to the author and a different line
+# layout to legacy (contract section 8.2). The reservoir fills over the second step.
+[[amplitude]]
+name   = "reservoir"
+type   = "waterlevel"
+points = [[0.0, 0.0], [1.0, 1.0]]
+
+# --- step 1: the wall stands under its own weight -----------------------------
+[[step]]
+name      = "self_weight"
+procedure = "static"
+load_mode = "load"
+
+[step.controls]
+increments       = 1
+substeps         = 1
+time_increment   = 1.0
+max_iterations   = 10
+tolerance_force  = 1.0e-5
+tolerance_dof    = 1.0e-5
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "base"
+dof   = [1, 2]
+value = 0.0
+
+[[step.boundary]]
+nset  = "downstream_x"
+dof   = [1]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+# --- step 2: the reservoir fills to y = 15 ------------------------------------
+# Every load is restated. legacy repeats the whole load record per block and lets the
+# unchanged parts look like inheritance; the contract makes each step say what it carries.
+[[step]]
+name      = "impoundment"
+procedure = "static"
+load_mode = "load"
+
+[step.controls]
+increments       = 1
+substeps         = 10
+time_increment   = 0.1
+max_iterations   = 10
+tolerance_force  = 1.0e-5
+tolerance_dof    = 1.0e-5
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "base"
+dof   = [1, 2]
+value = 0.0
+
+[[step.boundary]]
+nset  = "downstream_x"
+dof   = [1]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+# Hydrostatic: zero head at the water surface y = 15, 15 m of head at y = 0, times the
+# unit weight of water. legacy clamps the head at zero above the surface and zeroes the
+# pressure outside [at[1], at[0]] entirely (Load.f90:816-830).
+[[step.load]]
+type      = "pressure"
+surface   = "upstream_face"
+amplitude = "reservoir"
+
+[step.load.distribution]
+type  = "linear_in_coordinate"
+axis  = "y"
+at    = [15.0, 0.0]
+value = [0.0, 15.0]
+scale = 9810.0
+
+[solver]
+linear = "profile"
+
+[output]
+format           = "gid"
+field            = ["u", "s"]
+stress_averaging = "direct"

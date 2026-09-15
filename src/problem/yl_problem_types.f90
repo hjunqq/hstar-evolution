@@ -246,7 +246,7 @@ module yl_problem_types
     type(opt_int) :: nonlinear_type
     type(opt_int) :: increments
     type(opt_int) :: max_iterations
-    type(opt_int) :: steps
+    type(opt_int) :: substeps
     type(opt_int) :: step_increment
     type(opt_int) :: restart_frequency
     type(opt_real) :: time_increment       ! s

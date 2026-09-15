@@ -101,7 +101,7 @@
 | `steps(k)%controls%nonlinear_type` | `type(opt_int)` | 1 | optional | `steps0.controls.nonlinear_type` | draft | reader |
 | `steps(k)%controls%restart_frequency` | `type(opt_int)` | 1 | optional | `steps0.controls.restart_frequency` | draft | reader |
 | `steps(k)%controls%step_increment` | `type(opt_int)` | 1 | optional | `steps0.controls.step_increment` | draft | reader |
-| `steps(k)%controls%steps` | `type(opt_int)` | 1 | optional | `steps0.controls.steps` | draft | reader |
+| `steps(k)%controls%substeps` | `type(opt_int)` | 1 | optional | `steps0.controls.steps` | draft | reader |
 | `steps(k)%controls%time_increment` | `type(opt_real)` | s | optional | `steps0.controls.time_increment` | draft | reader |
 | `steps(k)%controls%tolerance_dof(:)` | `real(real64), allocatable` | m | collection | `steps0.controls.tolerance_dof` | draft | reader |
 | `steps(k)%controls%tolerance_force` | `type(opt_real)` | N | optional | `steps0.controls.tolerance_force` | draft | reader |

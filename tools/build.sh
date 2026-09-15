@@ -590,6 +590,12 @@ if [ "$TARGET" = authoring ]; then
     "$OUT/yl_authoring_test" "$ROOT/cases/golden/plasticity/mini_mc/modern/case.toml" \
         "$OUT/scratch" --plastic 2>&1 | tee -a "$LOG"
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (mini_mc)" >&2; exit 6; }
+    # The .loa family's counter-examples need a deck with a named surface and a pressure
+    # load. wall_reservoir is that deck, and it is deliberately NOT executable -- the
+    # refusals for its two steps and its pressure load live in the mapping layer.
+    "$OUT/yl_authoring_test" "$ROOT/cases/authoring/wall_reservoir/case.toml" \
+        "$OUT/scratch" --loa 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (wall_reservoir)" >&2; exit 6; }
     T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     log "=== BUILD OK (authoring/$PROFILE) $T0 -> $T1: contract validator suite passed"
     exit 0
@@ -713,6 +719,20 @@ state_dump_provenance_check() {
 #   the solver is satisfied by them: no solver consumer runs in this binary. Any
 #   conclusion drawn from it must be labelled PARTIAL.
 if [ "$TARGET" = runtime-bridge ] || [ "$TARGET" = adapter ]; then
+# The bytes of cases/ BEFORE this target ran. The guard at the end of the adapter target
+# compares against this instead of against a clean git tree: it is there to prove the
+# TARGET wrote nothing into the golden inputs, and an author legitimately editing a deck in
+# the same commit is not that failure. Requiring a clean tree made the gate refuse work it
+# has no opinion about, which is how a gate stops being believed.
+#
+# It hashes content rather than `git status`, and that is not fussiness: on a tree where a
+# deck is already modified, a status listing is IDENTICAL before and after the target
+# appends to that same file -- the status-delta version of this guard was blind in exactly
+# the situation that motivated it. 244 files, 5.4 MB, 0.4 s.
+cases_sig() {
+    (cd "$ROOT" && find cases -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum)
+}
+CASES_BEFORE=$(cases_sig)
     RB_OUT_ABS="$(realpath -m "$OUT")"
     RB_ROOT_ABS="$(realpath -m "$ROOT")"
     rb_covers() { [ "$2" = "$1" ] || case "$2" in "$1"/*) return 0;; *) return 1;; esac; }
@@ -1059,9 +1079,9 @@ RB_PY
         python3 "$ROOT/tools/yl_coverage_check.py" 2>&1 | tee -a "$LOG"
         [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== COVERAGE CHECK FAILED"; exit 6; }
         # Nothing this target does may write into the golden inputs.
-        if [ -n "$(git -C "$ROOT" status --porcelain cases/ 2>/dev/null)" ]; then
+        if [ "$(cases_sig)" != "$CASES_BEFORE" ]; then
             log "=== FAILED: this target modified cases/; that is never allowed"
-            git -C "$ROOT" status --porcelain cases/ | tee -a "$LOG"
+            (cd "$ROOT" && find cases -type f -newer "$LOG" -print) | tee -a "$LOG"
             exit 6
         fi
         log "=== BUILD OK (adapter/$PROFILE) $T0 -> $T1: bridge + dialect suites passed on both golden decks; reader coverage accounted for"

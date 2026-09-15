@@ -1870,7 +1870,7 @@ contains
     if (.not. opt_equal(a%controls%nonlinear_type, b%controls%nonlinear_type)) return
     if (.not. opt_equal(a%controls%increments, b%controls%increments)) return
     if (.not. opt_equal(a%controls%max_iterations, b%controls%max_iterations)) return
-    if (.not. opt_equal(a%controls%steps, b%controls%steps)) return
+    if (.not. opt_equal(a%controls%substeps, b%controls%substeps)) return
     if (.not. opt_equal(a%controls%step_increment, b%controls%step_increment)) return
     if (.not. opt_equal(a%controls%restart_frequency, b%controls%restart_frequency)) return
     if (.not. opt_equal(a%controls%time_increment, b%controls%time_increment)) return
@@ -2160,7 +2160,7 @@ contains
     call opt_set(ct%nonlinear_type, 5_int32)
     call opt_set(ct%increments, 1_int32)
     call opt_set(ct%max_iterations, 1_int32)
-    call opt_set(ct%steps, 1_int32)
+    call opt_set(ct%substeps, 1_int32)
     call opt_set(ct%step_increment, 1_int32)
     call opt_set(ct%restart_frequency, 0_int32)
     call opt_set(ct%time_increment, 1.0_real64)

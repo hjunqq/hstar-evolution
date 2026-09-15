@@ -394,7 +394,7 @@ contains
     ! controls%nonlinear_type is `.glb`'s and is deliberately left untouched.
     call opt_set(parts%controls%increments, nincs)
     call opt_set(parts%controls%max_iterations, miter)
-    call opt_set(parts%controls%steps, nstep)
+    call opt_set(parts%controls%substeps, nstep)
     call opt_set(parts%controls%step_increment, inc_step)
     call opt_set(parts%controls%restart_frequency, nresta)
     call opt_set(parts%controls%time_increment, ditime)

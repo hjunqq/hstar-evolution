@@ -4866,7 +4866,7 @@ consumers = ["STATIC_U", "ALGORT"]
 shape = []
 dtype = "i32"
 unit = "1"
-owner = "ProblemState.steps[0].controls.steps"
+owner = "ProblemState.steps[0].controls.substeps"
 index_by = "component"
 compare = { rule = "exact" }
 emit = "generated"

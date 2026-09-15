@@ -22,7 +22,7 @@ program yl_authoring_test
 
   integer :: pass, fail
   character(len=512) :: deck, scratch, mode
-  logical :: clean_only, plastic
+  logical :: clean_only, plastic, loa
 
   pass = 0
   fail = 0
@@ -33,6 +33,7 @@ program yl_authoring_test
   ! still prints is how a suite quietly stops testing something.
   clean_only = (trim(mode) == '--clean-only')
   plastic = (trim(mode) == '--plastic')
+  loa = (trim(mode) == '--loa')
 
   write (output_unit, '(a)') '== yl_authoring_test =='
   write (output_unit, '(a)') '   deck    : '//trim(deck)
@@ -43,6 +44,58 @@ program yl_authoring_test
 
   if (clean_only) then
     write (output_unit, '(a)') '-- counter-examples: not on this deck (--clean-only)'
+    write (output_unit, '(a)') ''
+    write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
+    if (fail > 0) then
+      write (output_unit, '(a,i0,a)') '== FAIL (', fail, ' checks failed) =='
+      error stop 1
+    end if
+    write (output_unit, '(a)') '== PASS =='
+    stop
+  end if
+
+  ! --loa: the counter-examples of the .loa family -- surfaces, the extended amplitudes
+  ! and the load array. They need a deck that HAS a named surface and a pressure load,
+  ! which none of the golden decks does; cases/authoring/wall_reservoir is that deck.
+  ! It is deliberately not executable (two steps, a pressure load) -- the refusals for
+  ! those two live in the mapping layer and are not this suite's business.
+  if (loa) then
+    write (output_unit, '(a)') '-- counter-examples of the .loa family'
+    ! a load naming a surface this file does not define
+    call expect_bad('dangling surface', 'surface   = "upstream_face"', &
+                    'surface   = "downstream_face"', 'DANGLING_REF', 2, 'surface')
+    ! a load naming an amplitude this file does not define
+    call expect_bad('dangling load amplitude', 'amplitude = "reservoir"', &
+                    'amplitude = "flood"', 'DANGLING_REF', 2, 'amplitude')
+    ! y0 == y1: legacy divides by their difference (Load.f90:819)
+    call expect_bad('degenerate water distribution', 'at    = [15.0, 0.0]', &
+                    'at    = [15.0, 15.0]', 'INVALID_INPUT', 2, 'distribution.at')
+    ! the two arrays of a distribution pair up, so they must be the same length
+    call expect_bad('distribution arrays of different length', 'value = [0.0, 15.0]', &
+                    'value = [0.0, 7.5, 15.0]', 'INVALID_INPUT', 2, 'distribution.value')
+    ! an amplitude whose time points do not advance
+    call expect_bad('non-monotonic amplitude', 'points = [[0.0, 0.0], [1.0, 1.0]]', &
+                    'points = [[0.0, 0.0], [0.0, 1.0]]', 'INVALID_INPUT', 2, 'points')
+    ! an edge row that is not [n1, n2, element]
+    call expect_bad('edge row of the wrong arity', 'edges = [[1, 4, 1], [4, 7, 3], [7, 10, 5], [10, 13, 7]]', &
+                    'edges = [[1, 4, 1], [4, 7], [7, 10, 5], [10, 13, 7]]', &
+                    'INVALID_INPUT', 2, 'edges[2]')
+    ! a node number that no mesh can have. "node 9999 does not exist" is NOT here: this
+    ! layer never opens the mesh, and claiming to check it would be the more dangerous
+    ! half-truth. Sign and shape are what is knowable from the file alone.
+    call expect_bad('edge row with a non-positive id', 'edges = [[1, 4, 1], [4, 7, 3], [7, 10, 5], [10, 13, 7]]', &
+                    'edges = [[1, 4, 1], [0, 7, 3], [7, 10, 5], [10, 13, 7]]', &
+                    'INVALID_INPUT', 2, 'edges[2]')
+    ! an unlisted surface kind is a capability refusal
+    call expect_bad('unlisted surface kind', 'kind  = "edge2"', 'kind  = "face4"', &
+                    'UNSUPPORTED', 3, 'kind')
+    ! the conditional requirement, forward direction: a pressure load without its scale
+    call expect_bad('pressure without a scale', 'scale = 9810.0', '# scale removed', &
+                    'MISSING_FIELD', 2, 'distribution.scale')
+    ! and backwards: a field that belongs to the other type would be read by nobody
+    call expect_bad('gravity field on a pressure load', 'surface   = "upstream_face"', &
+                    'magnitude = 9.81'//new_line('a')//'surface   = "upstream_face"', &
+                    'INVALID_INPUT', 2, 'magnitude')
     write (output_unit, '(a)') ''
     write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
     if (fail > 0) then
@@ -114,22 +167,29 @@ program yl_authoring_test
   call expect_bad('unlisted stiffness update', 'stiffness_update = "first_iteration"', &
                   'stiffness_update = "sometimes"', 'UNSUPPORTED', 3, 'stiffness_update')
   ! the load mode is a whitelist
-  call expect_bad('unlisted load mode', 'mode = "load"', 'mode = "creep"', &
-                  'UNSUPPORTED', 3, 'mode')
+  call expect_bad('unlisted load mode', 'load_mode = "load"', 'load_mode = "creep"', &
+                  'UNSUPPORTED', 3, 'load_mode')
   ! a strength-reduction curve on a deck that does not reduce strength: legacy would
   ! ignore it, and the author would never learn their schedule did nothing
-  call expect_bad('reduction curve without the mode', 'mode = "load"', &
-                  'mode = "load"'//new_line('a')//'[step.load.strength_reduction]'// &
+  call expect_bad('reduction curve without the mode', 'load_mode = "load"', &
+                  'load_mode = "load"'//new_line('a')//'[step.strength_reduction]'// &
                   new_line('a')//'amplitude = "constant"', &
                   'INVALID_INPUT', 2, 'strength_reduction')
   ! the two step-count controls left the default table because a sweep needs them
-  call expect_bad('missing step count', 'steps           = 1', '# steps removed', &
-                  'MISSING_FIELD', 2, 'steps')
+  call expect_bad('missing step count', 'substeps        = 1', '# substeps removed', &
+                  'MISSING_FIELD', 2, 'substeps')
   call expect_bad('missing time increment', 'time_increment  = 1.0', '# removed', &
                   'MISSING_FIELD', 2, 'time_increment')
   ! a material property that varies between real decks, so it cannot be defaulted
   call expect_bad('missing thermal expansion', 'thermal_expansion = 1.0e-5', '# removed', &
                   'MISSING_FIELD', 2, 'thermal_expansion')
+  ! a gravity direction of zero length names no direction at all
+  call expect_bad('zero gravity direction', 'direction = [0.0, -1.0]', &
+                  'direction = [0.0, 0.0]', 'INVALID_INPUT', 2, 'direction')
+  ! gravity is applied to a named element set or to everything; a set that does not
+  ! exist is the same dangling reference as any other
+  call expect_bad('dangling apply_to', 'apply_to  = "all"', 'apply_to  = "rock"', &
+                  'DANGLING_REF', 2, 'apply_to')
   ! stress averaging is a whitelist, and it is the one row that moved OUT of the default
   ! table: it decides what the reported stresses are, so an unlisted scheme is a capability
   ! refusal rather than a silently substituted default.

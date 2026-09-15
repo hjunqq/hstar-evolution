@@ -528,7 +528,7 @@ contains
     call opt_set(ct%nonlinear_type, 5_int32)
     call opt_set(ct%increments, 1_int32)
     call opt_set(ct%max_iterations, 1_int32)
-    call opt_set(ct%steps, 1_int32)
+    call opt_set(ct%substeps, 1_int32)
     call opt_set(ct%step_increment, 1_int32)
     call opt_set(ct%restart_frequency, 0_int32)
     call opt_set(ct%time_increment, 1.0_real64)

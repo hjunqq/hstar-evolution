@@ -807,7 +807,7 @@ contains
                     cand%steps(1)%output%frequency%nodes, GAP_FREQ_NODES)
     call cmp_i32_gap(unit, 'steps0.output.frequency_fields', &
                     cand%steps(1)%output%frequency%fields, GAP_FREQ_FIELDS)
-    call cmp_i32_gap(unit, 'steps0.controls.steps', cand%steps(1)%controls%steps, GAP_STEPS)
+    call cmp_i32_gap(unit, 'steps0.controls.steps', cand%steps(1)%controls%substeps, GAP_STEPS)
     call cmp_i32_gap(unit, 'steps0.controls.step_increment', &
                     cand%steps(1)%controls%step_increment, GAP_STEP_INCREMENT)
     call cmp_i32_gap(unit, 'steps0.controls.restart_frequency', &

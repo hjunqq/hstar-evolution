@@ -4,7 +4,7 @@
      不复制「当前在做 / 下一步」。.ccg/tasks/*/task.json 是执行器的工作队列，
      不是状态；两者不一致时以本文件为准。 -->
 
-更新日期：2026-09-12。此文件只登记已经发生的事；阶段验收以证据包为准。
+更新日期：2026-09-15。此文件只登记已经发生的事；阶段验收以证据包为准。
 
 ## 验收链（2026-09-12 总览时清点）
 
@@ -18,6 +18,7 @@
 | M5 现代输入闭环 | 完成 5/5 | **ACCEPTED（窄口径）** 2026-09-13 | `docs/m5/M5-report.md` + `docs/m5/authoring-contract.md` + `tools/yl_modern_check.py`（N1/N2/N3，release 门禁） |
 | M6.4 材料域第一能力（CLASSICALEP/MC） | 完成 5/5 | **ACCEPTED（窄口径）** 2026-09-14 | `docs/m6/material-domain.md` + `cases/golden/plasticity/mini_mc`（三块严格相等，含 PLASTICSTRAIN） |
 | M6.5 强度折减 + 材料曲线（MAT_DE / mat_curve） | 完成 4/4 | **ACCEPTED（窄口径）** 2026-09-15 | `docs/m6/material-domain.md` §9 + `cases/golden/plasticity/slope_srm`（600 块 541 200 值 `max|d|=0`，**非零 PLASTICSTRAIN 18 924/45 100**） |
+| M7 `.loa` 输入家族 Phase 1–2（普查 + 契约 + 校验器 + 反例） | 完成 | **未签收** | `docs/m7/loa-family-report.md`（52 处覆盖矩阵）+ `docs/m5/authoring-contract.md` §2.1/§8 + `cases/authoring/wall_reservoir`（12 条反例，40/40） |
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
@@ -53,10 +54,10 @@ M1 的形式验收缺口（没有阶段矩阵、条件解除未经第二方逐�
 | 功能域 | 旧字段 | 语义 | 内部结构 | 新 schema | 回归证据 | 里程碑 |
 |---|---|---|---|---|---|---|
 | **静力（2D Q4 线弹性 / 重力 / 单增量 / PROFILE）** | 已登记 157 处 | 已摸清（有具名缺口） | `ProblemState` + `deck_residue_t` + 运行存在面 | **v1 契约可完整表达两例** | **状态等价与数值等价均已证（严格相等）；新格式亦严格复现冻结参考** | M1～M5 完成，M5 已签收（窄口径） |
-| 荷载扩展（点/边/梁板荷载、压力面） | `.loa` 32 处 | 未开始 | — | — | — | M5.pressure / M6 |
+| 荷载扩展（点/边/梁板荷载、压力面） | `.loa` 共 52 处读取（其中 32 处不在静力路径上） | **已普查，52 处逐条归类** | 尚未进入 `ProblemState` | **v1 契约已表达幅值/面/荷载对象** | 仅校验器反例；**无水压算例、无逐位回归** | M7 Phase 2 完成，Phase 3 未开始 |
 | 求解器变体（PARDISO 等） | `.sol` 29 + iafile 5 | 未开始 | — | — | — | M5 |
 | 输出与观测点 | `.opr` 10 | 未开始 | — | — | — | M5 |
-| 材料（非弹性本构、属性曲线、液化） | `.mat` 104 + 4 | 未开始 | — | — | — | M6.4 / M6.5 |
+| 材料（非弹性本构、属性曲线、液化） | `.mat` 104 + 4 | CLASSICALEP/MC 与 MAT_DE 已摸清，其余未开始 | `material_t` 已分派 | 两种模型进入白名单 | `mini_mc` / `slope_srm` 逐位一致 | M6.4 / M6.5 已签收（窄口径） |
 | 几何与插值扩展（3D、局部坐标、移动网格） | `.nrt` 40 + `.ftr` 13 + 10 | 未开始 | — | — | — | M6.2 |
 | 接触与界面 | `.ctt` 16 + `.glb` 部分 | 未开始 | — | — | — | M6.6 |
 | 施工/加载过程与重启 | `.man`/`.rtt`/`.resb`/`.stf`/`.stn` 239 | 未开始 | — | — | — | M6.7 |

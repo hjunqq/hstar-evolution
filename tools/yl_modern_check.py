@@ -223,6 +223,46 @@ def main(argv=None):
     if "element_count" not in blob:
         problems.append("N3 element counts: the refusal did not name the key")
 
+    # b3 -- two refusals that belong to the mapping layer for the same reason as b2: they
+    # are statements about what this BINARY can run, not about what the input language can
+    # say. The contract deliberately describes both shapes (authoring-contract 2.1, 8.3),
+    # so the validator lets them through and this is the only place they can be caught.
+    # Written after predicting each: exit 3, one finding, naming `step` / `step[1].load`.
+    def second_step(text: str) -> str:
+        i, j = text.index("[[step]]"), text.index("[solver]")
+        return text + "\n" + text[i:j].replace('name      = "', 'name      = "second_', 1)
+
+    blob = rejected("a second analysis step", "--input=case.toml", second_step)
+    if "legacy nblks" not in blob:
+        problems.append("N3 second step: the refusal did not say what the step count maps to")
+
+    def add_pressure(text: str) -> str:
+        return text + '''
+[[surface]]
+name  = "face"
+kind  = "edge2"
+edges = [[1, 2, 1]]
+
+[[step.load]]
+type      = "pressure"
+surface   = "face"
+amplitude = "constant"
+
+[step.load.distribution]
+type  = "linear_in_coordinate"
+axis  = "y"
+at    = [10.0, 0.0]
+value = [0.0, 10.0]
+scale = 9810.0
+'''
+
+    blob = rejected("a pressure load", "--input=case.toml", add_pressure)
+    if "pressure" not in blob:
+        problems.append("N3 pressure load: the refusal did not name what it cannot carry")
+    if "legacy nblks" in blob:
+        problems.append("N3 pressure load: it refused the step count instead -- the deck "
+                        "has one step, so this control is measuring the wrong rule")
+
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",
                     lambda t: sub("density = 2400.0", 'density = "heavy"')(

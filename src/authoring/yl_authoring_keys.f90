@@ -94,7 +94,7 @@ module yl_authoring_keys
     key_t('section[].formulation',         TV_STR,  .true.,  'plane_strain'),                &
     key_t('section[].material',            TV_STR,  .true.,  ''),                            &
     key_t('amplitude[].name',              TV_STR,  .true.,  ''),                            &
-    key_t('amplitude[].type',              TV_STR,  .true.,  'linear'),                      &
+    key_t('amplitude[].type',              TV_STR,  .true.,  'linear|waterlevel'),           &
     key_t('amplitude[].points[][]',        TV_REAL, .false., ''),                            &
     key_t('amplitude[].points[].count',    TV_INT,  .false., ''),                            &
     key_t('amplitude[].points.count',      TV_INT,  .true.,  ''),                            &
@@ -105,7 +105,7 @@ module yl_authoring_keys
     ! abscissa. Both were pinned in the default table while one step was the only shape
     ! this build admitted; a strength-reduction sweep is 100 steps of 0.01 and the values
     ! decide where on the reduction curve the analysis ends.
-    key_t('step[].controls.steps',         TV_INT,  .true.,  ''),                            &
+    key_t('step[].controls.substeps',      TV_INT,  .true.,  ''),                            &
     key_t('step[].controls.time_increment', TV_REAL, .true., ''),                            &
     key_t('step[].controls.max_iterations', TV_INT, .true.,  ''),                            &
     key_t('step[].controls.tolerance_force', TV_REAL, .true., ''),                           &
@@ -121,13 +121,40 @@ module yl_authoring_keys
     key_t('step[].boundary[].value',       TV_REAL, .true.,  ''),                            &
     ! legacy `type_load`. 'strength_reduction' is MAT_DE: the named amplitude's current
     ! factor scales the cohesion and tand(friction)/tand(dilation) every step
-    ! (Stiff.f90:5779), which is what walks the model to failure.
-    key_t('step[].load.mode',              TV_STR,  .true.,  'load|strength_reduction'),     &
-    key_t('step[].load.strength_reduction.amplitude', TV_STR, .false., ''),                  &
-    key_t('step[].load.gravity.magnitude', TV_REAL, .true.,  ''),                            &
-    key_t('step[].load.gravity.direction[]', TV_REAL, .false., ''),                          &
-    key_t('step[].load.gravity.direction.count', TV_INT, .true., '2'),                       &
-    key_t('step[].load.gravity.amplitude', TV_STR,  .true.,  ''),                            &
+    ! (Stiff.f90:5779), which is what walks the model to failure. It is a property of the
+    ! STEP, not of any one load, which is why it left `[step.load]` when that became an
+    ! array (2026-09-15, contract section 8.3).
+    key_t('step[].load_mode',              TV_STR,  .true.,  'load|strength_reduction'),     &
+    key_t('step[].strength_reduction.amplitude', TV_STR, .false., ''),                       &
+    ! Loads are an ARRAY of objects, because one step can carry several of the same kind:
+    ! two element groups on different gravity histories, two faces at different water
+    ! levels. legacy flattens all of that into parallel arrays indexed by group or by edge
+    ! range; the author writes objects and the adapter does the flattening.
+    key_t('step[].load[].type',            TV_STR,  .true.,  'gravity|pressure'),            &
+    key_t('step[].load[].amplitude',       TV_STR,  .true.,  ''),                            &
+    ! --- type = "gravity"
+    key_t('step[].load[].magnitude',       TV_REAL, .false., ''),                            &
+    key_t('step[].load[].direction[]',     TV_REAL, .false., ''),                            &
+    key_t('step[].load[].direction.count', TV_INT,  .false., '2'),                           &
+    key_t('step[].load[].apply_to',        TV_STR,  .false., ''),                            &
+    ! --- type = "pressure"
+    key_t('step[].load[].surface',         TV_STR,  .false., ''),                            &
+    key_t('step[].load[].distribution.type', TV_STR, .false., 'linear_in_coordinate'),       &
+    key_t('step[].load[].distribution.axis', TV_STR, .false., 'y'),                          &
+    key_t('step[].load[].distribution.at[]', TV_REAL, .false., ''),                          &
+    key_t('step[].load[].distribution.at.count', TV_INT, .false., ''),                       &
+    key_t('step[].load[].distribution.value[]', TV_REAL, .false., ''),                       &
+    key_t('step[].load[].distribution.value.count', TV_INT, .false., ''),                    &
+    key_t('step[].load[].distribution.scale', TV_REAL, .false., ''),                         &
+    ! A named face is an EXPLICIT edge table: every row is [n1, n2, element]. The element
+    ! is written down because legacy writes it down too (Load.f90:383); looking it up from
+    ! the node pair would be topology derivation in the adapter, and this build has twice
+    ! paid for mirroring legacy's own derivations (R31, the jacob 1-ULP divergence).
+    key_t('surface[].name',                TV_STR,  .true.,  ''),                            &
+    key_t('surface[].kind',                TV_STR,  .true.,  'edge2'),                       &
+    key_t('surface[].edges[][]',           TV_INT,  .false., ''),                            &
+    key_t('surface[].edges[].count',       TV_INT,  .false., ''),                            &
+    key_t('surface[].edges.count',         TV_INT,  .true.,  ''),                            &
     key_t('solver.linear',                 TV_STR,  .true.,  'profile'),                     &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
     key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y'),               &
@@ -193,19 +220,29 @@ contains
     call unique_names(doc, 'section', file, errors)
     call unique_names(doc, 'amplitude', file, errors)
     call unique_names(doc, 'step', file, errors)
+    call unique_names(doc, 'surface', file, errors)
 
     call resolve(doc, 'section', 'elset', 'elset', file, errors)
     call resolve(doc, 'section', 'material', 'material', file, errors)
     call resolve_nested(doc, 'step', 'boundary', 'nset', 'nset', file, errors)
+    call resolve_nested(doc, 'step', 'load', 'surface', 'surface', file, errors)
     call resolve_step_amplitude(doc, file, errors)
     call model_requires(doc, file, errors)
     call load_mode_requires(doc, file, errors)
+    call load_type_requires(doc, file, errors)
+    call check_loads(doc, file, errors)
+    call check_surfaces(doc, file, errors)
+    call check_amplitudes(doc, file, errors)
 
-    ! --- the one arity the contract fixes -----------------------------------------
-    if (doc%count_of('step') /= 1_int32) then
-      call raise(errors, PE_UNSUPPORTED, PE_EXIT_UNSUPPORTED, file, 0_int32, 'step',         &
-                 'this build supports exactly one analysis step', itoa(doc%count_of('step')), &
-                 '1')
+    ! --- at least one step --------------------------------------------------------
+    ! "EXACTLY one" used to be here. It moved to the mapping layer on 2026-09-15: the
+    ! contract can describe a sequence of steps (section 2.1 freezes legacy nblks =
+    ! count(step)), and what this build can EXECUTE is a separate, narrower statement.
+    ! Putting the execution limit where the mesh and the legacy globals are is the same
+    ! rule that already sends the element-count refusal there.
+    if (doc%count_of('step') < 1_int32) then
+      call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, 0_int32, 'step',             &
+                 'an analysis needs at least one [[step]]', '0', 'one or more')
     end if
   end subroutine authoring_validate
 
@@ -272,13 +309,13 @@ contains
     integer(int32) :: km, kc
     logical :: reducing
 
-    km = doc%find('step[1].load.mode')
+    km = doc%find('step[1].load_mode')
     if (km == 0_int32) return                  ! a missing mode is require_all's finding
     reducing = trim(doc%entry(km)%svalue) == 'strength_reduction'
-    kc = doc%find('step[1].load.strength_reduction.amplitude')
+    kc = doc%find('step[1].strength_reduction.amplitude')
     if (reducing .and. kc == 0_int32) then
       call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(km)%line,           &
-                 'step[1].load.strength_reduction.amplitude',                                 &
+                 'step[1].strength_reduction.amplitude',                                      &
                  'strength reduction needs the amplitude that schedules it', '',              &
                  'an amplitude name')
     end if
@@ -288,7 +325,7 @@ contains
       ! schedule, so the mode is what is out of step with the intent. The message names
       ! the other line so neither has to be guessed at.
       call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(km)%line,           &
-                 'step[1].load.strength_reduction.amplitude',                                 &
+                 'step[1].strength_reduction.amplitude',                                      &
                  'a strength-reduction curve is named but load.mode is not '//                &
                  '"strength_reduction", so legacy would never read it',                       &
                  trim(doc%entry(km)%svalue), 'strength_reduction')
@@ -426,12 +463,16 @@ contains
     type(toml_doc_t), intent(in) :: doc
     character(len=*), intent(in) :: file
     type(problem_errors_t), intent(inout) :: errors
-    integer(int32) :: n, a, k
+    integer(int32) :: n, a, nl, b
     n = doc%count_of('step')
     do a = 1_int32, n
-      call one_amplitude_ref(doc, file, 'step['//trim(itoa(a))//'].load.gravity.amplitude', errors)
       call one_amplitude_ref(doc, file,                                                       &
-           'step['//trim(itoa(a))//'].load.strength_reduction.amplitude', errors)
+           'step['//trim(itoa(a))//'].strength_reduction.amplitude', errors)
+      nl = doc%count_of('step['//trim(itoa(a))//'].load')
+      do b = 1_int32, nl
+        call one_amplitude_ref(doc, file,                                                     &
+             'step['//trim(itoa(a))//'].load['//trim(itoa(b))//'].amplitude', errors)
+      end do
     end do
   end subroutine resolve_step_amplitude
 
@@ -449,6 +490,231 @@ contains
                'refers to an amplitude that this file does not define',                      &
                trim(doc%entry(k)%svalue), 'a declared [[amplitude]] name')
   end subroutine one_amplitude_ref
+
+  !> A load object's fields are required BY ITS TYPE, and forbidden outside it.
+  !>
+  !> Third instance of the same shape as `model_requires` and `load_mode_requires`, and
+  !> the reason it keeps recurring is structural: legacy reads a common record and then
+  !> branches, so "required" is a property of the (key, discriminator) pair rather than of
+  !> the key. Both directions are checked -- a water-pressure distribution written on a
+  !> gravity object would otherwise be read by nobody and reported by nobody.
+  subroutine load_type_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), parameter :: GRAV(3) = [character(len=24) ::                            &
+      'magnitude', 'direction.count', 'apply_to']
+    character(len=*), parameter :: PRES(6) = [character(len=24) ::                            &
+      'surface', 'distribution.type', 'distribution.axis', 'distribution.at.count',           &
+      'distribution.value.count', 'distribution.scale']
+    integer(int32) :: a, b, kt, k
+    character(len=TOML_LEN_PATH) :: base
+    logical :: is_grav
+    integer :: f
+
+    do a = 1_int32, doc%count_of('step')
+      do b = 1_int32, doc%count_of('step['//trim(itoa(a))//'].load')
+        base = 'step['//trim(itoa(a))//'].load['//trim(itoa(b))//']'
+        kt = doc%find(trim(base)//'.type')
+        if (kt == 0_int32) cycle               ! a missing type is require_all's finding
+        is_grav = trim(doc%entry(kt)%svalue) == 'gravity'
+        do f = 1, size(GRAV)
+          call needs(doc, file, errors, trim(base), trim(GRAV(f)), is_grav, kt, 'gravity')
+        end do
+        do f = 1, size(PRES)
+          call needs(doc, file, errors, trim(base), trim(PRES(f)), .not. is_grav, kt,         &
+                     'pressure')
+        end do
+        ! `apply_to` names an element set or the whole model. It is required rather than
+        ! defaulted to "all" because on a two-material deck "which elements are heavy" is
+        ! a physical statement, and this contract does not guess physical statements.
+        k = doc%find(trim(base)//'.apply_to')
+        if (is_grav .and. k /= 0_int32) then
+          if (trim(doc%entry(k)%svalue) /= 'all') then
+            if (.not. name_exists(doc, 'elset', trim(doc%entry(k)%svalue))) then
+              call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(k)%line,     &
+                         trim(base)//'.apply_to',                                             &
+                         'refers to an elset that this file does not define',                 &
+                         trim(doc%entry(k)%svalue), '"all" or a declared [[elset]] name')
+            end if
+          end if
+        end if
+      end do
+    end do
+  end subroutine load_type_requires
+
+  !> One (field, belongs-to-this-type) pair, both directions.
+  subroutine needs(doc, file, errors, base, field, wanted, kt, tname)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file, base, field, tname
+    logical, intent(in) :: wanted
+    integer(int32), intent(in) :: kt
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: k
+    k = doc%find(trim(base)//'.'//trim(field))
+    if (wanted .and. k == 0_int32) then
+      call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(kt)%line,           &
+                 trim(base)//'.'//trim(field),                                                &
+                 'a load of type "'//trim(tname)//'" needs this field', '', 'a value')
+    else if ((.not. wanted) .and. k /= 0_int32) then
+      call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,            &
+                 trim(base)//'.'//trim(field),                                                &
+                 'only a load of type "'//trim(tname)//'" takes this field; here it '//       &
+                 'would be read by nothing', trim(doc%entry(kt)%svalue), tname)
+    end if
+  end subroutine needs
+
+  !> The two numeric degeneracies a load object can carry.
+  !>
+  !> Both are things legacy does not survive: a zero gravity direction leaves the load
+  !> vector undefined, and `at[1] == at[2]` divides by zero in `Load.f90:819`
+  !> (`dcor/(cor0-cor1)`). Neither is a whitelist question -- the value is well formed and
+  !> the combination is arithmetic nonsense -- so both are INVALID_INPUT.
+  subroutine check_loads(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: a, b, k1, k2, kn, kv
+    character(len=TOML_LEN_PATH) :: base
+    real(real64) :: d1, d2
+
+    do a = 1_int32, doc%count_of('step')
+      do b = 1_int32, doc%count_of('step['//trim(itoa(a))//'].load')
+        base = 'step['//trim(itoa(a))//'].load['//trim(itoa(b))//']'
+
+        k1 = doc%find(trim(base)//'.direction[1]')
+        k2 = doc%find(trim(base)//'.direction[2]')
+        if (k1 /= 0_int32 .and. k2 /= 0_int32) then
+          d1 = doc%entry(k1)%rvalue
+          d2 = doc%entry(k2)%rvalue
+          if (d1*d1 + d2*d2 == 0.0_real64) then
+            call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k1)%line,     &
+                       trim(base)//'.direction',                                              &
+                       'the direction has zero length, so it names no direction at all',      &
+                       '[0, 0]', 'a vector with non-zero length')
+          end if
+        end if
+
+        k1 = doc%find(trim(base)//'.distribution.at[1]')
+        k2 = doc%find(trim(base)//'.distribution.at[2]')
+        if (k1 /= 0_int32 .and. k2 /= 0_int32) then
+          if (doc%entry(k1)%rvalue == doc%entry(k2)%rvalue) then
+            call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k2)%line,     &
+                       trim(base)//'.distribution.at',                                        &
+                       'the two coordinates are equal, and legacy divides by their '//        &
+                       'difference (Load.f90:819)', trim(rtoa(doc%entry(k1)%rvalue)),         &
+                       'two different coordinates')
+          end if
+        end if
+
+        kn = doc%find(trim(base)//'.distribution.at.count')
+        kv = doc%find(trim(base)//'.distribution.value.count')
+        if (kn /= 0_int32 .and. kv /= 0_int32) then
+          if (doc%entry(kn)%ivalue /= doc%entry(kv)%ivalue) then
+            call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(kv)%line,     &
+                       trim(base)//'.distribution.value',                                     &
+                       'the distribution pairs one pressure with each coordinate, so the '//  &
+                       'two arrays must be the same length',                                  &
+                       trim(itoa(doc%entry(kv)%ivalue)), trim(itoa(doc%entry(kn)%ivalue)))
+          else if (doc%entry(kn)%ivalue /= 2_int32) then
+            ! Two points are what a 2-D linear distribution is; more of them is a
+            ! piecewise profile, which legacy's single (cor0, cor1, p0, p1) record
+            ! cannot express at all. A capability refusal, not a malformed file.
+            call raise(errors, PE_UNSUPPORTED, PE_EXIT_UNSUPPORTED, file,                     &
+                       doc%entry(kn)%line, trim(base)//'.distribution.at',                    &
+                       'a 2-D linear distribution is fixed by exactly two points',            &
+                       trim(itoa(doc%entry(kn)%ivalue)), '2')
+          end if
+        end if
+      end do
+    end do
+  end subroutine check_loads
+
+  !> A surface is an explicit edge table, and every row must have the arity its `kind`
+  !> declares. Node and element NUMBERS are not checked here: this layer never opens the
+  !> mesh, so "node 9999 does not exist" is the mapping layer's finding, where the .cor
+  !> file is in hand. What is checkable here is shape and sign, and a zero or negative
+  !> number is never a legacy node id.
+  subroutine check_surfaces(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: a, e, k, kc, c, j, want
+    character(len=TOML_LEN_PATH) :: base, row
+
+    do a = 1_int32, doc%count_of('surface')
+      base = 'surface['//trim(itoa(a))//']'
+      k = doc%find(trim(base)//'.kind')
+      want = 3_int32                            ! 'edge2': [n1, n2, element]
+      if (k == 0_int32) cycle
+      kc = doc%find(trim(base)//'.edges.count')
+      if (kc == 0_int32) cycle
+      if (doc%entry(kc)%ivalue == 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+                   trim(base)//'.edges', 'a surface with no edges carries no load', '0',      &
+                   'at least one [n1, n2, element] row')
+        cycle
+      end if
+      do e = 1_int32, doc%entry(kc)%ivalue
+        row = trim(base)//'.edges['//trim(itoa(e))//']'
+        c = doc%find(trim(row)//'.count')
+        if (c == 0_int32) cycle
+        if (doc%entry(c)%ivalue /= want) then
+          call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(c)%line,        &
+                     trim(row), 'kind "'//trim(doc%entry(k)%svalue)//'" makes every row '//   &
+                     '[n1, n2, element]', trim(itoa(doc%entry(c)%ivalue)), trim(itoa(want)))
+          cycle
+        end if
+        do j = 1_int32, want
+          c = doc%find(trim(row)//'['//trim(itoa(j))//']')
+          if (c == 0_int32) cycle
+          if (doc%entry(c)%ivalue < 1_int32) then
+            call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(c)%line,      &
+                       trim(row), 'node and element numbers start at 1',                      &
+                       trim(itoa(doc%entry(c)%ivalue)), 'a positive number')
+          end if
+        end do
+      end do
+    end do
+  end subroutine check_surfaces
+
+  !> An amplitude's abscissa must strictly increase.
+  !>
+  !> legacy evaluates a curve by walking the time array until it passes the current time
+  !> and interpolating between the two straddling points; a repeated or decreasing time
+  !> makes the segment it lands on depend on the walk, not on the author's intent, and a
+  !> repeat divides by a zero interval. It is not a whitelist question, so INVALID_INPUT.
+  subroutine check_amplitudes(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: a, i, kn, kp, kq
+    character(len=TOML_LEN_PATH) :: base
+
+    do a = 1_int32, doc%count_of('amplitude')
+      base = 'amplitude['//trim(itoa(a))//'].points'
+      kn = doc%find(trim(base)//'.count')
+      if (kn == 0_int32) cycle
+      do i = 2_int32, doc%entry(kn)%ivalue
+        kp = doc%find(trim(base)//'['//trim(itoa(i - 1_int32))//'][1]')
+        kq = doc%find(trim(base)//'['//trim(itoa(i))//'][1]')
+        if (kp == 0_int32 .or. kq == 0_int32) cycle
+        if (doc%entry(kq)%rvalue > doc%entry(kp)%rvalue) cycle
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(kq)%line,         &
+                   trim(base)//'['//trim(itoa(i))//']',                                       &
+                   'the time points of an amplitude must strictly increase',                  &
+                   trim(rtoa(doc%entry(kq)%rvalue)),                                          &
+                   'a time later than '//trim(rtoa(doc%entry(kp)%rvalue)))
+      end do
+    end do
+  end subroutine check_amplitudes
+
+  !> A real, rendered short enough to read inside an error message.
+  function rtoa(x) result(t)
+    real(real64), intent(in) :: x
+    character(len=24) :: t
+    write (t, '(g0.6)') x
+  end function rtoa
 
   ! ------------------------------------------------------------------ helpers ----
 

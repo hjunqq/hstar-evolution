@@ -39,7 +39,8 @@ module yl_authoring_map
                               activation_t, nset_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,        &
                                make_problem_error, make_source_location,                     &
-                               PE_INVALID_INPUT, PE_EXIT_INPUT
+                               PE_INVALID_INPUT, PE_EXIT_INPUT,                        &
+                               PE_UNSUPPORTED, PE_EXIT_UNSUPPORTED
   use yl_problem_manifest, only: manifest_t
   use yl_problem_builder, only: problem_builder_t, step_builder_t, amplitude_builder_t,      &
                                 builder_begin, builder_finish, builder_failed,               &
@@ -110,6 +111,7 @@ contains
     type(activation_t) :: act
     type(nset_t) :: ns
     integer(int32), allocatable :: ids(:), nodes(:)
+    character(len=TOML_LEN_PATH) :: gp
 
     site_file = 'case.toml'
     if (present(file)) site_file = file
@@ -240,12 +242,21 @@ contains
       if (builder_failed(b)) return
     end do
 
+    ! --- what this build can actually execute -------------------------------------
+    ! The contract admits a sequence of steps and a list of load objects per step
+    ! (authoring-contract section 2.1 / 8.3); the executable slice is narrower, and the
+    ! refusal lives HERE rather than in the validator because it is a statement about
+    ! this binary, not about the input language. Silently running step 1 and ignoring
+    ! step 2 is the failure mode this exists to prevent.
+    call executable_shape(doc, errors)
+    if (errors%count() > mark0) return
+
     ! --- the single step ----------------------------------------------------------
     call builder_step_begin(sb)
     call builder_step_set_procedure(b, sb, procedure_code(text_at(doc, 'step[1].procedure')), &
                                     here(line_at(doc, 'step[1].procedure')), errors)
-    call builder_step_set_load_mode(b, sb, load_mode_code(text_at(doc, 'step[1].load.mode')), &
-                                    here(line_at(doc, 'step[1].load.mode')), errors)
+    call builder_step_set_load_mode(b, sb, load_mode_code(text_at(doc, 'step[1].load_mode')), &
+                                    here(line_at(doc, 'step[1].load_mode')), errors)
     if (builder_failed(b)) return
 
     call default_controls(ctrl)
@@ -253,7 +264,7 @@ contains
     call opt_set(ctrl%max_iterations,  int_at(doc, 'step[1].controls.max_iterations'))
     call opt_set(ctrl%nonlinear_type,                                                         &
          stiffness_update_code(text_at(doc, 'step[1].controls.stiffness_update')))
-    call opt_set(ctrl%steps,          int_at(doc, 'step[1].controls.steps'))
+    call opt_set(ctrl%substeps,       int_at(doc, 'step[1].controls.substeps'))
     call opt_set(ctrl%time_increment, real_at(doc, 'step[1].controls.time_increment'))
     call opt_set(ctrl%tolerance_force, real_at(doc, 'step[1].controls.tolerance_force'))
     ! tolerance_dof is one value PER DEGREE OF FREEDOM and gravity%amplitude one id PER
@@ -272,18 +283,22 @@ contains
     ! validator has already refused a curve that names nothing, and a name on a plain
     ! gravity run.
     call opt_set(ld%strength_reduction,                                                       &
-         int(amplitude_index(doc, text_at(doc, 'step[1].load.strength_reduction.amplitude')), &
+         int(amplitude_index(doc, text_at(doc, 'step[1].strength_reduction.amplitude')),      &
              int32))
-    call opt_set(ld%gravity%magnitude, real_at(doc, 'step[1].load.gravity.magnitude'))
+    ! The load array is the author's shape; ProblemState still holds ONE gravity object,
+    ! so the one gravity load is located by type. `executable_shape` has already refused
+    ! anything this cannot carry -- a second gravity load, or a pressure load.
+    gp = load_of_type(doc, 1_int32, 'gravity')
+    call opt_set(ld%gravity%magnitude, real_at(doc, trim(gp)//'.magnitude'))
     if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
     allocate (ld%gravity%amplitude(int(doc%count_of('section'))))
     ld%gravity%amplitude = int(amplitude_index(doc,                                           &
-                               text_at(doc, 'step[1].load.gravity.amplitude')), int32)
+                               text_at(doc, trim(gp)//'.amplitude')), int32)
     if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
     allocate (ld%gravity%direction(2))
-    ld%gravity%direction(1) = real_at(doc, 'step[1].load.gravity.direction[1]')
-    ld%gravity%direction(2) = real_at(doc, 'step[1].load.gravity.direction[2]')
-    call builder_step_set_load(b, sb, ld, here(line_at(doc, 'step[1].load.gravity.magnitude')), errors)
+    ld%gravity%direction(1) = real_at(doc, trim(gp)//'.direction[1]')
+    ld%gravity%direction(2) = real_at(doc, trim(gp)//'.direction[2]')
+    call builder_step_set_load(b, sb, ld, here(line_at(doc, trim(gp)//'.magnitude')), errors)
     if (builder_failed(b)) return
 
     call default_output(outp)
@@ -529,6 +544,65 @@ contains
     type(source_location_t) :: loc
     loc = make_source_location(file=trim(site_file), reader='authoring', line=line)
   end function here
+
+  !> Refuse the shapes the contract can describe and this build cannot run.
+  subroutine executable_shape(doc, errors)
+    type(toml_doc_t), intent(in) :: doc
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: a, b, ngrav, npres, k
+
+    if (doc%count_of('step') /= 1_int32) then
+      call refuse(errors, 'step', 'this build runs one analysis step; legacy nblks = '//      &
+                  'count(step)', itoa(int(doc%count_of('step'))), '1')
+      return
+    end if
+    ngrav = 0_int32
+    npres = 0_int32
+    do a = 1_int32, doc%count_of('step')
+      do b = 1_int32, doc%count_of('step['//itoa(int(a))//'].load')
+        k = doc%find('step['//itoa(int(a))//'].load['//itoa(int(b))//'].type')
+        if (k == 0_int32) cycle
+        if (trim(doc%entry(k)%svalue) == 'gravity') ngrav = ngrav + 1_int32
+        if (trim(doc%entry(k)%svalue) == 'pressure') npres = npres + 1_int32
+      end do
+    end do
+    if (ngrav /= 1_int32) then
+      call refuse(errors, 'step[1].load', 'this build carries exactly one gravity load '//    &
+                  'per step', itoa(int(ngrav)), '1')
+    end if
+    if (npres /= 0_int32) then
+      call refuse(errors, 'step[1].load', 'surface pressure is declared by the contract '//   &
+                  'but not yet carried to ProblemState', itoa(int(npres)), '0')
+    end if
+  end subroutine executable_shape
+
+  !> The path of the `which`-typed load in step `st`, or the first load if none matches --
+  !> `executable_shape` has already refused the latter case.
+  function load_of_type(doc, st, which) result(path)
+    type(toml_doc_t), intent(in) :: doc
+    integer(int32), intent(in) :: st
+    character(len=*), intent(in) :: which
+    character(len=TOML_LEN_PATH) :: path
+    integer(int32) :: b, k
+    path = 'step['//itoa(int(st))//'].load[1]'
+    do b = 1_int32, doc%count_of('step['//itoa(int(st))//'].load')
+      k = doc%find('step['//itoa(int(st))//'].load['//itoa(int(b))//'].type')
+      if (k == 0_int32) cycle
+      if (trim(doc%entry(k)%svalue) == trim(which)) then
+        path = 'step['//itoa(int(st))//'].load['//itoa(int(b))//']'
+        return
+      end if
+    end do
+  end function load_of_type
+
+  subroutine refuse(errors, path, msg, actual, expected)
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), intent(in) :: path, msg, actual, expected
+    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage='authoring',                &
+         object_path=path, message=msg, actual=actual, expected=expected,                     &
+         exit_class=PE_EXIT_UNSUPPORTED,                                                      &
+         source=make_source_location(file=trim(site_file), reader='authoring')))
+  end subroutine refuse
 
   subroutine fail(errors, path, msg)
     type(problem_errors_t), intent(inout) :: errors

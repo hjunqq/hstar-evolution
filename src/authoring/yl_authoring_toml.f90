@@ -34,6 +34,12 @@ module yl_authoring_toml
   private
 
   integer, parameter, public :: TOML_LEN_PATH = 96
+  !> Distinct [[table]] names one file may use. `arr_name` and `idx` are BOTH this long:
+  !> parse_header writes idx(k) for the k it just allocated in arr_name, so a file with
+  !> more names than idx has slots writes past it. That happened on 2026-09-15, when the
+  !> .loa deck became the first with nine of them and only arr_name had been enlarged --
+  !> at -O2 it was not a diagnostic but a hang. One parameter, so they cannot drift again.
+  integer, parameter :: TOML_MAX_ARRAYS = 16
   integer, parameter, public :: TOML_LEN_TEXT = 256
 
   !> What a value is. `TV_ARRAY` entries are expanded into one entry per element, with the
@@ -81,8 +87,8 @@ contains
     character(len=1024) :: raw
     character(len=:), allocatable :: line, key, val
     character(len=TOML_LEN_PATH) :: table
-    integer(int32) :: idx(8)
-    character(len=TOML_LEN_PATH) :: arr_name(8)
+    integer(int32) :: idx(TOML_MAX_ARRAYS)
+    character(len=TOML_LEN_PATH) :: arr_name(TOML_MAX_ARRAYS)
     integer :: n_arr
 
     cap = 4096

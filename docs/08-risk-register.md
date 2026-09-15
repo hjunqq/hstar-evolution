@@ -46,5 +46,8 @@ build 规则 60→54，model_ready RuntimeState 行 46→41（双射两向仍成
 四个 golden 算例仍全部 `max|d| = 0` |
 | R16 | 初稿 ProblemState 自创分类，与 CAE 惯例和 YL 对象都不对应 | 三套词汇并存，输入更混乱 | ADR-0003 采用 CAE 对象模型；docs/01、03 与 schema 已改，M3/M5 按其实施 |
 
+| R32 | **authoring 的 TOML 子集不接受多行数组。** `store_value` 明确拒绝跨行的 `[...]`（`yl_authoring_toml.f90`："array not closed on one line (multi-line arrays are not part of this subset)"）。`[[surface]]` 的边表因此必须写在一行上：`wall_reservoir` 的 4 条边约 50 字符尚可，一个真实坝面 30 条边约 330 字符 | 影响的是**可读性**，不是正确性——而可读性正是这份契约的第二条判据（`docs/m5/authoring-contract.md` §0，30～50 行的目标）。一行 330 字符的边表在评审时无法逐条看，等于把「显式边表」的好处又还回去了 | **处置**：本轮不处理。Phase 2 的夹具只有 4 条边，不受影响；**第一个真实水压算例进来之前必须处理**。**关闭条件**：`store_value` 支持跨行累积到方括号配平，配一条「未配平即在起始行报错」的反例。**关闭里程碑**：M7 Phase 3 之前。登记于 2026-09-15 |
+| R33 | **`tools/build.sh` 的 `adapter` 目标要求整个 `cases/` 干净，而它想证明的只是「本目标没有写进 golden 输入」。** 2026-09-15 发现：同一个提交里合法修改算例（`.loa` 家族把四个 deck 的 `[step.load]` 改成对象数组）就会让这道门禁红，而它对这件事没有立场 | 一道会拒绝自己无权评判之事的门禁，会先失去可信度，再被绕过——这比它漏报更危险 | **已于同日关闭**：守卫改为比较目标**运行前后**的 `git status --porcelain cases/` 差，性质不变，拒绝面回到它声称的那一条。**第二次修正（同日）**：守卫最初改成「比较目标前后的 `git status --porcelain cases/`」，写阳性对照时才发现它在**恰恰是促成本次修改的那种树上是瞎的**——一个已经 ` M` 的 deck 被追加一行之后，status 列表逐字不变。改为对 `cases/` 下全部文件取内容哈希（244 文件 / 5.4 MB / 0.4 s）。**阳性对照已建立**：在目标里注入一次对 golden deck 的追加写，守卫报 `=== FAILED: this target modified cases/` 并退出 6 |
+
 每次新增风险补充责任人、发现提交、最小复现、预定处置阶段和关闭证据路径。
 计划修正只解决文档问题，不能替代代码或运行验证。

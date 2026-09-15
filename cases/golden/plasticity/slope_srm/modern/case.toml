@@ -78,20 +78,19 @@ points = [[0.0, 1.0], [1.0, 0.5]]
 [[step]]
 name      = "strength_reduction"
 procedure = "static"
+load_mode = "strength_reduction"
 
 [step.controls]
 increments      = 1
-steps           = 100    # 100 steps x 0.01 walks the curve abscissa from 0 to 1
+substeps        = 100    # 100 steps x 0.01 walks the curve abscissa from 0 to 1
 time_increment  = 0.01
 max_iterations  = 40
 tolerance_force = 1.0e-5
 tolerance_dof   = 1.0e-5
 stiffness_update = "first_iteration"
 
-[step.load]
-mode = "strength_reduction"
 
-[step.load.strength_reduction]
+[step.strength_reduction]
 amplitude = "reduction"
 
 [[step.boundary]]
@@ -109,10 +108,12 @@ nset  = "left_face_y"
 dof   = [2]
 value = 0.0
 
-[step.load.gravity]
+[[step.load]]
+type      = "gravity"
 magnitude = 9.81
 direction = [0.0, -1.0]
 amplitude = "gravity"
+apply_to  = "all"   # every element group is on this gravity history
 
 [solver]
 linear = "profile"
