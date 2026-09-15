@@ -441,6 +441,15 @@ PASS  blocks=600 values=541200 mismatches=0 max|d|=0.000e+00
 临时浮点探针与 `initzero` / `nofma` / `fpprecise` 三个 profile **仍为非默认**,
 未升级为常设治理设施;未新增常设门禁;塑性积分器未纳入观测面。
 
+## 9.0 签收（负责人 Huijun，2026-09-15，窄口径）
+
+**本次确立**：`CLASSICALEP/MC` + 强度折减（`MAT_DE` + 材料曲线）在真实 deck 上
+由现代输入独立驱动；材料曲线链路成立；**塑性确实发生**（非零 `PLASTICSTRAIN`）；
+与冻结 legacy 参考严格等价（600 块 / 541 200 值 / `max|d| = 0`）。
+
+**不确立**：其他屈服准则（TC / VM / DP / MCC / DPC / MCJOINT）；其他本构模型；
+§2.4 那四个与模型正交的子能力族。门禁由实现方编写并运行，**不表述为独立第三方验证**。
+
 ## 9. `mat_curve = 2` 能力收口:`train05b_slope_srm`(2026-09-15)
 
 ### 9.1 判据
