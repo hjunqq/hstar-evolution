@@ -74,7 +74,8 @@ module yl_problem_builder
   use yl_problem_types, only: problem_state_t, case_t, node_t, element_t, elset_t, &
                               nset_t, material_t, section_t, amplitude_t, &
                               amplitude_point_t, interactions_t, solver_t, step_t, &
-                              controls_t, load_t, output_t, boundary_t, activation_t
+                              controls_t, load_t, output_t, boundary_t, activation_t, &
+                              surface_edge_t
   use yl_problem_errors, only: problem_error_t, problem_errors_t, source_location_t, &
                                make_problem_error, PE_INVALID_INPUT
 
@@ -92,6 +93,7 @@ module yl_problem_builder
   public :: builder_add_material, builder_materials_empty
   public :: builder_add_section, builder_sections_empty
   public :: builder_add_amplitude, builder_amplitudes_empty
+  public :: builder_add_surface_edge, builder_surface_edges_empty
   public :: builder_add_step, builder_steps_empty
   public :: builder_amplitude_begin, builder_amplitude_finish
   public :: builder_amplitude_set_name, builder_amplitude_set_type
@@ -163,6 +165,12 @@ module yl_problem_builder
     integer(int32) :: st_amplitudes = COLL_UNSET
     integer(int32) :: n_amplitudes = 0_int32
     type(amplitude_t), allocatable :: buf_amplitudes(:)
+    ! The named faces, flattened. One collection for the whole problem, like the mesh and
+    ! unlike the loads: legacy reads the edge table once "for whole analysis" and only
+    ! the loads ON it repeat per block.
+    integer(int32) :: st_surface_edges = COLL_UNSET
+    integer(int32) :: n_surface_edges = 0_int32
+    type(surface_edge_t), allocatable :: buf_surface_edges(:)
 
     integer(int32) :: st_steps = COLL_UNSET
     integer(int32) :: n_steps = 0_int32
@@ -451,6 +459,12 @@ contains
                           candidate%sections(:) = b%buf_sections(1:b%n_sections)
       end select
 
+      select case (b%st_surface_edges)
+      case (COLL_EMPTY);  allocate(candidate%surface_edges(0))
+      case (COLL_FILLED); allocate(candidate%surface_edges(b%n_surface_edges))
+                          candidate%surface_edges(:) = b%buf_surface_edges(1:b%n_surface_edges)
+      end select
+
       select case (b%st_amplitudes)
       case (COLL_EMPTY);  allocate(candidate%amplitudes(0))
       case (COLL_FILLED); allocate(candidate%amplitudes(b%n_amplitudes))
@@ -735,6 +749,34 @@ contains
     b%buf_amplitudes(b%n_amplitudes) = value
     b%st_amplitudes = COLL_FILLED
   end subroutine builder_add_amplitude
+
+  subroutine builder_add_surface_edge(b, value, loc, errors)
+    type(problem_builder_t), intent(inout) :: b
+    type(surface_edge_t), intent(in) :: value
+    type(source_location_t), intent(in) :: loc
+    type(problem_errors_t), intent(inout) :: errors
+    type(surface_edge_t), allocatable :: tmp(:)
+    if (.not. allow_add(b, b%st_surface_edges, &
+                        'surface_edges', b%n_surface_edges + 1_int32, loc, errors)) return
+    if (.not. allocated(b%buf_surface_edges)) then
+      allocate(b%buf_surface_edges(SEED_CAPACITY))
+    else if (b%n_surface_edges >= int(size(b%buf_surface_edges), int32)) then
+      allocate(tmp(2 * size(b%buf_surface_edges)))
+      tmp(1:b%n_surface_edges) = b%buf_surface_edges(1:b%n_surface_edges)
+      call move_alloc(tmp, b%buf_surface_edges)
+    end if
+    b%n_surface_edges = b%n_surface_edges + 1_int32
+    b%buf_surface_edges(b%n_surface_edges) = value
+    b%st_surface_edges = COLL_FILLED
+  end subroutine builder_add_surface_edge
+
+  subroutine builder_surface_edges_empty(b, loc, errors)
+    type(problem_builder_t), intent(inout) :: b
+    type(source_location_t), intent(in) :: loc
+    type(problem_errors_t), intent(inout) :: errors
+    if (.not. allow_empty(b, b%st_surface_edges, 'surface_edges', loc, errors)) return
+    b%st_surface_edges = COLL_EMPTY
+  end subroutine builder_surface_edges_empty
 
   subroutine builder_amplitudes_empty(b, loc, errors)
     type(problem_builder_t), intent(inout) :: b

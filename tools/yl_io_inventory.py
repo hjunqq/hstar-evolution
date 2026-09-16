@@ -42,8 +42,12 @@ STMT = re.compile(r"^\s*(?:\d+\s+)?(read|open|close|rewind|backspace|inquire)\s*
 IF_PREFIX = re.compile(r"^\s*if\s*\(", re.I)
 ROUTINE = re.compile(r"^\s*(?:recursive\s+)?(subroutine|function|program)\s+([A-Za-z_0-9]+)", re.I)
 END_ROUTINE = re.compile(r"^\s*end\s+(subroutine|function|program)\b", re.I)
-STATE_TARGET_VOCAB = re.compile(r"^(case|mesh|materials|sections|amplitudes|interactions|steps|solver)(\.|\[|$)|^(derived|not_migrated|unused_switch|empty_section|output_control|runtime_only|title_skip)$")
-PHASE_VOCAB = re.compile(r"^(startup|phase_lazy\(\d+\)|increment_lazy\(\d+,\d+\)|solver_lazy|rewind_reread)$")
+STATE_TARGET_VOCAB = re.compile(r"^(case|mesh|materials|sections|amplitudes|interactions|steps|solver|surface_edges)(\.|\[|$)|^(derived|not_migrated|unused_switch|empty_section|output_control|runtime_only|title_skip)$")
+# block_lazy(N) joins the vocabulary with the .loa load domain (2026-09-16): the tail
+# of .loa is re-read once per BLOCK, and until a deck had more than one block the
+# distinction was invisible -- every external_load_2 reader was labelled `startup`
+# and was not wrong on a one-block slice. N is the first block that reaches it.
+PHASE_VOCAB = re.compile(r"^(startup|phase_lazy\(\d+\)|block_lazy\(\d+\)|increment_lazy\(\d+,\d+\)|solver_lazy|rewind_reread)$")
 
 
 def strip_comment(line: str) -> str:
@@ -235,7 +239,13 @@ def cmd_gdb_script(a):
             lines += [spec, "commands", "silent", f'printf "HIT {s["site"]} {where}\\n"', "continue", "end"]
             n_loc += 1
     lines += [f'printf "LOCATIONS %d {n_loc}\\n", $bpnum',
-              "run < /dev/null > gdb-stdout.txt 2> gdb-stderr.txt",
+              # --adapter=off, always. The tracer exists to count LEGACY reader
+              # executions, and the trace profile links the real adapter entry, whose
+              # default is ON -- so without this the tracer measured the adapter path
+              # and, on a deck the adapter refuses, measured a run that stopped at the
+              # first refusal (found 2026-09-16 on loads_2d.wall_reservoir: 49 hits,
+              # exit 3, empty results).
+              "run --adapter=off < /dev/null > gdb-stdout.txt 2> gdb-stderr.txt",
               'printf "EXIT %d\\n", $_exitcode', "quit"]
     Path(a.output).write_text("\n".join(lines) + "\n", encoding="utf-8")
     if a.locations:

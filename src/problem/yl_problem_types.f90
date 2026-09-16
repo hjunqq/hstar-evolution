@@ -266,8 +266,39 @@ module yl_problem_types
     integer(int32), allocatable :: amplitude(:)     ! id, one amplitude reference per section
   end type gravity_t
 
+  !> One loaded stretch of a named face: legacy's edge-load group.
+  !>
+  !> legacy addresses the loaded edges as a CONTIGUOUS RANGE into the global `edges`
+  !> table (`begin_edge .. end_edge`, Load.f90:767), and that is what is stored here. The
+  !> range is not something an author writes -- the contract's section 3 keeps integer ids
+  !> out of the input entirely -- it is what the mapping layer assigns when it lays the
+  !> named `[[surface]]` collections out in declaration order. This is the same division
+  !> as everywhere else in ProblemState: names in the input, ids in the state.
+  type, public :: pressure_t
+    type(opt_int) :: first_edge            !@off-face: steps0.load.pressure.begin_edge
+    type(opt_int) :: last_edge             !@off-face: steps0.load.pressure.end_edge
+    type(opt_int) :: amplitude             !@off-face: steps0.load.pressure.itcurve
+    !> legacy `water`: |value| selects the coordinate the distribution reads and the sign
+    !> says which way the head deepens (Load.f90:811-822). A physical choice, so it is
+    !> carried rather than assumed, even though this build whitelists one value.
+    type(opt_int) :: distribution_axis     !@off-face: steps0.load.pressure.water
+    !> legacy `code_load` -- a SECOND distribution for the far side of the face -- is
+    !> deliberately NOT a field here. legacy reads it into a routine local and keeps
+    !> nothing: there is no global for a map row to name, so carrying it would mean
+    !> inventing state legacy does not have. The contract admits no key for it, which is
+    !> where that capability is refused.
+    real(real64), allocatable :: at(:)     !@off-face: steps0.load.pressure.cor
+    real(real64), allocatable :: value(:)  !@off-face: steps0.load.pressure.p
+    type(opt_real) :: scale                !@off-face: steps0.load.pressure.fact
+  end type pressure_t
+
   type, public :: load_t
     type(gravity_t) :: gravity
+    !> The pressure loads this step carries, in the order the author declared them --
+    !> which is the order legacy reads its edge-load groups. NOT allocated means the step
+    !> was never given a load record; allocated with size 0 means it carries no pressure,
+    !> and those are different states (ADR-0002).
+    type(pressure_t), allocatable :: pressure(:)
     !> legacy `mat_curve`: WHICH amplitude drives strength reduction. Only meaningful when
     !> `load_mode` is 'MAT_DE', where Stiff.f90:5779 takes that curve's current factor and
     !> scales the cohesion and tan(friction) / tan(dilation) by it -- so the curve IS the
@@ -328,9 +359,28 @@ module yl_problem_types
   ! ADR-0003 top-level shape: case / mesh / materials / sections / amplitudes /
   ! interactions / steps[] / solver. All counts are derived, never stored.
 
+  !> One edge of one face, exactly as legacy writes it down (Load.f90:375-383).
+  !>
+  !> `element` is stored because legacy stores it: finding the element from the node pair
+  !> is topology derivation, and deriving what legacy already states is the mistake this
+  !> build has paid for twice (R31, the jacob 1-ULP divergence). `element_class` and
+  !> `projection_axis` are legacy's `index` and `vdimn`, per edge, because legacy keeps
+  !> them per edge even though its file writes them once per chunk.
+  type, public :: surface_edge_t
+    integer(int32), allocatable :: nodes(:)  !@off-face: surfaces.edges.lnode
+    type(opt_int) :: element                 !@off-face: surfaces.edges.aelem
+    type(opt_int) :: element_class           !@off-face: surfaces.edges.index
+    type(opt_int) :: projection_axis         !@off-face: surfaces.edges.vdimn
+  end type surface_edge_t
+
   type, public :: problem_state_t
     type(case_t) :: case
     type(mesh_t) :: mesh
+    !> Every face's edges, flattened into one table in declaration order, which is what
+    !> makes a named face exactly one contiguous range (see pressure_t). One collection
+    !> for the whole problem, not one per step: legacy reads the edge table once, "for
+    !> whole analysis", and only the LOADS on it are per block.
+    type(surface_edge_t), allocatable :: surface_edges(:)
     type(material_t), allocatable :: materials(:)
     type(section_t), allocatable :: sections(:)
     type(amplitude_t), allocatable :: amplitudes(:)

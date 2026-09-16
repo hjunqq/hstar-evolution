@@ -1,0 +1,93 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-16T11:15:40+00:00",
+  "root": "cases/golden/loads_2d/wall_reservoir/legacy",
+  "file_count": 15,
+  "total_bytes": 14931,
+  "excludes": [],
+  "meta": {
+    "case_id": "loads_2d.wall_reservoir",
+    "source_repository": "/home/huijun/HSTAR_Next/hstar_jobs",
+    "source_path": "0416_125158_determ_test",
+    "actually_opened_load_file": "1.loa",
+    "note": "Solver inputs only; two blocks, group 2 appears in block 2, edge load only in block 2"
+  },
+  "case_insensitive_collisions": [],
+  "files": [
+    {
+      "path": "1.aqu",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "1.cor",
+      "bytes": 1292,
+      "sha256": "0fd4233e5118bd8056611bdeca91439394db1b72a27e1996d5639379a8db9b95"
+    },
+    {
+      "path": "1.ele",
+      "bytes": 675,
+      "sha256": "11e99b38d70f60661d330bfd48f6791c53e4c5f1bf0a645f36a08acd1773da4b"
+    },
+    {
+      "path": "1.ftr",
+      "bytes": 72,
+      "sha256": "5a6bc4c49e60511b7ab9080c1779320847979214450fa5306248bc25014e6bfc"
+    },
+    {
+      "path": "1.glb",
+      "bytes": 2589,
+      "sha256": "afe02994be8f3ea92fe748d0fd8cc9575cd171b8e85cab021d2b8d0fd3a8121f"
+    },
+    {
+      "path": "1.ifs",
+      "bytes": 73,
+      "sha256": "237a1f4f804e4815f29cb4f4b643089e363b398f6a6c4120713f22e3c728eb9b"
+    },
+    {
+      "path": "1.loa",
+      "bytes": 716,
+      "sha256": "d250f7a8429a8683c5e415674cf771cc78b6ad1659dd7f4f26b996070c9a894c"
+    },
+    {
+      "path": "1.man",
+      "bytes": 186,
+      "sha256": "87b9909d8f64b41fe549fedf39ad3ee7606b270c57ac669f68e0d5480607ed36"
+    },
+    {
+      "path": "1.mat",
+      "bytes": 371,
+      "sha256": "8f186ce326e29ca7704d7501228e515c655232808c5dc89acfcec9191995a73c"
+    },
+    {
+      "path": "1.nrt",
+      "bytes": 91,
+      "sha256": "969193fc453109c96ba5786cc5085c77c29b3a4466e518287a86f42a2b5e25d4"
+    },
+    {
+      "path": "1.opr",
+      "bytes": 219,
+      "sha256": "2b23bff52983db51251a327e6d9e2472188df582e86993eaca3348f943b9f02c"
+    },
+    {
+      "path": "1.pre",
+      "bytes": 328,
+      "sha256": "a1a463c698feedda5fd047a6fa26119fdb1d5200f732068254fe1d2328f0d4e7"
+    },
+    {
+      "path": "1.sol",
+      "bytes": 8000,
+      "sha256": "731953774729842473e89657d1ee94b7efdd6fb83562e31bc675c39dd6573b91"
+    },
+    {
+      "path": "1.tem",
+      "bytes": 248,
+      "sha256": "110dabf3b657fd524285aa54cf178bfe7c9c33ac3cc48308ce4b465b733f1bd0"
+    },
+    {
+      "path": "inp",
+      "bytes": 71,
+      "sha256": "77a8615a6cf6418962a4467144f498f3e72164d51a169e0d88ae19e404c8b63a"
+    }
+  ]
+}

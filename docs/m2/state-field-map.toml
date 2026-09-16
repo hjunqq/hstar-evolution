@@ -59,6 +59,8 @@ nnode = "nodes per element from sections[].element_kind (4 for Q4)"
 ngroup = "count(sections) = count(mesh.elsets)"
 nelgroup = "count(mesh.elsets[].elements) per group = group(ig)%nelgroup (ragged; 256 on both cases with ngroup=1)"
 nmats = "count(materials)"
+edge_node_count = "nodes on one surface edge = edges(i)%nnode (2 for a 2-D Q4 face)"
+pressure_point_count = "points fixing one linear pressure distribution (2: legacy cor0/cor1 with p0/p1)"
 nrfields = "count(sections[].formulation.fields) per group (1 on both cases)"
 nfdof = "count(sections[].formulation.dofs) per field (2 on both cases)"
 mdofn = "sum over distinct global dofs of sections[].formulation.dofs (2 on both cases)"
@@ -5112,3 +5114,201 @@ field = "steps0.load.gravity.magnitude"
 index = "[]"
 legacy_edit = ".loa body-force record, gravy 9.81 -> 9.80 (Load.f90:912 item 1)"
 expected_only = true
+
+[[field]]
+id = "surfaces.edges.lnode"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edges%lnode"
+source = ["LOA.external_load_1.edge_nodes"]
+consumers = ["external_load_1", "external_load_2"]
+shape = ["edge_node_count"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.surface_edges[].nodes"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "The global node numbers of one edge (Load.f90:383). Two of them for a 2-D Q4 face."
+
+[[field]]
+id = "surfaces.edges.aelem"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edges%aelem"
+source = ["LOA.external_load_1.edge_nodes"]
+consumers = ["external_load_1", "external_load_2"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.surface_edges[].element"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "The element the edge belongs to, written down by legacy (Load.f90:383) and therefore never derived here."
+
+[[field]]
+id = "surfaces.edges.index"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edges%index"
+source = ["LOA.external_load_1.edge_chunk_header"]
+consumers = ["external_load_1", "external_load_2"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.surface_edges[].element_class"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `index`: which element class the edge's shape functions come from (elkn). 1 on the 2-D Q4 face."
+
+[[field]]
+id = "surfaces.edges.vdimn"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edges%vdimn"
+source = ["LOA.external_load_1.edge_chunk_header"]
+consumers = ["external_load_1", "external_load_2"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.surface_edges[].projection_axis"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `vdimn` (2021-10-28): the coordinate flattened before the edge geometry is built. 0 in 2-D."
+
+[[field]]
+id = "steps0.load.pressure.begin_edge"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edgeload%iedge"
+source = ["LOA.external_load_2.edge_load_group"]
+consumers = ["external_load_2"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.pressure[].first_edge"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `begin_edge` (Load.f90:767): the first edge of a contiguous loaded range."
+
+[[field]]
+id = "steps0.load.pressure.end_edge"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edgeload%iedge"
+source = ["LOA.external_load_2.edge_load_group"]
+consumers = ["external_load_2"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.pressure[].last_edge"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `end_edge` (Load.f90:767): the last edge of the range."
+
+[[field]]
+id = "steps0.load.pressure.itcurve"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.edgeload%itcurve"
+source = ["LOA.external_load_2.edge_load_group"]
+consumers = ["external_load_2"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.pressure[].amplitude"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "The amplitude that scales this group over time, 1-based into tcurves(:)."
+
+[[field]]
+id = "steps0.load.pressure.water"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.gpwater%water"
+source = ["LOA.external_load_2.edge_load_group"]
+consumers = ["external_load_2"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.steps[0].load.pressure[].distribution_axis"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `water`: abs() picks the coordinate the head is measured along, the sign picks the direction (Load.f90:811-822). 2 on this build's whitelist."
+
+[[field]]
+id = "steps0.load.pressure.cor"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.gpwater%cor0"
+source = ["LOA.external_load_2.edge_load_distribution"]
+consumers = ["external_load_2"]
+shape = ["pressure_point_count"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.steps[0].load.pressure[].at"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `cor0, cor1`: the two coordinates the linear head is fixed by. Their difference is a divisor (Load.f90:819), which is why the contract refuses them equal."
+
+[[field]]
+id = "steps0.load.pressure.p"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.gpwater%p0"
+source = ["LOA.external_load_2.edge_load_distribution"]
+consumers = ["external_load_2"]
+shape = ["pressure_point_count"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.steps[0].load.pressure[].value"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `p0, p1`: the head at each of the two coordinates, before `fact` scales it to a pressure."
+
+[[field]]
+id = "steps0.load.pressure.fact"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.gpwater%fact"
+source = ["LOA.external_load_2.edge_load_distribution"]
+consumers = ["external_load_2"]
+shape = []
+dtype = "f64"
+unit = "N/m3"
+owner = "ProblemState.steps[0].load.pressure[].scale"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "legacy `fact`: what multiplies the head to make a pressure -- the unit weight of water, 9810 on every deck measured."

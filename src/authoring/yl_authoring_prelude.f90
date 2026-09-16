@@ -117,6 +117,12 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
                                    nresta, cwater, qstatic)
   use iso_fortran_env, only: int32
   use variable_types, only: irk, ink
+  ! WHICH block legacy is in. These controls are STATIC_U locals, re-read from `.man` at
+  ! the top of every block, so the modern answer has to depend on the block too -- and
+  ! `iblks` is where legacy keeps that. Reading it here rather than threading it through
+  ! the call keeps Fem.f90's line numbers untouched, which the M2 checkpoint anchors and
+  ! the reader registry both depend on.
+  use global_var, only: iblks
   use yl_diag, only: yl_input_file
   use yl_authoring_toml, only: toml_doc_t, toml_read
   implicit none
@@ -125,6 +131,8 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
   real(irk), intent(out) :: ditime
   type(toml_doc_t) :: doc
   integer(int32) :: k
+  character(len=32) :: base
+  character(len=12) :: ib
   nincs_ = 1_ink
   miter = 1_ink
   nstep = 1_ink
@@ -135,17 +143,19 @@ subroutine yl_modern_step_controls(nincs_, miter, ditime, noutn, noutf, nstep, i
   ! and quietly substituting 1/1 for what the author wrote would change the answer with
   ! nothing on screen saying so.
   if (doc%failed) call refuse_reread(doc%fail_line, trim(doc%message))
-  k = doc%find('step[1].controls.increments')
+  write (ib, '(i0)') max(1, int(iblks))
+  base = 'step['//trim(ib)//'].controls'
+  k = doc%find(trim(base)//'.increments')
   if (k /= 0_int32) nincs_ = int(doc%entry(k)%ivalue, ink)
-  k = doc%find('step[1].controls.max_iterations')
+  k = doc%find(trim(base)//'.max_iterations')
   if (k /= 0_int32) miter = int(doc%entry(k)%ivalue, ink)
   ! nstep and ditime were pinned to 1 and 1.0 while one step was the only shape this build
   ! admitted. A strength-reduction sweep is 100 steps of 0.01, and the two values decide
   ! how far along the reduction curve the analysis gets -- they are the experiment, not
   ! bookkeeping. Read here because STATIC_U's copies are routine locals.
-  k = doc%find('step[1].controls.substeps')
+  k = doc%find(trim(base)//'.substeps')
   if (k /= 0_int32) nstep = int(doc%entry(k)%ivalue, ink)
-  k = doc%find('step[1].controls.time_increment')
+  k = doc%find(trim(base)//'.time_increment')
   if (k /= 0_int32) ditime = real(doc%entry(k)%rvalue, irk)
   noutn = 1_ink
   noutf = 1_ink
@@ -168,21 +178,25 @@ subroutine yl_modern_tolerances(toler_force)
   ! legacy allocates it at Fem.f90:214, which runs AFTER the entry (the entry lives inside
   ! global_data, called at :117). So the only place that works is right here, where the
   ! read it replaces used to be.
-  use global_var, only: toler_var, mdofn
+  use global_var, only: toler_var, mdofn, iblks
   use yl_authoring_toml, only: toml_doc_t, toml_read
   implicit none
   real(irk), intent(out) :: toler_force
   type(toml_doc_t) :: doc
   integer(int32) :: k
+  character(len=32) :: base
+  character(len=12) :: ib
   toler_force = 1.0e-5_irk
   if (allocated(toler_var)) toler_var = 1.0e-5_irk
   call toml_read(trim(yl_input_file), doc)
   ! Same reasoning as yl_modern_step_controls: a re-read that fails must say so rather
   ! than leave the run converging on a tolerance nobody asked for.
   if (doc%failed) call refuse_reread(doc%fail_line, trim(doc%message))
-  k = doc%find('step[1].controls.tolerance_force')
+  write (ib, '(i0)') max(1, int(iblks))
+  base = 'step['//trim(ib)//'].controls'
+  k = doc%find(trim(base)//'.tolerance_force')
   if (k /= 0_int32) toler_force = real(doc%entry(k)%rvalue, irk)
-  k = doc%find('step[1].controls.tolerance_dof')
+  k = doc%find(trim(base)//'.tolerance_dof')
   if (k /= 0_int32 .and. allocated(toler_var)) then
     toler_var(1:max(int(mdofn), 1)) = real(doc%entry(k)%rvalue, irk)
   end if

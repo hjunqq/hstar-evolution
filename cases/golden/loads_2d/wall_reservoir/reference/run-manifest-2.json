@@ -1,0 +1,262 @@
+{
+  "manifest_version": 1,
+  "case_id": "loads_2d.wall_reservoir",
+  "case_dir": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/loads_2d/wall_reservoir",
+  "label": "ref2",
+  "status": "COMPLETED",
+  "expected_status": "COMPLETED",
+  "expectation_met": true,
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+    "sha256": "cf59c766848d88691dfa37c37084712c81e843dd3f6e7e2976d67cb19b1cb982"
+  },
+  "build_manifest": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/build-manifest.json",
+    "profile": "release",
+    "binary_sha256": "cf59c766848d88691dfa37c37084712c81e843dd3f6e7e2976d67cb19b1cb982"
+  },
+  "platform": {
+    "os": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "hostname": "FemChat"
+  },
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "timeout_seconds": 600.0,
+  "input_check_before": {
+    "ok": true,
+    "problems": []
+  },
+  "input_check_after": {
+    "ok": true,
+    "problems": []
+  },
+  "process": {
+    "command": [
+      "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+      "--adapter=off"
+    ],
+    "cwd": "/tmp/yl-freeze.ht2vryxs/loads_2d.wall_reservoir/20260916T111633Z_02ccf318_ref2/work",
+    "started_at": "2026-09-16T11:16:33+00:00",
+    "wall_seconds": 0.032,
+    "user_seconds": 0.008603,
+    "system_seconds": 0.015201999999999999,
+    "max_rss_kib": 24832,
+    "returncode": 0,
+    "signal": null,
+    "timed_out": false,
+    "stderr_bytes": 16,
+    "stderr_unexpected_lines": [],
+    "stderr_crash_pattern": false,
+    "inputs_copied": [
+      "1.aqu",
+      "1.cor",
+      "1.ele",
+      "1.ftr",
+      "1.glb",
+      "1.ifs",
+      "1.loa",
+      "1.man",
+      "1.mat",
+      "1.nrt",
+      "1.opr",
+      "1.pre",
+      "1.sol",
+      "1.tem",
+      "inp"
+    ]
+  },
+  "required_output": {
+    "file": "1.flavia.res",
+    "present": true,
+    "bytes": 14464,
+    "sha256": "3b516e88e2e49b1923f54c1e8a41d9b50da9543fee361ee4ca025ccd4579a774",
+    "parse": {
+      "ok": true,
+      "problems": [],
+      "summary": {
+        "blocks": [
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 46,
+            "max_abs": 0.00093912968
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 46,
+            "max_abs": 948087.13
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 46,
+            "max_abs": 0.0029590805
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 46,
+            "max_abs": 1762531.6
+          }
+        ]
+      }
+    }
+  },
+  "outputs": [
+    {
+      "name": "1.act",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.bar",
+      "bytes": 162,
+      "sha256": "8654bfba9f3dce48b98aee6eb338415574b2565b0472623b7d97c5947726a795"
+    },
+    {
+      "name": "1.bem",
+      "bytes": 324,
+      "sha256": "59dfaf2f609be703cca153f905153552784c91abf0ef0992a079c26bb41c0ba3"
+    },
+    {
+      "name": "1.chk",
+      "bytes": 5952,
+      "sha256": "9e8a6190f464e1c4ea43ce8cbaf2b2c573e96162fcf2a69ace0f433d6eba289b"
+    },
+    {
+      "name": "1.ctr",
+      "bytes": 508,
+      "sha256": "5e950202a8cc20da297f7027fb0e406ca7ddca782079e83efa8e6e09c371a554"
+    },
+    {
+      "name": "1.ctt",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.dis",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.fai",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.msh",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.res",
+      "bytes": 14464,
+      "sha256": "3b516e88e2e49b1923f54c1e8a41d9b50da9543fee361ee4ca025ccd4579a774"
+    },
+    {
+      "name": "1.ftf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.gdm",
+      "bytes": 74,
+      "sha256": "f229354d66df26993895afe0af97753ed8ab6798428f1c75922298b84d037bf1"
+    },
+    {
+      "name": "1.gpv",
+      "bytes": 23214,
+      "sha256": "156e492b7b563c0caae557451cd9c7d4309d89c020cf845f6f350fe92b126533"
+    },
+    {
+      "name": "1.ini",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.inw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.oew",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ogw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ojw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.opw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.res",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.resb",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.rtt",
+      "bytes": 13604,
+      "sha256": "2fb7736bc59be208ffca8ffb889e5bef3c29c1bf32a7e29669c758222d34bf75"
+    },
+    {
+      "name": "1.stf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.sto",
+      "bytes": 0,
+      "sha256": null
+    }
+  ],
+  "diagnostics": [],
+  "diagnostics_malformed": [],
+  "check_summary": null,
+  "check_malformed": [],
+  "protocol_violation": null,
+  "core_dump": false,
+  "state": null,
+  "finished_at": "2026-09-16T11:16:33+00:00",
+  "run_dir": "/tmp/yl-freeze.ht2vryxs/loads_2d.wall_reservoir/20260916T111633Z_02ccf318_ref2"
+}

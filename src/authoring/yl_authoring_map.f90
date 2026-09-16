@@ -36,6 +36,7 @@ module yl_authoring_map
   use yl_problem_types, only: problem_state_t, case_t, material_t, section_t, amplitude_t,  &
                               amplitude_point_t, solver_t, boundary_t, controls_t,           &
                               gravity_t, load_t, output_t, output_field_t, step_t,           &
+                              surface_edge_t, pressure_t,                                     &
                               activation_t, nset_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,        &
                                make_problem_error, make_source_location,                     &
@@ -49,6 +50,7 @@ module yl_authoring_map
                                 builder_add_material, builder_add_section,                   &
                                 builder_add_nset, builder_nsets_empty,                       &
                                 builder_add_amplitude, builder_add_step,                     &
+                                builder_add_surface_edge, builder_surface_edges_empty,        &
                                 builder_amplitude_begin, builder_amplitude_finish,           &
                                 builder_amplitude_set_name, builder_amplitude_set_type,      &
                                 builder_amplitude_add_point,                                 &
@@ -94,7 +96,7 @@ contains
     type(amplitude_builder_t) :: ab
     type(deck_context_t) :: ctx
     type(problem_state_t), allocatable :: draft
-    integer :: mark0, u_cor, u_ele, ios, i, j, k, n, iset
+    integer :: mark0, u_cor, u_ele, ios, i, j, k, n, iset, st, ie, ip, e1, e2
     logical :: ok
     character(len=:), allocatable :: prefix
     type(case_t) :: cs
@@ -111,7 +113,9 @@ contains
     type(activation_t) :: act
     type(nset_t) :: ns
     integer(int32), allocatable :: ids(:), nodes(:)
-    character(len=TOML_LEN_PATH) :: gp
+    character(len=TOML_LEN_PATH) :: gp, lp
+    type(surface_edge_t) :: sedge
+    type(pressure_t), allocatable :: prs(:)
 
     site_file = 'case.toml'
     if (present(file)) site_file = file
@@ -251,101 +255,178 @@ contains
     call executable_shape(doc, errors)
     if (errors%count() > mark0) return
 
-    ! --- the single step ----------------------------------------------------------
-    call builder_step_begin(sb)
-    call builder_step_set_procedure(b, sb, procedure_code(text_at(doc, 'step[1].procedure')), &
-                                    here(line_at(doc, 'step[1].procedure')), errors)
-    call builder_step_set_load_mode(b, sb, load_mode_code(text_at(doc, 'step[1].load_mode')), &
-                                    here(line_at(doc, 'step[1].load_mode')), errors)
-    if (builder_failed(b)) return
-
-    call default_controls(ctrl)
-    call opt_set(ctrl%increments,      int_at(doc, 'step[1].controls.increments'))
-    call opt_set(ctrl%max_iterations,  int_at(doc, 'step[1].controls.max_iterations'))
-    call opt_set(ctrl%nonlinear_type,                                                         &
-         stiffness_update_code(text_at(doc, 'step[1].controls.stiffness_update')))
-    call opt_set(ctrl%substeps,       int_at(doc, 'step[1].controls.substeps'))
-    call opt_set(ctrl%time_increment, real_at(doc, 'step[1].controls.time_increment'))
-    call opt_set(ctrl%tolerance_force, real_at(doc, 'step[1].controls.tolerance_force'))
-    ! tolerance_dof is one value PER DEGREE OF FREEDOM and gravity%amplitude one id PER
-    ! SECTION: legacy stores both as arrays, and the contract lets the author write one
-    ! number because "the same tolerance everywhere" is what they mean. The fan-out is
-    ! here, where the counts are known, not in the input.
-    if (allocated(ctrl%tolerance_dof)) deallocate (ctrl%tolerance_dof)
-    allocate (ctrl%tolerance_dof(int(int_at(doc, 'mesh.dimension'))))
-    ctrl%tolerance_dof = real_at(doc, 'step[1].controls.tolerance_dof')
-    call builder_step_set_controls(b, sb, ctrl, here(line_at(doc, 'step[1].controls.increments')), errors)
-    if (builder_failed(b)) return
-
-    call default_load(ld)
-    call opt_set(ld%gravity%recompute_every, 1_int32)
-    ! 0 unless the author named a curve: legacy's own "no strength reduction". The
-    ! validator has already refused a curve that names nothing, and a name on a plain
-    ! gravity run.
-    call opt_set(ld%strength_reduction,                                                       &
-         int(amplitude_index(doc, text_at(doc, 'step[1].strength_reduction.amplitude')),      &
-             int32))
-    ! The load array is the author's shape; ProblemState still holds ONE gravity object,
-    ! so the one gravity load is located by type. `executable_shape` has already refused
-    ! anything this cannot carry -- a second gravity load, or a pressure load.
-    gp = load_of_type(doc, 1_int32, 'gravity')
-    call opt_set(ld%gravity%magnitude, real_at(doc, trim(gp)//'.magnitude'))
-    if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
-    allocate (ld%gravity%amplitude(int(doc%count_of('section'))))
-    ld%gravity%amplitude = int(amplitude_index(doc,                                           &
-                               text_at(doc, trim(gp)//'.amplitude')), int32)
-    if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
-    allocate (ld%gravity%direction(2))
-    ld%gravity%direction(1) = real_at(doc, trim(gp)//'.direction[1]')
-    ld%gravity%direction(2) = real_at(doc, trim(gp)//'.direction[2]')
-    call builder_step_set_load(b, sb, ld, here(line_at(doc, trim(gp)//'.magnitude')), errors)
-    if (builder_failed(b)) return
-
-    call default_output(outp)
-    call set_stress_averaging(outp, int(doc%count_of('section')),                             &
-                              stress_averaging_code(text_at(doc, 'output.stress_averaging')))
-    call apply_output_fields(doc, outp)
-    call builder_step_set_output(b, sb, outp, here(line_at(doc, 'output.format')), errors)
-    if (builder_failed(b)) return
-
-    ! Boundary: one ProblemState entry per (set, dof, node) triple -- that is the solver's
-    ! storage (prescrib%ifixset / %ifixvar / %nodfix), not the author's statement. The
-    ! contract lets an author name a node set once and write `dof = [1, 2]` once, so both
-    ! expansions happen here. dof is the outer loop because legacy's `.pre` groups one set
-    ! per constrained direction, and that grouping is what the frozen reference records.
-    ! boundary_t's component names read backwards against this: %name carries the set
-    ! ordinal, %nset carries the node number (see yl_runtime_commit.f90:1052-1061).
-    do i = 1, int(doc%count_of('step[1].boundary'))
-      call int_list(doc, 'step[1].boundary['//itoa(i)//'].dof', ids)
-      iset = nset_index(doc, text_at(doc, 'step[1].boundary['//itoa(i)//'].nset'))
-      call int_list(doc, 'nset['//itoa(iset)//'].nodes', nodes)
-      do j = 1, size(ids)
-        do k = 1, size(nodes)
-          call default_boundary(bnd)
-          call opt_set(bnd%name, int(iset, int32))
-          call opt_set(bnd%nset, nodes(k))
-          call opt_set(bnd%dof, ids(j))
-          call opt_set(bnd%value, real_at(doc, 'step[1].boundary['//itoa(i)//'].value'))
-          call builder_step_add_boundary(b, sb, bnd,                                          &
-               here(line_at(doc, 'step[1].boundary['//itoa(i)//'].nset')), errors)
+    ! --- the named faces, flattened -------------------------------------------------
+    ! Declaration order IS legacy's edge numbering, which is what makes a named face
+    ! exactly one contiguous begin_edge..end_edge range (authoring-contract section 8.1).
+    ! Nothing here computes: the element on each row is the author's, because it is
+    ! legacy's (Load.f90 writes it down too).
+    n = 0
+    do i = 1, int(doc%count_of('surface'))
+      n = n + int(int_at(doc, 'surface['//itoa(i)//'].edges.count'))
+    end do
+    if (n == 0) then
+      call builder_surface_edges_empty(b, here(0_int32), errors)
+    else
+      do i = 1, int(doc%count_of('surface'))
+        do ie = 1, int(int_at(doc, 'surface['//itoa(i)//'].edges.count'))
+          lp = 'surface['//itoa(i)//'].edges['//itoa(ie)//']'
+          call default_surface_edge(sedge)
+          if (allocated(sedge%nodes)) deallocate (sedge%nodes)
+          allocate (sedge%nodes(2))
+          sedge%nodes(1) = int_at(doc, trim(lp)//'[1]')
+          sedge%nodes(2) = int_at(doc, trim(lp)//'[2]')
+          call opt_set(sedge%element, int_at(doc, trim(lp)//'[3]'))
+          ! `index` and `vdimn` are fixed by `kind`: "edge2" is legacy's 2-node edge on
+          ! element class 1 with no flattened coordinate. The whitelist admits one kind,
+          ! so this is the encoding of that one choice, not a hidden default.
+          call opt_set(sedge%element_class, 1_int32)
+          call opt_set(sedge%projection_axis, 0_int32)
+          call builder_add_surface_edge(b, sedge, here(line_at(doc, trim(lp)//'[1]')), errors)
           if (builder_failed(b)) return
         end do
       end do
+    end if
+
+    ! --- the steps ------------------------------------------------------------------
+    ! One `[[step]]` is one legacy BLOCK (authoring-contract section 2.1: legacy nblks =
+    ! count(step)). Everything in this loop used to read `step[1]` because the whitelist
+    ! admitted exactly one; the loop is the whole difference.
+    do st = 1, int(doc%count_of('step'))
+        ! --- the single step ----------------------------------------------------------
+        call builder_step_begin(sb)
+        call builder_step_set_procedure(b, sb, procedure_code(text_at(doc, 'step['//itoa(st)//'].procedure')), &
+                                        here(line_at(doc, 'step['//itoa(st)//'].procedure')), errors)
+        call builder_step_set_load_mode(b, sb, load_mode_code(text_at(doc, 'step['//itoa(st)//'].load_mode')), &
+                                        here(line_at(doc, 'step['//itoa(st)//'].load_mode')), errors)
+        if (builder_failed(b)) return
+
+        call default_controls(ctrl)
+        call opt_set(ctrl%increments,      int_at(doc, 'step['//itoa(st)//'].controls.increments'))
+        call opt_set(ctrl%max_iterations,  int_at(doc, 'step['//itoa(st)//'].controls.max_iterations'))
+        call opt_set(ctrl%nonlinear_type,                                                         &
+             stiffness_update_code(text_at(doc, 'step['//itoa(st)//'].controls.stiffness_update')))
+        call opt_set(ctrl%substeps,       int_at(doc, 'step['//itoa(st)//'].controls.substeps'))
+        call opt_set(ctrl%time_increment, real_at(doc, 'step['//itoa(st)//'].controls.time_increment'))
+        call opt_set(ctrl%tolerance_force, real_at(doc, 'step['//itoa(st)//'].controls.tolerance_force'))
+        ! tolerance_dof is one value PER DEGREE OF FREEDOM and gravity%amplitude one id PER
+        ! SECTION: legacy stores both as arrays, and the contract lets the author write one
+        ! number because "the same tolerance everywhere" is what they mean. The fan-out is
+        ! here, where the counts are known, not in the input.
+        if (allocated(ctrl%tolerance_dof)) deallocate (ctrl%tolerance_dof)
+        allocate (ctrl%tolerance_dof(int(int_at(doc, 'mesh.dimension'))))
+        ctrl%tolerance_dof = real_at(doc, 'step['//itoa(st)//'].controls.tolerance_dof')
+        call builder_step_set_controls(b, sb, ctrl, here(line_at(doc, 'step['//itoa(st)//'].controls.increments')), errors)
+        if (builder_failed(b)) return
+
+        call default_load(ld)
+        call opt_set(ld%gravity%recompute_every, 1_int32)
+        ! 0 unless the author named a curve: legacy's own "no strength reduction". The
+        ! validator has already refused a curve that names nothing, and a name on a plain
+        ! gravity run.
+        call opt_set(ld%strength_reduction,                                                       &
+             int(amplitude_index(doc, text_at(doc, 'step['//itoa(st)//'].strength_reduction.amplitude')),      &
+                 int32))
+        ! The load array is the author's shape; ProblemState still holds ONE gravity object,
+        ! so the one gravity load is located by type. `executable_shape` has already refused
+        ! anything this cannot carry -- a second gravity load, or a pressure load.
+        gp = load_of_type(doc, int(st, int32), 'gravity')
+        call opt_set(ld%gravity%magnitude, real_at(doc, trim(gp)//'.magnitude'))
+        if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
+        allocate (ld%gravity%amplitude(int(doc%count_of('section'))))
+        ld%gravity%amplitude = int(amplitude_index(doc,                                           &
+                                   text_at(doc, trim(gp)//'.amplitude')), int32)
+        if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
+        allocate (ld%gravity%direction(2))
+        ld%gravity%direction(1) = real_at(doc, trim(gp)//'.direction[1]')
+        ld%gravity%direction(2) = real_at(doc, trim(gp)//'.direction[2]')
+        ! The pressure loads of this step, in declaration order. Each names a face; the
+        ! face's edges are one contiguous range of the flattened table, and the range is
+        ! what legacy's edge-load card carries.
+        n = 0
+        do i = 1, int(doc%count_of('step['//itoa(st)//'].load'))
+          if (text_at(doc, 'step['//itoa(st)//'].load['//itoa(i)//'].type') == 'pressure') n = n + 1
+        end do
+        if (allocated(prs)) deallocate (prs)
+        allocate (prs(n))
+        ip = 0
+        do i = 1, int(doc%count_of('step['//itoa(st)//'].load'))
+          lp = 'step['//itoa(st)//'].load['//itoa(i)//']'
+          if (text_at(doc, trim(lp)//'.type') /= 'pressure') cycle
+          ip = ip + 1
+          call surface_range(doc, text_at(doc, trim(lp)//'.surface'), e1, e2)
+          call opt_set(prs(ip)%first_edge, int(e1, int32))
+          call opt_set(prs(ip)%last_edge, int(e2, int32))
+          call opt_set(prs(ip)%amplitude,                                                          &
+               int(amplitude_index(doc, text_at(doc, trim(lp)//'.amplitude')), int32))
+          ! legacy `water`: the axis, with the sign saying which way the head deepens.
+          ! The whitelist admits "y" measured downward from at[1], i.e. +2.
+          call opt_set(prs(ip)%distribution_axis, 2_int32)
+          if (allocated(prs(ip)%at)) deallocate (prs(ip)%at)
+          if (allocated(prs(ip)%value)) deallocate (prs(ip)%value)
+          allocate (prs(ip)%at(2), prs(ip)%value(2))
+          prs(ip)%at(1) = real_at(doc, trim(lp)//'.distribution.at[1]')
+          prs(ip)%at(2) = real_at(doc, trim(lp)//'.distribution.at[2]')
+          prs(ip)%value(1) = real_at(doc, trim(lp)//'.distribution.value[1]')
+          prs(ip)%value(2) = real_at(doc, trim(lp)//'.distribution.value[2]')
+          call opt_set(prs(ip)%scale, real_at(doc, trim(lp)//'.distribution.scale'))
+        end do
+        if (allocated(ld%pressure)) deallocate (ld%pressure)
+        call move_alloc(prs, ld%pressure)
+
+        call builder_step_set_load(b, sb, ld, here(line_at(doc, trim(gp)//'.magnitude')), errors)
+        if (builder_failed(b)) return
+
+        call default_output(outp)
+        call set_stress_averaging(outp, int(doc%count_of('section')),                             &
+                                  stress_averaging_code(text_at(doc, 'output.stress_averaging')))
+        call apply_output_fields(doc, outp)
+        call builder_step_set_output(b, sb, outp, here(line_at(doc, 'output.format')), errors)
+        if (builder_failed(b)) return
+
+        ! Boundary: one ProblemState entry per (set, dof, node) triple -- that is the solver's
+        ! storage (prescrib%ifixset / %ifixvar / %nodfix), not the author's statement. The
+        ! contract lets an author name a node set once and write `dof = [1, 2]` once, so both
+        ! expansions happen here. dof is the outer loop because legacy's `.pre` groups one set
+        ! per constrained direction, and that grouping is what the frozen reference records.
+        ! boundary_t's component names read backwards against this: %name carries the set
+        ! ordinal, %nset carries the node number (see yl_runtime_commit.f90:1052-1061).
+        do i = 1, int(doc%count_of('step['//itoa(st)//'].boundary'))
+          call int_list(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].dof', ids)
+          iset = nset_index(doc, text_at(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].nset'))
+          call int_list(doc, 'nset['//itoa(iset)//'].nodes', nodes)
+          do j = 1, size(ids)
+            do k = 1, size(nodes)
+              call default_boundary(bnd)
+              call opt_set(bnd%name, int(iset, int32))
+              call opt_set(bnd%nset, nodes(k))
+              call opt_set(bnd%dof, ids(j))
+              call opt_set(bnd%value, real_at(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].value'))
+              call builder_step_add_boundary(b, sb, bnd,                                          &
+                   here(line_at(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].nset')), errors)
+              if (builder_failed(b)) return
+            end do
+          end do
+        end do
+
+        ! Activation: one entry per SECTION (= legacy element group), carrying whether
+        ! this step contains it and which material it uses. `active_elsets` is the
+        ! author's statement; this is its expansion into legacy's (group, block) matrix,
+        ! which is a table lookup and not a derivation.
+        do i = 1, int(doc%count_of('section'))
+          call default_activation(act, int(material_index(doc,                                    &
+               text_at(doc, 'section['//itoa(i)//'].material')), int32))
+          call opt_set(act%active, merge(1_int32, 0_int32,                                        &
+               elset_is_active(doc, st, text_at(doc, 'section['//itoa(i)//'].elset'))))
+          call builder_step_add_activation(b, sb, act, here(0_int32), errors)
+          if (builder_failed(b)) return
+        end do
+
+        call builder_step_finish(b, sb, step_val, here(0_int32), errors, ok)
+        if (.not. ok) return
+        call builder_add_step(b, step_val, here(0_int32), errors)
+        if (builder_failed(b)) return
     end do
 
-    ! Activation: every section active. Construction staging is not on the whitelist, so
-    ! this is a default with a reason, not a modelling decision left implicit.
-    do i = 1, int(doc%count_of('section'))
-      call default_activation(act, int(material_index(doc,                                    &
-           text_at(doc, 'section['//itoa(i)//'].material')), int32))
-      call builder_step_add_activation(b, sb, act, here(0_int32), errors)
-      if (builder_failed(b)) return
-    end do
-
-    call builder_step_finish(b, sb, step_val, here(0_int32), errors, ok)
-    if (.not. ok) return
-    call builder_add_step(b, step_val, here(0_int32), errors)
-    if (builder_failed(b)) return
 
     ! --- solver -------------------------------------------------------------------
     call default_solver(sol)
@@ -549,30 +630,41 @@ contains
   subroutine executable_shape(doc, errors)
     type(toml_doc_t), intent(in) :: doc
     type(problem_errors_t), intent(inout) :: errors
-    integer(int32) :: a, b, ngrav, npres, k
+    integer(int32) :: a, b_, ngrav, npres, k
 
-    if (doc%count_of('step') /= 1_int32) then
-      call refuse(errors, 'step', 'this build runs one analysis step; legacy nblks = '//      &
-                  'count(step)', itoa(int(doc%count_of('step'))), '1')
+    if (doc%count_of('step') < 1_int32) then
+      call refuse(errors, 'step', 'an analysis needs at least one step', '0', 'one or more')
       return
     end if
-    ngrav = 0_int32
     npres = 0_int32
     do a = 1_int32, doc%count_of('step')
-      do b = 1_int32, doc%count_of('step['//itoa(int(a))//'].load')
-        k = doc%find('step['//itoa(int(a))//'].load['//itoa(int(b))//'].type')
+      do b_ = 1_int32, doc%count_of('step['//itoa(int(a))//'].load')
+        k = doc%find('step['//itoa(int(a))//'].load['//itoa(int(b_))//'].type')
         if (k == 0_int32) cycle
-        if (trim(doc%entry(k)%svalue) == 'gravity') ngrav = ngrav + 1_int32
         if (trim(doc%entry(k)%svalue) == 'pressure') npres = npres + 1_int32
       end do
     end do
-    if (ngrav /= 1_int32) then
-      call refuse(errors, 'step[1].load', 'this build carries exactly one gravity load '//    &
-                  'per step', itoa(int(ngrav)), '1')
-    end if
-    if (npres /= 0_int32) then
-      call refuse(errors, 'step[1].load', 'surface pressure is declared by the contract '//   &
-                  'but not yet carried to ProblemState', itoa(int(npres)), '0')
+    ! One gravity object per step, still: ProblemState holds ONE gravity record per step
+    ! (legacy's gravy / factg / tcurvegravity), so two of them cannot both be carried.
+    ! Counted per step rather than over the whole file -- the old count was a file-wide
+    ! sum that happened to equal the per-step count while only one step was allowed.
+    do a = 1_int32, doc%count_of('step')
+      ngrav = 0_int32
+      do b_ = 1_int32, doc%count_of('step['//itoa(int(a))//'].load')
+        k = doc%find('step['//itoa(int(a))//'].load['//itoa(int(b_))//'].type')
+        if (k == 0_int32) cycle
+        if (trim(doc%entry(k)%svalue) == 'gravity') ngrav = ngrav + 1_int32
+      end do
+      if (ngrav /= 1_int32) then
+        call refuse(errors, 'step['//itoa(int(a))//'].load',                                   &
+                    'this build carries exactly one gravity load per step',                    &
+                    itoa(int(ngrav)), '1')
+        return
+      end if
+    end do
+    if (npres > 0_int32 .and. doc%count_of('surface') == 0_int32) then
+      call refuse(errors, 'step[].load', 'a pressure load names a face and this file '//      &
+                  'declares none', '0', 'at least one [[surface]]')
     end if
   end subroutine executable_shape
 
@@ -603,6 +695,44 @@ contains
          exit_class=PE_EXIT_UNSUPPORTED,                                                      &
          source=make_source_location(file=trim(site_file), reader='authoring')))
   end subroutine refuse
+
+  !> Is this elset part of the model in step `st`? A membership test over the author's
+  !> own list, nothing more. A name that matches no elset is the validator's finding.
+  logical function elset_is_active(doc, st, name) result(active)
+    type(toml_doc_t), intent(in) :: doc
+    integer, intent(in) :: st
+    character(len=*), intent(in) :: name
+    integer :: i, n
+    active = .false.
+    n = int(int_at(doc, 'step['//itoa(st)//'].active_elsets.count'))
+    do i = 1, n
+      if (text_at(doc, 'step['//itoa(st)//'].active_elsets['//itoa(i)//']') == trim(name)) then
+        active = .true.
+        return
+      end if
+    end do
+  end function elset_is_active
+
+  !> The edge range a named face occupies in the flattened table. Declaration order is
+  !> the numbering, so this is a running count, not a search over geometry.
+  subroutine surface_range(doc, name, first, last)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: name
+    integer, intent(out) :: first, last
+    integer :: i, n, at
+    at = 0
+    first = 0
+    last = -1
+    do i = 1, int(doc%count_of('surface'))
+      n = int(int_at(doc, 'surface['//itoa(i)//'].edges.count'))
+      if (text_at(doc, 'surface['//itoa(i)//'].name') == trim(name)) then
+        first = at + 1
+        last = at + n
+        return
+      end if
+      at = at + n
+    end do
+  end subroutine surface_range
 
   subroutine fail(errors, path, msg)
     type(problem_errors_t), intent(inout) :: errors

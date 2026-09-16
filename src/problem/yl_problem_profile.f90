@@ -275,8 +275,14 @@ module yl_problem_profile
     ! sections as an array, and the thickness resolution is keyed by material. A row
     ! asserting a bound nobody can justify is worse than no row -- it reads as a measured
     ! limit. INV-EMPTY-DERIVED stays where it is, as the assertion that V26 did its job.
-capability_item_t('G6', 'analysis.step_count', 'steps', 'size',                                 &
-                      PROFILE_KIND_INT, 1_int32, '', .false.),                                      &
+! `analysis.step_count` was here, pinned to 1, and it is REMOVED rather than raised
+    ! (2026-09-16) for the same reason the section-count row above was: after the .loa load
+    ! domain the step loop is general -- the mapping layer builds every step, commit sizes
+    ! appear_process / matno_process by the step count, and the per-block hook re-commits
+    ! each block's loads. A row asserting a bound nobody can justify reads as a measured
+    ! limit. What this build genuinely cannot do ACROSS steps is refused by name where the
+    ! reason lives: `commit_step_invariants` for boundary conditions that change between
+    ! steps, `executable_shape` for a second gravity load in one step.
     capability_item_t('G6', 'analysis.increments', 'steps[].controls', 'increments',                &
                       PROFILE_KIND_INT, 1_int32, '', .false.)]
 

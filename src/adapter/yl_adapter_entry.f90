@@ -45,7 +45,7 @@ subroutine yl_adapter_override()
 
   use iso_fortran_env, only: int32, output_unit, error_unit
 
-  use yl_problem_optional, only: opt_get
+  use yl_problem_optional, only: opt_get, opt_set
 
   use yl_diag, only: diag_abort, EXIT_INIT, EXIT_INPUT, EXIT_UNSUPPORTED,                     &
                      yl_input_enabled, yl_input_file
@@ -77,7 +77,8 @@ subroutine yl_adapter_override()
   use yl_runtime_types, only: runtime_state_t
   use yl_runtime_contract, only: CONTRACT_TAG
   use yl_runtime_build, only: build_runtime
-  use yl_runtime_commit, only: commit_legacy_globals
+  use yl_runtime_commit, only: commit_legacy_globals, commit_step_invariants
+  use yl_adapter_session, only: session_problem, session_runtime, session_committed
 
   implicit none
 
@@ -87,6 +88,13 @@ subroutine yl_adapter_override()
   type(manifest_t), allocatable :: pmanifest, rmanifest
   type(problem_errors_t) :: errors
   type(runtime_state_t), allocatable :: rt
+
+  ! legacy calls this from INSIDE its block loop (Fem.f90, just before the model_ready
+  ! dump), so on a two-block analysis it is called twice. The full commit is a once-per-
+  ! run act -- it allocates the legacy globals and would refuse its own second call --
+  ! and everything that legitimately differs between blocks is committed by
+  ! yl_adapter_block_override at the TOP of each block instead.
+  if (session_committed) return
 
   write (output_unit, '(a)') 'yl_adapter_override: adapter entry ON; the legacy readers '// &
     'below are switched off and these globals come from the deck through the adapter.'
@@ -106,11 +114,21 @@ subroutine yl_adapter_override()
     end if
   end if
 
+  call commit_step_invariants(problem, errors)
+  if (errors%any()) call fail('commit_step_invariants', errors)
+
   call build_runtime(problem, CONTRACT_TAG, rt, rmanifest, errors)
   if (errors%any() .or. .not. allocated(rt)) call fail('build_runtime', errors)
 
   call commit_legacy_globals(problem, residue, existence, rt, errors)
   if (errors%any()) call fail('commit_legacy_globals', errors)
+
+  ! Hand the committed state to the session so the blocks that follow can re-commit
+  ! their own share of it. move_alloc, not a copy: there is exactly one ProblemState per
+  ! run and the session owns it from here on.
+  call move_alloc(problem, session_problem)
+  call move_alloc(rt, session_runtime)
+  session_committed = .true.
 
   ! The modern values that need a size commit computes.
   if (yl_input_enabled) call yl_modern_after_commit()
@@ -131,8 +149,8 @@ contains
     type(manifest_t), allocatable, intent(inout) :: pmanifest
     type(problem_errors_t), intent(inout) :: errors
     type(toml_doc_t) :: doc
+    integer(int32) :: npoin, nelem, ngroup, mdofn, k
     integer :: i
-    integer(int32) :: npoin, nelem, ngroup, mdofn
 
     write (output_unit, '(a)') 'yl_adapter_override: modern input '//trim(yl_input_file)
 
@@ -160,6 +178,20 @@ contains
     ngroup = int(size(problem%sections), int32)
     mdofn = int(int_at_dim(problem), int32)
     call default_residue(residue, npoin)
+    ! `uinitial` is one value PER BLOCK, so the default table's single zero only ever fit
+    ! a one-step analysis. The author states it per step (`reset_state`); this is the
+    ! fan-out, and commit refuses a size that does not match the step count.
+    ! How many blocks legacy will run. The default table's 1 was only ever right for a
+    ! one-step analysis; commit now checks this against the step count rather than
+    ! against 1, so a disagreement is a finding instead of a silently truncated run.
+    call opt_set(residue%runblks, int(max(1, int(doc%count_of('step'))), int32))
+    if (allocated(residue%uinitial)) deallocate (residue%uinitial)
+    allocate (residue%uinitial(max(1, int(doc%count_of('step')))))
+    residue%uinitial = 0_int32
+    do i = 1, int(doc%count_of('step'))
+      k = doc%find('step['//itoa(i)//'].reset_state')
+      if (k /= 0_int32) residue%uinitial(i) = merge(1_int32, 0_int32, doc%entry(k)%lvalue)
+    end do
     call default_existence(existence, nelem, ngroup, mdofn)
   end subroutine from_modern_input
 
@@ -174,6 +206,14 @@ contains
     n = 0
     if (found) n = int(d)
   end function int_at_dim
+
+  pure function itoa(v) result(out)
+    integer, intent(in) :: v
+    character(len=12) :: buf
+    character(len=:), allocatable :: out
+    write (buf, '(i0)') v
+    out = trim(buf)
+  end function itoa
 
   subroutine fail(stage, errs)
     character(len=*), intent(in) :: stage
@@ -224,3 +264,54 @@ contains
   end subroutine fail
 
 end subroutine yl_adapter_override
+
+
+!> The per-block half of the adapter entry: what legacy re-reads at the top of every
+!> block, supplied from ProblemState instead.
+!>
+!> WHERE IT IS CALLED AND WHY THERE
+!>   Fem.f90 calls it at the top of the block loop, BEFORE the loop reads
+!>   `appear_process(:, iblks)` and `matno_process(:, iblks)` into `appear` and
+!>   `group%matno`. That ordering is the whole point: those two arrays are committed
+!>   once, by block 1's full commit, and block 2 consumes them before anything else
+!>   happens. Putting this hook where `yl_adapter_override` already sits -- after
+!>   `external_load_2`, near the model_ready dump -- would commit block 2's loads after
+!>   block 2 had already decided which groups are active.
+!>
+!>   It is guarded on `iblks > 1` at the call site, so block 1 keeps EXACTLY the path it
+!>   had before this existed: one commit, in one place, at the end of which
+!>   `commit_block_state` supplies block 1's own loads.
+subroutine yl_adapter_block_override(iblks)
+
+  use iso_fortran_env, only: int32, output_unit
+
+  use yl_diag, only: diag_abort, EXIT_INIT
+  use yl_problem_errors, only: problem_errors_t
+  use yl_runtime_commit, only: commit_block_state
+  use yl_adapter_session, only: session_problem, session_runtime, session_committed
+
+  implicit none
+
+  integer(int32), intent(in) :: iblks
+  type(problem_errors_t) :: errors
+  integer :: i
+
+  ! Nothing committed means the adapter entry never ran, which cannot happen through
+  ! Fem.f90's guard -- but a silent return here would be a block running on the previous
+  ! block's loads, so it is a refusal rather than an assumption.
+  if (.not. session_committed .or. .not. allocated(session_problem) .or.                      &
+      .not. allocated(session_runtime)) then
+    call diag_abort('INIT', EXIT_INIT, 'yl_adapter_block_override',                           &
+         'legacy asked for block state before the adapter committed anything')
+  end if
+
+  call commit_block_state(session_problem, session_runtime, iblks, errors)
+  if (errors%any()) then
+    do i = 1, errors%count()
+      write (output_unit, '(a)') '    '//trim(errors%render(i))
+    end do
+    call diag_abort('INIT', EXIT_INIT, 'yl_adapter_block_override',                           &
+         'the per-block commit raised a finding; refusing to run this block on the '//        &
+         'previous block''s loads')
+  end if
+end subroutine yl_adapter_block_override

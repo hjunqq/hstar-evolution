@@ -1,217 +1,217 @@
 {
-  "manifest_version": 1,
-  "generated_at": "2026-09-12T00:17:58+00:00",
-  "root": "legacy",
-  "file_count": 39,
-  "total_bytes": 55716226,
-  "excludes": [
-    "BASELINE.md",
-    "source-manifest.json"
-  ],
-  "meta": {
-    "source_repository": "/home/huijun/HSTAR_Next/hstarYLOrig",
-    "source_commit": "5414e737484edf2f53efbfd2bafd3702ebbbb88a",
-    "source_tree": "HSTAR/",
-    "stub_origin": "/home/huijun/HSTAR_Next/_archive/src/gidpost_stub.c",
-    "modified_by": "M4-02-adapter-entry-2026-09-10",
-    "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements), + M2-02 state-dump instrumentation on the static_2d path (Fem.f90: one use line and three guarded yl_state_dump calls at the M2-01 checkpoints); + M1 fix 2026-09-08: Load.f90:231 (amplitude dfact_curve factors record, external_load_1) given iostat=/iomsg=/diag_check_read wrapping -- was executed-but-unwrapped, misclassified into the loadunit not_on_path group (see docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md); + M1-04 R27 closure 2026-09-09: Output.f90:4301/4326/4351 and Temper.f90:243 (the four labelled title reads that the pre-R27 `break FILE:LINE` breakpoints never bound) given iostat=/iomsg=/diag_check_read wrapping, see docs/m1/M1-04-r27-closure.md; + M4-02 adapter entry 2026-09-10: Fem.f90 line 1908 gained a `;`-joined guarded call `if (yl_adapter_mode) call yl_adapter_override()` BEFORE the existing model_ready dump call. Joined onto the existing line on purpose so the file's line count is unchanged and all three checkpoint anchors, the seven Fem.f90 reader-registry sites and the M2-01 prose keep their line numbers (git diff shows exactly one changed line). yl_adapter_override is an EXTERNAL subroutine with no arguments, so Fem.f90 needs no new use line; builds link either src/adapter/yl_adapter_entry_stub.f90 (refuses, exit 3) or src/adapter/yl_adapter_entry.f90. See docs/m4/M4-02-adapter-entry.md; reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json"
+ "manifest_version": 1,
+ "generated_at": "2026-09-16T13:38:02+00:00",
+ "root": "legacy",
+ "file_count": 39,
+ "total_bytes": 55720460,
+ "excludes": [
+  "BASELINE.md",
+  "source-manifest.json"
+ ],
+ "meta": {
+  "source_repository": "/home/huijun/HSTAR_Next/hstarYLOrig",
+  "source_commit": "5414e737484edf2f53efbfd2bafd3702ebbbb88a",
+  "source_tree": "HSTAR/",
+  "stub_origin": "/home/huijun/HSTAR_Next/_archive/src/gidpost_stub.c",
+  "modified_by": "M7-loa-load-domain-2026-09-16",
+  "note": "snapshot 5414e73 + M1-02 checked I/O wrapping + M1-03 semantic guards (sizes/ids/references), R17/R18 fixes and diag_* replacements of the 38 bare-stop sites (39 statements), + M2-02 state-dump instrumentation on the static_2d path (Fem.f90: one use line and three guarded yl_state_dump calls at the M2-01 checkpoints); + M1 fix 2026-09-08: Load.f90:231 (amplitude dfact_curve factors record, external_load_1) given iostat=/iomsg=/diag_check_read wrapping -- was executed-but-unwrapped, misclassified into the loadunit not_on_path group (see docs/m1/M1-finding-2026-09-08-unwrapped-loa-read.md); + M1-04 R27 closure 2026-09-09: Output.f90:4301/4326/4351 and Temper.f90:243 (the four labelled title reads that the pre-R27 `break FILE:LINE` breakpoints never bound) given iostat=/iomsg=/diag_check_read wrapping, see docs/m1/M1-04-r27-closure.md; + M4-02 adapter entry 2026-09-10: Fem.f90 line 1908 gained a `;`-joined guarded call `if (yl_adapter_mode) call yl_adapter_override()` BEFORE the existing model_ready dump call. Joined onto the existing line on purpose so the file's line count is unchanged and all three checkpoint anchors, the seven Fem.f90 reader-registry sites and the M2-01 prose keep their line numbers (git diff shows exactly one changed line). yl_adapter_override is an EXTERNAL subroutine with no arguments, so Fem.f90 needs no new use line; builds link either src/adapter/yl_adapter_entry_stub.f90 (refuses, exit 3) or src/adapter/yl_adapter_entry.f90. See docs/m4/M4-02-adapter-entry.md; reference identity of the unmodified snapshot is kept in cases/golden/*/reference/build-manifest.json; + M7 .loa load domain 2026-09-16: Load.f90's five edge-definition and edge-load reads (the chunk title, the chunk header sedge/nnode/index/vdimn, the per-edge lnode/aelem row, the edge-load group header and its water distribution) given iostat=/iomsg=/diag_check_read wrapping. They were unreachable on the static_2d slice (nedge == 0, edge_load_group == 0) and so had never been wrapped; loads_2d.wall_reservoir is the first golden case that executes them. Wrapped BY HAND, byte-spliced on latin-1: tools/yl_wrap_reads.py can no longer run over this tree because the M5 `yl_input_enabled` guards changed anchors it verifies. The splice was proved to be exactly those five wrappings by reconstructing the pre-splice bytes and comparing; + M7 per-block adapter hook 2026-09-16: Fem.f90 line 1712 gained a ;-joined guarded call  at the top of the block loop, BEFORE appear_process/matno_process are consumed. Joined onto the existing line for the same reason as the M4-02 entry: the file keeps its line count, so the checkpoint anchors and the Fem.f90 reader sites keep their line numbers. + Load.f90 extraction: the edge DOF map, the edge Gauss geometry and the per-group edge-load assembly moved from inside external_load_1/2 to module-level subroutines (edge_dofs, edge_geometry, edge_cosc, edge_load_group_apply) so the modern path calls legacy code instead of reimplementing it; cosc renamed edge_cosc because Stiff.f90 has one of its own."
+ },
+ "case_insensitive_collisions": [],
+ "files": [
+  {
+   "path": "stubs/gidpost_stub.c",
+   "bytes": 13974,
+   "sha256": "c87eb19a72eb1e3fec9d0eefa03bc956f46ca83c9eb28dc0773071a611f41fd6"
   },
-  "case_insensitive_collisions": [],
-  "files": [
-    {
-      "path": "stubs/gidpost_stub.c",
-      "bytes": 13974,
-      "sha256": "c87eb19a72eb1e3fec9d0eefa03bc956f46ca83c9eb28dc0773071a611f41fd6"
-    },
-    {
-      "path": "yl/Array.f90",
-      "bytes": 22358,
-      "sha256": "5a444f390ba83d75c82983bff2fc4684bc3e33e8b04815489d4029a9858fa442"
-    },
-    {
-      "path": "yl/Elements.f90",
-      "bytes": 106090,
-      "sha256": "501b27dcadb89bfba5a3dee5b827afacb268c2310a8aca2d6929669d80b02bf7"
-    },
-    {
-      "path": "yl/Fem.f90",
-      "bytes": 725626,
-      "sha256": "b13d83c647c860a820059280c46233a6c77df520317a500b9534189aa2d32a4c"
-    },
-    {
-      "path": "yl/Global.f90",
-      "bytes": 209887,
-      "sha256": "2017ce5b82c54e4fe93fee9ddabf06a444ab7023002fb192b5012b141bb7ace7"
-    },
-    {
-      "path": "yl/Level.f90",
-      "bytes": 86651,
-      "sha256": "87616b09cdbfe73bbc19051086b3116fcd30f150e2ef7f9da8b33c064081d67d"
-    },
-    {
-      "path": "yl/Load.f90",
-      "bytes": 70063,
-      "sha256": "db8dbe49211ab89e14169878097075c8fff5277dcd45ae42cd68ebb75713665e"
-    },
-    {
-      "path": "yl/Material.f90",
-      "bytes": 67427,
-      "sha256": "d685ae0617063d3313765e705d099053503a10a79e4630d8e7cbede40976073b"
-    },
-    {
-      "path": "yl/OPT.F90",
-      "bytes": 8728,
-      "sha256": "9a6a83f21277546838f97e49bb8c442fe2eedc5e0dfd41681e36197128780ee8"
-    },
-    {
-      "path": "yl/Output.f90",
-      "bytes": 215917,
-      "sha256": "d80b528bf4d3e97bc6b2599d0129d8af023dd6707d60c281b3c495c0cf371a40"
-    },
-    {
-      "path": "yl/Prescrib.f90",
-      "bytes": 19988,
-      "sha256": "6b396345f58e45a33a926a3f94db88bb8465e5273b8f711f34b2d84564221438"
-    },
-    {
-      "path": "yl/Residu.f90",
-      "bytes": 233633,
-      "sha256": "b114f73a66827dc9742cf3405720c9f754c8ed0752c4785fbfb6cc31db53144f"
-    },
-    {
-      "path": "yl/Solver.f90",
-      "bytes": 407746,
-      "sha256": "8fad2a9cd5172db19c0a67e683751c62740247b5bb50c162a25a76fc9300a174"
-    },
-    {
-      "path": "yl/Stiff.f90",
-      "bytes": 440139,
-      "sha256": "0baa060b082d02d9bcf5f91c6cf77bd3d159bc94c36d26e688c6463e3e62138f"
-    },
-    {
-      "path": "yl/Temper.f90",
-      "bytes": 54408,
-      "sha256": "ee7d15c3c272a1852cd7e856c82d0f0763c6c00e2c5154ac6e767514a7a83c72"
-    },
-    {
-      "path": "yl/Vartype.f90",
-      "bytes": 678,
-      "sha256": "9128d2e5518a3406ad098126b830a7a409ae9639d38376072f04a9bc7d366528"
-    },
-    {
-      "path": "yl/dagangshan.u2d",
-      "bytes": 38,
-      "sha256": "4844f2de3094f8322c5fa9b0f75352ac123e05cd4d6ef2407ed2311a925d3800"
-    },
-    {
-      "path": "yl/errcheck.inc",
-      "bytes": 24246,
-      "sha256": "ababc21300f5bec17bfdc57fa9aa5c466e50cc99e04c7b4702942117843f9c05"
-    },
-    {
-      "path": "yl/ex_nlsqp_f.f",
-      "bytes": 10671,
-      "sha256": "fd958d97dadb5a38b678b401bd4fc54536da45543a90e9fef4597287431e4444"
-    },
-    {
-      "path": "yl/gauss_random.txt",
-      "bytes": 32000,
-      "sha256": "33ae9c1a8fcc810a8b812ff7479484f855545db81e41e621f124b345d3a31804"
-    },
-    {
-      "path": "yl/generatedata.inc",
-      "bytes": 24695,
-      "sha256": "8e1ae1fa4e003354fbf1e8125e36d252e6cb650fdab98b7052c382f66a21b439"
-    },
-    {
-      "path": "yl/gidpost.F90",
-      "bytes": 124831,
-      "sha256": "0fefe906ae9e20baf8732948121ae8b7f30a29cb056334be2bf84d065d021e5b"
-    },
-    {
-      "path": "yl/hstar.u2d",
-      "bytes": 38,
-      "sha256": "4844f2de3094f8322c5fa9b0f75352ac123e05cd4d6ef2407ed2311a925d3800"
-    },
-    {
-      "path": "yl/hstar.vfproj",
-      "bytes": 6541,
-      "sha256": "91d814a98125168a6300f0b06382696910c4b76d15f79bfa2f6e817367bc815f"
-    },
-    {
-      "path": "yl/inp",
-      "bytes": 211,
-      "sha256": "de15f08e1b4a43b586c2322c1ed2399abfedbbba6f7c48892165669bd86f3e6f"
-    },
-    {
-      "path": "yl/libiomp5md.dll",
-      "bytes": 1602416,
-      "sha256": "15e6f874a53cb54a8e266099c8da92484c6f50301d117f9a5443846e9ece90b5"
-    },
-    {
-      "path": "yl/memory_leak_check.md",
-      "bytes": 1860,
-      "sha256": "9a7093cd00e6281f0ab63c7b75c48bc09fc6a86d665e449062bc9256a656bc42"
-    },
-    {
-      "path": "yl/meshfine.f90",
-      "bytes": 133982,
-      "sha256": "74c03a6efa95ce375c78d04e3ef648fab15d5aa23e65c3702ce4491c800c20ef"
-    },
-    {
-      "path": "yl/sanitizer_guide.md",
-      "bytes": 834,
-      "sha256": "856f29976de9e03d1edb9adae6ce81ddefb2ca67b58cbf108c17e6b1c67dbebb"
-    },
-    {
-      "path": "yl/statchars.inc",
-      "bytes": 24151,
-      "sha256": "245dc16fc9bfa37c598a0aa25213f697cca40f9da6ec62480d88d787ceecf313"
-    },
-    {
-      "path": "yl/statcheck.inc",
-      "bytes": 6492,
-      "sha256": "6304d88f4d45d7497f0178f96e84956a06b5712eda1d8aff5fc0c5208d55ff87"
-    },
-    {
-      "path": "yl/vdrnggaussianmv_full.f",
-      "bytes": 4591,
-      "sha256": "206852e13af495aa9d63913aa7d7a424d83bf7caa4fce9fc17a6582f807d6180"
-    },
-    {
-      "path": "yl/vdrnggaussianmv_packed.f",
-      "bytes": 8509,
-      "sha256": "b9185b27f36bc350d88ed9aafc6422b809f66a50b4634b61693c9f7b96f6ef8d"
-    },
-    {
-      "path": "yl/vsl_gauss_module.f90",
-      "bytes": 6796,
-      "sha256": "d25e207910e318870966adf0f5a12602712179efc493d17468a56f64bd193615"
-    },
-    {
-      "path": "yl/HSTAR/HSTAR.vtuneproj",
-      "bytes": 797,
-      "sha256": "cbe4074bd31a945b5d5d8894645bcef91d09e5faebfad068171d00c29535aa6b"
-    },
-    {
-      "path": "yl/lib64/gidpost.lib",
-      "bytes": 780790,
-      "sha256": "aaad4ba6c74456328392e3ab110d6358213c8699512938179b8887d434268f71"
-    },
-    {
-      "path": "yl/lib64/libhdf5.lib",
-      "bytes": 48535438,
-      "sha256": "ee2b0bf65d1b17c9576e13c1657869e914d3f5afe275449e1eb4984635c26cda"
-    },
-    {
-      "path": "yl/lib64/libhdf5_hl.lib",
-      "bytes": 1247862,
-      "sha256": "8eae8184d1fdabd6ad41cce39531d5ad61aeb4b03d9aa511c1a8e80122a8c8b9"
-    },
-    {
-      "path": "yl/lib64/zlib.lib",
-      "bytes": 455124,
-      "sha256": "157d5c8e7733ec77c6aacc0cd878c5043b0f6c9611c69ba8f189b6fc2c119dfa"
-    }
-  ]
+  {
+   "path": "yl/Array.f90",
+   "bytes": 22358,
+   "sha256": "5a444f390ba83d75c82983bff2fc4684bc3e33e8b04815489d4029a9858fa442"
+  },
+  {
+   "path": "yl/Elements.f90",
+   "bytes": 106090,
+   "sha256": "501b27dcadb89bfba5a3dee5b827afacb268c2310a8aca2d6929669d80b02bf7"
+  },
+  {
+   "path": "yl/Fem.f90",
+   "bytes": 725702,
+   "sha256": "af9cabceaf5cb7aeaa82e67997ea619dd5a1938cd2b341b7854c1f59527380f2"
+  },
+  {
+   "path": "yl/Global.f90",
+   "bytes": 209887,
+   "sha256": "2017ce5b82c54e4fe93fee9ddabf06a444ab7023002fb192b5012b141bb7ace7"
+  },
+  {
+   "path": "yl/Level.f90",
+   "bytes": 86651,
+   "sha256": "87616b09cdbfe73bbc19051086b3116fcd30f150e2ef7f9da8b33c064081d67d"
+  },
+  {
+   "path": "yl/Load.f90",
+   "bytes": 74221,
+   "sha256": "639641f205511e0ff3d5a7150b31518546562228ab80bd2de7416149294e6ed9"
+  },
+  {
+   "path": "yl/Material.f90",
+   "bytes": 67427,
+   "sha256": "d685ae0617063d3313765e705d099053503a10a79e4630d8e7cbede40976073b"
+  },
+  {
+   "path": "yl/OPT.F90",
+   "bytes": 8728,
+   "sha256": "9a6a83f21277546838f97e49bb8c442fe2eedc5e0dfd41681e36197128780ee8"
+  },
+  {
+   "path": "yl/Output.f90",
+   "bytes": 215917,
+   "sha256": "d80b528bf4d3e97bc6b2599d0129d8af023dd6707d60c281b3c495c0cf371a40"
+  },
+  {
+   "path": "yl/Prescrib.f90",
+   "bytes": 19988,
+   "sha256": "6b396345f58e45a33a926a3f94db88bb8465e5273b8f711f34b2d84564221438"
+  },
+  {
+   "path": "yl/Residu.f90",
+   "bytes": 233633,
+   "sha256": "b114f73a66827dc9742cf3405720c9f754c8ed0752c4785fbfb6cc31db53144f"
+  },
+  {
+   "path": "yl/Solver.f90",
+   "bytes": 407746,
+   "sha256": "8fad2a9cd5172db19c0a67e683751c62740247b5bb50c162a25a76fc9300a174"
+  },
+  {
+   "path": "yl/Stiff.f90",
+   "bytes": 440139,
+   "sha256": "0baa060b082d02d9bcf5f91c6cf77bd3d159bc94c36d26e688c6463e3e62138f"
+  },
+  {
+   "path": "yl/Temper.f90",
+   "bytes": 54408,
+   "sha256": "ee7d15c3c272a1852cd7e856c82d0f0763c6c00e2c5154ac6e767514a7a83c72"
+  },
+  {
+   "path": "yl/Vartype.f90",
+   "bytes": 678,
+   "sha256": "9128d2e5518a3406ad098126b830a7a409ae9639d38376072f04a9bc7d366528"
+  },
+  {
+   "path": "yl/dagangshan.u2d",
+   "bytes": 38,
+   "sha256": "4844f2de3094f8322c5fa9b0f75352ac123e05cd4d6ef2407ed2311a925d3800"
+  },
+  {
+   "path": "yl/errcheck.inc",
+   "bytes": 24246,
+   "sha256": "ababc21300f5bec17bfdc57fa9aa5c466e50cc99e04c7b4702942117843f9c05"
+  },
+  {
+   "path": "yl/ex_nlsqp_f.f",
+   "bytes": 10671,
+   "sha256": "fd958d97dadb5a38b678b401bd4fc54536da45543a90e9fef4597287431e4444"
+  },
+  {
+   "path": "yl/gauss_random.txt",
+   "bytes": 32000,
+   "sha256": "33ae9c1a8fcc810a8b812ff7479484f855545db81e41e621f124b345d3a31804"
+  },
+  {
+   "path": "yl/generatedata.inc",
+   "bytes": 24695,
+   "sha256": "8e1ae1fa4e003354fbf1e8125e36d252e6cb650fdab98b7052c382f66a21b439"
+  },
+  {
+   "path": "yl/gidpost.F90",
+   "bytes": 124831,
+   "sha256": "0fefe906ae9e20baf8732948121ae8b7f30a29cb056334be2bf84d065d021e5b"
+  },
+  {
+   "path": "yl/hstar.u2d",
+   "bytes": 38,
+   "sha256": "4844f2de3094f8322c5fa9b0f75352ac123e05cd4d6ef2407ed2311a925d3800"
+  },
+  {
+   "path": "yl/hstar.vfproj",
+   "bytes": 6541,
+   "sha256": "91d814a98125168a6300f0b06382696910c4b76d15f79bfa2f6e817367bc815f"
+  },
+  {
+   "path": "yl/inp",
+   "bytes": 211,
+   "sha256": "de15f08e1b4a43b586c2322c1ed2399abfedbbba6f7c48892165669bd86f3e6f"
+  },
+  {
+   "path": "yl/libiomp5md.dll",
+   "bytes": 1602416,
+   "sha256": "15e6f874a53cb54a8e266099c8da92484c6f50301d117f9a5443846e9ece90b5"
+  },
+  {
+   "path": "yl/memory_leak_check.md",
+   "bytes": 1860,
+   "sha256": "9a7093cd00e6281f0ab63c7b75c48bc09fc6a86d665e449062bc9256a656bc42"
+  },
+  {
+   "path": "yl/meshfine.f90",
+   "bytes": 133982,
+   "sha256": "74c03a6efa95ce375c78d04e3ef648fab15d5aa23e65c3702ce4491c800c20ef"
+  },
+  {
+   "path": "yl/sanitizer_guide.md",
+   "bytes": 834,
+   "sha256": "856f29976de9e03d1edb9adae6ce81ddefb2ca67b58cbf108c17e6b1c67dbebb"
+  },
+  {
+   "path": "yl/statchars.inc",
+   "bytes": 24151,
+   "sha256": "245dc16fc9bfa37c598a0aa25213f697cca40f9da6ec62480d88d787ceecf313"
+  },
+  {
+   "path": "yl/statcheck.inc",
+   "bytes": 6492,
+   "sha256": "6304d88f4d45d7497f0178f96e84956a06b5712eda1d8aff5fc0c5208d55ff87"
+  },
+  {
+   "path": "yl/vdrnggaussianmv_full.f",
+   "bytes": 4591,
+   "sha256": "206852e13af495aa9d63913aa7d7a424d83bf7caa4fce9fc17a6582f807d6180"
+  },
+  {
+   "path": "yl/vdrnggaussianmv_packed.f",
+   "bytes": 8509,
+   "sha256": "b9185b27f36bc350d88ed9aafc6422b809f66a50b4634b61693c9f7b96f6ef8d"
+  },
+  {
+   "path": "yl/vsl_gauss_module.f90",
+   "bytes": 6796,
+   "sha256": "d25e207910e318870966adf0f5a12602712179efc493d17468a56f64bd193615"
+  },
+  {
+   "path": "yl/HSTAR/HSTAR.vtuneproj",
+   "bytes": 797,
+   "sha256": "cbe4074bd31a945b5d5d8894645bcef91d09e5faebfad068171d00c29535aa6b"
+  },
+  {
+   "path": "yl/lib64/gidpost.lib",
+   "bytes": 780790,
+   "sha256": "aaad4ba6c74456328392e3ab110d6358213c8699512938179b8887d434268f71"
+  },
+  {
+   "path": "yl/lib64/libhdf5.lib",
+   "bytes": 48535438,
+   "sha256": "ee2b0bf65d1b17c9576e13c1657869e914d3f5afe275449e1eb4984635c26cda"
+  },
+  {
+   "path": "yl/lib64/libhdf5_hl.lib",
+   "bytes": 1247862,
+   "sha256": "8eae8184d1fdabd6ad41cce39531d5ad61aeb4b03d9aa511c1a8e80122a8c8b9"
+  },
+  {
+   "path": "yl/lib64/zlib.lib",
+   "bytes": 455124,
+   "sha256": "157d5c8e7733ec77c6aacc0cd878c5043b0f6c9611c69ba8f189b6fc2c119dfa"
+  }
+ ]
 }

@@ -94,7 +94,7 @@ module yl_authoring_keys
     key_t('section[].formulation',         TV_STR,  .true.,  'plane_strain'),                &
     key_t('section[].material',            TV_STR,  .true.,  ''),                            &
     key_t('amplitude[].name',              TV_STR,  .true.,  ''),                            &
-    key_t('amplitude[].type',              TV_STR,  .true.,  'linear|waterlevel'),           &
+    key_t('amplitude[].type',              TV_STR,  .true.,  'linear'),                      &
     key_t('amplitude[].points[][]',        TV_REAL, .false., ''),                            &
     key_t('amplitude[].points[].count',    TV_INT,  .false., ''),                            &
     key_t('amplitude[].points.count',      TV_INT,  .true.,  ''),                            &
@@ -125,6 +125,21 @@ module yl_authoring_keys
     ! STEP, not of any one load, which is why it left `[step.load]` when that became an
     ! array (2026-09-15, contract section 8.3).
     key_t('step[].load_mode',              TV_STR,  .true.,  'load|strength_reduction'),     &
+    ! WHICH element sets are part of the model in this step. legacy calls it
+    ! APPEAR_PROCESS and stores it as a (group, block) matrix read once from `.glb`; the
+    ! author states it per step, by name, and the mapping layer builds the matrix.
+    ! Required rather than defaulted to "everything": on a staged analysis "which parts
+    ! exist yet" is the whole point of having more than one step, and on a single-step
+    ! deck writing it costs one line and removes a default that would have to be
+    ! un-defaulted the moment a second step appears.
+    ! legacy `uinitial(iblks)`: this step starts from ZERO displacement rather than
+    ! continuing from the previous step's. Fem.f90:1704-1708 zeroes result_zero and the
+    ! two result buffers when it is set. It left the default table the moment a second
+    ! step existed -- "does this step inherit what the last one did" is the central
+    ! question of a staged analysis, and it cannot be guessed.
+    key_t('step[].reset_state',            TV_BOOL, .true.,  ''),                            &
+    key_t('step[].active_elsets[]',        TV_STR,  .false., ''),                            &
+    key_t('step[].active_elsets.count',    TV_INT,  .true.,  ''),                            &
     key_t('step[].strength_reduction.amplitude', TV_STR, .false., ''),                       &
     ! Loads are an ARRAY of objects, because one step can carry several of the same kind:
     ! two element groups on different gravity histories, two faces at different water
@@ -226,6 +241,7 @@ contains
     call resolve(doc, 'section', 'material', 'material', file, errors)
     call resolve_nested(doc, 'step', 'boundary', 'nset', 'nset', file, errors)
     call resolve_nested(doc, 'step', 'load', 'surface', 'surface', file, errors)
+    call resolve_active_elsets(doc, file, errors)
     call resolve_step_amplitude(doc, file, errors)
     call model_requires(doc, file, errors)
     call load_mode_requires(doc, file, errors)
@@ -306,16 +322,30 @@ contains
     type(toml_doc_t), intent(in) :: doc
     character(len=*), intent(in) :: file
     type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: km, kc, a
+
+    do a = 1_int32, doc%count_of('step')
+      call one_step_load_mode(doc, file, a, errors)
+    end do
+  end subroutine load_mode_requires
+
+  subroutine one_step_load_mode(doc, file, a, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    integer(int32), intent(in) :: a
+    type(problem_errors_t), intent(inout) :: errors
     integer(int32) :: km, kc
     logical :: reducing
+    character(len=TOML_LEN_PATH) :: base
 
-    km = doc%find('step[1].load_mode')
+    base = 'step['//trim(itoa(a))//']'
+    km = doc%find(trim(base)//'.load_mode')
     if (km == 0_int32) return                  ! a missing mode is require_all's finding
     reducing = trim(doc%entry(km)%svalue) == 'strength_reduction'
-    kc = doc%find('step[1].strength_reduction.amplitude')
+    kc = doc%find(trim(base)//'.strength_reduction.amplitude')
     if (reducing .and. kc == 0_int32) then
       call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(km)%line,           &
-                 'step[1].strength_reduction.amplitude',                                      &
+                 trim(base)//'.strength_reduction.amplitude',                                &
                  'strength reduction needs the amplitude that schedules it', '',              &
                  'an amplitude name')
     end if
@@ -325,12 +355,12 @@ contains
       ! schedule, so the mode is what is out of step with the intent. The message names
       ! the other line so neither has to be guessed at.
       call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(km)%line,           &
-                 'step[1].strength_reduction.amplitude',                                      &
+                 trim(base)//'.strength_reduction.amplitude',                                &
                  'a strength-reduction curve is named but load.mode is not '//                &
                  '"strength_reduction", so legacy would never read it',                       &
                  trim(doc%entry(km)%svalue), 'strength_reduction')
     end if
-  end subroutine load_mode_requires
+  end subroutine one_step_load_mode
 
   ! ------------------------------------------------------------------ checks ----
 
@@ -475,6 +505,32 @@ contains
       end do
     end do
   end subroutine resolve_step_amplitude
+
+  !> Every name in a step's `active_elsets` must be a declared elset. A typo here is
+  !> silent in the worst way: the element set simply never appears in the model, and the
+  !> analysis runs to completion on a structure with a piece missing.
+  subroutine resolve_active_elsets(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: a, i, kn, k
+    character(len=TOML_LEN_PATH) :: base
+
+    do a = 1_int32, doc%count_of('step')
+      base = 'step['//trim(itoa(a))//'].active_elsets'
+      kn = doc%find(trim(base)//'.count')
+      if (kn == 0_int32) cycle
+      do i = 1_int32, doc%entry(kn)%ivalue
+        k = doc%find(trim(base)//'['//trim(itoa(i))//']')
+        if (k == 0_int32) cycle
+        if (name_exists(doc, 'elset', trim(doc%entry(k)%svalue))) cycle
+        call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(k)%line,           &
+                   trim(base)//'['//trim(itoa(i))//']',                                       &
+                   'refers to an elset that this file does not define',                       &
+                   trim(doc%entry(k)%svalue), 'a declared [[elset]] name')
+      end do
+    end do
+  end subroutine resolve_active_elsets
 
   !> One amplitude reference, if present, must name a declared amplitude. Two call sites
   !> now (gravity's curve and the strength-reduction schedule) and the same rule for both.

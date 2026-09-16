@@ -973,14 +973,12 @@ contains
     call expect_rule('G6  unsupported increment count', 'G6', PE_UNSUPPORTED, &
                      'steps[1].controls', 'increments', d)
 
-    ! G6 -- and more than one step, the cardinality half of the same rule.
-    call good_draft(d)
-    allocate (sts(2))
-    sts(1) = d%steps(1)
-    sts(2) = d%steps(1)
-    call move_alloc(sts, d%steps)
-    call expect_rule('G6  unsupported step count', 'G6', PE_UNSUPPORTED, &
-                     'steps', 'size', d)
+    ! The G6 step-count counter-example was here. It went with its row on 2026-09-16:
+    ! two steps is a SUPPORTED shape now, so a counter-example asserting that it is
+    ! refused would assert the opposite of the truth. Unlike the section-count removal
+    ! above, this one left no hole in the pipeline -- what this build still cannot do
+    ! across steps (boundary conditions that change) is a COMMIT-layer refusal, and its
+    ! counter-example lives where that refusal does: tools/yl_modern_check.py, N3.
 
     ! No sections at all. This WAS the capability gate's job -- it counted an absent
     ! collection as zero and called it an unsupported section count -- and it moved to

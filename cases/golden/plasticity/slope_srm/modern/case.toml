@@ -79,6 +79,8 @@ points = [[0.0, 1.0], [1.0, 0.5]]
 name      = "strength_reduction"
 procedure = "static"
 load_mode = "strength_reduction"
+reset_state   = false   # legacy uinitial = 0: the step does not zero the result buffers
+active_elsets = ["slope"]   # every group is in the model from the start
 
 [step.controls]
 increments      = 1

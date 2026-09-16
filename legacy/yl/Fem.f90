@@ -1709,7 +1709,7 @@
             if(allocated(result_first))result_first=0.0
             if(allocated(result_second))result_second=0.0
         endif
-        print *,'a1'
+        print *,'a1'; if (yl_adapter_mode .and. iblks > 1) call yl_adapter_block_override(iblks)
 
         appear_p=appear
         do igroup=1,ngroup

@@ -147,3 +147,43 @@ reason = "label line of an empty .opr element section"
 id = "OPR.output_read.label3_title"
 state_target = "title_skip"
 reason = "label line of an empty .opr gap section"
+
+# ---------------------------------------------------------------------------- .loa ----
+# The edge-definition and edge-load records, which the .loa load domain (M7) brought onto
+# the executed path with loads_2d.wall_reservoir. They are reproduced by the MODERN input
+# path -- `[[surface]]` and `[[step.load]] type = "pressure"` in the authoring contract,
+# carried through ProblemState.surface_edges and steps[].load.pressure -- but NOT by the
+# M4 legacy-deck adapter, which refuses a multi-block deck at parse time and therefore
+# never reaches them. Writing a legacy-deck parser for them would be a parser with no
+# deck to read: every deck that has these records also has more than one block.
+#
+# So these five rows say something narrower than "not adapted": they say "not adapted
+# FROM A LEGACY DECK". The evidence lines are the modern path's, measured on the case.
+[[not_adapted]]
+id = "LOA.external_load_1.edge_chunk_title"
+state_target = "title_skip"
+reason = "chunk title of the edge table; no value reaches ProblemState. Reached only when nedge > 0, i.e. only on a deck the legacy-deck adapter refuses for its block count"
+
+[[not_adapted]]
+id = "LOA.external_load_1.edge_chunk_header"
+state_target = "surface_edges[]"
+reason = "sedge/nnode/index/vdimn. The modern path carries the same facts from [[surface]].kind; the legacy-deck adapter never reaches this record because every deck with an edge table has more than one block, which it refuses at parse time"
+evidence = "measured on loads_2d.wall_reservoir: the modern path builds edges(1..4) with nnode=2, index=1, vdimn=0 and the legacy path's own edge_geometry then produces djacb = 5.0 on edge 1 from both paths"
+
+[[not_adapted]]
+id = "LOA.external_load_1.edge_nodes"
+state_target = "surface_edges[]"
+reason = "the per-edge lnode/aelem row; same reason as the chunk header"
+evidence = "measured on loads_2d.wall_reservoir: edges(1)%lnode = [1, 7] and %aelem = 1 on the modern path, identical to the legacy read"
+
+[[not_adapted]]
+id = "LOA.external_load_2.edge_load_group"
+state_target = "steps[0].load.pressure[]"
+reason = "begin_edge/end_edge/itcurve/water/code_load. Carried by the modern path as steps[].load.pressure[]; the legacy-deck adapter refuses these decks before the block loop"
+evidence = "measured on loads_2d.wall_reservoir: both paths assemble the same four edge loads (edload(4) = 8.17500015E+05, 0, 1.63499999E+06, 0) with the same dfact = 1.0"
+
+[[not_adapted]]
+id = "LOA.external_load_2.edge_load_distribution"
+state_target = "steps[0].load.pressure[]"
+reason = "cor0/cor1/p0/p1/fact. Same carrier, same reason"
+evidence = "measured on loads_2d.wall_reservoir: gpwater(1) = (water 2, cor0 50, cor1 0, p0 0, p1 50, fact 9810) on the modern path, identical to the legacy read"

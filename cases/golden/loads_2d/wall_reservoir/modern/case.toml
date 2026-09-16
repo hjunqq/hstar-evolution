@@ -1,0 +1,169 @@
+# A staged gravity wall: the foundation stands alone, then the dam is placed on it and
+# the reservoir fills. Two analysis steps, and every difference between them is stated.
+#
+# This is the .loa load domain's golden deck. What it carries that no earlier golden case
+# does: more than one analysis step, an element set that does not exist yet in step 1,
+# a named face, and a hydrostatic pressure that acts in the second step only.
+version = 1
+
+[case]
+name        = "wall_reservoir"
+units       = "SI"
+description = "2-D Q4 plane-strain gravity wall: foundation under self-weight, then the dam placed and the reservoir filled to y = 50"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+# Elements come from 1.ele in FILE ORDER, legacy's own rule: the first 20 are the
+# foundation, the last 12 the dam. 1.ele carries no group column, which is why the
+# membership is stated as a count.
+[[elset]]
+name          = "foundation"
+element_count = 20
+
+[[elset]]
+name          = "dam"
+element_count = 12
+
+# x = 0 slides in y; the left column slides in x.
+[[nset]]
+name  = "base"
+nodes = [1, 2, 3, 4, 5, 6]
+
+[[nset]]
+name  = "left_edge"
+nodes = [1, 6, 7, 12, 13, 18, 19, 24, 25, 30]
+
+[[material]]
+name              = "concrete"
+model             = "elastic_isotropic"
+density           = 2400.0
+E                 = 2.5e10
+nu                = 0.167
+thermal_expansion = 1.0e-5
+
+[[section]]
+name        = "foundation"
+elset       = "foundation"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+[[section]]
+name        = "dam"
+elset       = "dam"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+# The upstream face, edge by edge: [n1, n2, element]. The element is the author's
+# statement because it is legacy's (Load.f90 writes it down too) -- see
+# docs/m5/authoring-contract.md section 8.1 for why it is never looked up.
+[[surface]]
+name  = "upstream_face"
+kind  = "edge2"
+edges = [[1, 7, 1], [7, 13, 6], [13, 19, 11], [19, 25, 16]]
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+# --- step 1: the foundation alone, under its own weight -------------------------
+[[step]]
+name          = "foundation_only"
+procedure     = "static"
+load_mode     = "load"
+reset_state   = false
+active_elsets = ["foundation"]
+
+[step.controls]
+increments       = 1
+substeps         = 1
+time_increment   = 1.0
+max_iterations   = 5
+tolerance_force  = 1.0e-5
+tolerance_dof    = 1.0e-5
+stiffness_update = "first_iteration"
+
+# The boundary records are declared in the order legacy's .pre stores them: one set per
+# constrained direction, and the y constraint first. The order is the record order in
+# `prescrib`, which is part of what the frozen reference fixes.
+[[step.boundary]]
+nset  = "base"
+dof   = [2]
+value = 0.0
+
+[[step.boundary]]
+nset  = "left_edge"
+dof   = [1]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+# --- step 2: the dam is placed, and the reservoir fills to y = 50 ---------------
+# Everything is restated. legacy repeats the whole load record per block and lets the
+# unchanged parts look like inheritance; here each step says what it carries, and what
+# it INHERITS is one explicit flag.
+[[step]]
+name          = "impoundment"
+procedure     = "static"
+load_mode     = "load"
+reset_state   = true
+active_elsets = ["foundation", "dam"]
+
+[step.controls]
+increments       = 1
+substeps         = 1
+time_increment   = 1.0
+max_iterations   = 5
+tolerance_force  = 1.0e-5
+tolerance_dof    = 1.0e-5
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "base"
+dof   = [2]
+value = 0.0
+
+[[step.boundary]]
+nset  = "left_edge"
+dof   = [1]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+# Hydrostatic on the upstream face: zero head at the water surface y = 50, 50 m of head
+# at y = 0, times the unit weight of water. legacy clamps the head at zero above the
+# surface and zeroes the pressure outside [at[2], at[1]] (Load.f90:816-830).
+[[step.load]]
+type      = "pressure"
+surface   = "upstream_face"
+amplitude = "constant"
+
+[step.load.distribution]
+type  = "linear_in_coordinate"
+axis  = "y"
+at    = [50.0, 0.0]
+value = [0.0, 50.0]
+scale = 9810.0
+
+[solver]
+linear = "profile"
+
+[output]
+format           = "gid"
+field            = ["u", "s"]
+stress_averaging = "direct"

@@ -1,0 +1,38 @@
+{
+ "case_id": "loads_2d.wall_reservoir",
+ "test_id": "B02",
+ "frozen_at": "2026-09-16T11:16:33+00:00",
+ "binary_sha256": "cf59c766848d88691dfa37c37084712c81e843dd3f6e7e2976d67cb19b1cb982",
+ "build_profile": "release",
+ "entry": "--adapter=off (legacy readers); the reference is what LEGACY produces",
+ "threads": {
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "runs": [
+  {
+   "label": "ref1",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "3b516e88e2e49b1923f54c1e8a41d9b50da9543fee361ee4ca025ccd4579a774"
+  },
+  {
+   "label": "ref2",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "3b516e88e2e49b1923f54c1e8a41d9b50da9543fee361ee4ca025ccd4579a774"
+  },
+  {
+   "label": "ref3",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "3b516e88e2e49b1923f54c1e8a41d9b50da9543fee361ee4ca025ccd4579a774"
+  }
+ ],
+ "all_completed": true,
+ "flavia_res_identical": true,
+ "comparison_rule": "atol = rtol = 0 (B02)"
+}

@@ -23,7 +23,22 @@ while [ $# -gt 0 ]; do
     esac; shift
 done
 CASE_NAME="${CASE_ID#*.}"
-CASE_DIR="$ROOT/cases/golden/static_2d/$CASE_NAME"
+# The case directory comes from cases/manifest.toml, not from a hard-coded family name:
+# the .loa load domain put a third case (loads_2d.wall_reservoir) into the inventory's
+# evidence set, and a tracer that can only find static_2d cases would have silently
+# traced the wrong directory or none at all.
+CASE_DIR="$ROOT/$(python3 - "$CASE_ID" <<'PYEOF'
+import sys, tomllib, pathlib
+root = pathlib.Path(__file__).resolve().parent if False else None
+m = tomllib.loads(open("cases/manifest.toml", "rb").read().decode("utf-8"))
+for c in m["case"]:
+    if c["id"] == sys.argv[1]:
+        print("cases/" + c["path"]); break
+else:
+    raise SystemExit(f"{sys.argv[1]}: not in cases/manifest.toml")
+PYEOF
+)"
+[ -d "$CASE_DIR" ] || { echo "case directory not found: $CASE_DIR" >&2; exit 3; }
 [ -z "$OUT" ] && OUT="$ROOT/docs/m1/evidence/$CASE_NAME"
 [ -x "$BIN" ] || { echo "trace binary missing: $BIN (run tools/build.sh trace)" >&2; exit 3; }
 [ -f "$ROOT/docs/m1/io-sites.json" ] || { echo "census missing: run tools/yl_io_inventory.py scan" >&2; exit 3; }

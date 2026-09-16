@@ -64,27 +64,31 @@ program yl_authoring_test
     ! a load naming a surface this file does not define
     call expect_bad('dangling surface', 'surface   = "upstream_face"', &
                     'surface   = "downstream_face"', 'DANGLING_REF', 2, 'surface')
-    ! a load naming an amplitude this file does not define
-    call expect_bad('dangling load amplitude', 'amplitude = "reservoir"', &
-                    'amplitude = "flood"', 'DANGLING_REF', 2, 'amplitude')
+    ! a step naming an element set this file does not define. Silent in the worst way if
+    ! unchecked: the set simply never appears and the analysis runs on a structure with
+    ! a piece missing.
+    call expect_bad('dangling active elset', 'active_elsets = ["foundation"]', &
+                    'active_elsets = ["footing"]', 'DANGLING_REF', 2, 'active_elsets')
     ! y0 == y1: legacy divides by their difference (Load.f90:819)
-    call expect_bad('degenerate water distribution', 'at    = [15.0, 0.0]', &
-                    'at    = [15.0, 15.0]', 'INVALID_INPUT', 2, 'distribution.at')
+    call expect_bad('degenerate water distribution', 'at    = [50.0, 0.0]', &
+                    'at    = [50.0, 50.0]', 'INVALID_INPUT', 2, 'distribution.at')
     ! the two arrays of a distribution pair up, so they must be the same length
-    call expect_bad('distribution arrays of different length', 'value = [0.0, 15.0]', &
-                    'value = [0.0, 7.5, 15.0]', 'INVALID_INPUT', 2, 'distribution.value')
+    call expect_bad('distribution arrays of different length', 'value = [0.0, 50.0]', &
+                    'value = [0.0, 25.0, 50.0]', 'INVALID_INPUT', 2, 'distribution.value')
     ! an amplitude whose time points do not advance
-    call expect_bad('non-monotonic amplitude', 'points = [[0.0, 0.0], [1.0, 1.0]]', &
-                    'points = [[0.0, 0.0], [0.0, 1.0]]', 'INVALID_INPUT', 2, 'points')
+    call expect_bad('non-monotonic amplitude', 'points = [[0.0, 1.0], [1.0, 1.0]]', &
+                    'points = [[1.0, 1.0], [0.0, 1.0]]', 'INVALID_INPUT', 2, 'points')
     ! an edge row that is not [n1, n2, element]
-    call expect_bad('edge row of the wrong arity', 'edges = [[1, 4, 1], [4, 7, 3], [7, 10, 5], [10, 13, 7]]', &
-                    'edges = [[1, 4, 1], [4, 7], [7, 10, 5], [10, 13, 7]]', &
+    call expect_bad('edge row of the wrong arity', &
+                    'edges = [[1, 7, 1], [7, 13, 6], [13, 19, 11], [19, 25, 16]]', &
+                    'edges = [[1, 7, 1], [7, 13], [13, 19, 11], [19, 25, 16]]', &
                     'INVALID_INPUT', 2, 'edges[2]')
     ! a node number that no mesh can have. "node 9999 does not exist" is NOT here: this
-    ! layer never opens the mesh, and claiming to check it would be the more dangerous
+    ! layer never opens the mesh, and claiming that check would be the more dangerous
     ! half-truth. Sign and shape are what is knowable from the file alone.
-    call expect_bad('edge row with a non-positive id', 'edges = [[1, 4, 1], [4, 7, 3], [7, 10, 5], [10, 13, 7]]', &
-                    'edges = [[1, 4, 1], [0, 7, 3], [7, 10, 5], [10, 13, 7]]', &
+    call expect_bad('edge row with a non-positive id', &
+                    'edges = [[1, 7, 1], [7, 13, 6], [13, 19, 11], [19, 25, 16]]', &
+                    'edges = [[1, 7, 1], [0, 13, 6], [13, 19, 11], [19, 25, 16]]', &
                     'INVALID_INPUT', 2, 'edges[2]')
     ! an unlisted surface kind is a capability refusal
     call expect_bad('unlisted surface kind', 'kind  = "edge2"', 'kind  = "face4"', &
@@ -96,6 +100,10 @@ program yl_authoring_test
     call expect_bad('gravity field on a pressure load', 'surface   = "upstream_face"', &
                     'magnitude = 9.81'//new_line('a')//'surface   = "upstream_face"', &
                     'INVALID_INPUT', 2, 'magnitude')
+    ! whether a step starts from zero or continues is the central question of a staged
+    ! analysis, so it is required rather than defaulted
+    call expect_bad('missing reset_state', 'reset_state   = false', '# removed', &
+                    'MISSING_FIELD', 2, 'reset_state')
     write (output_unit, '(a)') ''
     write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
     if (fail > 0) then
@@ -183,6 +191,9 @@ program yl_authoring_test
   ! a material property that varies between real decks, so it cannot be defaulted
   call expect_bad('missing thermal expansion', 'thermal_expansion = 1.0e-5', '# removed', &
                   'MISSING_FIELD', 2, 'thermal_expansion')
+  ! a load naming an amplitude this file does not define
+  call expect_bad('dangling load amplitude', 'amplitude = "constant"', &
+                  'amplitude = "flood"', 'DANGLING_REF', 2, 'amplitude')
   ! a gravity direction of zero length names no direction at all
   call expect_bad('zero gravity direction', 'direction = [0.0, -1.0]', &
                   'direction = [0.0, 0.0]', 'INVALID_INPUT', 2, 'direction')

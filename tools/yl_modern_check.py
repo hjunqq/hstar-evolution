@@ -63,6 +63,10 @@ def cases() -> list[tuple[str, Path]]:
     out = []
     for c in doc.get("case", []):
         d = ROOT / "cases" / c["path"]
+        if c.get("modern_gate") is False:
+            print(f"  -- {c['id']:<28} modern gate OFF by manifest: "
+                  f"{'the modern path does not reproduce this reference yet'}")
+            continue
         if (d / "modern/case.toml").is_file():
             out.append((c["id"], d))
     if not out:
@@ -168,12 +172,21 @@ def main(argv=None):
     # N3 -- a deck the contract rejects must stop, readably.
     bad_id, bad_dir = cases()[0]
 
-    def rejected(label: str, arg: str, mutate=None) -> str:
+    def _step_count(case_dir: Path) -> int:
+        text = (case_dir / "modern/case.toml").read_text(encoding="utf-8")
+        return text.count("\n[[step]]") + text.startswith("[[step]]")
+
+    def rejected(label: str, arg: str, mutate=None, case: str | None = None) -> str:
         """Run a deck that must be refused; assert the run stopped and wrote nothing.
         Returns the combined output so the caller can assert what it SAID."""
+        if case is None:
+            src = bad_dir
+        else:
+            _d = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
+            src = ROOT / "cases" / next(c["path"] for c in _d["case"] if c["id"] == case)
         with tempfile.TemporaryDirectory(prefix="yl-modern-bad.") as td:
             work = Path(td)
-            deck = stage(bad_dir, work)
+            deck = stage(src, work)
             if mutate is not None:
                 deck.write_text(mutate(deck.read_text(encoding="utf-8")), encoding="utf-8")
             cp = subprocess.run([str(binary), arg], cwd=work, stdin=subprocess.DEVNULL,
@@ -223,45 +236,41 @@ def main(argv=None):
     if "element_count" not in blob:
         problems.append("N3 element counts: the refusal did not name the key")
 
-    # b3 -- two refusals that belong to the mapping layer for the same reason as b2: they
-    # are statements about what this BINARY can run, not about what the input language can
-    # say. The contract deliberately describes both shapes (authoring-contract 2.1, 8.3),
-    # so the validator lets them through and this is the only place they can be caught.
-    # Written after predicting each: exit 3, one finding, naming `step` / `step[1].load`.
-    def second_step(text: str) -> str:
-        i, j = text.index("[[step]]"), text.index("[solver]")
-        return text + "\n" + text[i:j].replace('name      = "', 'name      = "second_', 1)
+    # b3 -- the refusals that belong to the mapping layer for the same reason as b2:
+    # they are statements about what this BINARY can run, not about what the input
+    # language can say. Two earlier controls lived here -- "a second analysis step" and
+    # "a pressure load" -- and BOTH were retired on 2026-09-16, when those shapes became
+    # supported. A control asserting a refusal that no longer happens does not fail safe;
+    # it goes green for the wrong reason. What replaced them is here and in b4: the
+    # refusals that are still true.
+    def two_gravities(text: str) -> str:
+        i = text.index("[[step.load]]")
+        j = text.index("\n\n", i)
+        return text[:j] + "\n" + text[i:j] + text[j:]
 
-    blob = rejected("a second analysis step", "--input=case.toml", second_step)
-    if "legacy nblks" not in blob:
-        problems.append("N3 second step: the refusal did not say what the step count maps to")
+    blob = rejected("two gravity loads in one step", "--input=case.toml", two_gravities)
+    if "gravity" not in blob:
+        problems.append("N3 two gravity loads: the refusal did not name what it counted")
 
-    def add_pressure(text: str) -> str:
-        return text + '''
-[[surface]]
-name  = "face"
-kind  = "edge2"
-edges = [[1, 2, 1]]
-
-[[step.load]]
-type      = "pressure"
-surface   = "face"
-amplitude = "constant"
-
-[step.load.distribution]
-type  = "linear_in_coordinate"
-axis  = "y"
-at    = [10.0, 0.0]
-value = [0.0, 10.0]
-scale = 9810.0
-'''
-
-    blob = rejected("a pressure load", "--input=case.toml", add_pressure)
-    if "pressure" not in blob:
-        problems.append("N3 pressure load: the refusal did not name what it cannot carry")
-    if "legacy nblks" in blob:
-        problems.append("N3 pressure load: it refused the step count instead -- the deck "
-                        "has one step, so this control is measuring the wrong rule")
+    # b4 -- the one thing a multi-step deck still cannot do. Prescribed degrees of
+    # freedom are committed once, from step 1, so a deck whose second step releases a
+    # constraint would run the whole analysis on step 1's constraints and produce
+    # plausible numbers with nothing saying so. Predicted before running: exit 3, the
+    # message naming steps[].boundary, no results.
+    # Read from the manifest, not from cases(): the multi-step deck is exactly the one
+    # whose modern gate is off, and this control is about the refusal, not the numbers.
+    _doc = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
+    multi = next((c["id"] for c in _doc.get("case", [])
+                  if (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
+                  and _step_count(ROOT / "cases" / c["path"]) > 1), None)
+    if multi is not None:
+        blob = rejected("boundaries that change between steps", "--input=case.toml",
+                        lambda t: t.replace('nset  = "left_edge"\ndof   = [1]',
+                                            'nset  = "base"\ndof   = [1]', 1)
+                        if t.count('nset  = "left_edge"') >= 1 else t,
+                        case=multi)
+        if "boundary" not in blob:
+            problems.append("N3 boundaries that change: the refusal did not name the field")
 
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",

@@ -131,3 +131,87 @@ legacy nblks = count(step)          legacy nstep = step.controls.substeps
    逐字不变。最终改为对 `cases/` 下全部文件取内容哈希，并补上阳性对照。
    两件事都值得记：一道会拒绝自己无权评判之事的门禁会先失去可信度、再被绕过；
    而**一道没有阳性对照的修正，和没修一样**——这一版正是被对照当场否掉的。
+
+---
+
+# Phase 3：面荷载 + 多分析步 → ProblemState → solver
+
+状态：**未收口**。四个原有 golden 算例在全部改动之后仍逐位一致；新 golden 算例
+`loads_2d.wall_reservoir` 由现代输入独立驱动、跑完两步、写出正确形状的结果，但**第 2 步
+与冻结参考不符**。本节如实记录已确立的部分、那一处分叉的定位证据，以及下一步。
+
+## 1. 算例是量出来的，不是挑出来的
+
+`hstar_jobs` 语料里**每一个**两块 2-D deck 都带施工分期（`APPEAR_PROCESS = 1 0 / 1 1`）——
+分期正是这些 deck 之所以有两块的原因。所以分期不是这个算例额外拖进来的负担，
+它是多分析步能力的一部分。在这些 deck 里取最小的一个：
+
+`0416_125158_determ_test` → `cases/golden/loads_2d/wall_reservoir`：46 节点、32 单元、
+两个单元组（Foundation 20 / Dam 12）、一种材料、4 条边、2 块。第 1 块只有基础在自重下，
+第 2 块坝体就位并加上水面 y = 50 的静水压（`water = 2`，`fact = 9810`）。
+冻结参考 3 次运行逐字节相同：**4 块 552 值**。
+
+## 2. 复用 legacy，而不是重写它
+
+`Load.f90` 的三段计算被**提取**为模块级子程序，两条路径都调用同一份代码：
+
+| 提取出来的 | 原来在哪 | 谁调用 |
+|---|---|---|
+| `edge_dofs(tedge)` | `external_load_1` 读取循环内 | legacy 读取路径 + `commit_surface_edges` |
+| `edge_geometry()` | `external_load_1` 读完边表之后 | 同上 |
+| `edge_load_group_apply(...)` | `external_load_2` 的每组循环 | legacy 读取路径 + `commit_block_state` |
+| `edge_cosc` | `external_load_1` 的 `contains` 块 | `edge_geometry`（改名是因为 Stiff.f90 自己有一个 `cosc`）|
+
+**没有写一行同义的数值代码。** 提取是否保行为，由三个算例的 gdb 追踪当场证明：
+`cooks_membrane` / `lame_cylinder` / `wall_reservoir` 在提取之后逐位复现各自的冻结参考。
+
+## 3. 多分析步的接缝在 legacy 自己的位置上
+
+legacy 在**每一块**的开头重读 `.pre` 与 `.loa` 尾部（`Fem.f90:1873 / 1896`）。现代侧因此也
+必须有一个每块的接缝，位置由 legacy 决定：`Fem.f90:1712` 加了一行
+`if (yl_adapter_mode .and. iblks > 1) call yl_adapter_block_override(iblks)`，
+在 `appear_process` / `matno_process` 被消费**之前**。第 1 块走的仍是改动前那条路径，
+一字未变。`yl_adapter_session` 保存已提交的 ProblemState / RuntimeState 供后续块使用。
+
+## 4. 进入 ProblemState 的新对象
+
+`surface_edges[]`（`nodes` / `element` / `element_class` / `projection_axis`）与
+`steps[].load.pressure[]`（`first_edge` / `last_edge` / `amplitude` / `distribution_axis` /
+`at` / `value` / `scale`），各带 `@off-face` 标记与 map 行。**没有一条直接写 legacy 全局**：
+commit 仍是唯一的写入口。`code_load` 故意**不**进 ProblemState——legacy 把它读进一个例程
+局部量就丢了，没有全局可供 map 行指认，编造一个会是凭空发明状态。
+
+## 5. 契约新增与移出默认表的两项
+
+`step.active_elsets`（这一步里有哪些单元集）与 `step.reset_state`（这一步是否从零开始）
+双双**移出默认表变成必填**——见 `docs/m5/authoring-contract.md` §9。两者都不是表达性字段：
+它们就是分期分析要回答的问题。
+
+## 6. 那一处未收口的分叉，以及它不是什么
+
+**第 1 步逐位一致；第 2 步不一致**（260/552 不符，`max|d| = 1.1e6`）。
+
+逐项对照两条路径，**以下全部逐位相同**（实测，不是推断）：边表（`nedge`、每条边的
+`lnode`/`aelem`/`index`/`nnode`）、边高斯几何、四条边组装出来的 `edload`（连同 `dfact`，
+四条全等）、`gpwater` 的五个分布量、`tcurvegravity`、`appear`（两块各自的值）、
+`nelgroup`、`ice0`、`uinitial = (0, 1)`、约束自由度。
+
+分叉的形态很窄：**第 2 步里坝体那 16 个节点的位移恰好为 0**，而参考里是 ~3e-3；
+第 2 步的 `retot = |tofor|²` 与第 1 步**完全相等**（1.534986789650702E+015），
+legacy 则升到 3.920e15。也就是说第 2 块在现代路径上**没有获得任何新荷载**——
+不是水压算错了（水压算得一模一样），而是新出现的那一组根本没有进入外力向量。
+
+**下一步只有一个方向**：`tofor` 由 `element%field%tload` 经 `ldofs_f` 累加而来
+（`Fem.f90:13836-13849`）。`ldofs_f`、`nodfn` 与求解器 profile 都由 `build_runtime` 一次
+建成，而 `build_runtime` 只看 `steps(1)`。legacy 的自由度编号与分期无关，现代侧是否也
+如此，是这条链上唯一还没有实测过的一环。**在测出来之前不改代码。**
+
+## 7. 门禁口径
+
+`cases/manifest.toml` 给这个算例加了 `modern_gate = false`，并写明了理由；
+`tools/yl_modern_check.py` 每次运行都会**打印**这条豁免，而不是静默跳过。
+这个算例在**legacy 路径上**是完整的 golden 算例（冻结参考 + gdb 追踪证据），
+**现代路径上不是**——两件事分开记。
+
+新增两条 N3 反例（多步能力使两条旧反例失效，一并退役并写明原因）：
+「一步里两个 gravity」与「各步边界条件不同」，都是 `UNSUPPORTED` / 退出码 3。

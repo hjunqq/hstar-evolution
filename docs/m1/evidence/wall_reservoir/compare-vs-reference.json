@@ -1,0 +1,67 @@
+{
+  "structure_ok": true,
+  "problems": [],
+  "blocks": [
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 2.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 2.0
+    }
+  ],
+  "passed": true,
+  "n_blocks": 4,
+  "n_values": 552,
+  "n_mismatch": 0,
+  "max_abs_diff": 0.0,
+  "first_mismatch": null,
+  "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/loads_2d/wall_reservoir/reference/results.json",
+  "actual": "/tmp/yl-io-trace.SaDQIC/results.json",
+  "tolerance_section": "exact"
+}

@@ -112,19 +112,22 @@ module yl_runtime_commit
                         ntrans
   use prescribed, only: prescrib, ndofix, freedom_prescribe, nfixsets
   use applied_load, only: tcurves, ntcurve, time_curve, factg, tcurvegravity, gravy,          &
-                          nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload
+                          nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload,   &
+                          edges, edgeload, gpwater, edge_dofs, edge_geometry,                  &
+                          edge_load_group_apply
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
                        material_1
 
-  use yl_problem_types, only: problem_state_t
+  use yl_problem_types, only: problem_state_t, boundary_t
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
   include 'yl_runtime_scalars_use.inc'
   use yl_problem_optional, only: opt_int, opt_real, opt_text, opt_logical, opt_get, opt_is_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
-                               PE_INTERNAL, PE_EXIT_INTERNAL
+                               make_source_location,                                            &
+                               PE_INTERNAL, PE_EXIT_INTERNAL, PE_UNSUPPORTED, PE_EXIT_UNSUPPORTED
   use yl_runtime_geometry, only: geometry_rule
   use yl_runtime_contract, only: contract_expect_int
   use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
@@ -138,6 +141,7 @@ module yl_runtime_commit
   private
 
   public :: commit_legacy_globals, commit_release, commit_owns_globals
+  public :: commit_block_state, commit_surface_edges, commit_step_invariants
   public :: commit_provenance_count, commit_provenance_row, commit_provenance_of
   public :: commit_provenance_export
 
@@ -1432,7 +1436,7 @@ contains
     allocate (s_ex_lelenrt(s_nelem));                  s_ex_lelenrt = 0_ink
     allocate (s_ex_icpspring(s_npoin));                s_ex_icpspring = 0_ink
 
-    call verify_residue_against_gates(residue, errors, ok)
+    call verify_residue_against_gates(residue, errors, ok, n_steps)
     if (.not. ok) return
 
     ! ----------------------------------------------------------------- write
@@ -1529,8 +1533,203 @@ contains
 
     include 'yl_runtime_scalars.inc'
 
+    ! The named faces, and legacy's own derivation of their DOF maps and Gauss geometry.
+    ! After the move_allocs, because it reads `element`, `group` and `coord`.
+    call commit_surface_edges(problem)
+
+    ! Block 1's own share of the per-block state. Blocks 2.. get theirs from
+    ! yl_adapter_block_override at the top of legacy's block loop.
+    call commit_block_state(problem, runtime, 1_int32, errors)
+
     commit_owned = .true.
   end subroutine commit_legacy_globals
+
+  !> What this build can carry ACROSS steps, refused by name where it cannot.
+  !>
+  !> The prescribed degrees of freedom are committed once, from step 1, through
+  !> `runtime%dof%fixed_mask`. legacy re-reads `.pre` every block and so CAN change them
+  !> between blocks; this build cannot, and the difference is invisible in the results --
+  !> a deck whose second block releases a constraint would simply run the whole analysis
+  !> on the first block's constraints and produce plausible numbers. So it is refused.
+  !> The golden deck this was written for has byte-identical `.pre` records in both
+  !> blocks, which is what makes the restriction affordable rather than arbitrary.
+  subroutine commit_step_invariants(problem, errors)
+    type(problem_state_t), intent(in) :: problem
+    type(problem_errors_t), intent(inout) :: errors
+    integer :: k, i, n1
+
+    if (.not. allocated(problem%steps)) return
+    if (size(problem%steps) < 2) return
+    if (.not. allocated(problem%steps(1)%boundary)) return
+    n1 = size(problem%steps(1)%boundary)
+    do k = 2, size(problem%steps)
+      if (.not. allocated(problem%steps(k)%boundary)) then
+        call refuse_block(errors, 'steps[].boundary',                                          &
+             'every step must state the same boundary conditions; this build commits them '//  &
+             'once, from step 1')
+        return
+      end if
+      if (size(problem%steps(k)%boundary) /= n1) then
+        call refuse_block(errors, 'steps[].boundary',                                          &
+             'every step must state the same boundary conditions; this build commits them '//  &
+             'once, from step 1')
+        return
+      end if
+      do i = 1, n1
+        if (.not. same_boundary(problem%steps(1)%boundary(i), problem%steps(k)%boundary(i))) then
+          call refuse_block(errors, 'steps[].boundary',                                        &
+               'every step must state the same boundary conditions; this build commits them '//&
+               'once, from step 1')
+          return
+        end if
+      end do
+    end do
+  end subroutine commit_step_invariants
+
+  pure logical function same_boundary(a, b) result(same)
+    type(boundary_t), intent(in) :: a, b
+    same = opt_or(a%nset) == opt_or(b%nset) .and. opt_or(a%name) == opt_or(b%name) .and.       &
+           opt_or(a%dof) == opt_or(b%dof) .and.                                                &
+           opt_or_real(a%value) == opt_or_real(b%value) .and.                                  &
+           opt_or(a%amplitude) == opt_or(b%amplitude) .and.                                    &
+           opt_or(a%record_reaction) == opt_or(b%record_reaction)
+  end function same_boundary
+
+  subroutine refuse_block(errors, path, msg)
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), intent(in) :: path, msg
+    call errors%add(make_problem_error(code=PE_UNSUPPORTED, stage='commit',                    &
+         object_path=path, message=msg, exit_class=PE_EXIT_UNSUPPORTED,                        &
+         source=make_source_location(file='ProblemState', reader='commit')))
+  end subroutine refuse_block
+
+  !> The named faces: ProblemState.surface_edges -> legacy `nedge` / `edges(:)`, then
+  !> legacy's OWN derivation of everything else about them.
+  !>
+  !> Runs ONCE per analysis, at the end of the full commit, because that is when legacy
+  !> reads it: the edge table is declared "for whole analysis" (Load.f90's own title) and
+  !> only the LOADS on it repeat per block. It must run after `element`, `group` and
+  !> `coord` are in place, which is why it is here and not earlier.
+  !>
+  !> Note what this routine does NOT do. It fills the five fields legacy reads from the
+  !> file -- nnode, index, vdimn, lnode, aelem -- and then calls `edge_dofs` and
+  !> `edge_geometry`, which are legacy's own code, moved to module scope for exactly this
+  !> (Load.f90, 2026-09-16). The DOF map and the edge Gauss geometry are therefore
+  !> computed once, by legacy, for both paths. Writing them again here would be a second
+  !> implementation of a formula legacy already has, and this build has twice measured
+  !> what that costs (R31; the 1-ULP cartd divergence in docs/m6/material-domain.md S7).
+  subroutine commit_surface_edges(problem)
+    type(problem_state_t), intent(in) :: problem
+    integer :: ie, n
+
+    if (.not. allocated(problem%surface_edges)) then
+      nedge = 0_ink
+      return
+    end if
+    n = size(problem%surface_edges)
+    nedge = int(n, ink)
+    if (allocated(edges)) deallocate (edges)
+    if (n == 0) return
+    allocate (edges(n))
+    do ie = 1, n
+      edges(ie)%nnode = int(size(problem%surface_edges(ie)%nodes), ink)
+      edges(ie)%index = int(opt_or(problem%surface_edges(ie)%element_class), ink)
+      edges(ie)%vdimn = int(opt_or(problem%surface_edges(ie)%projection_axis), ink)
+      edges(ie)%aelem = int(opt_or(problem%surface_edges(ie)%element), ink)
+      allocate (edges(ie)%lnode(edges(ie)%nnode))
+      edges(ie)%lnode = int(problem%surface_edges(ie)%nodes, ink)
+      call edge_dofs(int(ie, ink))
+    end do
+    call edge_geometry()
+  end subroutine commit_surface_edges
+
+  !> The part of the input legacy re-reads at the top of every block: this step's gravity
+  !> and its surface loads (Fem.f90:1873/1896 -> prescrib_set / external_load_2).
+  !>
+  !> Called for EVERY block, block 1 included, so there is one code path rather than a
+  !> first-block special case that only the golden decks ever exercise.
+  !>
+  !> BOUNDARY CONDITIONS ARE NOT RE-COMMITTED HERE, and that is a refusal rather than an
+  !> omission: `runtime%dof%fixed_mask` is built once from step 1, so a deck whose
+  !> prescribed sets change between steps would silently run every block on step 1's
+  !> constraints. `commit_block_check` refuses such a deck by name instead.
+  subroutine commit_block_state(problem, runtime, iblks, errors)
+    type(problem_state_t), intent(in) :: problem
+    type(runtime_state_t), intent(in) :: runtime
+    integer(int32), intent(in) :: iblks
+    type(problem_errors_t), intent(inout) :: errors
+
+    integer :: ip, n, total, jedge
+    real(irk) :: zero
+
+    if (.not. allocated(problem%steps)) return
+    if (iblks < 1 .or. iblks > size(problem%steps)) then
+      call fail(errors, 'legacy asked for block '//itoa(int(iblks))//' and this analysis declares '//itoa(size(problem%steps))//' steps')
+      return
+    end if
+
+    ! --- the prescribed degrees of freedom, restored ---------------------------------
+    ! legacy calls `prescrib_set` at the top of EVERY block, which rebuilds iffix and
+    ! fixed from the file. Reading the file again is not the point -- RESTORING them is:
+    ! the solve writes into both while it runs, and a second block that inherits the used
+    ! copies is not the same analysis. The values come from RuntimeState, unchanged since
+    ! the first commit, so this is transport and not a second derivation.
+    iffix = int(runtime%dof%fixed_mask, ink)
+    fixed = real(runtime%dof%prescribed_value, irk)
+
+    ! --- gravity: legacy re-reads gravy / factg / tcurvegravity per block -------------
+    gravy = real(opt_or_real(problem%steps(iblks)%load%gravity%magnitude), irk)
+    if (allocated(problem%steps(iblks)%load%gravity%direction)) then
+      factg = real(problem%steps(iblks)%load%gravity%direction, irk)
+    end if
+    if (allocated(problem%steps(iblks)%load%gravity%amplitude)) then
+      tcurvegravity = int(problem%steps(iblks)%load%gravity%amplitude, ink)
+    end if
+
+    ! --- the surface loads of THIS block ---------------------------------------------
+    ! legacy deallocates and rebuilds both arrays every block (Load.f90:761-763) and
+    ! leaves them alone entirely when the block declares no group (its `goto 33`). Both
+    ! are reproduced, including the leak of the `%edload` pointers that legacy's own
+    ! deallocate causes: matching legacy is the job, and fixing a legacy leak from here
+    ! would be a silent change of behaviour on the path that must stay bit-exact.
+    if (allocated(edgeload)) deallocate (edgeload)
+    if (allocated(gpwater)) deallocate (gpwater)
+    n = 0
+    if (allocated(problem%steps(iblks)%load%pressure)) n = size(problem%steps(iblks)%load%pressure)
+    delgroup = int(n, ink)
+    total = 0
+    do ip = 1, n
+      total = total + int(opt_or(problem%steps(iblks)%load%pressure(ip)%last_edge))                &
+                    - int(opt_or(problem%steps(iblks)%load%pressure(ip)%first_edge)) + 1
+    end do
+    edge_load_group = int(total, ink)
+    if (n == 0) return
+
+    allocate (edgeload(total))
+    allocate (gpwater(n))
+    jedge = 0
+    zero = 0.0_irk
+    do ip = 1, n
+      associate (pr => problem%steps(iblks)%load%pressure(ip))
+        gpwater(ip)%water = int(opt_or(pr%distribution_axis), ink)
+        gpwater(ip)%cor0 = real(pr%at(1), irk)
+        gpwater(ip)%cor1 = real(pr%at(2), irk)
+        gpwater(ip)%p0 = real(pr%value(1), irk)
+        gpwater(ip)%p1 = real(pr%value(2), irk)
+        gpwater(ip)%fact = real(opt_or_real(pr%scale), irk)
+        ! The second distribution (legacy `code_load`) is not in the contract, so it is
+        ! passed as absent: code_load = 0 and five zeros legacy will not read.
+        call edge_load_group_apply(int(opt_or(pr%first_edge), ink),                            &
+                                   int(opt_or(pr%last_edge), ink),                             &
+                                   int(opt_or(pr%amplitude), ink),                             &
+                                   gpwater(ip)%water, 0_ink,                                   &
+                                   gpwater(ip)%cor0, gpwater(ip)%cor1, gpwater(ip)%p0,         &
+                                   gpwater(ip)%p1, gpwater(ip)%fact,                           &
+                                   zero, zero, zero, zero, zero,                               &
+                                   int(ip, ink), jedge)
+      end associate
+    end do
+  end subroutine commit_block_state
 
   !> True while the legacy globals hold storage this module allocated.
   pure logical function commit_owns_globals() result(owned)
@@ -1948,7 +2147,7 @@ contains
     type(problem_state_t), intent(in) :: problem
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
-    integer :: i, k
+    integer :: i, j, k
 
     ok = .false.
 
@@ -2168,6 +2367,42 @@ contains
         end if
       end if
     end do
+
+    ! The named faces, and the per-step pressure records that index into them. Both are
+    ! optional collections -- a deck with no surface load has neither -- but once present
+    ! every field the staging pass reads must be set, for the same reason as everywhere
+    ! else here: an unset one publishes a default, and 0 is a real element number and a
+    ! real coordinate.
+    if (allocated(problem%surface_edges)) then
+      do i = 1, size(problem%surface_edges)
+        if (.not. allocated(problem%surface_edges(i)%nodes) .or.                              &
+            .not. opt_is_set(problem%surface_edges(i)%element) .or.                           &
+            .not. opt_is_set(problem%surface_edges(i)%element_class) .or.                     &
+            .not. opt_is_set(problem%surface_edges(i)%projection_axis)) then
+          call fail(errors, 'surface_edges['//itoa(i)//'] has unset nodes, element, '//       &
+                    'element_class or projection_axis')
+          return
+        end if
+      end do
+    end if
+    if (allocated(problem%steps)) then
+      do i = 1, size(problem%steps)
+        if (.not. allocated(problem%steps(i)%load%pressure)) cycle
+        do j = 1, size(problem%steps(i)%load%pressure)
+          if (.not. opt_is_set(problem%steps(i)%load%pressure(j)%first_edge) .or.             &
+              .not. opt_is_set(problem%steps(i)%load%pressure(j)%last_edge) .or.              &
+              .not. opt_is_set(problem%steps(i)%load%pressure(j)%amplitude) .or.              &
+              .not. opt_is_set(problem%steps(i)%load%pressure(j)%distribution_axis) .or.      &
+              .not. opt_is_set(problem%steps(i)%load%pressure(j)%scale) .or.                  &
+              .not. allocated(problem%steps(i)%load%pressure(j)%at) .or.                      &
+              .not. allocated(problem%steps(i)%load%pressure(j)%value)) then
+            call fail(errors, 'steps['//itoa(i)//'].load.pressure['//itoa(j)//'] has an '//   &
+                      'unset edge range, amplitude, axis, scale or distribution array')
+            return
+          end if
+        end do
+      end do
+    end if
     ok = .true.
   end subroutine verify_problem_inputs
 
@@ -2191,11 +2426,15 @@ contains
   !     discards them (1.7.1's table). There is nothing to agree with, and inventing an
   !     expectation here would be exactly the "second source of truth" the carrier exists
   !     to avoid. They are carried unchecked, and that is the honest state.
-  !   * `runblks` is gated to 1, not 0.
-  subroutine verify_residue_against_gates(residue, errors, ok)
+  !   * `runblks` is gated against the STEP COUNT, not against 1. It was 1 while one step
+  !     was the only admitted shape; the invariant it was really asserting is that the
+  !     residue and ProblemState agree about how many blocks legacy will run, and that is
+  !     what it asserts now (2026-09-16).
+  subroutine verify_residue_against_gates(residue, errors, ok, n_steps)
     type(deck_residue_t), intent(in) :: residue
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
+    integer, intent(in) :: n_steps
 
     ok = .false.
 
@@ -2206,9 +2445,11 @@ contains
                 'carrier disagree')
       return
     end if
-    if (opt_or(residue%runblks) /= 1) then
-      call fail(errors, 'the deck residue carries runblks /= 1, but the adapter rejects '//   &
-                'any deck that does; the gate and the carrier disagree')
+    if (opt_or(residue%runblks) /= n_steps) then
+      call fail(errors, 'the deck residue says legacy will run '//                             &
+                itoa(int(opt_or(residue%runblks)))//' blocks and ProblemState declares '//     &
+                itoa(n_steps)//' steps; the carrier and the state disagree about the '//       &
+                'analysis this is')
       return
     end if
     if (opt_or(residue%ninit) /= 0 .or. opt_or(residue%nlinks) /= 0 .or.                      &
@@ -2222,9 +2463,14 @@ contains
                 'carrier disagree')
       return
     end if
-    if (any(residue%uinitial /= 0_int32)) then
-      call fail(errors, 'the deck residue carries a non-zero uinitial, but the adapter '//    &
-                'rejects any deck that does; the gate and the carrier disagree')
+    ! `uinitial` was gated to all-zero, which was the M4 adapter's whitelist speaking: it
+    ! refuses a deck that zeroes its result buffers at a block boundary. The MODERN path
+    ! carries that per step (`step.reset_state`, authoring-contract section 9.2), so the
+    ! all-zero assertion belonged to the legacy-deck adapter alone while this routine
+    ! serves both. What stays true for both is that the value is a FLAG (2026-09-16).
+    if (any(residue%uinitial /= 0_int32 .and. residue%uinitial /= 1_int32)) then
+      call fail(errors, 'the deck residue carries a uinitial that is neither 0 nor 1; it '//  &
+                'is a flag (Fem.f90:1704 tests it against 1) and the carrier disagrees')
       return
     end if
     if (opt_or(residue%nplgroup) /= 0 .or. opt_or(residue%nedge) /= 0 .or.                    &

@@ -27,3 +27,17 @@ subroutine yl_adapter_override()
        'this binary was built without the adapter entry; --adapter=on is not ' // &
        'available here. Build tools/build.sh solver-adapter, or drop --adapter=on.')
 end subroutine yl_adapter_override
+
+!> The per-block half of the same switch, for the same reason: a build without the
+!> adapter must refuse `--adapter=on` / `--input=` at every entry point, not just the
+!> first. Silently returning here would leave block 2 running on block 1's loads.
+subroutine yl_adapter_block_override(iblks)
+  use iso_fortran_env, only: int32
+  use yl_diag, only: diag_abort, EXIT_UNSUPPORTED
+  implicit none
+  integer(int32), intent(in) :: iblks
+  if (iblks < 0) continue   ! the argument is used only to make the interface explicit
+  call diag_abort('UNSUPPORTED', EXIT_UNSUPPORTED, 'yl_adapter_entry_stub', &
+       'this binary was built without the adapter entry; a multi-block analysis on ' // &
+       'the adapter path is not available here.')
+end subroutine yl_adapter_block_override

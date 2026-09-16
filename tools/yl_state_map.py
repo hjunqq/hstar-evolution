@@ -128,9 +128,9 @@ SNAPSHOT_FILES = ["control.json", "mesh.sha256", "dof.sha256", "groups.json", "m
 SKIP_TARGETS = {"title_skip", "empty_section", "unused_switch"}
 CHECKPOINT_ID = re.compile(r"^(model_ready|phase_ready\(\d+\)|increment_ready\(\d+,\d+\)|restart_ready)$")
 FIELD_ID = re.compile(r"^[a-z][a-z0-9]*(\.[A-Za-z0-9_]+)+$")
-FIELD_TOP = re.compile(r"^(case|mesh|materials|sections|amplitudes|interactions|steps\d+|solver|runtime|derived|control|output)$")
+FIELD_TOP = re.compile(r"^(case|mesh|materials|sections|amplitudes|interactions|steps\d+|solver|surfaces|runtime|derived|control|output)$")
 # plan regex plus an optional `[]` after the first segment (schema examples use materials[].E)
-OWNER = re.compile(r"^(ProblemState\.(case|mesh|materials|sections|amplitudes|interactions|steps\[\d+\]|solver)(\[\])?(\.|$)|RuntimeState(\.|$)|derived$|not_migrated$)")
+OWNER = re.compile(r"^(ProblemState\.(case|mesh|materials|sections|amplitudes|interactions|steps\[\d+\]|solver|surface_edges)(\[\])?(\.|$)|RuntimeState(\.|$)|derived$|not_migrated$)")
 SITE = re.compile(r"^([A-Za-z_0-9.]+\.[fF]90):(\d+)$")
 # Derive-rule vocabulary (closed). Single definition: the map header of docs/m2/state-field-map.toml
 # documents these kinds in prose, and this set is what enforces them.
@@ -145,11 +145,11 @@ DTYPES = {"i32", "i64", "f64", "str", "bool"}
 # acceptance criterion IS bit-exactness. Converting would insert a rounding step between
 # the author's number and the solver for no physical gain. The authoring contract states
 # the unit on the field instead.
-UNITS = {"1", "id", "m", "N", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
+UNITS = {"1", "id", "m", "N", "N/m3", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
 DETERMINISM = {"deterministic", "uninitialized", "pointer", "order_dependent"}
 COMPARE_RULES = {"exact", "abs_tol", "rel_tol", "hash", "ignore"}
 OWNER_BUCKETS = {"derived", "not_migrated"}   # owners that are labels, not paths (rule 21)
-OWNER_GROUPS = ["case", "mesh", "materials", "sections", "amplitudes", "interactions", "steps[0]", "solver",
+OWNER_GROUPS = ["case", "mesh", "materials", "sections", "amplitudes", "interactions", "steps[0]", "solver", "surface_edges",
                 "RuntimeState", "derived", "not_migrated"]
 DECL = re.compile(r"^\s*(integer|real|character|logical|complex|double\s+precision|type\s*\()", re.I)
 DECL_PREFIX = re.compile(r"^\s*(integer|real|character|logical|complex|double\s+precision|type)\s*(\([^)]*\))?\s*", re.I)

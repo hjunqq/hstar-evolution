@@ -590,10 +590,11 @@ if [ "$TARGET" = authoring ]; then
     "$OUT/yl_authoring_test" "$ROOT/cases/golden/plasticity/mini_mc/modern/case.toml" \
         "$OUT/scratch" --plastic 2>&1 | tee -a "$LOG"
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (mini_mc)" >&2; exit 6; }
-    # The .loa family's counter-examples need a deck with a named surface and a pressure
-    # load. wall_reservoir is that deck, and it is deliberately NOT executable -- the
-    # refusals for its two steps and its pressure load live in the mapping layer.
-    "$OUT/yl_authoring_test" "$ROOT/cases/authoring/wall_reservoir/case.toml" \
+    # The .loa family's counter-examples need a deck with two steps, a named surface and
+    # a pressure load. That is now a GOLDEN case rather than a fixture: the same file the
+    # modern gate drives bit-exactly is the one the counter-examples mutate, so a rule
+    # that stops matching reality fails here before it fails there.
+    "$OUT/yl_authoring_test" "$ROOT/cases/golden/loads_2d/wall_reservoir/modern/case.toml" \
         "$OUT/scratch" --loa 2>&1 | tee -a "$LOG"
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (wall_reservoir)" >&2; exit 6; }
     T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -653,6 +654,7 @@ if [ "$TARGET" = solver ] || [ "$TARGET" = solver-adapter ]; then
                       src/adapter/yl_adapter_fem90.f90
                       src/adapter/yl_adapter_harvest.f90
                       src/adapter/yl_adapter_driver.f90
+                      src/adapter/yl_adapter_session.f90
                       src/authoring/yl_authoring_toml.f90
                       src/authoring/yl_authoring_keys.f90
                       src/authoring/yl_authoring_report.f90
@@ -803,7 +805,8 @@ CASES_BEFORE=$(cases_sig)
                        src/adapter/yl_adapter_temper.f90
                        src/adapter/yl_adapter_fem90.f90
                        src/adapter/yl_adapter_harvest.f90
-                       src/adapter/yl_adapter_driver.f90)
+                       src/adapter/yl_adapter_driver.f90
+                       src/adapter/yl_adapter_session.f90)
         RB_MAIN=src/adapter/yl_adapter_bridge_test.f90
         RB_EXTRA_RUN=(src/adapter/yl_adapter_dialect_test.f90
                       src/adapter/yl_adapter_shadow.f90)

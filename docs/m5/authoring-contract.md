@@ -141,7 +141,8 @@ legacy nblks = count(step)          legacy nstep = step.controls.substeps
 | `steps[0].load_mode` | `"LOAD"` | 白名单只有一种加载模式 |
 | `steps[0].output.field.*`（20 个开关） | 由 `[output].field` 展开 | 作者选“要哪些场”，开关是它的编码 |
 | `steps[0].output.frequency.*` | 1 / 1 | 单增量下只有一个输出时刻 |
-| `steps[0].activation[].*` | 全激活 | 施工阶段不在白名单内（M6.7） |
+| ~~`steps[0].activation[].*`~~ | **已移出本表**（2026-09-16） | 「这一步里有哪些单元集」正是分期分析的全部内容，不能猜；由 `step.active_elsets` 写明 |
+| ~~`control.glb.uinitial`~~ | **已移出本表**（2026-09-16） | 「这一步从零开始还是接着上一步」同理；由 `step.reset_state` 写明 |
 | `sections[].class` / `formulation` / `special` | 由 `element` + `formulation` 决定 | 是同一物理选择的编码 |
 | `sections[].algorithm` / `stiffness_kind` / `stress_recovery` | 0 / 1 / 1 | 数值细节，白名单内唯一取值 |
 | `sections[].layer` / `liquefaction` / `uplift` / `local_axes` | 0 / 0 / 0 / 0 | 相应能力不在白名单内 |
@@ -173,13 +174,15 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
   `pressure` 需要 `surface` / `amplitude` / `distribution`，且
   `distribution.type = "linear_in_coordinate"`、`distribution.axis = "y"`
 - `surface.kind = "edge2"`（每行恰好 `[n1, n2, element]`）
-- `amplitude.type ∈ {"linear", "waterlevel"}`
+- `amplitude.type = "linear"`。`waterlevel` 在 2026-09-15 曾进入白名单，2026-09-16 又被移出：**没有任何 golden 算例使用它**，而白名单里一条没有算例支撑的能力就是一句没有证据的断言。它的线格式差异仍记录在 §8.2，等第一个真实算例进来再放回
 - `solver.linear = "profile"`
 - `output.format = "gid"`；`output.field ⊆ {"u","s","ep"}`；`output.stress_averaging ∈ {"none","smoothed","direct"}`
   （`"smoothed"` 与 `"direct"` 在本切片上不可区分：Output.f90:5128-5129 的分支只在
   `nnode==8 .and. ndimn==3` 下成立，2-D Q4 走同一条 else 分支。实测而非推断——改成
   `"smoothed"` 仍严格复现冻结参考，改成 `"none"` 应力偏离 1.5e5、位移不变。）
-- `[[step]]` 恰好一个
+- `[[step]]` 一个或多个（2026-09-16）。每个 step 必须写 `active_elsets` 与 `reset_state`
+- 各 step 的边界条件必须**完全相同**：`runtime.dof.fixed_mask` 只提交一次（取 step 1），   逐步变化的约束会静默地整场沿用 step 1 —— 由 `commit_step_invariants` 按名拒绝
+- 每个 step 恰好一个 `type = "gravity"` 荷载：ProblemState 的每步只有一份重力记录（legacy 的 `gravy` / `factg` / `tcurvegravity`）
 
 白名单之外的每一条都要有**反例**，与 M4 方言门同一形态：一行一个反例，
 断言该行触发、且**只有该行触发**。
@@ -301,3 +304,54 @@ legacy 的「荷载」本质上是一个**按块推进的状态机**，而不是
 **代价要写清楚**：legacy 允许两块之间「只改一点点」而文件里仍重复整段；
 现代输入里每个 step 都要把自己那一份荷载写全。这是有意的——
 **隐式继承上一块的状态，正是 legacy 输入最难审阅的性质。**
+
+## 9. 多分析步：顺序、继承与作用范围
+
+`[[step]]` 从一开始就是表数组（§2），2026-09-16 起它真的可以有多个。一个 step 就是 legacy
+的一个 block，映射公式在 §2.1 冻结。这一节写的是**步与步之间**的三件事，因为「能读进去」
+从来不是这里的难点——难点是它们之间的关系是否显式。
+
+### 9.1 顺序
+
+声明顺序就是执行顺序，`[[step]]` 的第 k 个就是 legacy 的第 k 个 block。没有别的排序键，
+也没有名字引用：step 之间不互相引用，所以不需要名字定位。
+
+### 9.2 继承与重置，一个显式开关
+
+```toml
+reset_state = false   # 接着上一步的位移继续
+reset_state = true    # 这一步从零位移开始
+```
+
+legacy 是 `uinitial(iblks)`：置 1 时 `Fem.f90:1704-1708` 把 `result_zero` 与两个结果缓冲清零。
+它原先在默认表里钉成 0，那在只有一步时是恒真的；一旦有第二步，**「这一步继承什么」就是
+分期分析的核心问题**，于是它移出默认表变成必填项。
+
+这也是本契约对「隐式状态机」的一贯答复：legacy 里步与步的关系藏在一个整数数组里，
+现代输入里它是每一步自己的一行字。
+
+### 9.3 荷载与单元集的作用范围
+
+```toml
+active_elsets = ["foundation"]            # 第 1 步：只有基础
+active_elsets = ["foundation", "dam"]     # 第 2 步：坝体就位
+```
+
+对应 legacy 的 `APPEAR_PROCESS(1:ngroup, iblks)`。**没有列出的单元集在这一步里不存在**——
+不是荷载为零，是不参与。legacy 自己还会从相邻两块推出 `-1`（「上一步有、这一步撤除」），
+那一步推导留在 legacy 里，现代侧只提供 0/1 矩阵。
+
+荷载的作用范围同理由**每步自己的 `[[step.load]]` 列表**决定：第 1 步没有 `pressure` 对象，
+它就没有面荷载；第 2 步写了，它才有。legacy 在这里的形态是每块重读一遍 `.loa` 尾部，
+空的那块写 `edge_load_group = 0`。
+
+### 9.4 这一版**不**支持、且按名拒绝的
+
+| 想做的事 | 为什么拒绝 | 判决落在哪 |
+|---|---|---|
+| 各步边界条件不同 | `runtime.dof.fixed_mask` 只提交一次（取 step 1），逐步变化会静默整场沿用 step 1 | `commit_step_invariants`，`UNSUPPORTED` |
+| 一步里两个 `gravity` | ProblemState 每步只有一份重力记录 | `executable_shape`，`UNSUPPORTED` |
+| 各步材料不同（legacy `MATNO_PROCESS`） | 契约没有这个键；`matno_process` 由每步的 section 材料填出，因而恒定 | 无键即无法表达 |
+
+前两条都有反例；第三条没有，因为**没有键可以写错**——这不是一道门禁，是一处表达能力的缺口，
+按 ADR-0008 §3 如实登记而不是假装成拒绝。

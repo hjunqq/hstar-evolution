@@ -371,8 +371,10 @@ endif  !kpload=1  20210502
     allocate(edges(nedge))
     tedge=0
     do while(tedge<nedge)
-       read(loadunit,*)text                               !4
-       read(loadunit,*)sedge,nnode,index,vdimn  !20211028
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)text                               !4
+       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_edge_chunk_title,tedge)
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)sedge,nnode,index,vdimn  !20211028
+       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_edge_chunk_header,tedge)
        lineload=lineload+2
        do iedge=1,sedge
           tedge=tedge+1
@@ -380,10 +382,39 @@ endif  !kpload=1  20210502
           edges(tedge)%index=index
           edges(tedge)%vdimn=vdimn !20211028
           allocate(edges(tedge)%lnode(nnode))
-          read(loadunit,*)i0,edges(tedge)%lnode(1:nnode),edges(tedge)%aelem
+          read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)i0,edges(tedge)%lnode(1:nnode),edges(tedge)%aelem
+          call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_edge_nodes,tedge)
         !if(vdimn==3)write(7,*)'tedge=',tedge,'iedge=',iedge
           !print *, i0,edges(tedge)%lnode(1:nnode),edges(tedge)%aelem
           lineload=lineload+1
+          call edge_dofs(tedge)
+          !write(7,*)'tedge=',tedge,'aelem=',aelem,'ldofe=',edges(tedge)%ldofe
+          !write(7,*)'nnode=',nnode,'igroup=',igroup,'nfdof=',nfdof,'ipoin=',ipoin,'jpoin=',jpoin
+          !write(7,*)'inode=',inode,'jnode=',jnode
+       end do                                        !3
+    end do                                               !4
+
+    call edge_geometry()
+ 
+22  continue
+    print *, 'iblks=',iblks,'lineload=',lineload
+
+    END SUBROUTINE external_load_1
+
+    !> One edge's element-local degree-of-freedom map (extracted from external_load_1,
+    !> 2026-09-16, unchanged line for line).
+    !>
+    !> WHY IT IS A SUBROUTINE NOW: the modern input path fills `edges(:)%lnode/%aelem`
+    !> from ProblemState and then needs exactly this, and the alternative -- writing a
+    !> second implementation of the same loop on the modern side -- is the mistake this
+    !> build has already paid for twice (R31, the jacob 1-ULP divergence). Reuse means
+    !> calling legacy's own code, so legacy's own code moved here and both sides call it.
+    subroutine edge_dofs(tedge)
+    integer(ink) tedge
+    integer(ink) aelem,indey,nnode,nnode_f,ndofn_f,igroup,nfdof,inode,jnode,idofn
+    integer(ink) ipoin,jpoin,i1,i2
+
+    nnode=edges(tedge)%nnode
           aelem=edges(tedge)%aelem
           indey=element(aelem)%index
           nnode_f=elkn(indey)%el_field(1)%nnode_f
@@ -403,12 +434,18 @@ endif  !kpload=1  20210502
                 edges(tedge)%ldofe(i1)=i2
              end do                    ! 12
           end do                             !2
-          
-          !write(7,*)'tedge=',tedge,'aelem=',aelem,'ldofe=',edges(tedge)%ldofe
-          !write(7,*)'nnode=',nnode,'igroup=',igroup,'nfdof=',nfdof,'ipoin=',ipoin,'jpoin=',jpoin
-          !write(7,*)'inode=',inode,'jnode=',jnode
-       end do                                        !3
-    end do                                               !4
+
+    end subroutine edge_dofs
+
+    !> The Gauss-point geometry of every declared edge (extracted from external_load_1,
+    !> 2026-09-16, unchanged line for line). Runs once, after the whole edge table is
+    !> known, exactly where it ran before. Same reuse argument as edge_dofs.
+    subroutine edge_geometry()
+    integer(ink) iedge,vdimn,index,nnode,edimn,order_int,ngaus,ig,inode
+    integer(ink),allocatable::lnode(:)
+    real   (irk) aa,weigp,djacb
+    real   (irk),allocatable::a3(:),shape(:),elcod(:,:),deriv(:,:),elcod0(:,:), &
+                              cartd(:,:),s(:,:),rr(:,:),xjaci(:,:)
 
     do iedge=1,nedge
        vdimn=edges(iedge)%vdimn  !20211031
@@ -454,7 +491,7 @@ endif  !kpload=1  20210502
           s(edimn+1,:)=s(edimn+1,:)/aa
           a3=s(edimn+1,:)
 
-          call cosc(edimn+1,a3,elcod0,elcod,rr)
+          call edge_cosc(edimn+1,a3,elcod0,elcod,rr)
           call jacob(iedge, edimn, nnode,elcod0,deriv,cartd, djacb,xjaci)
           edges(iedge)%edgegaus(ig)%djacb=djacb*weigp
           edges(iedge)%edgegaus(ig)%cartd=cartd
@@ -466,13 +503,12 @@ endif  !kpload=1  20210502
 
     end do           !!iedge
 
- 
-22  continue
-    print *, 'iblks=',iblks,'lineload=',lineload
+    end subroutine edge_geometry
 
-    contains
-
-    subroutine cosc(idm,a3,elcod0,elcod,rr)
+    !> external_load_1's internal `cosc`, moved to module level so edge_geometry can call
+    !> it. Body unchanged; RENAMED because Stiff.f90 has a `cosc` of its own and a public
+    !> one here collides with it in every scope that uses applied_load.
+    subroutine edge_cosc(idm,a3,elcod0,elcod,rr)
     integer(ink) idm,idj,nnode,ind
     real   (irk) a3(:),elcod0(:,:),elcod(:,:),rr(:,:)
 
@@ -485,10 +521,148 @@ endif  !kpload=1  20210502
        end do
     end do
 
-    end subroutine cosc
+    end subroutine edge_cosc
+
+    !> One edge-load group: turn its distribution into nodal pressures and assemble the
+    !> edge load vector (extracted from external_load_2, 2026-09-16, unchanged line for
+    !> line, including the `press` read on the `water == 0` branch -- that branch reads
+    !> the file and is unreachable from the modern side, which has no key for a per-node
+    !> pressure table, so it stays where legacy put it).
+    !>
+    !> WHY IT IS A SUBROUTINE NOW: the modern input path has the same five distribution
+    !> numbers in ProblemState and needs exactly this arithmetic. Writing it again on the
+    !> modern side would be a second implementation of a formula legacy already has, and
+    !> two same-meaning implementations of one formula is precisely what produced the
+    !> 1-ULP cartd divergence (docs/m6/material-domain.md section 7). The `water == 0`
+    !> branch is NOT reachable from the modern side: the contract has no key for a
+    !> per-node pressure table, so that path stays legacy-only and keeps its read.
+    subroutine edge_load_group_apply(begin_edge,end_edge,itcurve,water,code_load, &
+                                     cor0,cor1,p0,p1,fact,cor01,cor11,p01,p11,fact1, &
+                                     ipegroup,jedge)
+    integer(ink) begin_edge,end_edge,itcurve,water,code_load,ipegroup,jedge
+    real   (irk) cor0,cor1,p0,p1,fact,cor01,cor11,p01,p11,fact1
+    integer(ink) iedge,index,nnode,ngaus,edimn,aelem,vdimn,ndofn,nevab,inode,ig,i0,idofn
+    real   (irk) dcor,corx,rn,djacb
+    real   (irk),allocatable::press(:,:),shape(:),rr(:,:),xload(:),edload(:)
+
+       do iedge=begin_edge,end_edge
+          jedge=jedge+1
+          edgeload(jedge)%iedge=iedge
+          edgeload(jedge)%idelgroup=ipegroup  !2013/3/18
+          
+          edgeload(jedge)%itcurve=itcurve
+          index=edges(iedge)%index
+          nnode=edges(iedge)%nnode
+          ngaus=edges(iedge)%ngaus
+          edimn=elkn(index)%ndimn
+          aelem=edges(iedge)%aelem
+          vdimn=edges(iedge)%vdimn  !20211031
+             
+          ndofn=ndimn
+          allocate(press(edimn+1,nnode),shape(nnode),rr(edimn+1,edimn+1),xload(edimn+1))
+          allocate(edload(ndofn*nnode))
+          allocate(edgeload(jedge)%edload(ndofn*nnode))
+
+          edload=0.0
+!! special for water_pressure
+          if (water/=0) then
+               press=0.0
+  if(vdimn/=3) then  !常规水压力计算  !20211031 
+             do inode=1,nnode
+                if(vdimn==0)then
+			    corx=coord(abs(water),edges(iedge)%lnode(inode))
+                else
+			    corx=coord(3,edges(iedge)%lnode(inode))
+                endif
+                if (water>0) then
+                   dcor=cor0-corx
+                   if (dcor.le.0.)dcor=0.
+                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
+                else
+                   dcor=corx-cor0
+                   if (dcor.le.0.)dcor=0.
+                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
+                endif
+				if (cor0>=cor1)then
+				   if(corx>(cor0+0.01).or.corx<(cor1-0.01))press(ndimn,inode)=0.
+				else
+				   if(corx>(cor1+0.01).or.corx<(cor0-0.01))press(ndimn,inode)=0.
+				endif
+             end do
+  else  !隧洞按规范计算侧向和垂直向水土压力
+       if(vdimn/=abs(water))cycle
+       rn=edges(iedge)%edgegaus(1)%rotation(ndimn,3)
+       if(abs(rn-1)<.01)then
+                do inode=1,nnode
+			    corx=coord(1,edges(iedge)%lnode(inode))
+                if (water>0) then
+                   dcor=cor0-corx
+                   if (dcor.le.0.)dcor=0.
+                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
+                else
+                   dcor=corx-cor0
+                   if (dcor.le.0.)dcor=0.
+                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
+                endif
+				if (cor0>=cor1)then
+				   if(corx>(cor0+0.01).or.corx<(cor1-0.01))press(ndimn,inode)=0.
+				else
+				   if(corx>(cor1+0.01).or.corx<(cor0-0.01))press(ndimn,inode)=0.
+				endif
+             end do
+
+       elseif(abs(rn+1)<.01)then
+                do inode=1,nnode
+			    corx=coord(1,edges(iedge)%lnode(inode))
+                if (water>0) then
+                   dcor=cor01-corx
+                   if (dcor.le.0.)dcor=0.
+                   press(ndimn,inode)=-(p01+dcor/(cor01-cor11)*(p11-p01))*fact1
+                else
+                   dcor=corx-cor01
+                   if (dcor.le.0.)dcor=0.
+                   press(ndimn,inode)=-(p01+dcor/(cor01-cor11)*(p11-p01))*fact1
+                endif
+				if (cor01>=cor11)then
+				   if(corx>(cor01+0.01).or.corx<(cor11-0.01))press(ndimn,inode)=0.
+				else
+				   if(corx>(cor11+0.01).or.corx<(cor01-0.01))press(ndimn,inode)=0.
+				endif
+             end do
+
+       endif
+ endif
+             
+             
+!! end of special considering
+          else
+             press=0.
+             read(loadunit,*)i0,(press(edimn+1,inode),inode=1,nnode)   !(press(1:edimn+1,inode),inode=1,nnode)
+             lineload=lineload+1
+          endif
+          do ig=1,ngaus
+             djacb=edges(iedge)%edgegaus(ig)%djacb
+             shape=edges(iedge)%edgegaus(ig)%shape
+             rr=edges(iedge)%edgegaus(ig)%rotation
+             do i0=1,edimn+1
+                xload(i0)=sum(shape(1:nnode)*press(i0,1:nnode))
+             end do
+             xload=matmul(rr,xload)
+             do inode=1,nnode
+                idofn=(inode-1)*ndofn
+                edload(idofn+1:idofn+edimn+1)=edload(idofn+1:idofn+edimn+1)+        &
+                xload*djacb*shape(inode)
+             end do
+          end do
+          edgeload(jedge)%edload=edload
+          
+          !write(7,*)'jedge=',jedge,'edload=',edgeload(jedge)%edload
 
 
-    END SUBROUTINE external_load_1
+          deallocate(press,shape,rr,xload,edload)
+       end do !iedge
+
+    end subroutine edge_load_group_apply
     
      subroutine find_pload_points(icpoin,xyz)  !20210502
 integer(ink) ielem,jgroup,i0,jpoin,idimn,icpoin,inout,iiter,inode, &
@@ -764,12 +938,14 @@ end subroutine element_in_out
     allocate(gpwater(delgroup)) !2013/3/18
     jedge=0
     do ipegroup=1,delgroup
-       read(loadunit,*)begin_edge,end_edge,itcurve,water,code_load
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)begin_edge,end_edge,itcurve,water,code_load
+       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_edge_load_group,ipegroup)
        gpwater(ipegroup)%water=water    !2013/3/18
        lineload=lineload+1
        !!
        if (water/=0) then
-          read(loadunit,*)cor0,cor1,p0,p1,fact
+          read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)cor0,cor1,p0,p1,fact
+          call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_2_edge_load_distribution,ipegroup)
            gpwater(ipegroup)%cor0=cor0     !2013/3/18
            gpwater(ipegroup)%cor1=cor1     !2013/3/18
            gpwater(ipegroup)%p0=p0         !2013/3/18
@@ -784,122 +960,9 @@ end subroutine element_in_out
            endif
 
        !!
-       do iedge=begin_edge,end_edge
-          jedge=jedge+1
-          edgeload(jedge)%iedge=iedge
-          edgeload(jedge)%idelgroup=ipegroup  !2013/3/18
-          
-          edgeload(jedge)%itcurve=itcurve
-          index=edges(iedge)%index
-          nnode=edges(iedge)%nnode
-          ngaus=edges(iedge)%ngaus
-          edimn=elkn(index)%ndimn
-          aelem=edges(iedge)%aelem
-          vdimn=edges(iedge)%vdimn  !20211031
-             
-          ndofn=ndimn
-          allocate(press(edimn+1,nnode),shape(nnode),rr(edimn+1,edimn+1),xload(edimn+1))
-          allocate(edload(ndofn*nnode))
-          allocate(edgeload(jedge)%edload(ndofn*nnode))
-
-          edload=0.0
-!! special for water_pressure
-          if (water/=0) then
-               press=0.0
-  if(vdimn/=3) then  !常规水压力计算  !20211031 
-             do inode=1,nnode
-                if(vdimn==0)then
-			    corx=coord(abs(water),edges(iedge)%lnode(inode))
-                else
-			    corx=coord(3,edges(iedge)%lnode(inode))
-                endif
-                if (water>0) then
-                   dcor=cor0-corx
-                   if (dcor.le.0.)dcor=0.
-                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
-                else
-                   dcor=corx-cor0
-                   if (dcor.le.0.)dcor=0.
-                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
-                endif
-				if (cor0>=cor1)then
-				   if(corx>(cor0+0.01).or.corx<(cor1-0.01))press(ndimn,inode)=0.
-				else
-				   if(corx>(cor1+0.01).or.corx<(cor0-0.01))press(ndimn,inode)=0.
-				endif
-             end do
-  else  !隧洞按规范计算侧向和垂直向水土压力
-       if(vdimn/=abs(water))cycle
-       rn=edges(iedge)%edgegaus(1)%rotation(ndimn,3)
-       if(abs(rn-1)<.01)then
-                do inode=1,nnode
-			    corx=coord(1,edges(iedge)%lnode(inode))
-                if (water>0) then
-                   dcor=cor0-corx
-                   if (dcor.le.0.)dcor=0.
-                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
-                else
-                   dcor=corx-cor0
-                   if (dcor.le.0.)dcor=0.
-                   press(ndimn,inode)=-(p0+dcor/(cor0-cor1)*(p1-p0))*fact
-                endif
-				if (cor0>=cor1)then
-				   if(corx>(cor0+0.01).or.corx<(cor1-0.01))press(ndimn,inode)=0.
-				else
-				   if(corx>(cor1+0.01).or.corx<(cor0-0.01))press(ndimn,inode)=0.
-				endif
-             end do
-
-       elseif(abs(rn+1)<.01)then
-                do inode=1,nnode
-			    corx=coord(1,edges(iedge)%lnode(inode))
-                if (water>0) then
-                   dcor=cor01-corx
-                   if (dcor.le.0.)dcor=0.
-                   press(ndimn,inode)=-(p01+dcor/(cor01-cor11)*(p11-p01))*fact1
-                else
-                   dcor=corx-cor01
-                   if (dcor.le.0.)dcor=0.
-                   press(ndimn,inode)=-(p01+dcor/(cor01-cor11)*(p11-p01))*fact1
-                endif
-				if (cor01>=cor11)then
-				   if(corx>(cor01+0.01).or.corx<(cor11-0.01))press(ndimn,inode)=0.
-				else
-				   if(corx>(cor11+0.01).or.corx<(cor01-0.01))press(ndimn,inode)=0.
-				endif
-             end do
-
-       endif
- endif
-             
-             
-!! end of special considering
-          else
-             press=0.
-             read(loadunit,*)i0,(press(edimn+1,inode),inode=1,nnode)   !(press(1:edimn+1,inode),inode=1,nnode)
-             lineload=lineload+1
-          endif
-          do ig=1,ngaus
-             djacb=edges(iedge)%edgegaus(ig)%djacb
-             shape=edges(iedge)%edgegaus(ig)%shape
-             rr=edges(iedge)%edgegaus(ig)%rotation
-             do i0=1,edimn+1
-                xload(i0)=sum(shape(1:nnode)*press(i0,1:nnode))
-             end do
-             xload=matmul(rr,xload)
-             do inode=1,nnode
-                idofn=(inode-1)*ndofn
-                edload(idofn+1:idofn+edimn+1)=edload(idofn+1:idofn+edimn+1)+        &
-                xload*djacb*shape(inode)
-             end do
-          end do
-          edgeload(jedge)%edload=edload
-          
-          !write(7,*)'jedge=',jedge,'edload=',edgeload(jedge)%edload
-
-
-          deallocate(press,shape,rr,xload,edload)
-       end do !iedge
+       call edge_load_group_apply(begin_edge,end_edge,itcurve,water,code_load, &
+                                  cor0,cor1,p0,p1,fact,cor01,cor11,p01,p11,fact1, &
+                                  ipegroup,jedge)
     end do !ipegroup
 
     ! get time curve for each group in the block

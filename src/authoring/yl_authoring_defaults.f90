@@ -23,7 +23,7 @@ module yl_authoring_defaults
 
   use yl_problem_optional, only: opt_set
   use yl_problem_types, only: material_t, section_t, solver_t, boundary_t, controls_t,       &
-                              load_t, output_t, activation_t, interactions_t
+                              load_t, output_t, activation_t, interactions_t, surface_edge_t
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
 
@@ -33,6 +33,7 @@ module yl_authoring_defaults
   public :: default_material, default_section, default_solver, default_boundary
   public :: default_controls, default_load, default_output, default_activation
   public :: default_interactions, default_load_mode, set_stress_averaging
+  public :: default_surface_edge
   public :: stress_averaging_code
   public :: default_residue, default_existence
   public :: element_kind_of, nodes_per_element, formulation_code, amplitude_code
@@ -145,6 +146,14 @@ contains
     ! it is the absence of one, and the deck that HAS strength reduction names the curve.
     call opt_set(l%strength_reduction, 0_int32)
   end subroutine default_load
+
+  !> An edge with nothing decided. Every one of its four fields is stated by the author
+  !> or fixed by the face's `kind`, so there is no default value here to justify -- the
+  !> routine exists so the map layer never hands the builder a partly-initialised record.
+  subroutine default_surface_edge(e)
+    type(surface_edge_t), intent(out) :: e
+    if (allocated(e%nodes)) deallocate (e%nodes)
+  end subroutine default_surface_edge
 
   !> Every GiD switch off; `enable_output_field` turns on what the author asked for.
   subroutine default_output(o)

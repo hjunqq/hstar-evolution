@@ -1208,9 +1208,9 @@ contains
     ! yl_problem_profile.f90 where that row was removed, and V26, which is what made the
     ! removal safe. "A model with no sections at all" is not a capability question either
     ! -- it is a missing collection, which V8 reports during validate with the right code.
-    if (allocated(state%steps)) then
-      call gate_size(errors, 'analysis.step_count', 'steps', size(state%steps))
-    end if
+    ! The step-count gate was here. It went with its capability row (2026-09-16): the
+    ! step loop is general now, and what this build cannot do across steps is refused by
+    ! name elsewhere rather than by a number here.
   end subroutine capability_gate
 
   subroutine gate_int(errors, item, object, field, value, idx)
