@@ -102,16 +102,6 @@ migration_phase = "M7"
 status = "reference-frozen"
 verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
 reference = "reference/"
-# The modern path RUNS this deck and produces the right shape (4 result blocks, 552
-# values) but does not yet reproduce the reference: step 1 is bit-exact, step 2 is not.
-# Measured, not guessed -- the staged group's nodes come out at exactly zero in step 2,
-# and |tofor| in step 2 equals step 1's, so the block carries no new load. Everything
-# upstream of that agrees between the two paths, checked value by value: the edge table,
-# the edge Gauss geometry, the assembled edge loads (bit-identical), the gravity curves,
-# appear_process, matno_process, uinitial and the prescribed sets. The gate therefore
-# covers this case for the LEGACY path only, by name, until that is closed -- see
-# docs/m7/loa-family-report.md section 6.
-modern_gate = false
 # Chosen by measuring, not by taste: every two-block 2-D deck in the job corpus stages a
 # group (APPEAR_PROCESS = 1 0 / 1 1), so staging is not an extra this case drags in -- it
 # is WHY these decks have two blocks. This is the smallest of them: 46 nodes, 32 elements,

@@ -110,7 +110,8 @@ module yl_runtime_commit
                         restart, relis, ADINA, runblks, npoinb, nlayer, block_stab, nbackf,     &
                         ebody, ninit, state_change, Bparameter, stab_matde, nlinks, nsmat,      &
                         ntrans
-  use prescribed, only: prescrib, ndofix, freedom_prescribe, nfixsets
+  use prescribed, only: prescrib, ndofix, freedom_prescribe, nfixsets,                &
+                        prescribe_free_active
   use applied_load, only: tcurves, ntcurve, time_curve, factg, tcurvegravity, gravy,          &
                           nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload,   &
                           edges, edgeload, gpwater, edge_dofs, edge_geometry,                  &
@@ -1660,6 +1661,8 @@ contains
     type(problem_errors_t), intent(inout) :: errors
 
     integer :: ip, n, total, jedge
+    integer(int32) :: prescribed_mask
+    logical :: found
     real(irk) :: zero
 
     if (.not. allocated(problem%steps)) return
@@ -1668,14 +1671,30 @@ contains
       return
     end if
 
-    ! --- the prescribed degrees of freedom, restored ---------------------------------
-    ! legacy calls `prescrib_set` at the top of EVERY block, which rebuilds iffix and
-    ! fixed from the file. Reading the file again is not the point -- RESTORING them is:
-    ! the solve writes into both while it runs, and a second block that inherits the used
-    ! copies is not the same analysis. The values come from RuntimeState, unchanged since
-    ! the first commit, so this is transport and not a second derivation.
-    iffix = int(runtime%dof%fixed_mask, ink)
-    fixed = real(runtime%dof%prescribed_value, irk)
+    ! --- the prescribed degrees of freedom, re-derived for THIS block ----------------
+    ! legacy calls `prescrib_set` at the top of every block and the first thing it does is
+    ! rebuild iffix from the CURRENT `appear`: everything frozen, then freed for the
+    ! elements of the groups this block contains. That is not bookkeeping on a staged
+    ! analysis -- it is what unfreezes the group that appears in block 2.
+    !
+    ! RuntimeState's `fixed_mask` cannot serve here: it is derived once, from steps(1)
+    ! (yl_runtime_build), so reusing it would leave block 2's new group fixed and its
+    ! nodes at exactly zero. That is not a hypothesis -- it is what this build did until
+    ! 2026-09-16, measured on loads_2d.wall_reservoir.
+    !
+    ! So legacy's own loop is called, extracted for the purpose (Prescrib.f90,
+    ! `prescribe_free_active`), and the PRESCRIBED entries are then re-applied from the
+    ! mask -- which is legitimate because a deck whose prescribed sets differ between
+    ! steps is refused by name (commit_step_invariants).
+    call contract_expect_int('constraint.mask_prescribed_base', prescribed_mask, found)
+    if (.not. found) prescribed_mask = 1_int32
+    call prescribe_free_active()
+    do ip = 1, size(iffix)
+      if (runtime%dof%fixed_mask(ip) == prescribed_mask) then
+        iffix(ip) = int(runtime%dof%fixed_mask(ip), ink)
+        fixed(ip) = real(runtime%dof%prescribed_value(ip), irk)
+      end if
+    end do
 
     ! --- gravity: legacy re-reads gravy / factg / tcurvegravity per block -------------
     gravy = real(opt_or_real(problem%steps(iblks)%load%gravity%magnitude), irk)

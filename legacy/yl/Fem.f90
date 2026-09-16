@@ -1709,7 +1709,7 @@
             if(allocated(result_first))result_first=0.0
             if(allocated(result_second))result_second=0.0
         endif
-        print *,'a1'; if (yl_adapter_mode .and. iblks > 1) call yl_adapter_block_override(iblks)
+        print *,'a1'
 
         appear_p=appear
         do igroup=1,ngroup
@@ -1718,7 +1718,7 @@
             if(appear_process(igroup,iblks)==0.and.              &
                 appear_process(igroup,iblks-1)==1)                &
                 appear(igroup)=-1
-        end do
+        end do; if (yl_adapter_mode .and. iblks > 1) call yl_adapter_block_override(iblks)
 
         !20231215YL
         if(restart==0) then !20231008

@@ -1,9 +1,9 @@
 {
  "manifest_version": 1,
- "generated_at": "2026-09-16T13:38:02+00:00",
+ "generated_at": "2026-09-16T14:34:37+00:00",
  "root": "legacy",
  "file_count": 39,
- "total_bytes": 55720460,
+ "total_bytes": 55721634,
  "excludes": [
   "BASELINE.md",
   "source-manifest.json"
@@ -36,7 +36,7 @@
   {
    "path": "yl/Fem.f90",
    "bytes": 725702,
-   "sha256": "af9cabceaf5cb7aeaa82e67997ea619dd5a1938cd2b341b7854c1f59527380f2"
+   "sha256": "ff794ba13ee5ff875a3ce200001f8c1b3c2cbdf83f6d8de20fac2b7638f22f5e"
   },
   {
    "path": "yl/Global.f90",
@@ -70,8 +70,8 @@
   },
   {
    "path": "yl/Prescrib.f90",
-   "bytes": 19988,
-   "sha256": "6b396345f58e45a33a926a3f94db88bb8465e5273b8f711f34b2d84564221438"
+   "bytes": 21162,
+   "sha256": "2f926f655de23e46aea5ffa4be7ff41c702ef6b00ab16ce8e1fbfd6e7c64a9ba"
   },
   {
    "path": "yl/Residu.f90",

@@ -63,9 +63,14 @@ def cases() -> list[tuple[str, Path]]:
     out = []
     for c in doc.get("case", []):
         d = ROOT / "cases" / c["path"]
+        # `modern_gate = false` in the manifest excludes a case from this gate. It is
+        # honoured, and PRINTED on every run rather than skipped quietly -- an exclusion
+        # nobody sees is how a gate stops covering what people think it covers. No case
+        # carries it at present; it was used for one day while loads_2d.wall_reservoir's
+        # second step was being closed.
         if c.get("modern_gate") is False:
-            print(f"  -- {c['id']:<28} modern gate OFF by manifest: "
-                  f"{'the modern path does not reproduce this reference yet'}")
+            print(f"  -- {c['id']:<28} modern gate OFF by manifest "
+                  f"(reason in cases/manifest.toml)")
             continue
         if (d / "modern/case.toml").is_file():
             out.append((c["id"], d))

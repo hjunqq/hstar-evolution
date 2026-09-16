@@ -136,9 +136,9 @@ legacy nblks = count(step)          legacy nstep = step.controls.substeps
 
 # Phase 3：面荷载 + 多分析步 → ProblemState → solver
 
-状态：**未收口**。四个原有 golden 算例在全部改动之后仍逐位一致；新 golden 算例
-`loads_2d.wall_reservoir` 由现代输入独立驱动、跑完两步、写出正确形状的结果，但**第 2 步
-与冻结参考不符**。本节如实记录已确立的部分、那一处分叉的定位证据，以及下一步。
+状态：**收口**。五个 golden 算例全部由现代输入独立驱动，逐位复现冻结参考：
+cooks 1734 值、lame 486、mini_mc 210、slope_srm 600 块 541 200 值、
+**wall_reservoir 4 块 552 值**，`max|d| = 0`。
 
 ## 1. 算例是量出来的，不是挑出来的
 
@@ -153,13 +153,14 @@ legacy nblks = count(step)          legacy nstep = step.controls.substeps
 
 ## 2. 复用 legacy，而不是重写它
 
-`Load.f90` 的三段计算被**提取**为模块级子程序，两条路径都调用同一份代码：
+`Load.f90` 与 `Prescrib.f90` 的四段计算被**提取**为模块级子程序，两条路径调用同一份代码：
 
 | 提取出来的 | 原来在哪 | 谁调用 |
 |---|---|---|
 | `edge_dofs(tedge)` | `external_load_1` 读取循环内 | legacy 读取路径 + `commit_surface_edges` |
 | `edge_geometry()` | `external_load_1` 读完边表之后 | 同上 |
 | `edge_load_group_apply(...)` | `external_load_2` 的每组循环 | legacy 读取路径 + `commit_block_state` |
+| `prescribe_free_active()` | `prescrib_set` 开头的 iffix 推导 | legacy 读取路径 + `commit_block_state` |
 | `edge_cosc` | `external_load_1` 的 `contains` 块 | `edge_geometry`（改名是因为 Stiff.f90 自己有一个 `cosc`）|
 
 **没有写一行同义的数值代码。** 提取是否保行为，由三个算例的 gdb 追踪当场证明：
@@ -168,10 +169,11 @@ legacy nblks = count(step)          legacy nstep = step.controls.substeps
 ## 3. 多分析步的接缝在 legacy 自己的位置上
 
 legacy 在**每一块**的开头重读 `.pre` 与 `.loa` 尾部（`Fem.f90:1873 / 1896`）。现代侧因此也
-必须有一个每块的接缝，位置由 legacy 决定：`Fem.f90:1712` 加了一行
+必须有一个每块的接缝：`Fem.f90:1721` 加了一行（与 `end do` 同行，文件行数不变）
 `if (yl_adapter_mode .and. iblks > 1) call yl_adapter_block_override(iblks)`，
-在 `appear_process` / `matno_process` 被消费**之前**。第 1 块走的仍是改动前那条路径，
-一字未变。`yl_adapter_session` 保存已提交的 ProblemState / RuntimeState 供后续块使用。
+位置在 `appear` 按本块更新**之后**、任何东西消费荷载**之前**。
+第 1 块走的仍是改动前那条路径。`yl_adapter_session` 保存已提交的
+ProblemState / RuntimeState 供后续块使用。
 
 ## 4. 进入 ProblemState 的新对象
 
@@ -187,31 +189,36 @@ commit 仍是唯一的写入口。`code_load` 故意**不**进 ProblemState—�
 双双**移出默认表变成必填**——见 `docs/m5/authoring-contract.md` §9。两者都不是表达性字段：
 它们就是分期分析要回答的问题。
 
-## 6. 那一处未收口的分叉，以及它不是什么
+## 6. 那个 bug，以及它为什么值得写下来
 
-**第 1 步逐位一致；第 2 步不一致**（260/552 不符，`max|d| = 1.1e6`）。
+第一次跑通时，第 1 步逐位一致而第 2 步差 260/552 值。**定位过程全部是实测，没有猜**：
 
-逐项对照两条路径，**以下全部逐位相同**（实测，不是推断）：边表（`nedge`、每条边的
-`lnode`/`aelem`/`index`/`nnode`）、边高斯几何、四条边组装出来的 `edload`（连同 `dfact`，
-四条全等）、`gpwater` 的五个分布量、`tcurvegravity`、`appear`（两块各自的值）、
-`nelgroup`、`ice0`、`uinitial = (0, 1)`、约束自由度。
+1. 两条路径逐项对照，以下**全部逐位相同**：边表、边高斯几何、四条边组装出的 `edload`
+   连同 `dfact`、`gpwater` 的五个分布量、`tcurvegravity`、每块的 `appear`、`nelgroup`、
+   `ice0`、`uinitial = (0, 1)`、约束自由度。**水压算得一模一样**，所以问题不在面荷载。
+2. 分叉的形态很窄：坝体那 16 个节点在第 2 步恰好为 0，且第 2 步的 `retot = |tofor|²`
+   与第 1 步**完全相等** —— 第 2 块没有获得任何新荷载。
+3. 顺着 `tofor ← element%tload ← ldofs_f` 往回看，唯一没被实测过的一环是自由度冻结。
 
-分叉的形态很窄：**第 2 步里坝体那 16 个节点的位移恰好为 0**，而参考里是 ~3e-3；
-第 2 步的 `retot = |tofor|²` 与第 1 步**完全相等**（1.534986789650702E+015），
-legacy 则升到 3.920e15。也就是说第 2 块在现代路径上**没有获得任何新荷载**——
-不是水压算错了（水压算得一模一样），而是新出现的那一组根本没有进入外力向量。
+**根因**：`yl_runtime_build` 里 `dof%fixed_mask` 的推导写着 `problem%steps(1)%activation`
+——「一切冻结，然后为**活动**单元集的单元解冻」。它对单步分析恒真；分期分析里，
+第 2 块才出现的那一组自由度**永远冻着**，于是位移恒为 0。legacy 没有这个问题，
+因为它每块都在 `prescrib_set` 里按当前 `appear` 重新推一遍。
 
-**下一步只有一个方向**：`tofor` 由 `element%field%tload` 经 `ldofs_f` 累加而来
-（`Fem.f90:13836-13849`）。`ldofs_f`、`nodfn` 与求解器 profile 都由 `build_runtime` 一次
-建成，而 `build_runtime` 只看 `steps(1)`。legacy 的自由度编号与分期无关，现代侧是否也
-如此，是这条链上唯一还没有实测过的一环。**在测出来之前不改代码。**
+**修法沿用同一条纪律**：不在现代侧再写一遍这条规则，而是把 legacy 的那段循环提取成
+`prescribe_free_active()`，两条路径都调用它；被约束的那些自由度再从 mask 重新应用一次
+（合法的前提是「各步边界条件必须相同」已经由 `commit_step_invariants` 按名拒绝）。
+
+值得写下来的不是 bug 本身，而是**它在哪儿**：不在新写的面荷载代码里，而在一处
+「只对单步为真」的既有推导里。多分析步这个能力真正的代价，是把每一处
+`steps(1)` 的写法重新审一遍。
 
 ## 7. 门禁口径
 
-`cases/manifest.toml` 给这个算例加了 `modern_gate = false`，并写明了理由；
-`tools/yl_modern_check.py` 每次运行都会**打印**这条豁免，而不是静默跳过。
-这个算例在**legacy 路径上**是完整的 golden 算例（冻结参考 + gdb 追踪证据），
-**现代路径上不是**——两件事分开记。
-
 新增两条 N3 反例（多步能力使两条旧反例失效，一并退役并写明原因）：
 「一步里两个 gravity」与「各步边界条件不同」，都是 `UNSUPPORTED` / 退出码 3。
+`cases/manifest.toml` 的 `modern_gate = false` 机制留在原地（当前无算例使用），
+它在每次运行时**打印**豁免而不是静默跳过。
+
+五个新增的 `.loa` 读取站点已按 M1-02 流程包装并登记，逐条带实测证据；
+`tools/yl_io_trace.sh` 的 `--adapter=off` 修正见 §5 第 4 条的同类问题。

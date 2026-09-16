@@ -59,76 +59,7 @@
     if (allocated(iffix))deallocate(iffix)
     if (allocated(fixed))deallocate(fixed)
     allocate(iffix(ntotv),fixed(ntotv))
-    iffix=5   !20171201
-    fixed=0.0_irk
-    if(state_change==0)then
-    DO igroup = 1,ngroup
-       if  (appear(igroup).gt.0) then
-          index = group(igroup)%index
-          DO ielgroup = 1, group(igroup)%nelgroup
-             ielem = group(igroup)%list(ielgroup)
-             if  (ice0(ielem)==0)then
-                listdof => element(ielem)%ldofs
-                iffix(listdof)=0
-             endif
-          end do
-          nullify(listdof)
-       endif
-    END DO
-    elseif(state_change==1)then
-         DO igroup = 1,ngroup
-       if  (appear(igroup).gt.0) then
-          index = group(igroup)%index
-           nrfields=group(igroup)%nrfields
-           fieldid=group(igroup)%fieldid
-           if(nrfields==2.and.fieldid=='UW')then
-        iphase=state_change_process(igroup,iblks)
-        if(iphase==1)then
-          DO ielgroup = 1, group(igroup)%nelgroup
-             ielem = group(igroup)%list(ielgroup)
-             if  (ice0(ielem)==0)then
-                listdof=>element(ielem)%field(1)%ldofs_f
-                iffix(listdof)=0
-             endif
-          end do
-          nullify(listdof)
-        elseif(iphase==3)then  
-           DO ielgroup = 1, group(igroup)%nelgroup
-             ielem = group(igroup)%list(ielgroup)
-             if  (ice0(ielem)==0)then
-                listdof=>element(ielem)%field(2)%ldofs_f
-                iffix(listdof)=0
-             endif
-          end do
-          nullify(listdof) 
-        elseif(iphase==2)then  
-                  do ifield=1,nrfields
-          DO ielgroup = 1, group(igroup)%nelgroup
-             ielem = group(igroup)%list(ielgroup)
-             if  (ice0(ielem)==0)then
-                listdof=>element(ielem)%field(ifield)%ldofs_f
-                iffix(listdof)=0
-             endif
-          end do
-          nullify(listdof)
-                 end do
-        endif  !iphase
-           else  !if(nrfields/=2.or.fieldid=='UW')then      
-                  DO ielgroup = 1, group(igroup)%nelgroup
-                  ielem = group(igroup)%list(ielgroup)
-                  if  (ice0(ielem)==0)then
-                  listdof => element(ielem)%ldofs
-                   iffix(listdof)=0
-                  endif
-                  end do
-                  nullify(listdof)
-           endif
-        
-        
-       endif  !appear
-    END DO !igroup
-     
-     endif !state_change
+    call prescribe_free_active()
     if  (rmesh>0.and.nelem1>0)then
        DO igroup=1,ngroup
           if  (appear(igroup).gt.0) then
@@ -448,5 +379,94 @@
 
 
                 end  subroutine prescrib_set
+
+    !> iffix / fixed at the start of a block: everything inactive, then freed for the
+    !> elements of every group this block CONTAINS (extracted from prescrib_set,
+    !> 2026-09-16, unchanged line for line).
+    !>
+    !> WHY IT IS A SUBROUTINE NOW: legacy re-derives this at the top of every block from
+    !> the CURRENT `appear`, and on a staged analysis that is load-bearing -- the group
+    !> that appears in block 2 has its degrees of freedom frozen until this runs. The
+    !> modern path committed the mask once, from step 1, and so ran block 2 with the new
+    !> group still fixed; its nodes came out at exactly zero. Rather than write the rule
+    !> a second time on the modern side, both paths call legacy's own copy of it.
+    !>
+    !> It does NOT allocate: prescrib_set still owns that, and the modern path calls this
+    !> on the arrays commit already published, so neither side takes the other's storage.
+    subroutine prescribe_free_active()
+    character(10) fieldid
+    integer(ink) igroup,index,ielgroup,ielem,nrfields,ifield,iphase
+    integer(ink),pointer::listdof(:)
+    iffix=5   !20171201
+    fixed=0.0_irk
+    if(state_change==0)then
+    DO igroup = 1,ngroup
+       if  (appear(igroup).gt.0) then
+          index = group(igroup)%index
+          DO ielgroup = 1, group(igroup)%nelgroup
+             ielem = group(igroup)%list(ielgroup)
+             if  (ice0(ielem)==0)then
+                listdof => element(ielem)%ldofs
+                iffix(listdof)=0
+             endif
+          end do
+          nullify(listdof)
+       endif
+    END DO
+    elseif(state_change==1)then
+         DO igroup = 1,ngroup
+       if  (appear(igroup).gt.0) then
+          index = group(igroup)%index
+           nrfields=group(igroup)%nrfields
+           fieldid=group(igroup)%fieldid
+           if(nrfields==2.and.fieldid=='UW')then
+        iphase=state_change_process(igroup,iblks)
+        if(iphase==1)then
+          DO ielgroup = 1, group(igroup)%nelgroup
+             ielem = group(igroup)%list(ielgroup)
+             if  (ice0(ielem)==0)then
+                listdof=>element(ielem)%field(1)%ldofs_f
+                iffix(listdof)=0
+             endif
+          end do
+          nullify(listdof)
+        elseif(iphase==3)then  
+           DO ielgroup = 1, group(igroup)%nelgroup
+             ielem = group(igroup)%list(ielgroup)
+             if  (ice0(ielem)==0)then
+                listdof=>element(ielem)%field(2)%ldofs_f
+                iffix(listdof)=0
+             endif
+          end do
+          nullify(listdof) 
+        elseif(iphase==2)then  
+                  do ifield=1,nrfields
+          DO ielgroup = 1, group(igroup)%nelgroup
+             ielem = group(igroup)%list(ielgroup)
+             if  (ice0(ielem)==0)then
+                listdof=>element(ielem)%field(ifield)%ldofs_f
+                iffix(listdof)=0
+             endif
+          end do
+          nullify(listdof)
+                 end do
+        endif  !iphase
+           else  !if(nrfields/=2.or.fieldid=='UW')then      
+                  DO ielgroup = 1, group(igroup)%nelgroup
+                  ielem = group(igroup)%list(ielgroup)
+                  if  (ice0(ielem)==0)then
+                  listdof => element(ielem)%ldofs
+                   iffix(listdof)=0
+                  endif
+                  end do
+                  nullify(listdof)
+           endif
+        
+        
+       endif  !appear
+    END DO !igroup
+     
+     endif !state_change
+    end subroutine prescribe_free_active
 
                 end module prescribed
