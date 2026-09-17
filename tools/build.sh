@@ -529,6 +529,15 @@ PT_PY
         log "--- cross-check: docs/m2/state-field-map.toml is internally valid"
         python3 "$ROOT/tools/yl_state_map.py" check 2>&1 | tee -a "$LOG"
         [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== STATE-MAP CHECK FAILED"; exit 6; }
+        # The census the inventory is checked AGAINST, against the sources themselves.
+        # Without this the two can go stale together: a source edit that moves a read
+        # without changing its text leaves every registered site -- and every breakpoint
+        # address the evidence was collected at -- pointing at the wrong line, and the
+        # inventory check still passes because it only ever compares itself with the
+        # census. Measured 2026-09-17: 25 rows had drifted that way.
+        log "--- cross-check: docs/m1/io-sites.json is a current scan of legacy/yl"
+        python3 "$ROOT/tools/yl_io_inventory.py" scan --check 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== IO-CENSUS FRESHNESS CHECK FAILED"; exit 6; }
         # The reader inventory against its gdb evidence, for the same reason.
         log "--- cross-check: reader inventory vs its evidence"
         python3 "$ROOT/tools/yl_io_inventory.py" check --evidence "$ROOT"/docs/m1/evidence/*/hits.json 2>&1 | tee -a "$LOG"

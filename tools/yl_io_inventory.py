@@ -110,6 +110,39 @@ def anchor_hash(text: str) -> str:
     return hashlib.sha256(re.sub(r"\s+", " ", text.strip().lower()).encode()).hexdigest()[:12]
 
 
+def split_semicolons(code: str) -> list[str]:
+    """Split one line into its `;`-separated statements, ignoring `;` inside quotes.
+
+    M5 and M4-02 joined guarded calls onto existing lines on purpose -- so that the file's
+    line count, and with it every checkpoint anchor and reader site, stayed put. The cost
+    is that a statement can now sit in the MIDDLE of a line:
+
+        if (yl_input_enabled) call yl_modern_prelude(); if (.not. yl_input_enabled) open(inpunit,...)
+
+    A scanner that only looks at the start of a line does not see that `open` at all, and
+    the site silently leaves the census -- which is exactly how INP.FEM90.open_Fem_92
+    disappeared. Returns one element for an ordinary line, so nothing that was already
+    scanned changes shape.
+    """
+    out, buf, quote = [], [], ""
+    for ch in code:
+        if quote:
+            buf.append(ch)
+            if ch == quote:
+                quote = ""
+            continue
+        if ch in "'\"":
+            quote = ch
+            buf.append(ch)
+        elif ch == ";":
+            out.append("".join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    out.append("".join(buf))
+    return [x.strip() for x in out if x.strip()]
+
+
 def scan() -> list[dict]:
     sites = []
     for f in SOURCES:
@@ -122,16 +155,22 @@ def scan() -> list[dict]:
                 routine = m.group(2)
             if END_ROUTINE.match(code):
                 routine = "?"
-            stmt_code, cond = strip_if_prefix(code)
-            m = STMT.match(stmt_code)
-            if not m:
-                continue
-            kind, unit = m.group(1).lower(), m.group(2)
-            if kind == "read" and unit == "*":
-                continue  # stdin
-            text = full_statement(lines, i)
-            sites.append({"site": f"{f}:{i + 1}", "file": f, "line": i + 1, "routine": routine, "stmt": kind,
-                          "unit": unit, "inline_if": cond, "text": text, "anchor": anchor_hash(text)})
+            segments = split_semicolons(code)
+            for seg_no, segment in enumerate(segments):
+                stmt_code, cond = strip_if_prefix(segment)
+                m = STMT.match(stmt_code)
+                if not m:
+                    continue
+                kind, unit = m.group(1).lower(), m.group(2)
+                if kind == "read" and unit == "*":
+                    continue  # stdin
+                # Only a WHOLE line can carry a `&` continuation; a `;`-joined statement is
+                # complete where it stands, so its text is the segment itself.
+                text = full_statement(lines, i) if len(segments) == 1 else segment
+                sites.append({"site": f"{f}:{i + 1}", "file": f, "line": i + 1, "routine": routine, "stmt": kind,
+                              "unit": unit, "inline_if": cond, "text": text, "anchor": anchor_hash(text)})
+                if len(segments) > 1:
+                    break   # one site per line: the site key is the line number
     return sites
 
 
@@ -140,6 +179,36 @@ def cmd_scan(a):
     doc = {"version": 1, "sources": SOURCES, "site_count": len(sites),
            "by_stmt": dict(Counter(s["stmt"] for s in sites)), "sites": sites}
     out = Path(a.output)
+    if a.check:
+        # WHY THIS MODE EXISTS. `check` validates the inventory against this CENSUS FILE,
+        # which is a committed artefact nothing regenerated. So a source edit that moved a
+        # read without changing its text left the census -- and with it every registered
+        # site AND every gdb breakpoint address the evidence was collected at -- pointing
+        # at the wrong line, and every gate stayed green because the inventory and the
+        # census were stale together. Measured 2026-09-17: 25 rows had drifted, across
+        # the M5 `yl_input_enabled` guards and the Phase-3 Prescrib.f90 extraction.
+        # Comparing a fresh scan with the committed one closes that, and it is cheap.
+        if not out.is_file():
+            print(f"census missing: {out}", file=sys.stderr)
+            return 1
+        have = json.loads(out.read_text(encoding="utf-8"))
+        a_sites = {s["site"]: s["anchor"] for s in have.get("sites", [])}
+        b_sites = {s["site"]: s["anchor"] for s in sites}
+        gone = sorted(set(a_sites) - set(b_sites))
+        new_ = sorted(set(b_sites) - set(a_sites))
+        moved = sorted(k for k in set(a_sites) & set(b_sites) if a_sites[k] != b_sites[k])
+        if gone or new_ or moved:
+            for k in gone[:20]:
+                print(f"census is stale: {k} is in the census but is no longer an I/O site", file=sys.stderr)
+            for k in new_[:20]:
+                print(f"census is stale: {k} is an I/O site that the census does not have", file=sys.stderr)
+            for k in moved[:20]:
+                print(f"census is stale: {k} anchor {a_sites[k]} != source {b_sites[k]}", file=sys.stderr)
+            print(f"census is stale: {len(gone)} gone, {len(new_)} new, {len(moved)} changed; "
+                  f"regenerate with tools/yl_io_inventory.py scan and re-collect evidence", file=sys.stderr)
+            return 1
+        print(f"CENSUS CURRENT: {len(sites)} sites match the sources exactly")
+        return 0
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(doc, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"wrote {out}: {len(sites)} sites {doc['by_stmt']}")
@@ -303,6 +372,13 @@ def cmd_hits(a):
     return 0
 
 
+def norm_stmt(text: str) -> str:
+    """Whitespace- and case-insensitive form, for comparing a recorded statement with the
+    source. Not the anchor hash: a row's `statement` is often the statement WITHOUT the
+    M5 guard prefix or the iostat= wrapping, so this is a containment test either way."""
+    return re.sub(r"\s+", "", text).lower()
+
+
 def load_inventory(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
@@ -333,6 +409,17 @@ def cmd_check(a):
             continue
         if entry.get("anchor") != c["anchor"]:
             problems.append(f"{entry['id']}: anchor {entry.get('anchor')} != census {c['anchor']} (source changed?)")
+        # The anchor alone is not enough. It is a hash of the census's text, so a row whose
+        # `site` was re-pointed at the WRONG line and then had its anchor refreshed from
+        # that line agrees with itself perfectly -- measured 2026-09-17, when a rewind row
+        # ended up on a read two lines away and every anchor check passed. Comparing the
+        # row's own recorded STATEMENT with the source text catches that; it is the only
+        # field in the row a mechanical re-pointer does not touch.
+        if norm_stmt(entry.get("statement", "")) not in norm_stmt(c["text"]) and \
+           norm_stmt(c["text"]) not in norm_stmt(entry.get("statement", "")):
+            problems.append(f"{entry['id']}: site {site} holds {c['text'][:60]!r} but the row "
+                            f"records {entry.get('statement','')[:60]!r} -- the row is on the "
+                            f"wrong line")
         if entry.get("routine") != c["routine"]:
             problems.append(f"{entry['id']}: routine {entry.get('routine')} != census {c['routine']}")
         if entry.get("unit_var") != c["unit"]:
@@ -673,7 +760,7 @@ def cmd_render(a):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("scan"); s.add_argument("-o", "--output", default=str(REPO_ROOT / "docs/m1/io-sites.json")); s.set_defaults(func=cmd_scan)
+    s = sub.add_parser("scan"); s.add_argument("-o", "--output", default=str(REPO_ROOT / "docs/m1/io-sites.json")); s.add_argument("--check", action="store_true", help="do not write; FAIL if the committed census disagrees with a fresh scan of the sources"); s.set_defaults(func=cmd_scan)
     g = sub.add_parser("gdb-script"); g.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); g.add_argument("--log", required=True); g.add_argument("-o", "--output", required=True); g.add_argument("--binary", required=True, help="trace binary; its line table decides how many addresses each site line has (R27)"); g.add_argument("--locations", help="write the per-site breakpoint address map here"); g.set_defaults(func=cmd_gdb_script)
     h = sub.add_parser("hits"); h.add_argument("--log", required=True); h.add_argument("--case-id", required=True); h.add_argument("-o", "--output", required=True); h.set_defaults(func=cmd_hits)
     c = sub.add_parser("check"); c.add_argument("--inventory", default=str(REPO_ROOT / "docs/m1/reader-inventory.toml")); c.add_argument("--sites", default=str(REPO_ROOT / "docs/m1/io-sites.json")); c.add_argument("--evidence", nargs="+", required=True); c.add_argument("--registry", default=str(REGISTRY_DEFAULT), help="generated Fortran registry to compare with the inventory"); c.set_defaults(func=cmd_check)

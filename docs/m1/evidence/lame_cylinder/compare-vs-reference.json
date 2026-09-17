@@ -36,6 +36,6 @@
   "max_abs_diff": 0.0,
   "first_mismatch": null,
   "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/lame_cylinder/reference/results.json",
-  "actual": "/tmp/yl-io-trace.ZeVi17/results.json",
+  "actual": "/tmp/yl-io-trace.2TBcUf/results.json",
   "tolerance_section": "exact"
 }

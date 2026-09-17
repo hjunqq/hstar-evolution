@@ -73,6 +73,6 @@
     "why": "outside tolerance"
   },
   "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/plasticity/mini_mc/reference/results.json",
-  "actual": "/tmp/yl-io-trace.4zisZ2/results.json",
+  "actual": "/tmp/yl-io-trace.8mkjWJ/results.json",
   "tolerance_section": "exact"
 }

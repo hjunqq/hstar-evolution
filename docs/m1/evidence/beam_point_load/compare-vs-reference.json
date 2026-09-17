@@ -52,6 +52,6 @@
     "why": "outside tolerance"
   },
   "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/loads_2d/beam_point_load/reference/results.json",
-  "actual": "/tmp/yl-io-trace.Vxxqw2/results.json",
+  "actual": "/tmp/yl-io-trace.gaUEtc/results.json",
   "tolerance_section": "exact"
 }

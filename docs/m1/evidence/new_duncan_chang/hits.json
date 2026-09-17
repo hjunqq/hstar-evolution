@@ -1,17 +1,17 @@
 {
  "version": 1,
- "case_id": "static_2d.lame_cylinder",
+ "case_id": "nonlinear_elastic.new_duncan_chang",
  "exit_code": 0,
- "total_hits": 372,
- "distinct_sites": 216,
+ "total_hits": 288,
+ "distinct_sites": 218,
  "breakpoint_locations": 5661,
- "breakpoint_hits_raw": 1963,
+ "breakpoint_hits_raw": 1609,
  "merge_rule": "per-site count = max over the addresses the line compiles to",
  "hits": {
-  "Elements.f90:1087": 64,
+  "Elements.f90:1087": 20,
   "Fem.f90:101": 1,
   "Fem.f90:103": 1,
-  "Fem.f90:16382": 1,
+  "Fem.f90:16382": 10,
   "Fem.f90:185": 1,
   "Fem.f90:326": 1,
   "Fem.f90:3588": 1,
@@ -49,7 +49,7 @@
   "Global.f90:1099": 1,
   "Global.f90:1140": 1,
   "Global.f90:1155": 1,
-  "Global.f90:1176": 81,
+  "Global.f90:1176": 30,
   "Global.f90:1192": 1,
   "Global.f90:1195": 1,
   "Global.f90:1197": 1,
@@ -183,6 +183,8 @@
   "Material.f90:302": 1,
   "Material.f90:310": 1,
   "Material.f90:313": 1,
+  "Material.f90:504": 1,
+  "Material.f90:528": 1,
   "Output.f90:4154": 1,
   "Output.f90:4156": 1,
   "Output.f90:4159": 1,
@@ -227,10 +229,10 @@
  },
  "hits_by_range": {
   "Elements.f90:1087": {
-   "*0x42db82": 64,
-   "*0x42dbb6": 64,
-   "*0x42dbe0": 64,
-   "*0x42dcec": 64
+   "*0x42db82": 20,
+   "*0x42dbb6": 20,
+   "*0x42dbe0": 20,
+   "*0x42dcec": 20
   },
   "Fem.f90:101": {
    "*0xc119d4": 1,
@@ -253,7 +255,7 @@
    "*0xc11c11": 1
   },
   "Fem.f90:16382": {
-   "*0xdc114f": 1
+   "*0xdc114f": 10
   },
   "Fem.f90:185": {
    "*0xc13223": 1,
@@ -630,10 +632,10 @@
    "*0x496d96": 1
   },
   "Global.f90:1176": {
-   "*0x496fb6": 81,
-   "*0x496ff1": 81,
-   "*0x49701b": 81,
-   "*0x497156": 81
+   "*0x496fb6": 30,
+   "*0x496ff1": 30,
+   "*0x49701b": 30,
+   "*0x497156": 30
   },
   "Global.f90:1192": {
    "*0x497847": 1,
@@ -1707,6 +1709,27 @@
    "*0x522dc1": 1,
    "*0x522ddd": 1,
    "*0x522e16": 1
+  },
+  "Material.f90:504": {
+   "*0x52c201": 1,
+   "*0x52c21a": 1,
+   "*0x52c229": 1,
+   "*0x52c2e6": 1,
+   "*0x52c356": 1,
+   "*0x52c3c6": 1,
+   "*0x52c436": 1,
+   "*0x52c4a6": 1,
+   "*0x52c516": 1,
+   "*0x52c586": 1,
+   "*0x52c5f6": 1,
+   "*0x52c65f": 1
+  },
+  "Material.f90:528": {
+   "*0x52bc5f": 1,
+   "*0x52bc86": 1,
+   "*0x52bc99": 1,
+   "*0x52bd4d": 1,
+   "*0x52bdb6": 1
   },
   "Output.f90:4154": {
    "*0x77cad6": 1,
