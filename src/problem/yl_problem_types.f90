@@ -263,6 +263,32 @@ module yl_problem_types
     type(opt_int) :: pivot_file
   end type profile_t
 
+  !> The direct sparse solver's own settings, when `linear` selects it.
+  !>
+  !> A sibling block on solver_t for the same reason plasticity_t and duncan_chang_t are
+  !> siblings on material_t: legacy's `.sol` has one record shape per solver
+  !> (Solver.f90:6829 for PROFILE, :7788-7794 for PARDISO) and the settings of one are
+  !> meaningless to the other. Set only when `linear` is PARDISO.
+  !>
+  !> These are NUMERICS, not physics: they choose how the same equations get solved, and
+  !> nothing here enters the model. That is also why `threads` is carried rather than
+  !> defaulted or tuned -- legacy puts it straight into `iparm(3)` (Solver.f90:7816), so it
+  !> reaches the factorisation and is part of reproducing the deck. Choosing a good value
+  !> is a performance question and belongs to a different thread of work than this one.
+  !>
+  !>   matrix_type    legacy `mtype`; -2 is real symmetric indefinite
+  !>   threads        legacy `ncpu` -> iparm(3)
+  !>   message_level  legacy `msglvl`; 0 is silent
+  !>
+  !> legacy's `isdefault` has no component here on purpose. It is not a value but a
+  !> CAPABILITY SWITCH: non-zero makes legacy read a further record of eight iparm tuning
+  !> numbers, and this build has nowhere to put them, so the adapter refuses it by name.
+  type, public :: pardiso_t
+    type(opt_int) :: matrix_type           !@off-face: solver.pardiso.mtype
+    type(opt_int) :: threads               !@off-face: solver.pardiso.ncpu
+    type(opt_int) :: message_level         !@off-face: solver.pardiso.msglvl
+  end type pardiso_t
+
   type, public :: solver_t
     type(opt_text) :: linear
     ! Reads the legacy `nonsym` slot (a 0/1 flag, Solver.f90:7240) whose sense is
@@ -270,6 +296,8 @@ module yl_problem_types
     ! that is the legacy WIRE type driving the state dump and the frozen baselines.
     type(opt_logical) :: symmetric  !@repr: bool from i32; legacy nonsym is a 0/1 flag with inverted sense, the bridge converts
     type(profile_t) :: profile
+    !> Set only when `linear` is PARDISO; absent for PROFILE.
+    type(pardiso_t) :: pardiso
   end type solver_t
 
   ! --- steps ------------------------------------------------------------------

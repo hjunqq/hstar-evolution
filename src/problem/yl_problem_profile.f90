@@ -265,7 +265,13 @@ module yl_problem_profile
                       PROFILE_KIND_TEXT, 0_int32,                                                   &
                       'ELASTIC_ISOTROPIC|CLASSICALEP|DUNCANCHANG', .false.),                        &
     capability_item_t('G4', 'solver.linear', 'solver', 'linear',                                    &
-                      PROFILE_KIND_TEXT, 0_int32, 'PROFILE', .false.),                              &
+                      PROFILE_KIND_TEXT, 0_int32, 'PROFILE|PARDISO', .false.),                      &
+    ! PARDISO's matrix type selects the FACTORISATION: -2 is real symmetric indefinite, 2
+    ! is positive definite, 11/13 unsymmetric. Getting it wrong does not fail loudly, it
+    ! factorises the wrong way, so the one value a real deck exercises is whitelisted and
+    ! the rest are refused by name. Carried as text for the set mechanism (gate_int_set).
+    capability_item_t('G4', 'solver.pardiso.matrix_type', 'solver', 'pardiso.matrix_type',          &
+                      PROFILE_KIND_TEXT, 0_int32, '-2', .false.),                                   &
     capability_item_t('G4', 'solver.symmetric', 'solver', 'symmetric',                              &
                       PROFILE_KIND_LOGICAL, 0_int32, '', .true.),                                   &
     ! `load.gravity_enabled` was REMOVED on 2026-09-14. It required NGRAV == 1 and its

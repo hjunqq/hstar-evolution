@@ -1,0 +1,97 @@
+# The second linear solver. Nothing about the model changes: this deck is the static
+# baseline's shape -- 2-D Q4 plane strain, one elastic material, one group, gravity, one
+# step -- and the ONLY thing it does differently is solve the equations with PARDISO.
+#
+# That is why it is the slice. Probing every 2-D PARDISO deck in the corpus with the
+# adapter, this is the one whose sole finding was the .sol record itself; see
+# cases/manifest.toml for what each of the others tripped on first.
+#
+# See docs/m5/authoring-contract.md and docs/m10/pardiso.md.
+version = 1
+
+[case]
+name        = "benchmark_100x100"
+units       = "SI"
+description = "10201-node, 10000-element 2D Q4 plane-strain block under self-weight, solved with PARDISO"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name          = "block"
+element_count = 10000
+
+[[nset]]
+name  = "base"
+nodes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101]
+
+[[material]]
+name    = "rock"
+model   = "elastic_isotropic"
+density = 2400.0
+E       = 2.5e10
+nu      = 0.2
+thermal_expansion = 1.0e-5
+
+[[section]]
+name        = "block"
+elset       = "block"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "rock"
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[step]]
+name      = "self_weight"
+procedure = "static"
+load_mode = "load"
+reset_state   = false
+active_elsets = ["block"]
+
+[step.controls]
+increments      = 1
+substeps        = 1
+time_increment  = 1.0
+max_iterations  = 5
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "base"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "base"
+dof   = [2]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+[solver]
+linear = "pardiso"
+
+# NUMERICS, not physics: these choose how the same equations get solved.
+# `threads` is the deck's own value and is carried because legacy puts it into iparm(3)
+# (Solver.f90:7816), so it reaches the factorisation -- reproducing the deck, not tuning it.
+[solver.pardiso]
+matrix_type   = -2   # real symmetric indefinite
+threads       = 4
+message_level = 0
+
+[output]
+format = "gid"
+field  = ["u", "s"]
+stress_averaging = "direct"

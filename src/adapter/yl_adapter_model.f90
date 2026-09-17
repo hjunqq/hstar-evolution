@@ -1221,6 +1221,7 @@ contains
     ctx%element_kind = ctx_gindex
     ctx%type_abc = type_ABC
     ctx%type_problem = type_problem
+    ctx%type_solver = type_solver
     ctx%nbackdt = nbackdT
     ctx%ntrans = ntrans
     ctx%filled = .true.

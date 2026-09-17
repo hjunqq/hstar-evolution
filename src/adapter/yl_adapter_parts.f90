@@ -190,6 +190,10 @@ module yl_adapter_parts
     !> not know which problem type it was in would walk straight past them and
     !> desynchronise the rest of the file.
     character(len=LEN_TYPE_ABC) :: type_problem = ''
+    !> GLB.global_data.problem_type. Carried for the same reason as `type_problem`: `.sol`
+    !> has a DIFFERENT RECORD SHAPE per solver (Solver.f90:6829 vs :7788) and the parser
+    !> must know which one it is reading before it reads anything.
+    character(len=LEN_TYPE_ABC) :: type_solver = ''
     integer(int32) :: nbackdt = 0      ! GLB.global_data.init_and_blocks
     integer(int32) :: ntrans = 0       ! GLB.global_data.init_and_blocks
   end type deck_context_t

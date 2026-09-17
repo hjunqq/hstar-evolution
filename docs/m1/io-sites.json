@@ -5358,9 +5358,9 @@
    "routine": "MAIN_PARDISO",
    "stmt": "read",
    "unit": "solveunit",
-   "inline_if": null,
-   "text": "read(solveunit,*)text",
-   "anchor": "83dfdd0d1fb9"
+   "inline_if": ".not. yl_input_enabled",
+   "text": "if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)text",
+   "anchor": "4fe5b2810bde"
   },
   {
    "site": "Solver.f90:7790",
@@ -5369,9 +5369,9 @@
    "routine": "MAIN_PARDISO",
    "stmt": "read",
    "unit": "solveunit",
-   "inline_if": null,
-   "text": "read(solveunit,*)mtype,ncpu,msglvl",
-   "anchor": "dc1201290698"
+   "inline_if": ".not. yl_input_enabled",
+   "text": "if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)mtype,ncpu,msglvl",
+   "anchor": "17cc7e4c145c"
   },
   {
    "site": "Solver.f90:7792",
@@ -5380,9 +5380,9 @@
    "routine": "MAIN_PARDISO",
    "stmt": "read",
    "unit": "solveunit",
-   "inline_if": null,
-   "text": "read(solveunit,*)text",
-   "anchor": "83dfdd0d1fb9"
+   "inline_if": ".not. yl_input_enabled",
+   "text": "if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)text",
+   "anchor": "4fe5b2810bde"
   },
   {
    "site": "Solver.f90:7794",
@@ -5391,9 +5391,9 @@
    "routine": "MAIN_PARDISO",
    "stmt": "read",
    "unit": "solveunit",
-   "inline_if": null,
-   "text": "read(solveunit,*)isdefault",
-   "anchor": "ca5cff04cd5b"
+   "inline_if": ".not. yl_input_enabled",
+   "text": "if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)isdefault",
+   "anchor": "6b88ca5e36f7"
   },
   {
    "site": "Solver.f90:7798",

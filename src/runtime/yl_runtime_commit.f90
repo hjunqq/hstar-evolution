@@ -116,6 +116,11 @@ module yl_runtime_commit
                           nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload,   &
                           edges, edgeload, gpwater, edge_dofs, edge_geometry,                  &
                           edge_load_group_apply, pload, group_of_point_load
+  ! PARDISO's four settings. They live in SOLVER rather than GLOBAL_VAR because they are
+  ! the solver's own; `mtype` and `msglvl` were already module-scope, `ncpu` and
+  ! `isdefault` were promoted from MAIN_PARDISO locals in M10 so the bridge could write
+  ! them like every other legacy global instead of threading a supply routine through.
+  use solver, only: mtype, ncpu, msglvl, isdefault
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
@@ -572,6 +577,7 @@ contains
     integer(ink) :: s_nbeamload, s_nplateload
     integer(ink) :: s_ntemp_surface, s_ntedge, s_ntelgroup, s_npipe
     integer(ink), allocatable :: s_uinitial(:)
+    integer(ink) :: s_mtype, s_ncpu, s_msglvl, s_isdefault
     real(irk), allocatable :: s_hdam(:)
     ! staging: plain arrays
     integer(ink), allocatable :: s_lmdofn(:), s_lcdofn(:), s_nodfn(:,:), s_iffix(:)
@@ -1330,6 +1336,8 @@ contains
     s_mat_curve = STAGE_POISON_I
     s_nmats = STAGE_POISON_I;     s_nblks = STAGE_POISON_I;    s_nfixsets = STAGE_POISON_I
     s_gravy = STAGE_POISON_R
+    s_mtype = STAGE_POISON_I;  s_ncpu = STAGE_POISON_I
+    s_msglvl = STAGE_POISON_I;  s_isdefault = STAGE_POISON_I
     s_probn = '';  s_outplot = '';  s_type_problem = '';  s_type_solver = ''
     s_type_load = '';  s_type_abc = ''
 
@@ -1337,6 +1345,19 @@ contains
     s_outplot = opt_text_or(problem%steps(1)%output%format)
     s_type_problem = opt_text_or(problem%steps(1)%procedure)
     s_type_solver = opt_text_or(problem%solver%linear)
+    ! PARDISO's settings, staged only when PARDISO is the solver. They stay poisoned for a
+    ! PROFILE deck, which is correct: MAIN_PARDISO never runs, so nothing reads them, and
+    ! a plausible-looking 0 would be a worse thing to publish than huge().
+    !
+    ! `isdefault` has no ProblemState component -- it is a capability switch the adapter
+    ! refuses when non-zero -- so the committed value is 0 by construction, meaning "use
+    ! PARDISO's default iparm". That is what the deck said, not a default invented here.
+    if (opt_is_set(problem%solver%pardiso%matrix_type)) then
+      s_mtype = int(opt_or(problem%solver%pardiso%matrix_type), ink)
+      s_ncpu = int(opt_or(problem%solver%pardiso%threads), ink)
+      s_msglvl = int(opt_or(problem%solver%pardiso%message_level), ink)
+      s_isdefault = 0_ink
+    end if
     s_type_load = opt_text_or(problem%steps(1)%load_mode)
     s_type_abc = opt_text_or(problem%interactions%absorbing%type)
     s_type_nl = int(opt_or(problem%steps(1)%controls%nonlinear_type), ink)
@@ -1505,6 +1526,7 @@ contains
     ! nothing here that can fail.
     probn = s_probn;  outplot = s_outplot
     type_problem = s_type_problem;  type_solver = s_type_solver
+    mtype = s_mtype;  ncpu = s_ncpu;  msglvl = s_msglvl;  isdefault = s_isdefault
     type_load = s_type_load;  type_ABC = s_type_abc;  mat_curve = s_mat_curve
     type_nl = s_type_nl;  nonsym = s_nonsym;  NGRAV = s_ngrav
     nmats = s_nmats;  nblks = s_nblks;  nfixsets = s_nfixsets;  gravy = s_gravy

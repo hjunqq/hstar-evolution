@@ -68,11 +68,24 @@ MAP = ROOT / "docs/m2/state-field-map.toml"
 
 # Bucket 0 is "before the first anchor"; bucket k is "after anchor k-1".
 # The anchor sites are read from the M2 map so this tool cannot drift from it.
+# Which side of the three covered checkpoints a reader's phase puts it on.
+#   0  before model_ready
+#   1  between model_ready and phase_ready(1)
+#   2  between phase_ready(1) and increment_ready(1,1)
+#   3  after increment_ready(1,1)
+#
+# All three checkpoints sit inside BLOCK 1, so anything legacy reads in a later block is
+# bucket 3 by construction. `block_lazy(2)` are the two `.loa` edge-load readers that M7's
+# wall_reservoir executes at the top of block 2 (Fem.f90:1896 re-reads the .loa tail per
+# block). The tool refused to guess at them -- "extend PHASE_BUCKET deliberately" -- and
+# this is that deliberate extension; the bucket is then CHECKED against where they were
+# actually observed, so a wrong entry here fails rather than papers over.
 PHASE_BUCKET = {
     "startup": 0,
     "solver_lazy": 1,
     "phase_lazy(1)": 1,
     "increment_lazy(1,1)": 2,
+    "block_lazy(2)": 3,
 }
 
 
@@ -237,7 +250,14 @@ def check_case(case_id: str, readers: list[dict], binary: Path, out_root: Path |
         s, rid = r["site"], r["id"]
         phase = r.get("phase")
         reached_only = bool(r.get("reached_only"))
-        executed = bool(r.get("executed_by"))
+        # PER CASE, not "any case". `executed_by` is a LIST of the cases that execute the
+        # reader, and yl_io_inventory.py reads it that way (`case_id in ...`). This read it
+        # as a plain boolean, so a reader only mini_mc executes counted as "executed" while
+        # checking cooks_membrane, and every deck was then required to reach every other
+        # deck's readers. It stayed invisible while this check could only ever reach the two
+        # static cases -- they execute nearly the same set -- and surfaced the moment the
+        # case-path fix (2026-09-17) let it run the other four: 84 findings, none of them real.
+        executed = case_id in r.get("executed_by", [])
         if mutate and mutate["kind"] == "phase" and rid == mutate["id"]:
             phase = mutate["phase"]
         if mutate and mutate["kind"] == "reached" and rid == mutate["id"]:

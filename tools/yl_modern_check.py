@@ -48,6 +48,14 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# The solver must run under the SAME pinned environment every frozen reference was made
+# under; see yl_run.pinned_env for what happens when it does not.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("yl_run", ROOT / "tools/yl_run.py")
+_yl_run = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_yl_run)
+pinned_env = _yl_run.pinned_env
+
 MANIFEST = ROOT / "cases/manifest.toml"
 
 
@@ -159,7 +167,7 @@ def main(argv=None):
             stage(case_dir, work)
             cp = subprocess.run([str(binary), "--input=case.toml"], cwd=work,
                                 stdin=subprocess.DEVNULL, capture_output=True,
-                                text=True, errors="replace")
+                                text=True, errors="replace", env=pinned_env())
             res = work / "1.flavia.res"
             if cp.returncode != 0 or not (res.is_file() and res.stat().st_size > 0):
                 problems.append(f"N1 {cid}: the modern-input run exited {cp.returncode} "
@@ -209,7 +217,7 @@ def main(argv=None):
             if mutate is not None:
                 deck.write_text(mutate(deck.read_text(encoding="utf-8")), encoding="utf-8")
             cp = subprocess.run([str(binary), arg], cwd=work, stdin=subprocess.DEVNULL,
-                                capture_output=True, text=True, errors="replace")
+                                capture_output=True, text=True, errors="replace", env=pinned_env())
             res = work / "1.flavia.res"
             wrote = res.is_file() and res.stat().st_size > 0
             print(f"  N3 {label:<28} rc={cp.returncode} "
@@ -361,6 +369,38 @@ def main(argv=None):
         if "modulus_number" not in blob:
             problems.append("N3 duncanchang parameter on another model: the refusal did not "
                             "name the key")
+
+    # b7 -- the solver block. Three controls, PREDICTED BEFORE RUNNING:
+    #   s1  matrix_type = 2       exit 3, names the key and the value   (capability)
+    #   s2  matrix_type deleted   exit 2, names the key                 (missing field)
+    #   s3  the block on a PROFILE case   exit 2, names the key         (forbidden)
+    # and what must stay SILENT: none of these may disturb the eight N2 comparisons above.
+    pardiso = next((c["id"] for c in _doc.get("case", [])
+                    if (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
+                    and 'linear = "pardiso"' in
+                        (ROOT / "cases" / c["path"] / "modern/case.toml").read_text(encoding="utf-8")),
+                   None)
+    if pardiso is not None:
+        blob = rejected("pardiso matrix type 2", "--input=case.toml",
+                        sub("matrix_type   = -2", "matrix_type   = 2"), case=pardiso)
+        if "matrix_type" not in blob:
+            problems.append("N3 pardiso matrix type: the refusal did not name the key")
+
+        blob = rejected("pardiso without a matrix type", "--input=case.toml",
+                        lambda t: "\n".join(l for l in t.splitlines()
+                                            if not l.startswith("matrix_type")) + "\n",
+                        case=pardiso)
+        if "matrix_type" not in blob:
+            problems.append("N3 pardiso without a matrix type: the refusal did not name the key")
+
+        # The forbidden direction: the settings on a case whose solver is not PARDISO.
+        # Without it the required-together rule would be satisfied by a validator that
+        # simply accepted the keys everywhere.
+        blob = rejected("pardiso settings on a profile case", "--input=case.toml",
+                        sub('linear = "pardiso"', 'linear = "profile"'), case=pardiso)
+        if "pardiso" not in blob:
+            problems.append("N3 pardiso settings on a profile case: the refusal did not name "
+                            "the key")
 
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",

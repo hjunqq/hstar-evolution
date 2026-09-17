@@ -507,6 +507,14 @@ contains
     ! --- solver -------------------------------------------------------------------
     call default_solver(sol)
     call opt_set(sol%linear, solver_code(text_at(doc, 'solver.linear')))
+    ! The PARDISO block, written only when the author selected that solver. `solver_requires`
+    ! has already refused both halves of the mistake, so absence here means the case uses a
+    ! different solver and the commit leaves legacy's settings poisoned.
+    if (doc%find('solver.pardiso.matrix_type') /= 0_int32) then
+      call opt_set(sol%pardiso%matrix_type, int_at(doc, 'solver.pardiso.matrix_type'))
+      call opt_set(sol%pardiso%threads, int_at(doc, 'solver.pardiso.threads'))
+      call opt_set(sol%pardiso%message_level, int_at(doc, 'solver.pardiso.message_level'))
+    end if
     call builder_set_solver(b, sol, here(line_at(doc, 'solver.linear')), errors)
     if (builder_failed(b)) return
 

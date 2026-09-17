@@ -1,0 +1,45 @@
+# 观察量登记。按 M0-05a 的纪律：在任何结果数值被查看之前登记。
+# 本文件登记的是**结构**（块名、分量名、节点数），不是数值。
+version = 1
+case_id = "solver_2d.benchmark_100x100"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 10201
+expected_element_count = 10000
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+block = "DISPLACEMENT"
+# N4：本算例不是退化的。自重下 10 000 个单元必然产生非零位移。
+must_be_nonzero = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true
+
+# 本算例唯一新增的能力是**线性求解器的选择**。它在 1.flavia.res 上没有独立的块——
+# 换一个求解器不改变模型，只改变解同一个方程组的方法——所以登记在这里作为能力声明。
+[capability]
+linear_solver = "PARDISO"
+matrix_type = -2        # legacy mtype：实对称不定
+threads = 4             # legacy ncpu -> iparm(3)
+message_level = 0       # legacy msglvl
+use_default_iparm = true   # legacy isdefault = 0（“0=use default”）
+note = """求解器选择属于 numerics，不进入 physics 语义。
+本算例相对 static_2d.cooks_membrane 的差值只有这一项：2-D、Q、NBLKS=1、nincs=1、
+nstep=1、单材料 ELASTIC_ISOTROPIC、单组、nscurve=0，适配器对它的**唯一**发现就是
+.sol 记录的形状对不上 PROFILE 解析器。
+线程数是 deck 陈述的输入，会进入 iparm(3) 并影响分解，因此必须**照搬以复现**；
+这既不是调优也不是并行性能研究，两者都不在本线程内。"""

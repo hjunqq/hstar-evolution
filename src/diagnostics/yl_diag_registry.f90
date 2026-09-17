@@ -12,7 +12,7 @@ module yl_diag_registry
   implicit none
   public
 
-  integer, parameter :: YL_NREADERS = 174
+  integer, parameter :: YL_NREADERS = 178
   integer, parameter :: YL_LEN_READER_ID = 96
   integer, parameter :: YL_LEN_READER_SITE = 32
   integer, parameter :: YL_LEN_READER_FILE = 16
@@ -178,23 +178,27 @@ module yl_diag_registry
   integer, parameter :: RD_TEM_boundt_title_4 = 155
   integer, parameter :: RD_TEM_boundt_title_5 = 156
   integer, parameter :: RD_TEM_boundt_pipe_count = 157
-  integer, parameter :: RD_SOL_PROFILE_title_1 = 158
-  integer, parameter :: RD_SOL_PROFILE_profile_control = 159
-  integer, parameter :: RD_MAN_STATIC_U_title_1 = 160
-  integer, parameter :: RD_MAN_STATIC_U_nincs = 161
-  integer, parameter :: RD_MAN_STATIC_U_increment_control = 162
-  integer, parameter :: RD_MAN_STATIC_U_tolerances = 163
-  integer, parameter :: RD_LOA_external_load_1_edge_chunk_title = 164
-  integer, parameter :: RD_LOA_external_load_1_edge_chunk_header = 165
-  integer, parameter :: RD_LOA_external_load_1_edge_nodes = 166
-  integer, parameter :: RD_LOA_external_load_2_edge_load_group = 167
-  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution = 168
-  integer, parameter :: RD_LOA_external_load_1_point_load_group = 169
-  integer, parameter :: RD_LOA_external_load_1_point_load_force = 170
-  integer, parameter :: RD_LOA_external_load_1_point_load_nodes = 171
-  integer, parameter :: RD_LOA_external_load_1_point_load_extrapolation = 172
-  integer, parameter :: RD_LOA_external_load_2_edge_pressure_nodal = 173
-  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution_2 = 174
+  integer, parameter :: RD_SOL_PARDISO_title_1 = 158
+  integer, parameter :: RD_SOL_PARDISO_control = 159
+  integer, parameter :: RD_SOL_PARDISO_title_2 = 160
+  integer, parameter :: RD_SOL_PARDISO_isdefault = 161
+  integer, parameter :: RD_SOL_PROFILE_title_1 = 162
+  integer, parameter :: RD_SOL_PROFILE_profile_control = 163
+  integer, parameter :: RD_MAN_STATIC_U_title_1 = 164
+  integer, parameter :: RD_MAN_STATIC_U_nincs = 165
+  integer, parameter :: RD_MAN_STATIC_U_increment_control = 166
+  integer, parameter :: RD_MAN_STATIC_U_tolerances = 167
+  integer, parameter :: RD_LOA_external_load_1_edge_chunk_title = 168
+  integer, parameter :: RD_LOA_external_load_1_edge_chunk_header = 169
+  integer, parameter :: RD_LOA_external_load_1_edge_nodes = 170
+  integer, parameter :: RD_LOA_external_load_2_edge_load_group = 171
+  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution = 172
+  integer, parameter :: RD_LOA_external_load_1_point_load_group = 173
+  integer, parameter :: RD_LOA_external_load_1_point_load_force = 174
+  integer, parameter :: RD_LOA_external_load_1_point_load_nodes = 175
+  integer, parameter :: RD_LOA_external_load_1_point_load_extrapolation = 176
+  integer, parameter :: RD_LOA_external_load_2_edge_pressure_nodal = 177
+  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution_2 = 178
 
   character(len=96), parameter :: YL_READER_ID(YL_NREADERS) = [character(len=96) :: &
     'INP.FEM90.title#1', &
@@ -354,6 +358,10 @@ module yl_diag_registry
     'TEM.boundt.title#4', &
     'TEM.boundt.title#5', &
     'TEM.boundt.pipe_count', &
+    'SOL.PARDISO.title#1', &
+    'SOL.PARDISO.control', &
+    'SOL.PARDISO.title#2', &
+    'SOL.PARDISO.isdefault', &
     'SOL.PROFILE.title#1', &
     'SOL.PROFILE.profile_control', &
     'MAN.STATIC_U.title#1', &
@@ -531,6 +539,10 @@ module yl_diag_registry
     'Temper.f90:306', &
     'Temper.f90:308', &
     'Temper.f90:311', &
+    'Solver.f90:7788', &
+    'Solver.f90:7790', &
+    'Solver.f90:7792', &
+    'Solver.f90:7794', &
     'Solver.f90:6829', &
     'Solver.f90:6831', &
     'Fem.f90:3593', &
@@ -710,6 +722,10 @@ module yl_diag_registry
     '.tem', &
     '.sol', &
     '.sol', &
+    '.sol', &
+    '.sol', &
+    '.sol', &
+    '.sol', &
     '.man', &
     '.man', &
     '.man', &
@@ -887,6 +903,10 @@ module yl_diag_registry
     'tunit', &
     'solveunit', &
     'solveunit', &
+    'solveunit', &
+    'solveunit', &
+    'solveunit', &
+    'solveunit', &
     'mainunit', &
     'mainunit', &
     'mainunit', &
@@ -1038,6 +1058,10 @@ module yl_diag_registry
     'startup', &
     'startup', &
     'reached_only', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
     'startup', &
     'startup', &
     'startup', &
@@ -1267,6 +1291,11 @@ module yl_diag_registry
     'text:str', &
     'npipe:int,algo_pipe:int', &
     'text:str', &
+    'mtype:int:solver.pardiso.matrix_type,ncpu:int:solver.pardiso.threads,msglvl:int:solver.pardiso.m&
+    &essage_level', &
+    'text:str', &
+    'isdefault:int', &
+    'text:str', &
     'iafile:int,icond:int,ipdchk:int,ising:int', &
     'text:str', &
     'nincs:int', &
@@ -1307,8 +1336,8 @@ module yl_diag_registry
     6, 7, 8, 9, 13, 14, 15, 16, 17, 18, 1, 2, &
     0, 4, 5, 6, 9, 10, 11, 14, 15, 16, 17, 18, &
     19, 20, 21, 1, 2, 3, 4, 5, 6, 7, 8, 9, &
-    10, 1, 2, 1, 2, 3, 4, 10, 11, 12, 12, 13, &
-    7, 8, 9, 0, 0, 0 &
+    10, 17, 18, 19, 20, 1, 2, 1, 2, 3, 4, 10, &
+    11, 12, 12, 13, 7, 8, 9, 0, 0, 0 &
     ]
 
 end module yl_diag_registry

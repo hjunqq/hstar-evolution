@@ -1,0 +1,240 @@
+{
+  "manifest_version": 1,
+  "case_id": "solver_2d.benchmark_100x100",
+  "case_dir": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/solver_2d/benchmark_100x100",
+  "label": "ref1",
+  "status": "COMPLETED",
+  "expected_status": "COMPLETED",
+  "expectation_met": true,
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+    "sha256": "ebd0701dc17bdda7de8561a8711cb82618f25e16e1764fcc8d5ad6fdbaf8a54f"
+  },
+  "build_manifest": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/build-manifest.json",
+    "profile": "release",
+    "binary_sha256": "ebd0701dc17bdda7de8561a8711cb82618f25e16e1764fcc8d5ad6fdbaf8a54f"
+  },
+  "platform": {
+    "os": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "hostname": "FemChat"
+  },
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "timeout_seconds": 600.0,
+  "input_check_before": {
+    "ok": true,
+    "problems": []
+  },
+  "input_check_after": {
+    "ok": true,
+    "problems": []
+  },
+  "process": {
+    "command": [
+      "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+      "--adapter=off"
+    ],
+    "cwd": "/tmp/yl-freeze.8z3f9c1q/solver_2d.benchmark_100x100/20260917T105014Z_656b7208_ref1/work",
+    "started_at": "2026-09-17T10:50:14+00:00",
+    "wall_seconds": 0.565,
+    "user_seconds": 0.404883,
+    "system_seconds": 0.11745699999999999,
+    "max_rss_kib": 194676,
+    "returncode": 0,
+    "signal": null,
+    "timed_out": false,
+    "stderr_bytes": 16,
+    "stderr_unexpected_lines": [],
+    "stderr_crash_pattern": false,
+    "inputs_copied": [
+      "1.LOA",
+      "1.aqu",
+      "1.cor",
+      "1.ele",
+      "1.ftr",
+      "1.glb",
+      "1.ifs",
+      "1.loa",
+      "1.man",
+      "1.mat",
+      "1.nrt",
+      "1.opr",
+      "1.pre",
+      "1.sol",
+      "1.tem",
+      "inp"
+    ]
+  },
+  "required_output": {
+    "file": "1.flavia.res",
+    "present": true,
+    "bytes": 1571102,
+    "sha256": "f4f124fa384386634ad104cd95fb5a1d689779e0e02f583f7d0da4f1f13116f5",
+    "parse": {
+      "ok": true,
+      "problems": [],
+      "summary": {
+        "blocks": [
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 10201,
+            "max_abs": 0.0045166467
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 10201,
+            "max_abs": 3653277.4
+          }
+        ]
+      }
+    }
+  },
+  "outputs": [
+    {
+      "name": "1.act",
+      "bytes": 9793,
+      "sha256": "69ba4259a475128417ea624818e2896a4fdc99932cc58e5b0d235ba321a4624c"
+    },
+    {
+      "name": "1.bar",
+      "bytes": 81,
+      "sha256": "6748ad9dfef908b46bc79a4f5f7b6dbb194d050fa4ecccc0e270f012c51d6131"
+    },
+    {
+      "name": "1.bem",
+      "bytes": 162,
+      "sha256": "0b04385c3212086f53e82e13c20c2c77a382d2b697f9c64f5a2dc1f15214c910"
+    },
+    {
+      "name": "1.chk",
+      "bytes": 3661,
+      "sha256": "844289d52cf7b35eaf95267aa55887f9ea7baa2c93db8ecacd403df4d3a06494"
+    },
+    {
+      "name": "1.ctr",
+      "bytes": 254,
+      "sha256": "f6b269900501c6a12056f5c7cb9187a040c3c04d4822ca75cbe7c4709b9fb00d"
+    },
+    {
+      "name": "1.ctt",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.dis",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.fai",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.msh",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.res",
+      "bytes": 1571102,
+      "sha256": "f4f124fa384386634ad104cd95fb5a1d689779e0e02f583f7d0da4f1f13116f5"
+    },
+    {
+      "name": "1.ftf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.gdm",
+      "bytes": 37,
+      "sha256": "c5ad17f98d718d5d50e91b3cc1a27ba3fd48257720cf641d58eb06e7f4b140c2"
+    },
+    {
+      "name": "1.gpv",
+      "bytes": 4440063,
+      "sha256": "40aad4164fdb583d8d83e6a7cb795652ace8963c746ee1378d0d7542938e9102"
+    },
+    {
+      "name": "1.ini",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.inw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.oew",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ogw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ojw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.opw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.res",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.resb",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.rtt",
+      "bytes": 4086508,
+      "sha256": "4e5e64ea211cfc0590a6594d91a22eaeb4d97cca45bfaab7d67f94140a6ab482"
+    },
+    {
+      "name": "1.stf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.sto",
+      "bytes": 0,
+      "sha256": null
+    }
+  ],
+  "diagnostics": [],
+  "diagnostics_malformed": [],
+  "check_summary": null,
+  "check_malformed": [],
+  "protocol_violation": null,
+  "core_dump": false,
+  "state": null,
+  "finished_at": "2026-09-17T10:50:15+00:00",
+  "run_dir": "/tmp/yl-freeze.8z3f9c1q/solver_2d.benchmark_100x100/20260917T105014Z_656b7208_ref1"
+}

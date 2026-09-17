@@ -583,6 +583,17 @@ contains
       return
     end if
 
+    ! WHICH solver's records this file holds is decided by `.glb`, not by `.sol`: legacy
+    ! branches on `type_solver` (Solver.f90:7777) and the two shapes have nothing in common
+    ! -- PROFILE reads one four-integer record, PARDISO reads two records with a title
+    ! before each. Reading the wrong shape does not give wrong numbers, it desynchronises
+    ! the file, which is why the branch is taken from the context rather than guessed from
+    ! the content.
+    if (trim(ctx%type_solver) == 'PARDISO') then
+      call parse_sol_pardiso(unit, sparts, errors)
+      return
+    end if
+
     ! RD: SOL.PROFILE.title#1 (Solver.f90:6829) -- a title line, discarded.
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
     if (.not. sol_read_ok(errors, ios, iomsg_buf, 'SOL.PROFILE.title#1', 6829_int32)) return
@@ -608,6 +619,48 @@ contains
     call opt_set(sparts%solver%profile%positive_definite_check, ipdchk)
     call opt_set(sparts%solver%profile%singularity_check, ising)
   end subroutine parse_sol
+
+  !> The PARDISO arm of `.sol` (Solver.f90:7788-7794).
+  !>
+  !> Four records: a title, `mtype/ncpu/msglvl`, a title, `isdefault`. `isdefault` is a
+  !> CAPABILITY SWITCH, not a value: non-zero makes legacy read a further record of eight
+  !> iparm tuning numbers (Solver.f90:7797-7799) that this build has nowhere to put. It is
+  !> refused by name rather than walked past -- the same rule as the DUNCANCHANG bulk law,
+  !> and for the same reason: a wrong guess about a conditional record desynchronises
+  !> every read after it instead of producing a visibly wrong number.
+  subroutine parse_sol_pardiso(unit, sparts, errors)
+    integer, intent(in) :: unit
+    type(solver_parts_t), intent(inout) :: sparts
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=200) :: text, iomsg_buf
+    integer(int32) :: ios, mtype, ncpu, msglvl, isdefault
+    type(source_location_t) :: loc
+
+    ! RD: SOL.PARDISO.title#1 (Solver.f90:7788) -- a title line, discarded.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) text
+    if (.not. sol_read_ok(errors, ios, iomsg_buf, 'SOL.PARDISO.title#1', 7788_int32)) return
+
+    ! RD: SOL.PARDISO.control (Solver.f90:7790)
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) mtype, ncpu, msglvl
+    if (.not. sol_read_ok(errors, ios, iomsg_buf, 'SOL.PARDISO.control', 7790_int32)) return
+
+    ! RD: SOL.PARDISO.title#2 (Solver.f90:7792) -- a title line, discarded.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) text
+    if (.not. sol_read_ok(errors, ios, iomsg_buf, 'SOL.PARDISO.title#2', 7792_int32)) return
+
+    ! RD: SOL.PARDISO.isdefault (Solver.f90:7794)
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) isdefault
+    if (.not. sol_read_ok(errors, ios, iomsg_buf, 'SOL.PARDISO.isdefault', 7794_int32)) return
+    if (isdefault /= 0_int32) then
+      loc = make_source_location(file='.sol', reader='MAIN_PARDISO', line=7797_int32)
+      call reject_dialect(errors, 'A-SOL', 'pardiso-iparm-tuning', loc, actual=itoa(isdefault))
+      return
+    end if
+
+    call opt_set(sparts%solver%pardiso%matrix_type, mtype)
+    call opt_set(sparts%solver%pardiso%threads, ncpu)
+    call opt_set(sparts%solver%pardiso%message_level, msglvl)
+  end subroutine parse_sol_pardiso
 
   ! ============================================================================
   ! shared helpers

@@ -1179,6 +1179,8 @@ contains
 
     ! G4 -- the linear solver
     call gate_text(errors, 'solver.linear', 'solver', 'linear', state%solver%linear)
+    call gate_int_set(errors, 'solver.pardiso.matrix_type', 'solver', 'pardiso.matrix_type', &
+                      state%solver%pardiso%matrix_type)
     call gate_logical(errors, 'solver.symmetric', 'solver', 'symmetric', state%solver%symmetric)
 
     ! G1, G2 -- every section

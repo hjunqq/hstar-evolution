@@ -184,3 +184,27 @@ reference = "reference/"
 # The three element families are what the deck needs, not a choice: no 2-D deck in the
 # corpus uses kind 1 without kind 25 (reinforcement and its bond element always come as a
 # pair), and self-made decks are not admissible evidence.
+
+[[case]]
+id = "solver_2d.benchmark_100x100"
+path = "golden/solver_2d/benchmark_100x100"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/benchmark_100x100"
+source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
+input_manifest = "golden/solver_2d/benchmark_100x100/input-manifest.json"
+purpose = "the second linear solver: PARDISO, as the only difference from the static baseline"
+migration_phase = "M10"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# Chosen by probing every 2-D PARDISO deck in the curated corpus with the adapter and
+# reading the FIRST refusal. This is the only one whose sole finding is the solver record
+# itself; every other candidate drags in something else first:
+#   tunnel_lining / disc_contact_3d  material property curves (nscurve /= 0)
+#   gravdam                          mdofn /= ndimn
+#   static / goodmanLU / goodman_evolution   runblks > 1
+#   rc_lining                        nlocalbeam / ndimnrt
+#   rcbeam / tunnel / tunnel_sl      CONCRETE (and they are M9's, suspended)
+#
+# It also answers the question the domain opened with: CONCRETE is NOT coupled to PARDISO.
+# 45 of the corpus's PARDISO decks use ELASTIC_ISOTROPIC alone, so no joint slice is needed.

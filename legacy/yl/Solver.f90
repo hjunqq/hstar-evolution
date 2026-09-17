@@ -18,7 +18,7 @@
     real(irk)  tolcg
     logical pardiso_symbolic_done
     integer(ink) pardiso_analyzed_neq
-    integer(ink) iparm(64),maxfct, mnum, mtype, phase_pardiso,msglvl,error,idum   !PARDISO  2008-11-05
+    integer(ink) iparm(64),maxfct, mnum, mtype, phase_pardiso,msglvl,error,idum,isdefault,ncpu   !PARDISO  2008-11-05
     integer(ink) iparm_ctt(64),maxfct_ctt,mnum_ctt,mtype_ctt,phase_pardiso_ctt,msglvl_ctt,error_ctt,idum_ctt
     real   (irk) ddum
     integer(ink), allocatable::iseq_bt(:),totveq_bt(:),iffix_bt(:) !ctt2005
@@ -7756,7 +7756,7 @@
     integer(ink) migcg,jblks,igroup,ielgroup,ielem,nnode,inode,ipoin,jnode,jpoin,ic,iband,nthis,ithis, &
         ipm,lband,jband,icdofn,itotv,ieq,jeq,jcdofn,jtotv,sstore,itwksp,aelemf,aelems,ipea1,ipea2,jgroup, &
         nintf,njntf,iintf,jintf,nevab,ievab,nevabt,nbandi,nbandx,nbandy,ii,icaloctd,  &
-        isdefault,ncpu,reducing_order,PreCGS,permutation,maxiter,out_of_core,eps_pivot,iparm11,iparm13
+        reducing_order,PreCGS,permutation,maxiter,out_of_core,eps_pivot,iparm11,iparm13
     integer(ink) ltotve(300),ntotve,bkind
     integer(ink),allocatable::nbande(:),ldofe(:)
     integer(ink),allocatable::mbandi(:),mbandx(:)
@@ -7784,15 +7784,15 @@
         end if
 
         !fowlling setting for MKL_PARDISO 2008-11-05
-        iparm=0;mtype=2;ncpu=1;msglvl=0;isdefault=1
-        read(solveunit,*)text
-        print *,text
-        read(solveunit,*)mtype,ncpu,msglvl
-        print *,mtype,ncpu,msglvl
-        read(solveunit,*)text
-        print *,text
-        read(solveunit,*)isdefault   !0=use default;1=not use default
-        print *,isdefault
+        iparm=0; if (.not. yl_input_enabled) then; mtype=2;ncpu=1;msglvl=0;isdefault=1; endif
+        if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)text; if (.not. yl_input_enabled) print *,text
+        if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_SOL_PARDISO_title_1,0)
+        if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)mtype,ncpu,msglvl; print *,mtype,ncpu,msglvl
+        if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_SOL_PARDISO_control,0)
+        if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)text; if (.not. yl_input_enabled) print *,text
+        if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_SOL_PARDISO_title_2,0)
+        if (.not. yl_input_enabled) read(solveunit,*,iostat=yl_ios,iomsg=yl_msg)isdefault; print *,isdefault
+        if (.not. yl_input_enabled) call diag_check_read(yl_ios,yl_msg,RD_SOL_PARDISO_isdefault,0)
 
         if(isdefault/=0)then   ! define value for iparm
             read(solveunit,*)text

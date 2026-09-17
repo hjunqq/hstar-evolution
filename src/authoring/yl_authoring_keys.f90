@@ -205,7 +205,21 @@ module yl_authoring_keys
     key_t('surface[].edges[][]',           TV_INT,  .false., ''),                            &
     key_t('surface[].edges[].count',       TV_INT,  .false., ''),                            &
     key_t('surface[].edges.count',         TV_INT,  .true.,  ''),                            &
-    key_t('solver.linear',                 TV_STR,  .true.,  'profile'),                     &
+    key_t('solver.linear',                 TV_STR,  .true.,  'profile|pardiso'),             &
+    ! PARDISO's own settings, required by `solver_requires` exactly when `linear` selects
+    ! it and forbidden otherwise. These are NUMERICS -- they choose how the same equations
+    ! are solved and none of them enters the model.
+    !
+    ! `threads` is carried rather than defaulted because legacy assigns it to `iparm(3)`
+    ! (Solver.f90:7816), so it reaches the factorisation and is part of reproducing the
+    ! deck. Choosing a GOOD value is a performance question and is not this contract's.
+    !
+    ! There is deliberately no key for legacy's `isdefault`: it is not a value but a
+    ! capability switch, and the only admitted setting is "use PARDISO's defaults". A deck
+    ! that sets it is refused by the adapter, by name.
+    key_t('solver.pardiso.matrix_type',    TV_INT,  .false., '-2'),                          &
+    key_t('solver.pardiso.threads',        TV_INT,  .false., ''),                            &
+    key_t('solver.pardiso.message_level',  TV_INT,  .false., '0'),                           &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
     key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y'),           &
     key_t('output.field.count',            TV_INT,  .true.,  ''),                            &
@@ -280,6 +294,7 @@ contains
     call resolve_step_amplitude(doc, file, errors)
     call model_requires(doc, file, errors)
     call initial_stress_requires(doc, file, errors)
+    call solver_requires(doc, file, errors)
     call load_mode_requires(doc, file, errors)
     call load_type_requires(doc, file, errors)
     call check_loads(doc, file, errors)
@@ -390,6 +405,40 @@ contains
       end if
     end do
   end subroutine group_requires
+
+  !> `solver.pardiso.*` is required exactly when `solver.linear` is PARDISO, forbidden
+  !> otherwise. Fourth instance of the same shape, and the same reason every time:
+  !> "required" is a property of a PAIR. Settings written for a solver the case does not
+  !> use would be read by nobody -- legacy only reaches MAIN_PARDISO under
+  !> `type_solver=='PARDISO'` -- and a PARDISO case without them would take its matrix type
+  !> and thread count from whatever the bridge left behind.
+  subroutine solver_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), parameter :: PARDISO_KEYS(3) = [character(len=24) ::                    &
+      'matrix_type', 'threads', 'message_level']
+    integer(int32) :: kl, k
+    logical :: pardiso
+    integer :: f
+
+    kl = doc%find('solver.linear')
+    if (kl == 0_int32) return                  ! a missing solver is require_all's finding
+    pardiso = trim(doc%entry(kl)%svalue) == 'pardiso'
+    do f = 1, size(PARDISO_KEYS)
+      k = doc%find('solver.pardiso.'//trim(PARDISO_KEYS(f)))
+      if (pardiso .and. k == 0_int32) then
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(kl)%line,         &
+                   'solver.pardiso.'//trim(PARDISO_KEYS(f)),                                  &
+                   'solver "pardiso" needs this setting', '', 'an integer')
+      else if (.not. pardiso .and. k /= 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+                   'solver.pardiso.'//trim(PARDISO_KEYS(f)),                                  &
+                   'only solver "pardiso" takes this setting; legacy would never read it',    &
+                   trim(doc%entry(kl)%svalue), 'pardiso')
+      end if
+    end do
+  end subroutine solver_requires
 
   !> `step[].initial_stress.fill_elevation` is required exactly when a DUNCANCHANG material
   !> is present, and forbidden otherwise.

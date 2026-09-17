@@ -348,6 +348,32 @@ def normalize_state(yl_state, mp, raw: Path, out: Path) -> dict:
     }
 
 
+def pinned_env() -> dict:
+    """The environment every run of the solver must use, frozen references included.
+
+    THIS IS PART OF WHAT A REFERENCE MEANS. MKL PARDISO is reproducible run to run only
+    when the thread count is pinned: measured 2026-09-17 on solver_2d.benchmark_100x100,
+    four UNPINNED runs of one binary gave four different `1.flavia.res` hashes, while three
+    PINNED runs reproduced the frozen reference exactly. The differing values sat at 1e-21
+    -- displacements that are numerically zero -- but a byte comparison does not care how
+    small a difference is, and `atol = rtol = 0` is this project's acceptance criterion.
+
+    Every frozen reference was produced through this function. A checker that launches the
+    binary WITHOUT it compares against a reference from a different environment, which is
+    exactly the defect the first PARDISO case exposed: yl_modern_check ran the solver with
+    the ambient environment and its N2 failed on 206 of 61 206 values -- on the modern AND
+    the legacy path alike, for a reason belonging to neither. It stayed invisible until now
+    because every earlier golden used PROFILE, which is single-threaded whatever the
+    environment says.
+
+    LD_LIBRARY_PATH / LD_PRELOAD are dropped for the separate, older reason that a run must
+    not pick up libraries the build manifest never recorded.
+    """
+    env = {k: v for k, v in os.environ.items() if k not in ("LD_LIBRARY_PATH", "LD_PRELOAD")}
+    env.update({"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "MKL_DYNAMIC": "FALSE"})
+    return env
+
+
 def run(args: argparse.Namespace) -> int:
     case_dir = Path(args.case_dir).resolve() if args.case_dir else find_case(args.case_id)
     legacy_dir = case_dir / "legacy"

@@ -279,9 +279,16 @@ contains
     ! count is pinned deliberately -- a row appearing or vanishing unnoticed is exactly
     ! what this assertion is for -- so it moves only together with the reason, never to
     ! make a build go green.
-    call check('T1  the gate partition still has the M3-02 row count, less the four '//       &
-               'removed rows',                                                                &
-               capability_count() == 11)
+    !
+    ! 12 since 2026-09-17: ONE row ADDED, solver.pardiso.matrix_type, when the second
+    ! linear solver arrived. It is gated rather than passed through because the matrix type
+    ! selects the FACTORISATION -- -2 is real symmetric indefinite, 2 is positive definite,
+    ! 11/13 unsymmetric -- and the wrong one factorises the wrong way instead of failing,
+    ! so a value no real deck exercises must be refused by name. This assertion did its job:
+    ! it failed the moment the row appeared, and is being moved here WITH the reason.
+    call check('T1  the gate partition has the M3-02 row count, less the four removed '//     &
+               'rows, plus the PARDISO matrix type',                                          &
+               capability_count() == 12)
     call check('T2  every table row is accounted for by exactly one partition',               &
                capability_count() + dialect_count() == CAPABILITY_ROW_TOTAL)
     call check('T3  the adapter declares at least one dialect', dialect_count() > 0)

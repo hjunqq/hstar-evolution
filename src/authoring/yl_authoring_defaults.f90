@@ -373,6 +373,10 @@ contains
     character(len=:), allocatable :: s
     select case (trim(kind))
     case ('profile'); s = 'PROFILE'
+    ! The direct sparse solver. Its `.sol` record shape is entirely different from
+    ! PROFILE's (Solver.f90:7788-7794 vs :6829-6831), which is why the adapter branches on
+    ! the solver name before reading the file rather than after.
+    case ('pardiso'); s = 'PARDISO'
     case default; s = ''
     end select
   end function solver_code

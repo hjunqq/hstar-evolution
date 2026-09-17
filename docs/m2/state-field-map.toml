@@ -5620,3 +5620,57 @@ determinism = "deterministic"
 snapshot_file = "steps.json"
 reason = "per-step initial-stress datum; only the DUNCANCHANG path reads it on this build, so it is absent on every other golden deck and is not on the observation face (ADR-0009). The material domain accepts on final numerical equivalence instead"
 note = "an ELEVATION, not a thickness: every consumer uses hdam(iblks) - gpcod(ndimn). legacy reads the whole array in ONE record (Global.f90:1079) but indexes it per block, so the contract writes it under the step and the step-scope gate classifies it per_block"
+
+[[field]]
+id = "solver.pardiso.mtype"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.mtype"
+source = ["SOL.PARDISO.control"]
+consumers = ["MAIN_PARDISO"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.pardiso.matrix_type"
+index_by = "none"
+compare = { rule = "ignore", reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead"
+note = "MKL PARDISO matrix type; -2 is real symmetric indefinite. Module-scope in SOLVER (Solver.f90:21)"
+
+[[field]]
+id = "solver.pardiso.ncpu"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.ncpu"
+source = ["SOL.PARDISO.control"]
+consumers = ["MAIN_PARDISO"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.pardiso.threads"
+index_by = "none"
+compare = { rule = "ignore", reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead"
+note = "thread count; legacy assigns it to iparm(3) (Solver.f90:7816) so it reaches the factorisation. A SOLVER_SET local, supplied on the modern path by yl_modern_pardiso"
+
+[[field]]
+id = "solver.pardiso.msglvl"
+checkpoint = "phase_ready(1)"
+legacy_symbol = "solver.msglvl"
+source = ["SOL.PARDISO.control"]
+consumers = ["MAIN_PARDISO"]
+shape = []
+dtype = "i32"
+unit = "1"
+owner = "ProblemState.solver.pardiso.message_level"
+index_by = "none"
+compare = { rule = "ignore", reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "numerics.json"
+reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead"
+note = "PARDISO message level; 0 is silent. Module-scope in SOLVER (Solver.f90:21)"

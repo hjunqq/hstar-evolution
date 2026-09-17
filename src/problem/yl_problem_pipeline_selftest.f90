@@ -949,9 +949,21 @@ contains
     call expect_rule('G3  unsupported material model', 'G3', PE_UNSUPPORTED, &
                      'materials', 'model', d)
 
-    ! G4 -- a linear solver this build does not carry.
+    ! G4 -- a PARDISO matrix type this build does not carry. 2 is real symmetric POSITIVE
+    ! DEFINITE where the admitted -2 is indefinite: the wrong one factorises the wrong way
+    ! rather than failing, which is exactly why it is gated.
     call good_draft(d)
     call opt_set(d%solver%linear, 'PARDISO')
+    call opt_set(d%solver%pardiso%matrix_type, 2_int32)
+    call expect_rule('G4  unsupported pardiso matrix type', 'G4', PE_UNSUPPORTED, &
+                     'solver', 'pardiso.matrix_type', d)
+
+    ! G4 -- a linear solver this build does not carry. It used to be PARDISO; PARDISO was
+    ! admitted in M10, so the counter-example stopped being one and this suite said so.
+    ! SSORPBCG is legacy's iterative solver (Solver.f90:177 dispatches on it) and is still
+    ! outside the set.
+    call good_draft(d)
+    call opt_set(d%solver%linear, 'SSORPBCG')
     call expect_rule('G4  unsupported linear solver', 'G4', PE_UNSUPPORTED, &
                      'solver', 'linear', d)
 

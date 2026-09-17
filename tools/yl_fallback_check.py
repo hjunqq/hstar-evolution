@@ -30,6 +30,14 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# The solver must run under the SAME pinned environment every frozen reference was made
+# under; see yl_run.pinned_env for what happens when it does not.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("yl_run", ROOT / "tools/yl_run.py")
+_yl_run = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_yl_run)
+pinned_env = _yl_run.pinned_env
+
 MAP = ROOT / "docs/m2/state-field-map.toml"
 
 
@@ -112,7 +120,7 @@ def main(argv=None):
         lines[64] = b"  1"
         glb.write_bytes(b"\n".join(lines))
         cp = subprocess.run([str(binary)], cwd=work, stdin=subprocess.DEVNULL,
-                            capture_output=True, text=True, errors="replace")
+                            capture_output=True, text=True, errors="replace", env=pinned_env())
         blob = cp.stdout + cp.stderr
         verdict = "UNSUPPORTED" in blob and "tension_joint_count" in blob
         # An EMPTY 1.flavia.res is not a result: global_data opens the GiD units before
