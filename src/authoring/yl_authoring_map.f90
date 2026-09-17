@@ -36,7 +36,7 @@ module yl_authoring_map
   use yl_problem_types, only: problem_state_t, case_t, material_t, section_t, amplitude_t,  &
                               amplitude_point_t, solver_t, boundary_t, controls_t,           &
                               gravity_t, load_t, output_t, output_field_t, step_t,           &
-                              surface_edge_t, pressure_t,                                     &
+                              surface_edge_t, pressure_t, concentrated_t,                     &
                               activation_t, nset_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,        &
                                make_problem_error, make_source_location,                     &
@@ -116,6 +116,7 @@ contains
     character(len=TOML_LEN_PATH) :: gp, lp
     type(surface_edge_t) :: sedge
     type(pressure_t), allocatable :: prs(:)
+    type(concentrated_t), allocatable :: cfs(:)
 
     site_file = 'case.toml'
     if (present(file)) site_file = file
@@ -372,6 +373,36 @@ contains
         end do
         if (allocated(ld%pressure)) deallocate (ld%pressure)
         call move_alloc(prs, ld%pressure)
+
+        ! The concentrated forces of this step, in declaration order -- which is the order
+        ! legacy reads its point-load groups. The node list comes from the named nset, so
+        ! the author never writes node numbers into a load.
+        n = 0
+        do i = 1, int(doc%count_of('step['//itoa(st)//'].load'))
+          if (text_at(doc, 'step['//itoa(st)//'].load['//itoa(i)//'].type') == 'concentrated') &
+            n = n + 1
+        end do
+        if (allocated(cfs)) deallocate (cfs)
+        allocate (cfs(n))
+        ip = 0
+        do i = 1, int(doc%count_of('step['//itoa(st)//'].load'))
+          lp = 'step['//itoa(st)//'].load['//itoa(i)//']'
+          if (text_at(doc, trim(lp)//'.type') /= 'concentrated') cycle
+          ip = ip + 1
+          call opt_set(cfs(ip)%amplitude,                                                     &
+               int(amplitude_index(doc, text_at(doc, trim(lp)//'.amplitude')), int32))
+          if (allocated(cfs(ip)%value)) deallocate (cfs(ip)%value)
+          allocate (cfs(ip)%value(2))
+          cfs(ip)%value(1) = real_at(doc, trim(lp)//'.value[1]')
+          cfs(ip)%value(2) = real_at(doc, trim(lp)//'.value[2]')
+          iset = nset_index(doc, text_at(doc, trim(lp)//'.nset'))
+          call int_list(doc, 'nset['//itoa(iset)//'].nodes', nodes)
+          if (allocated(cfs(ip)%nodes)) deallocate (cfs(ip)%nodes)
+          allocate (cfs(ip)%nodes(size(nodes)))
+          cfs(ip)%nodes = nodes
+        end do
+        if (allocated(ld%concentrated)) deallocate (ld%concentrated)
+        call move_alloc(cfs, ld%concentrated)
 
         call builder_step_set_load(b, sb, ld, here(line_at(doc, trim(gp)//'.magnitude')), errors)
         if (builder_failed(b)) return

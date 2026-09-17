@@ -36,6 +36,6 @@
   "max_abs_diff": 0.0,
   "first_mismatch": null,
   "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/static_2d/cooks_membrane/reference/results.json",
-  "actual": "/tmp/yl-io-trace.VM6iOJ/results.json",
+  "actual": "/tmp/yl-io-trace.Ygjc84/results.json",
   "tolerance_section": "exact"
 }

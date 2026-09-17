@@ -1,0 +1,27 @@
+# 观察量登记。在任何结果数值被查看之前登记的是**结构**——块名、分量名、节点数——
+# 不是数值。分量名取自 1.flavia.res 的块头，节点/单元数取自 1.glb 的 NPOIN/NELEM。
+version = 1
+case_id = "loads_2d.beam_point_load"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 126
+expected_element_count = 100
+note = "唯一的荷载是一个集中力，且体力为零（gravy = 0，factg = (0,0)）。因此这个算例的位移场**完全由集中力决定**：集中力若没有进入外力向量，位移恒为零，不会像有自重的算例那样得到一个看似合理的解"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true

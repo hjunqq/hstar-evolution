@@ -518,6 +518,26 @@ PT_PY
             log "=== RULE-TABLE CROSS-CHECK FAILED ($TARGET/$PROFILE) rc=$PT_XRC"
             exit 6
         fi
+        # Step scope: every steps(1) read in the publishing modules is accounted for, and
+        # its scope agrees with what legacy does per BLOCK. This gate exists because the
+        # mistake it catches produces perfectly self-consistent numbers -- see the tool's
+        # header. Its self-test runs first, for the reason every suite here does.
+        # The map's own validator. It was not in any target until 2026-09-17, and went red
+        # unnoticed for a day when an evidence rewrite dropped a hand-maintained hits
+        # column: `executed_by` emptied, and eight map fields silently lost the reader
+        # that feeds them. A checker nothing runs is a checker that has stopped checking.
+        log "--- cross-check: docs/m2/state-field-map.toml is internally valid"
+        python3 "$ROOT/tools/yl_state_map.py" check 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== STATE-MAP CHECK FAILED"; exit 6; }
+        # The reader inventory against its gdb evidence, for the same reason.
+        log "--- cross-check: reader inventory vs its evidence"
+        python3 "$ROOT/tools/yl_io_inventory.py" check --evidence "$ROOT"/docs/m1/evidence/*/hits.json 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== READER-INVENTORY CHECK FAILED"; exit 6; }
+        log "--- cross-check: step scope (steps(1) derivations vs legacy's per-block work)"
+        python3 "$ROOT/tools/yl_step_scope_check.py" --selftest 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== STEP-SCOPE SELF-TEST FAILED"; exit 6; }
+        python3 "$ROOT/tools/yl_step_scope_check.py" 2>&1 | tee -a "$LOG"
+        [ "${PIPESTATUS[0]}" -eq 0 ] || { log "=== STEP-SCOPE CHECK FAILED"; exit 6; }
     fi
     log "=== BUILD OK ($TARGET/$PROFILE) $T0 -> $T1: ${#PT_EXES[@]} self-test suites passed"
     exit 0
@@ -597,6 +617,10 @@ if [ "$TARGET" = authoring ]; then
     "$OUT/yl_authoring_test" "$ROOT/cases/golden/loads_2d/wall_reservoir/modern/case.toml" \
         "$OUT/scratch" --loa 2>&1 | tee -a "$LOG"
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (wall_reservoir)" >&2; exit 6; }
+    # The concentrated force's counter-examples need a deck that carries one.
+    "$OUT/yl_authoring_test" "$ROOT/cases/golden/loads_2d/beam_point_load/modern/case.toml" \
+        "$OUT/scratch" --point 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "=== AUTHORING SUITE FAILED (beam_point_load)" >&2; exit 6; }
     T1=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     log "=== BUILD OK (authoring/$PROFILE) $T0 -> $T1: contract validator suite passed"
     exit 0

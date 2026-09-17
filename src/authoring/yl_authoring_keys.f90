@@ -145,13 +145,20 @@ module yl_authoring_keys
     ! two element groups on different gravity histories, two faces at different water
     ! levels. legacy flattens all of that into parallel arrays indexed by group or by edge
     ! range; the author writes objects and the adapter does the flattening.
-    key_t('step[].load[].type',            TV_STR,  .true.,  'gravity|pressure'),            &
+    key_t('step[].load[].type',            TV_STR,  .true.,  'gravity|pressure|concentrated'), &
     key_t('step[].load[].amplitude',       TV_STR,  .true.,  ''),                            &
     ! --- type = "gravity"
     key_t('step[].load[].magnitude',       TV_REAL, .false., ''),                            &
     key_t('step[].load[].direction[]',     TV_REAL, .false., ''),                            &
     key_t('step[].load[].direction.count', TV_INT,  .false., '2'),                           &
     key_t('step[].load[].apply_to',        TV_STR,  .false., ''),                            &
+    ! --- type = "concentrated"
+    ! A force vector applied at every node of a named set. legacy's point-load group has
+    ! exactly this shape; `nudofn` and `npload` are the two array lengths and are not
+    ! written by the author.
+    key_t('step[].load[].nset',            TV_STR,  .false., ''),                            &
+    key_t('step[].load[].value[]',         TV_REAL, .false., ''),                            &
+    key_t('step[].load[].value.count',     TV_INT,  .false., '2'),                           &
     ! --- type = "pressure"
     key_t('step[].load[].surface',         TV_STR,  .false., ''),                            &
     key_t('step[].load[].distribution.type', TV_STR, .false., 'linear_in_coordinate'),       &
@@ -558,14 +565,21 @@ contains
     type(toml_doc_t), intent(in) :: doc
     character(len=*), intent(in) :: file
     type(problem_errors_t), intent(inout) :: errors
-    character(len=*), parameter :: GRAV(3) = [character(len=24) ::                            &
-      'magnitude', 'direction.count', 'apply_to']
-    character(len=*), parameter :: PRES(6) = [character(len=24) ::                            &
+    ! One row per (field, owning type). A field is REQUIRED on its own type and forbidden
+    ! on the others, and both directions are checked -- a distribution written on a
+    ! gravity object would otherwise be read by nobody and reported by nobody.
+    character(len=*), parameter :: FIELD(12) = [character(len=24) ::                          &
+      'magnitude', 'direction.count', 'apply_to',                                             &
       'surface', 'distribution.type', 'distribution.axis', 'distribution.at.count',           &
-      'distribution.value.count', 'distribution.scale']
+      'distribution.value.count', 'distribution.scale',                                       &
+      'nset', 'value.count', 'amplitude']
+    character(len=*), parameter :: OWNER(12) = [character(len=12) ::                          &
+      'gravity', 'gravity', 'gravity',                                                        &
+      'pressure', 'pressure', 'pressure', 'pressure', 'pressure', 'pressure',                 &
+      'concentrated', 'concentrated', '*']
     integer(int32) :: a, b, kt, k
     character(len=TOML_LEN_PATH) :: base
-    logical :: is_grav
+    character(len=32) :: ty
     integer :: f
 
     do a = 1_int32, doc%count_of('step')
@@ -573,19 +587,17 @@ contains
         base = 'step['//trim(itoa(a))//'].load['//trim(itoa(b))//']'
         kt = doc%find(trim(base)//'.type')
         if (kt == 0_int32) cycle               ! a missing type is require_all's finding
-        is_grav = trim(doc%entry(kt)%svalue) == 'gravity'
-        do f = 1, size(GRAV)
-          call needs(doc, file, errors, trim(base), trim(GRAV(f)), is_grav, kt, 'gravity')
-        end do
-        do f = 1, size(PRES)
-          call needs(doc, file, errors, trim(base), trim(PRES(f)), .not. is_grav, kt,         &
-                     'pressure')
+        ty = doc%entry(kt)%svalue
+        do f = 1, size(FIELD)
+          if (trim(OWNER(f)) == '*') cycle     ! required of every type, by the key table
+          call needs(doc, file, errors, trim(base), trim(FIELD(f)),                           &
+                     trim(ty) == trim(OWNER(f)), kt, trim(OWNER(f)))
         end do
         ! `apply_to` names an element set or the whole model. It is required rather than
         ! defaulted to "all" because on a two-material deck "which elements are heavy" is
         ! a physical statement, and this contract does not guess physical statements.
         k = doc%find(trim(base)//'.apply_to')
-        if (is_grav .and. k /= 0_int32) then
+        if (trim(ty) == 'gravity' .and. k /= 0_int32) then
           if (trim(doc%entry(k)%svalue) /= 'all') then
             if (.not. name_exists(doc, 'elset', trim(doc%entry(k)%svalue))) then
               call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(k)%line,     &
@@ -593,6 +605,16 @@ contains
                          'refers to an elset that this file does not define',                 &
                          trim(doc%entry(k)%svalue), '"all" or a declared [[elset]] name')
             end if
+          end if
+        end if
+        ! and the concentrated force's node set, by the same rule
+        k = doc%find(trim(base)//'.nset')
+        if (k /= 0_int32) then
+          if (.not. name_exists(doc, 'nset', trim(doc%entry(k)%svalue))) then
+            call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(k)%line,       &
+                       trim(base)//'.nset',                                                   &
+                       'refers to a node set that this file does not define',                 &
+                       trim(doc%entry(k)%svalue), 'a declared [[nset]] name')
           end if
         end if
       end do
@@ -630,7 +652,7 @@ contains
     type(toml_doc_t), intent(in) :: doc
     character(len=*), intent(in) :: file
     type(problem_errors_t), intent(inout) :: errors
-    integer(int32) :: a, b, k1, k2, kn, kv
+    integer(int32) :: a, b, k1, k2, km, kn, kv
     character(len=TOML_LEN_PATH) :: base
     real(real64) :: d1, d2
 
@@ -638,16 +660,22 @@ contains
       do b = 1_int32, doc%count_of('step['//trim(itoa(a))//'].load')
         base = 'step['//trim(itoa(a))//'].load['//trim(itoa(b))//']'
 
+        ! A zero-length direction is an error only when something is being applied
+        ! ALONG it. `magnitude = 0` with `direction = [0, 0]` is how a real deck says it
+        ! has no body force at all, and legacy writes exactly that (gravy = 0,
+        ! factg = (0,0) -- loads_2d.beam_point_load). Refusing it would have forced that
+        ! deck to write a direction it does not have.
         k1 = doc%find(trim(base)//'.direction[1]')
         k2 = doc%find(trim(base)//'.direction[2]')
-        if (k1 /= 0_int32 .and. k2 /= 0_int32) then
+        km = doc%find(trim(base)//'.magnitude')
+        if (k1 /= 0_int32 .and. k2 /= 0_int32 .and. km /= 0_int32) then
           d1 = doc%entry(k1)%rvalue
           d2 = doc%entry(k2)%rvalue
-          if (d1*d1 + d2*d2 == 0.0_real64) then
+          if (d1*d1 + d2*d2 == 0.0_real64 .and. doc%entry(km)%rvalue /= 0.0_real64) then
             call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k1)%line,     &
                        trim(base)//'.direction',                                              &
-                       'the direction has zero length, so it names no direction at all',      &
-                       '[0, 0]', 'a vector with non-zero length')
+                       'a non-zero magnitude along a zero-length direction names no load '//  &
+                       'at all', '[0, 0]', 'a vector with non-zero length')
           end if
         end if
 

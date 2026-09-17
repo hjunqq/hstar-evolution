@@ -1,0 +1,78 @@
+{
+  "structure_ok": true,
+  "problems": [],
+  "blocks": [
+    {
+      "name": "DISPLACEMENT",
+      "ok": false,
+      "n_values": 60,
+      "n_mismatch": 22,
+      "max_abs_diff": 1.0000000027804608e-12,
+      "max_abs_diff_at": {
+        "node": 14,
+        "component": 2,
+        "reference": -3.3210937e-05,
+        "actual": -3.3210938e-05
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 2,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "STRESS",
+      "ok": false,
+      "n_values": 120,
+      "n_mismatch": 66,
+      "max_abs_diff": 3.1676021000000004e-11,
+      "max_abs_diff_at": {
+        "node": 30,
+        "component": 2,
+        "reference": 2.7742733e-11,
+        "actual": 5.9418754e-11
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 1,
+        "component": 3
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "PLASTICSTRAIN",
+      "ok": true,
+      "n_values": 30,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    }
+  ],
+  "passed": false,
+  "n_blocks": 3,
+  "n_values": 210,
+  "n_mismatch": 88,
+  "max_abs_diff": 3.1676021000000004e-11,
+  "first_mismatch": {
+    "block": "DISPLACEMENT",
+    "step": 1.0,
+    "node": 2,
+    "component": 1,
+    "reference": 9.9882333e-22,
+    "actual": 1.1126796e-21,
+    "why": "outside tolerance"
+  },
+  "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/plasticity/mini_mc/reference/results.json",
+  "actual": "/tmp/yl-io-trace.4zisZ2/results.json",
+  "tolerance_section": "exact"
+}

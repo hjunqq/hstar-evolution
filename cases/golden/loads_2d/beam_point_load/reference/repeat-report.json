@@ -1,0 +1,38 @@
+{
+ "case_id": "loads_2d.beam_point_load",
+ "test_id": "B02",
+ "frozen_at": "2026-09-17T00:28:00+00:00",
+ "binary_sha256": "2810fda0a2d5f9fdb83e6217b6f3a723685b3450beb62d64f0277ac42e4b467d",
+ "build_profile": "release",
+ "entry": "--adapter=off (legacy readers); the reference is what LEGACY produces",
+ "threads": {
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "runs": [
+  {
+   "label": "ref1",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "304ceb1179ea5bd358bf047b2d8585bcd9dd659b01f71637368b46a63d5bbfab"
+  },
+  {
+   "label": "ref2",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "304ceb1179ea5bd358bf047b2d8585bcd9dd659b01f71637368b46a63d5bbfab"
+  },
+  {
+   "label": "ref3",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "304ceb1179ea5bd358bf047b2d8585bcd9dd659b01f71637368b46a63d5bbfab"
+  }
+ ],
+ "all_completed": true,
+ "flavia_res_identical": true,
+ "comparison_rule": "atol = rtol = 0 (B02)"
+}

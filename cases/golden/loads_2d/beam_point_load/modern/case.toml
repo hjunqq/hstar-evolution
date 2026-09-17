@@ -1,0 +1,115 @@
+# A simply supported plate under a single concentrated force, and nothing else.
+#
+# This is the .loa family's point-load deck, and what makes it the right case for that
+# capability is what it does NOT have: the body force is genuinely zero, so the whole
+# displacement field is decided by the concentrated force. Lose the force and the answer
+# is not wrong, it is identically zero -- which no self-consistent run could hide.
+version = 1
+
+[case]
+name        = "beam_point_load"
+units       = "SI"
+description = "2-D Q4 plane-strain plate, 1.0 x 0.25 m, held at both bottom corners, with -10 kN at the centre of the top edge"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name          = "plate"
+element_count = 100
+
+# The supports: the bottom-left corner is pinned, the bottom-right one rolls.
+[[nset]]
+name  = "corner_left_x"
+nodes = [1]
+
+[[nset]]
+name  = "corner_left_y"
+nodes = [1]
+
+[[nset]]
+name  = "corner_right_y"
+nodes = [21]
+
+# Where the load acts: the midpoint of the top edge.
+[[nset]]
+name  = "top_centre"
+nodes = [116]
+
+[[material]]
+name              = "concrete"
+model             = "elastic_isotropic"
+density           = 2400.0
+E                 = 3.0e10
+nu                = 0.2
+thermal_expansion = 1.0e-5
+
+[[section]]
+name        = "plate"
+elset       = "plate"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[step]]
+name          = "point_load"
+procedure     = "static"
+load_mode     = "load"
+reset_state   = false
+active_elsets = ["plate"]
+
+[step.controls]
+increments       = 1
+substeps         = 1
+time_increment   = 1.0
+max_iterations   = 5
+tolerance_force  = 1.0e-5
+tolerance_dof    = 1.0e-5
+stiffness_update = "first_iteration"
+
+# The boundary records are declared in the order legacy's .pre stores them.
+[[step.boundary]]
+nset  = "corner_left_x"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "corner_left_y"
+dof   = [2]
+value = 0.0
+
+[[step.boundary]]
+nset  = "corner_right_y"
+dof   = [2]
+value = 0.0
+
+# No body force at all. legacy writes gravy = 0 with factg = (0, 0), and the contract says
+# the same rather than inventing a direction the deck does not have -- the zero-direction
+# rule applies to a NON-ZERO magnitude (authoring-contract section 8.3).
+[[step.load]]
+type      = "gravity"
+magnitude = 0.0
+direction = [0.0, 0.0]
+amplitude = "constant"
+apply_to  = "all"
+
+[[step.load]]
+type      = "concentrated"
+nset      = "top_centre"
+value     = [0.0, -10000.0]
+amplitude = "constant"
+
+[solver]
+linear = "profile"
+
+[output]
+format           = "gid"
+field            = ["u", "s"]
+stress_averaging = "direct"

@@ -12,7 +12,7 @@ module yl_diag_registry
   implicit none
   public
 
-  integer, parameter :: YL_NREADERS = 166
+  integer, parameter :: YL_NREADERS = 172
   integer, parameter :: YL_LEN_READER_ID = 96
   integer, parameter :: YL_LEN_READER_SITE = 32
   integer, parameter :: YL_LEN_READER_FILE = 16
@@ -187,6 +187,12 @@ module yl_diag_registry
   integer, parameter :: RD_LOA_external_load_1_edge_nodes = 164
   integer, parameter :: RD_LOA_external_load_2_edge_load_group = 165
   integer, parameter :: RD_LOA_external_load_2_edge_load_distribution = 166
+  integer, parameter :: RD_LOA_external_load_1_point_load_group = 167
+  integer, parameter :: RD_LOA_external_load_1_point_load_force = 168
+  integer, parameter :: RD_LOA_external_load_1_point_load_nodes = 169
+  integer, parameter :: RD_LOA_external_load_1_point_load_extrapolation = 170
+  integer, parameter :: RD_LOA_external_load_2_edge_pressure_nodal = 171
+  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution_2 = 172
 
   character(len=96), parameter :: YL_READER_ID(YL_NREADERS) = [character(len=96) :: &
     'INP.FEM90.title#1', &
@@ -354,7 +360,13 @@ module yl_diag_registry
     'LOA.external_load_1.edge_chunk_header', &
     'LOA.external_load_1.edge_nodes', &
     'LOA.external_load_2.edge_load_group', &
-    'LOA.external_load_2.edge_load_distribution' &
+    'LOA.external_load_2.edge_load_distribution', &
+    'LOA.external_load_1.point_load_group', &
+    'LOA.external_load_1.point_load_force', &
+    'LOA.external_load_1.point_load_nodes', &
+    'LOA.external_load_1.point_load_extrapolation', &
+    'LOA.external_load_2.edge_pressure_nodal', &
+    'LOA.external_load_2.edge_load_distribution_2' &
     ]
 
   character(len=32), parameter :: YL_READER_SITE(YL_NREADERS) = [character(len=32) :: &
@@ -480,8 +492,8 @@ module yl_diag_registry
     'Load.f90:231', &
     'Load.f90:240', &
     'Load.f90:242', &
-    'Load.f90:364', &
-    'Load.f90:366', &
+    'Load.f90:367', &
+    'Load.f90:369', &
     'Material.f90:620', &
     'Material.f90:625', &
     'Material.f90:645', &
@@ -492,17 +504,17 @@ module yl_diag_registry
     'Prescrib.f90:220', &
     'Prescrib.f90:235', &
     'Prescrib.f90:242', &
-    'Load.f90:924', &
-    'Load.f90:926', &
+    'Load.f90:927', &
     'Load.f90:929', &
-    'Load.f90:974', &
-    'Load.f90:976', &
-    'Load.f90:983', &
-    'Load.f90:985', &
-    'Load.f90:995', &
-    'Load.f90:997', &
-    'Load.f90:1076', &
-    'Load.f90:1078', &
+    'Load.f90:932', &
+    'Load.f90:977', &
+    'Load.f90:979', &
+    'Load.f90:986', &
+    'Load.f90:988', &
+    'Load.f90:998', &
+    'Load.f90:1000', &
+    'Load.f90:1079', &
+    'Load.f90:1081', &
     'Temper.f90:124', &
     'Temper.f90:126', &
     'Temper.f90:152', &
@@ -519,11 +531,17 @@ module yl_diag_registry
     'Fem.f90:3595', &
     'Fem.f90:3627', &
     'Fem.f90:3633', &
-    'Load.f90:374', &
-    'Load.f90:376', &
-    'Load.f90:385', &
-    'Load.f90:941', &
-    'Load.f90:947' &
+    'Load.f90:377', &
+    'Load.f90:379', &
+    'Load.f90:388', &
+    'Load.f90:944', &
+    'Load.f90:950', &
+    'Load.f90:250', &
+    'Load.f90:261', &
+    'Load.f90:266', &
+    'Load.f90:294', &
+    'Load.f90:643', &
+    'Load.f90:961' &
     ]
 
   character(len=16), parameter :: YL_READER_FILE(YL_NREADERS) = [character(len=16) :: &
@@ -688,6 +706,12 @@ module yl_diag_registry
     '.man', &
     '.man', &
     '.man', &
+    '.loa', &
+    '.loa', &
+    '.loa', &
+    '.loa', &
+    '.loa', &
+    '.loa', &
     '.loa', &
     '.loa', &
     '.loa', &
@@ -861,6 +885,12 @@ module yl_diag_registry
     'loadunit', &
     'loadunit', &
     'loadunit', &
+    'loadunit', &
+    'loadunit', &
+    'loadunit', &
+    'loadunit', &
+    'loadunit', &
+    'loadunit', &
     'loadunit' &
     ]
 
@@ -1030,7 +1060,13 @@ module yl_diag_registry
     'startup', &
     'startup', &
     'block_lazy(2)', &
-    'block_lazy(2)' &
+    'block_lazy(2)', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'reached_only', &
+    'reached_only', &
+    'reached_only' &
     ]
 
   character(len=256), parameter :: YL_READER_FIELD(YL_NREADERS) = [character(len=256) :: &
@@ -1231,7 +1267,13 @@ module yl_diag_registry
     &n_axis,code_load:int', &
     'cor0:real:steps[0].load.pressure[].at,cor1:real:steps[0].load.pressure[].at,p0:real:steps[0].loa&
     &d.pressure[].value,p1:real:steps[0].load.pressure[].value,fact:real:steps[0].load.pressure[].sca&
-    &le' &
+    &le', &
+    'order_time_curve:int:steps[0].load.concentrated[].amplitude,nudofn:int,npload:int,nline:int', &
+    'pxyz:real:steps[0].load.concentrated[].value', &
+    'list:int:steps[0].load.concentrated[].nodes', &
+    '', &
+    '', &
+    '' &
     ]
 
   integer, parameter :: YL_READER_SEQ(YL_NREADERS) = [integer :: &
@@ -1248,7 +1290,8 @@ module yl_diag_registry
     6, 7, 8, 9, 13, 14, 15, 16, 1, 2, 0, 4, &
     5, 6, 9, 10, 11, 14, 15, 16, 17, 18, 19, 20, &
     21, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 1, &
-    2, 1, 2, 3, 4, 10, 11, 12, 12, 13 &
+    2, 1, 2, 3, 4, 10, 11, 12, 12, 13, 7, 8, &
+    9, 0, 0, 0 &
     ]
 
 end module yl_diag_registry

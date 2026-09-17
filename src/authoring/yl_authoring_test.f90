@@ -22,7 +22,7 @@ program yl_authoring_test
 
   integer :: pass, fail
   character(len=512) :: deck, scratch, mode
-  logical :: clean_only, plastic, loa
+  logical :: clean_only, plastic, loa, point
 
   pass = 0
   fail = 0
@@ -34,6 +34,7 @@ program yl_authoring_test
   clean_only = (trim(mode) == '--clean-only')
   plastic = (trim(mode) == '--plastic')
   loa = (trim(mode) == '--loa')
+  point = (trim(mode) == '--point')
 
   write (output_unit, '(a)') '== yl_authoring_test =='
   write (output_unit, '(a)') '   deck    : '//trim(deck)
@@ -44,6 +45,46 @@ program yl_authoring_test
 
   if (clean_only) then
     write (output_unit, '(a)') '-- counter-examples: not on this deck (--clean-only)'
+    write (output_unit, '(a)') ''
+    write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
+    if (fail > 0) then
+      write (output_unit, '(a,i0,a)') '== FAIL (', fail, ' checks failed) =='
+      error stop 1
+    end if
+    write (output_unit, '(a)') '== PASS =='
+    stop
+  end if
+
+  ! --point: the counter-examples of the concentrated force. They need a deck that HAS
+  ! one, and the golden point-load deck is that deck -- the same file the modern gate
+  ! drives bit-exactly, so a rule that stops matching reality fails here first.
+  if (point) then
+    write (output_unit, '(a)') '-- counter-examples of the concentrated force'
+    ! a force naming a node set this file does not define
+    call expect_bad('dangling load nset', 'nset      = "top_centre"', &
+                    'nset      = "midspan"', 'DANGLING_REF', 2, 'nset')
+    ! the conditional requirement, forward direction
+    call expect_bad('concentrated without a node set', 'nset      = "top_centre"', &
+                    '# nset removed', 'MISSING_FIELD', 2, 'nset')
+    call expect_bad('concentrated without a force', 'value     = [0.0, -10000.0]', &
+                    '# value removed', 'MISSING_FIELD', 2, 'value')
+    ! and backwards: a field belonging to another type would be read by nobody
+    call expect_bad('gravity field on a concentrated load', 'nset      = "top_centre"', &
+                    'apply_to  = "all"'//new_line('a')//'nset      = "top_centre"', &
+                    'INVALID_INPUT', 2, 'apply_to')
+    ! a force with more components than the model has degrees of freedom is a capability
+    ! refusal, not a typo: legacy would read nudofn of them and this build has two
+    call expect_bad('force with three components', 'value     = [0.0, -10000.0]', &
+                    'value     = [0.0, -10000.0, 0.0]', 'UNSUPPORTED', 3, 'value')
+    ! The relaxed zero-direction rule has no counter-example HERE, and that is the
+    ! honest shape of it. What this deck proves is the ACCEPTANCE half: it carries
+    ! `magnitude = 0.0` with `direction = [0, 0]` -- legacy's own gravy = 0, factg =
+    ! (0,0) -- and the unchanged-deck check above passes, which is the assertion. The
+    ! refusal half still has its counter-example, on lame_cylinder, where the magnitude
+    ! is 9.81 and zeroing the direction is a real error. Writing a second one here would
+    ! mean mutating the magnitude and then asserting a finding on the direction line,
+    ! i.e. testing which of two contradicting lines the message points at rather than
+    ! testing the rule.
     write (output_unit, '(a)') ''
     write (output_unit, '(a,i0,a,i0,a)') '-- ', pass, '/', pass + fail, ' checks passed'
     if (fail > 0) then

@@ -1,0 +1,57 @@
+{
+  "structure_ok": true,
+  "problems": [],
+  "blocks": [
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 252,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "STRESS",
+      "ok": false,
+      "n_values": 504,
+      "n_mismatch": 6,
+      "max_abs_diff": 1.2778401e-10,
+      "max_abs_diff_at": {
+        "node": 11,
+        "component": 3,
+        "reference": 1.114131e-11,
+        "actual": -1.166427e-10
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 11,
+        "component": 3
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    }
+  ],
+  "passed": false,
+  "n_blocks": 2,
+  "n_values": 756,
+  "n_mismatch": 6,
+  "max_abs_diff": 1.2778401e-10,
+  "first_mismatch": {
+    "block": "STRESS",
+    "step": 1.0,
+    "node": 11,
+    "component": 3,
+    "reference": 1.114131e-11,
+    "actual": -1.166427e-10,
+    "why": "outside tolerance"
+  },
+  "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/loads_2d/beam_point_load/reference/results.json",
+  "actual": "/tmp/yl-io-trace.Vxxqw2/results.json",
+  "tolerance_section": "exact"
+}

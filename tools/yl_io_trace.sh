@@ -54,17 +54,49 @@ mkdir -p "$OUT"
 python3 "$ROOT/tools/yl_io_inventory.py" gdb-script --log "$WORK/hits.log" -o "$WORK/bp.gdb" \
     --binary "$BIN" --locations "$OUT/bp-locations.json"
 
+# The control run: the SAME binary, same inputs, no gdb. What this comparison has to
+# establish is that the instrumentation is inert -- breakpoints did not perturb the run --
+# and the only comparison that establishes it is against this binary's own output.
+#
+# It used to compare against the frozen reference instead, which is a DIFFERENT claim: the
+# reference is produced by the release (-O2) build and the tracer runs the trace (-O0)
+# build, so that comparison was really asserting build independence, which this project
+# has registered as open debt rather than established. It passed on the static pair by
+# luck and failed on the first deck with genuinely zero shear stresses
+# (loads_2d.beam_point_load, 2026-09-17: 6 of 756 values, max|d| = 1.3e-10, all of them
+# noise around zero). Both comparisons are made now; only the one the tracer can honestly
+# claim is fatal.
+( cd "$WORK" && OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 "$BIN" --adapter=off < /dev/null > plain.txt 2>&1 ) || true
+[ -s "$WORK/1.flavia.res" ] || { echo "control run wrote no results for $CASE_ID" >&2; exit 5; }
+cp "$WORK/1.flavia.res" "$WORK/plain.flavia.res"
+
 ( cd "$WORK" && OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 gdb -batch -x bp.gdb "$BIN" > gdb-console.txt 2>&1 ) || true
 cp "$WORK/gdb-console.txt" "$OUT/gdb-console.txt"
 python3 "$ROOT/tools/yl_io_inventory.py" hits --log "$WORK/hits.log" --case-id "$CASE_ID" -o "$OUT/hits.json"
 
+if ! cmp -s "$WORK/plain.flavia.res" "$WORK/1.flavia.res"; then
+    echo "REJECTED: $CASE_ID -- the same binary produced different results with and without" >&2
+    echo "          gdb, so the instrumentation perturbed the run and the hit counts are" >&2
+    echo "          evidence about a different execution than the one being measured." >&2
+    exit 5
+fi
+
+# And, reported rather than enforced: how this build compares with the frozen reference.
+# A large difference here would mean the trace build is a different program, which is
+# worth seeing even though it is not what this tool is for.
 REF_RES="$CASE_DIR/reference/results.json"
 python3 "$ROOT/tools/yl_parse_flavia.py" "$WORK/1.flavia.res" -o "$WORK/results.json" >/dev/null
 if python3 "$ROOT/tools/yl_compare.py" "$REF_RES" "$WORK/results.json" -o "$OUT/compare-vs-reference.json" >/dev/null; then
-    echo "OK: $CASE_ID traced; results identical to reference; evidence in $OUT"
+    echo "OK: $CASE_ID traced; instrumentation inert, and this build also matches the frozen reference exactly"
 else
-    echo "REJECTED: $CASE_ID results differ from reference under gdb; see $OUT/compare-vs-reference.json" >&2
-    exit 5
+    echo "OK: $CASE_ID traced; instrumentation inert (same binary, with and without gdb, byte identical)."
+    python3 - "$OUT/compare-vs-reference.json" <<'PYEOF'
+import json, sys
+d = json.load(open(sys.argv[1]))
+print(f"    note: the trace build differs from the release reference on "
+      f"{d['n_mismatch']}/{d['n_values']} values, max|d| = {d['max_abs_diff']:.3e} -- "
+      f"that is build independence (open debt), not instrumentation")
+PYEOF
 fi
 python3 - "$BIN" "$OUT" <<'PY'
 import hashlib, json, sys, pathlib

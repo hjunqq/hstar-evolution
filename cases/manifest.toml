@@ -107,3 +107,24 @@ reference = "reference/"
 # is WHY these decks have two blocks. This is the smallest of them: 46 nodes, 32 elements,
 # 4 edges, one material. Block 1 is self-weight on group 1 alone; block 2 adds group 2 and
 # a water load with the surface at y = 50 (Load.f90 `water = 2`, fact = 9810).
+
+[[case]]
+id = "loads_2d.beam_point_load"
+path = "golden/loads_2d/beam_point_load"
+source_repository = "/home/huijun/HSTAR_Next/hstar_jobs"
+source_path = "0413_164206_1c44582f"
+source_commit = "n/a (job directory, not a git tree)"
+input_manifest = "golden/loads_2d/beam_point_load/input-manifest.json"
+purpose = "the .loa family: a concentrated force, and a step whose body force is genuinely zero"
+migration_phase = "M7"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# The smallest point-load deck in the corpus, and the only capability it adds is the point
+# load itself: 126 nodes, 100 elements, one group, one elastic material, one block, Q4 /
+# PROFILE / LOAD / type_nl 5 -- every one of which the whitelist already admits. A simply
+# supported 1.0 x 0.25 m plate, held at both bottom corners, with -10 kN at the centre of
+# the top edge. Its body force is ZERO (gravy = 0, factg = (0,0)), which makes it the one
+# golden case whose displacement field is decided entirely by the new capability: lose the
+# point load and the answer is not wrong, it is identically zero.
+

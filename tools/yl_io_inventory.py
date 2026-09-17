@@ -340,13 +340,24 @@ def cmd_check(a):
         exp = "read" if entry in readers else c["stmt"]
         if c["stmt"] != exp and entry in readers:
             problems.append(f"{entry['id']}: registered as reader but census stmt is {c['stmt']}")
-        # evidence consistency. A breakpoint on a one-line `if (cond) stmt` fires when
-        # the line is reached even if cond is false; such entries carry reached_only=true
-        # plus condition_value and must claim no execution.
+        # evidence consistency. A breakpoint can fire for a line that did not execute,
+        # in two ways, and `reached_only` covers both:
+        #   * a one-line `if (cond) stmt` -- the breakpoint is on the line, so it fires
+        #     whenever the line is reached, false condition included. Census `inline_if`.
+        #   * the line table does not map this line to an address of its own, so gdb
+        #     either slid the breakpoint to the next line with code (the tracer records
+        #     these as `fallback_sites`) or bound it to an address the enclosing branch
+        #     also passes through. R27 found the mirror image of this -- one line, several
+        #     address ranges -- and the correspondence is not exact in either direction.
+        #     Such an entry carries `reached_reason` naming the condition that was false.
+        # Either way the entry must claim no execution: the hit is not evidence that the
+        # statement ran.
         reached_only = bool(entry.get("reached_only", False))
-        if reached_only and not c.get("inline_if"):
-            problems.append(f"{entry['id']}: reached_only but census has no inline if")
-        if reached_only and not entry.get("condition_value"):
+        if reached_only and not c.get("inline_if") and not entry.get("reached_reason"):
+            problems.append(f"{entry['id']}: reached_only on a statement that is not an "
+                            f"inline `if` needs reached_reason -- say which enclosing "
+                            f"condition was false and why the breakpoint fired anyway")
+        if reached_only and c.get("inline_if") and not entry.get("condition_value"):
             problems.append(f"{entry['id']}: reached_only requires condition_value")
         for case_id, doc in evidence.items():
             n = doc["hits"].get(site, 0)

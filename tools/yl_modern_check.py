@@ -277,6 +277,19 @@ def main(argv=None):
         if "boundary" not in blob:
             problems.append("N3 boundaries that change: the refusal did not name the field")
 
+    # b5 -- the other half of the steps(1) hazard. Legacy reads some fields once for the
+    # whole analysis, so this build commits them from step 1; a later step that disagrees
+    # would be dropped silently. Predicted before running: exit 3, the message saying the
+    # steps disagree about something legacy reads once.
+    if multi is not None:
+        blob = rejected("steps that disagree about a per-analysis field", "--input=case.toml",
+                        lambda t: t.replace('procedure     = "static"',
+                                            'procedure     = "dynamic"', 1)
+                        if t.count('procedure     = "static"') > 1 else t,
+                        case=multi)
+        if "reads once" not in blob and "static" not in blob:
+            problems.append("N3 steps disagree: the refusal did not say what it compared")
+
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",
                     lambda t: sub("density = 2400.0", 'density = "heavy"')(

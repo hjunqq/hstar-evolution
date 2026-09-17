@@ -187,3 +187,27 @@ id = "LOA.external_load_2.edge_load_distribution"
 state_target = "steps[0].load.pressure[]"
 reason = "cor0/cor1/p0/p1/fact. Same carrier, same reason"
 evidence = "measured on loads_2d.wall_reservoir: gpwater(1) = (water 2, cor0 50, cor1 0, p0 0, p1 50, fact 9810) on the modern path, identical to the legacy read"
+
+# The point-load records, on the executed path since loads_2d.beam_point_load (M7,
+# 2026-09-17). Reproduced by the MODERN input path -- `[[step.load]] type =
+# "concentrated"` carried through ProblemState.steps[].load.concentrated -- and not by
+# the M4 legacy-deck adapter, which has no point-load parser. Unlike the edge records,
+# this one is not blocked by the block count: a legacy-deck parser for it is simply not
+# written, and would be the way to delete these three rows.
+[[not_adapted]]
+id = "LOA.external_load_1.point_load_group"
+state_target = "steps[0].load.concentrated[]"
+reason = "order_time_curve/nudofn/npload. The modern path carries the curve as an amplitude reference and the two counts as array lengths; no legacy-deck parser exists"
+evidence = "measured on loads_2d.beam_point_load: the modern path commits nplgroup = 1 with pload(1)%order_time_curve = 1, and the run reproduces the frozen reference exactly (2 blocks, 756 values, max|d| = 0)"
+
+[[not_adapted]]
+id = "LOA.external_load_1.point_load_force"
+state_target = "steps[0].load.concentrated[]"
+reason = "the force vector; same carrier, same reason"
+evidence = "measured on loads_2d.beam_point_load: pxyz = (0, -10000) reaches the solver through ProblemState and the results are bit-identical to legacy's"
+
+[[not_adapted]]
+id = "LOA.external_load_1.point_load_nodes"
+state_target = "steps[0].load.concentrated[]"
+reason = "the node list, which the modern path takes from a named [[nset]] so no node number is written into a load; same carrier, same reason"
+evidence = "measured on loads_2d.beam_point_load: list = (116), the node the deck's `top_centre` set names"

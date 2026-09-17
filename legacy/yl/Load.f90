@@ -247,9 +247,10 @@ print *,'ok waterlevel'
 if(kpload==1)then !20210502
     allocate(pload(nplgroup))
     do iplgroup=1,nplgroup
-       read(loadunit,*)pload(iplgroup)%order_time_curve,             &
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)pload(iplgroup)%order_time_curve,             &
                        pload(iplgroup)%nudofn,                       &
                        pload(iplgroup)%npload,nline
+                       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_point_load_group,iplgroup)
        lineload=lineload+1
 
        nudofn=pload(iplgroup)%nudofn
@@ -257,11 +258,13 @@ if(kpload==1)then !20210502
 
        allocate(pload(iplgroup)%pxyz(nudofn))
        allocate(pload(iplgroup)%list(npload))
-       read(loadunit,*)pload(iplgroup)%pxyz(1:nudofn)
+       read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)pload(iplgroup)%pxyz(1:nudofn)
+       call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_point_load_force,iplgroup)
 
        type_curve=tcurves(pload(iplgroup)%order_time_curve)%type_curve
        if (type_curve/='EXTRAPOLATION')then
-          read(loadunit,*)pload(iplgroup)%list(1:npload)
+          read(loadunit,*,iostat=yl_ios,iomsg=yl_msg)pload(iplgroup)%list(1:npload)
+          call diag_check_read(yl_ios,yl_msg,RD_LOA_external_load_1_point_load_nodes,iplgroup)
           !steel 2006
           do ip=1,npload
              ipoin=pload(iplgroup)%list(ip)

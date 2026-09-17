@@ -292,8 +292,26 @@ module yl_problem_types
     type(opt_real) :: scale                !@off-face: steps0.load.pressure.fact
   end type pressure_t
 
+  !> A concentrated force: one force vector applied at every node of a named set.
+  !>
+  !> legacy's `pload` group (Load.f90:250-264) is exactly this shape -- one curve, one
+  !> `pxyz` vector, one node list -- so the record is carried across as it stands. Unlike
+  !> the surface loads, legacy reads this ONCE, before the block loop (Fem.f90:1682), so
+  !> it belongs to the analysis rather than to a block; the contract still writes it under
+  !> a step, and a deck whose steps disagree about it is refused by name.
+  type, public :: concentrated_t
+    type(opt_int) :: amplitude                !@off-face: steps0.load.point.itcurve
+    !> The force, one component per degree of freedom. legacy's `nudofn` is its size.
+    real(real64), allocatable :: value(:)     !@off-face: steps0.load.point.pxyz
+    !> The nodes it acts on. legacy's `npload` is its size.
+    integer(int32), allocatable :: nodes(:)   !@off-face: steps0.load.point.list
+  end type concentrated_t
+
   type, public :: load_t
     type(gravity_t) :: gravity
+    !> The concentrated forces this step carries, in declaration order -- which is the
+    !> order legacy reads its point-load groups.
+    type(concentrated_t), allocatable :: concentrated(:)
     !> The pressure loads this step carries, in the order the author declared them --
     !> which is the order legacy reads its edge-load groups. NOT allocated means the step
     !> was never given a load record; allocated with size 0 means it carries no pressure,

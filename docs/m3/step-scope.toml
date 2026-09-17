@@ -1,0 +1,314 @@
+# HSTAR Evolution — step-scope registry (M7, 2026-09-16)
+#
+# One row per ProblemState path that a PUBLISHING module reads through `steps(1)`.
+# `tools/yl_step_scope_check.py` requires a row for every such read, a read for
+# every row, and cross-checks each row's `scope` against what legacy actually does
+# per block -- see that file's header for why this class of mistake needs a gate of
+# its own rather than a convention.
+#
+# scope:
+#   per_analysis       legacy assigns the symbol once, outside the block loop
+#   per_block          legacy re-derives it every block, and `recommitted_by` names
+#                      the routine that does the same here (`via` when it delegates
+#                      to legacy's own extracted loop)
+#   per_block_refused  legacy re-derives it every block and this build cannot, so
+#                      `refused_by` names the routine that refuses such a deck
+
+version = 1
+
+[[path]]
+path = "steps[].output.field.u"
+scope = "per_analysis"
+legacy_symbol = "gid_u"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.s"
+scope = "per_analysis"
+legacy_symbol = "gid_s"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.ms"
+scope = "per_analysis"
+legacy_symbol = "gid_ms"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.f"
+scope = "per_analysis"
+legacy_symbol = "gid_f"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.rot"
+scope = "per_analysis"
+legacy_symbol = "gid_rot"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.v"
+scope = "per_analysis"
+legacy_symbol = "gid_v"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.a"
+scope = "per_analysis"
+legacy_symbol = "gid_a"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.T"
+scope = "per_analysis"
+legacy_symbol = "gid_T"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.P"
+scope = "per_analysis"
+legacy_symbol = "gid_P"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.Pv"
+scope = "per_analysis"
+legacy_symbol = "gid_Pv"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.ep"
+scope = "per_analysis"
+legacy_symbol = "gid_ep"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.Y"
+scope = "per_analysis"
+legacy_symbol = "gid_Y"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.FC"
+scope = "per_analysis"
+legacy_symbol = "gid_FC"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.Ns"
+scope = "per_analysis"
+legacy_symbol = "gid_Ns"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.Ss"
+scope = "per_analysis"
+legacy_symbol = "gid_Ss"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.Mxy"
+scope = "per_analysis"
+legacy_symbol = "gid_Mxy"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.bem"
+scope = "per_analysis"
+legacy_symbol = "gid_bem"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.wh"
+scope = "per_analysis"
+legacy_symbol = "gid_wh"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.wv"
+scope = "per_analysis"
+legacy_symbol = "gid_wv"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.field.bcs"
+scope = "per_analysis"
+legacy_symbol = "gid_bcs"
+reason = "GiD output switch; read once by global_data from .glb, before the block loop. The switches are a property of the run, not of a step: legacy has one set of them and no way to vary them per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.format"
+scope = "per_analysis"
+legacy_symbol = "outplot"
+reason = "output writer selection; read once by global_data from .glb, before the block loop"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].output.stress_averaging"
+scope = "per_analysis"
+legacy_symbol = "average_appear"
+reason = "nodal stress averaging scheme, per section; read once by global_data from .glb, before the block loop"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].procedure"
+scope = "per_analysis"
+legacy_symbol = "type_problem"
+reason = "which analysis driver runs; read once by global_data from .glb, before the block loop. Changing it between blocks is not something legacy can express"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].load_mode"
+scope = "per_analysis"
+legacy_symbol = "type_load"
+reason = "LOAD vs MAT_DE; read once by global_data from .glb, before the block loop"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].controls.nonlinear_type"
+scope = "per_analysis"
+legacy_symbol = "type_nl"
+reason = "when the tangent is rebuilt; read once by global_data from .glb, before the block loop"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].load.gravity.recompute_every"
+scope = "per_analysis"
+legacy_symbol = "NGRAV"
+reason = "how often the gravity load is recomputed; read once by global_data from .glb, before the block loop. The FREQUENCY is per analysis even though the load it governs is per block"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].load.strength_reduction"
+scope = "per_analysis"
+legacy_symbol = "mat_curve"
+reason = "which amplitude drives strength reduction; read once by global_data from .glb, before the block loop"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].load.gravity.magnitude"
+scope = "per_block"
+legacy_symbol = "gravy"
+reason = "re-read by external_load_2 at the top of every block (Fem.f90:1896)"
+recommitted_by = "commit_block_state"
+
+[[path]]
+path = "steps[].load.gravity.direction"
+scope = "per_block"
+legacy_symbol = "factg"
+reason = "re-read by external_load_2 at the top of every block (Fem.f90:1896)"
+recommitted_by = "commit_block_state"
+
+[[path]]
+path = "steps[].load.gravity.amplitude"
+scope = "per_block"
+legacy_symbol = "tcurvegravity"
+reason = "re-read by external_load_2 at the top of every block (Fem.f90:1896); one curve id per element group"
+recommitted_by = "commit_block_state"
+
+[[path]]
+path = "steps[].activation"
+scope = "per_block"
+legacy_symbol = "appear"
+reason = "legacy does not re-READ this -- appear_process is read once -- but it re-DERIVES `appear` from it at the top of every block (Fem.f90:1716) and prescrib_set then rebuilds iffix from that appear. Deriving the freeze mask from steps(1) is what left the staged group frozen for the whole run on loads_2d.wall_reservoir (2026-09-16); the mask is now re-derived per block by legacy's own extracted loop"
+recommitted_by = "commit_block_state"
+via = "prescribe_free_active"
+
+[[path]]
+path = "steps[].activation[].active"
+scope = "per_block"
+legacy_symbol = "appear"
+reason = "legacy does not re-READ this -- appear_process is read once -- but it re-DERIVES `appear` from it at the top of every block (Fem.f90:1716) and prescrib_set then rebuilds iffix from that appear. Deriving the freeze mask from steps(1) is what left the staged group frozen for the whole run on loads_2d.wall_reservoir (2026-09-16); the mask is now re-derived per block by legacy's own extracted loop"
+recommitted_by = "commit_block_state"
+via = "prescribe_free_active"
+
+[[path]]
+path = "steps[].boundary"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[]"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[].amplitude"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[].dof"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[].name"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[].nset"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[].record_reaction"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].boundary[].value"
+scope = "per_block_refused"
+legacy_symbol = "iffix"
+reason = "re-read by prescrib_set at the top of every block (Fem.f90:1873), so legacy CAN change the constrained degrees of freedom between blocks. This build commits them once, from step 1, and refuses a deck whose steps disagree rather than running every block on step 1's constraints"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].load.concentrated"
+scope = "per_analysis"
+legacy_symbol = "pload"
+reason = "legacy reads the point-load table ONCE, in external_load_1, immediately before the block loop (Fem.f90:1682): there is one table for the whole analysis and the time behaviour comes from the amplitude curve, not from the block. The contract still writes it under a step, so a second step that declares something different is refused rather than dropped"
+refused_by = "commit_step_invariants"
+
+[[path]]
+path = "steps[].load.concentrated[]"
+scope = "per_analysis"
+legacy_symbol = "pload"
+reason = "the individual point-load group; same scope and same refusal as the collection"
+refused_by = "commit_step_invariants"
+

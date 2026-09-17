@@ -115,13 +115,14 @@ module yl_runtime_commit
   use applied_load, only: tcurves, ntcurve, time_curve, factg, tcurvegravity, gravy,          &
                           nplgroup, nedge, edge_load_group, delgroup, nbeamload, nplateload,   &
                           edges, edgeload, gpwater, edge_dofs, edge_geometry,                  &
-                          edge_load_group_apply
+                          edge_load_group_apply, pload, group_of_point_load
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
                        material_1
 
-  use yl_problem_types, only: problem_state_t, boundary_t
+  use yl_problem_types, only: problem_state_t, boundary_t, step_t, output_field_t,          &
+                              concentrated_t
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
   include 'yl_runtime_scalars_use.inc'
@@ -143,6 +144,7 @@ module yl_runtime_commit
 
   public :: commit_legacy_globals, commit_release, commit_owns_globals
   public :: commit_block_state, commit_surface_edges, commit_step_invariants
+  public :: commit_point_loads
   public :: commit_provenance_count, commit_provenance_row, commit_provenance_of
   public :: commit_provenance_export
 
@@ -1437,7 +1439,7 @@ contains
     allocate (s_ex_lelenrt(s_nelem));                  s_ex_lelenrt = 0_ink
     allocate (s_ex_icpspring(s_npoin));                s_ex_icpspring = 0_ink
 
-    call verify_residue_against_gates(residue, errors, ok, n_steps)
+    call verify_residue_against_gates(residue, problem, errors, ok, n_steps)
     if (.not. ok) return
 
     ! ----------------------------------------------------------------- write
@@ -1534,6 +1536,11 @@ contains
 
     include 'yl_runtime_scalars.inc'
 
+    ! The concentrated forces. legacy reads them ONCE, before the block loop
+    ! (Fem.f90:1682), so they belong to the analysis and are committed here rather than
+    ! per block.
+    call commit_point_loads(problem)
+
     ! The named faces, and legacy's own derivation of their DOF maps and Gauss geometry.
     ! After the move_allocs, because it reads `element`, `group` and `coord`.
     call commit_surface_edges(problem)
@@ -1561,6 +1568,25 @@ contains
 
     if (.not. allocated(problem%steps)) return
     if (size(problem%steps) < 2) return
+
+    ! --- the fields legacy reads ONCE --------------------------------------------------
+    ! Everything in docs/m3/step-scope.toml with scope = per_analysis is committed from
+    ! step 1, because that is where legacy gets it: one read, before the block loop. The
+    ! contract still lets the author write those fields under every step, so a deck whose
+    ! second step says something different would have that difference SILENTLY dropped.
+    ! It is refused instead. One comparison covers the whole class rather than a rule per
+    ! field -- which is the point: the class is what recurs, not any one field.
+    do k = 2, size(problem%steps)
+      if (.not. same_per_analysis(problem%steps(1), problem%steps(k))) then
+        call refuse_block(errors, 'steps[]',                                                   &
+             'step '//itoa(k)//' disagrees with step 1 about something legacy reads once '//   &
+             'for the whole analysis -- the procedure, the load mode, the tangent rule, '//    &
+             'the gravity recompute frequency, the strength-reduction curve, the output '//    &
+             'request, or the concentrated forces. This build commits those from step 1, '//   &
+             'so the difference would be dropped without a word')
+        return
+      end if
+    end do
     if (.not. allocated(problem%steps(1)%boundary)) return
     n1 = size(problem%steps(1)%boundary)
     do k = 2, size(problem%steps)
@@ -1586,6 +1612,69 @@ contains
       end do
     end do
   end subroutine commit_step_invariants
+
+  !> Do two steps agree about everything legacy reads once for the whole analysis?
+  !>
+  !> The list is exactly the `per_analysis` rows of docs/m3/step-scope.toml, and the two
+  !> are kept in step by the gate that reads that file: a new steps(1) read has to be
+  !> registered, and a per_analysis registration has to name this routine.
+  pure logical function same_per_analysis(a, b) result(same)
+    type(step_t), intent(in) :: a, b
+    integer :: i
+
+    same = .false.
+    if (opt_text_or(a%procedure) /= opt_text_or(b%procedure)) return
+    if (opt_text_or(a%load_mode) /= opt_text_or(b%load_mode)) return
+    if (opt_or(a%controls%nonlinear_type) /= opt_or(b%controls%nonlinear_type)) return
+    if (opt_or(a%load%gravity%recompute_every) /= opt_or(b%load%gravity%recompute_every)) return
+    if (opt_or(a%load%strength_reduction) /= opt_or(b%load%strength_reduction)) return
+    if (allocated(a%output%stress_averaging) .neqv. allocated(b%output%stress_averaging)) return
+    if (allocated(a%output%stress_averaging)) then
+      if (size(a%output%stress_averaging) /= size(b%output%stress_averaging)) return
+      if (any(a%output%stress_averaging /= b%output%stress_averaging)) return
+    end if
+    if (opt_text_or(a%output%format) /= opt_text_or(b%output%format)) return
+    if (.not. same_output_fields(a%output%field, b%output%field)) return
+    if (allocated(a%load%concentrated) .neqv. allocated(b%load%concentrated)) return
+    if (allocated(a%load%concentrated)) then
+      if (size(a%load%concentrated) /= size(b%load%concentrated)) return
+      do i = 1, size(a%load%concentrated)
+        if (.not. same_concentrated(a%load%concentrated(i), b%load%concentrated(i))) return
+      end do
+    end if
+    same = .true.
+  end function same_per_analysis
+
+  pure logical function same_output_fields(a, b) result(same)
+    type(output_field_t), intent(in) :: a, b
+    same = opt_or(a%u) == opt_or(b%u) .and. opt_or(a%v) == opt_or(b%v) .and.                  &
+           opt_or(a%a) == opt_or(b%a) .and. opt_or(a%s) == opt_or(b%s) .and.                  &
+           opt_or(a%ms) == opt_or(b%ms) .and. opt_or(a%f) == opt_or(b%f) .and.                &
+           opt_or(a%rot) == opt_or(b%rot) .and. opt_or(a%T) == opt_or(b%T) .and.              &
+           opt_or(a%P) == opt_or(b%P) .and. opt_or(a%Pv) == opt_or(b%Pv) .and.                &
+           opt_or(a%ep) == opt_or(b%ep) .and. opt_or(a%Y) == opt_or(b%Y) .and.                &
+           opt_or(a%FC) == opt_or(b%FC) .and. opt_or(a%Ns) == opt_or(b%Ns) .and.              &
+           opt_or(a%Ss) == opt_or(b%Ss) .and. opt_or(a%Mxy) == opt_or(b%Mxy) .and.            &
+           opt_or(a%bem) == opt_or(b%bem) .and. opt_or(a%wh) == opt_or(b%wh) .and.            &
+           opt_or(a%wv) == opt_or(b%wv) .and. opt_or(a%bcs) == opt_or(b%bcs)
+  end function same_output_fields
+
+  pure logical function same_concentrated(a, b) result(same)
+    type(concentrated_t), intent(in) :: a, b
+    same = .false.
+    if (opt_or(a%amplitude) /= opt_or(b%amplitude)) return
+    if (allocated(a%value) .neqv. allocated(b%value)) return
+    if (allocated(a%nodes) .neqv. allocated(b%nodes)) return
+    if (allocated(a%value)) then
+      if (size(a%value) /= size(b%value)) return
+      if (any(a%value /= b%value)) return
+    end if
+    if (allocated(a%nodes)) then
+      if (size(a%nodes) /= size(b%nodes)) return
+      if (any(a%nodes /= b%nodes)) return
+    end if
+    same = .true.
+  end function same_concentrated
 
   pure logical function same_boundary(a, b) result(same)
     type(boundary_t), intent(in) :: a, b
@@ -1643,6 +1732,60 @@ contains
     end do
     call edge_geometry()
   end subroutine commit_surface_edges
+
+  !> ProblemState.steps[].load.concentrated -> legacy `nplgroup` / `pload(:)`.
+  !>
+  !> Pure transport: legacy's point-load record is one curve id, one force vector and one
+  !> node list, and ProblemState carries exactly those three. There is nothing to compute,
+  !> so unlike the surface loads this one extracts no legacy routine -- `force_external`
+  !> consumes `pload` directly (Fem.f90:13193).
+  !>
+  !> Read ONCE, before the block loop, so the whole analysis has one point-load table.
+  !> Step 1 supplies it; `commit_step_invariants` refuses a deck whose steps disagree,
+  !> because a second step's point loads would otherwise be silently dropped.
+  pure integer function n_surface_edges(problem) result(n)
+    type(problem_state_t), intent(in) :: problem
+    n = 0
+    if (allocated(problem%surface_edges)) n = size(problem%surface_edges)
+  end function n_surface_edges
+
+  pure integer function n_point_groups(problem) result(n)
+    type(problem_state_t), intent(in) :: problem
+    n = 0
+    if (.not. allocated(problem%steps)) return
+    if (size(problem%steps) < 1) return
+    if (allocated(problem%steps(1)%load%concentrated))                                        &
+      n = size(problem%steps(1)%load%concentrated)
+  end function n_point_groups
+
+  subroutine commit_point_loads(problem)
+    type(problem_state_t), intent(in) :: problem
+    integer :: ip, n
+
+    n = 0
+    if (allocated(problem%steps)) then
+      if (size(problem%steps) >= 1) then
+        if (allocated(problem%steps(1)%load%concentrated))                                     &
+          n = size(problem%steps(1)%load%concentrated)
+      end if
+    end if
+    nplgroup = int(n, ink)
+    if (allocated(pload)) deallocate (pload)
+    if (n == 0) return
+    allocate (pload(n))
+    do ip = 1, n
+      associate (cf => problem%steps(1)%load%concentrated(ip))
+        pload(ip)%order_time_curve = int(opt_or(cf%amplitude), ink)
+        pload(ip)%nudofn = int(size(cf%value), ink)
+        pload(ip)%npload = int(size(cf%nodes), ink)
+        nullify (pload(ip)%listep)
+        allocate (pload(ip)%pxyz(size(cf%value)))
+        allocate (pload(ip)%list(size(cf%nodes)))
+        pload(ip)%pxyz = real(cf%value, irk)
+        pload(ip)%list = int(cf%nodes, ink)
+      end associate
+    end do
+  end subroutine commit_point_loads
 
   !> The part of the input legacy re-reads at the top of every block: this step's gravity
   !> and its surface loads (Fem.f90:1873/1896 -> prescrib_set / external_load_2).
@@ -2406,6 +2549,17 @@ contains
     end if
     if (allocated(problem%steps)) then
       do i = 1, size(problem%steps)
+        if (allocated(problem%steps(i)%load%concentrated)) then
+          do j = 1, size(problem%steps(i)%load%concentrated)
+            if (.not. opt_is_set(problem%steps(i)%load%concentrated(j)%amplitude) .or.        &
+                .not. allocated(problem%steps(i)%load%concentrated(j)%value) .or.             &
+                .not. allocated(problem%steps(i)%load%concentrated(j)%nodes)) then
+              call fail(errors, 'steps['//itoa(i)//'].load.concentrated['//itoa(j)//'] has '//&
+                        'an unset amplitude, force vector or node list')
+              return
+            end if
+          end do
+        end if
         if (.not. allocated(problem%steps(i)%load%pressure)) cycle
         do j = 1, size(problem%steps(i)%load%pressure)
           if (.not. opt_is_set(problem%steps(i)%load%pressure(j)%first_edge) .or.             &
@@ -2449,8 +2603,9 @@ contains
   !     was the only admitted shape; the invariant it was really asserting is that the
   !     residue and ProblemState agree about how many blocks legacy will run, and that is
   !     what it asserts now (2026-09-16).
-  subroutine verify_residue_against_gates(residue, errors, ok, n_steps)
+  subroutine verify_residue_against_gates(residue, problem, errors, ok, n_steps)
     type(deck_residue_t), intent(in) :: residue
+    type(problem_state_t), intent(in) :: problem
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
     integer, intent(in) :: n_steps
@@ -2492,12 +2647,29 @@ contains
                 'is a flag (Fem.f90:1704 tests it against 1) and the carrier disagrees')
       return
     end if
-    if (opt_or(residue%nplgroup) /= 0 .or. opt_or(residue%nedge) /= 0 .or.                    &
-        opt_or(residue%edge_load_group) /= 0 .or. opt_or(residue%nbeamload) /= 0 .or.         &
+    ! The .loa counts. `nplgroup` and `nedge` were gated to 0 while the load family was
+    ! not migrated; both now carry real values and are checked against the state instead
+    ! (2026-09-17). `edge_load_group` stays gated to 0 because it is a PER-BLOCK count
+    ! that commit_block_state publishes directly -- the residue has no business carrying
+    ! it, and a non-zero value there would be a second source of truth. The beam and plate
+    ! counts stay gated to 0 because neither family is migrated at all.
+    if (opt_or(residue%nedge) /= n_surface_edges(problem)) then
+      call fail(errors, 'the deck residue says '//itoa(int(opt_or(residue%nedge)))//           &
+                ' surface edges and ProblemState carries '//                                  &
+                itoa(n_surface_edges(problem))//'; the carrier and the state disagree')
+      return
+    end if
+    if (opt_or(residue%nplgroup) /= n_point_groups(problem)) then
+      call fail(errors, 'the deck residue says '//itoa(int(opt_or(residue%nplgroup)))//       &
+                ' point-load groups and ProblemState carries '//                              &
+                itoa(n_point_groups(problem))//'; the carrier and the state disagree')
+      return
+    end if
+    if (opt_or(residue%edge_load_group) /= 0 .or. opt_or(residue%nbeamload) /= 0 .or.         &
         opt_or(residue%nplateload) /= 0) then
-      call fail(errors, 'the deck residue carries a non-zero .loa count (nplgroup, nedge, '// &
-                'edge_load_group, nbeamload or nplateload), but the adapter rejects any '//   &
-                'deck that does; the gate and the carrier disagree')
+      call fail(errors, 'the deck residue carries a non-zero edge_load_group, nbeamload '//   &
+                'or nplateload; the first is published per block by commit_block_state '//    &
+                'and the other two are families this build does not migrate')
       return
     end if
     if (opt_or(residue%ntemp_surface) /= 0 .or. opt_or(residue%ntedge) /= 0 .or.              &

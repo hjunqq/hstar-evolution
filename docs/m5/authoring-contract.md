@@ -170,7 +170,7 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
 - `step.procedure = "static"`；`step.controls.increments = 1`
 - `step.controls.stiffness_update ∈ {"first_iteration", "every_iteration"}`（legacy `type_nl` 5 / 4）
 - 边界只有给定位移（`value`），`dof ∈ {1,2}`
-- `step.load[].type ∈ {"gravity", "pressure"}`（§8.3）；
+- `step.load[].type ∈ {"gravity", "pressure", "concentrated"}`（§8.3）；
   `pressure` 需要 `surface` / `amplitude` / `distribution`，且
   `distribution.type = "linear_in_coordinate"`、`distribution.axis = "y"`
 - `surface.kind = "edge2"`（每行恰好 `[n1, n2, element]`）
@@ -283,6 +283,28 @@ scale = 9810.0               # legacy fact，例如水的重度
 `type = "gravity"` 对象，各自 `apply_to` 一个 elset、各自挂自己的 `amplitude`；
 适配器负责回填。`apply_to = "all"` 是「全体同一历程」的简写。
 
+**集中力**：
+
+```toml
+[[step.load]]
+type      = "concentrated"
+nset      = "top_centre"        # 力作用在这个节点集的每个节点上
+value     = [0.0, -10000.0]     # N，一个分量一个自由度
+amplitude = "constant"
+```
+
+对应 legacy 的点荷载组（`Load.f90:250-266`）：`order_time_curve` = `amplitude`，
+`pxyz` = `value`，`list` = 该 `nset` 的节点，而 `nudofn` / `npload` 是这两个数组的**长度**，
+作者不写。**节点号不进荷载**——荷载引用的是集合的名字，这和边界条件是同一条规则（§3）。
+
+与面荷载不同，legacy 把点荷载表读在**块循环之前**（`Fem.f90:1682`），一份表管整个分析。
+契约仍然把它写在 step 下面，因此**各 step 必须声明相同的集中力**，否则第 2 步写的东西会被
+静默丢掉——由 `commit_step_invariants` 按名拒绝（§9.4）。
+
+**零体力是合法的**：`magnitude = 0.0` 配 `direction = [0.0, 0.0]` 就是「这一步没有体力」，
+legacy 写的正是 `gravy = 0`、`factg = (0,0)`。方向模长为零只在**magnitude 非零**时才是错误
+（2026-09-17 收紧口径的反向：原先一律拒绝，会逼一个没有体力的 deck 写一个它没有的方向）。
+
 **面压力的分布**：legacy 逐节点算
 `press = -(p0 + dcor/(y0-y1)*(p1-p0)) * scale`，其中 `dcor = y0 - coord(axis, node)`
 截断在 0，且坐标落在 `[y1, y0]` 之外时压力归零（`Load.f90:816-830`）。契约因此要求：
@@ -351,6 +373,7 @@ active_elsets = ["foundation", "dam"]     # 第 2 步：坝体就位
 |---|---|---|
 | 各步边界条件不同 | `runtime.dof.fixed_mask` 只提交一次（取 step 1），逐步变化会静默整场沿用 step 1 | `commit_step_invariants`，`UNSUPPORTED` |
 | 一步里两个 `gravity` | ProblemState 每步只有一份重力记录 | `executable_shape`，`UNSUPPORTED` |
+| 各步在 legacy **只读一次**的字段上不一致（procedure、load_mode、切线规则、重力重算频率、折减曲线、输出请求、集中力） | 这些字段 legacy 在块循环之前读一次，本 build 取 step 1；第 2 步写不同的值会被静默丢掉 | `commit_step_invariants`，`UNSUPPORTED` |
 | 各步材料不同（legacy `MATNO_PROCESS`） | 契约没有这个键；`matno_process` 由每步的 section 材料填出，因而恒定 | 无键即无法表达 |
 
 前两条都有反例；第三条没有，因为**没有键可以写错**——这不是一道门禁，是一处表达能力的缺口，

@@ -61,6 +61,8 @@ nelgroup = "count(mesh.elsets[].elements) per group = group(ig)%nelgroup (ragged
 nmats = "count(materials)"
 edge_node_count = "nodes on one surface edge = edges(i)%nnode (2 for a 2-D Q4 face)"
 pressure_point_count = "points fixing one linear pressure distribution (2: legacy cor0/cor1 with p0/p1)"
+point_force_dofs = "components of one concentrated force = pload(i)%nudofn (2 in 2-D)"
+point_force_nodes = "nodes one concentrated force acts on = pload(i)%npload"
 nrfields = "count(sections[].formulation.fields) per group (1 on both cases)"
 nfdof = "count(sections[].formulation.dofs) per field (2 on both cases)"
 mdofn = "sum over distinct global dofs of sections[].formulation.dofs (2 on both cases)"
@@ -5312,3 +5314,57 @@ determinism = "deterministic"
 snapshot_file = "loads.sha256"
 reason = "the .loa load family: edge definitions and edge loads. The static_2d slice has no surface load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
 note = "legacy `fact`: what multiplies the head to make a pressure -- the unit weight of water, 9810 on every deck measured."
+
+[[field]]
+id = "steps0.load.point.itcurve"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.pload%order_time_curve"
+source = ["LOA.external_load_1.point_load_group"]
+consumers = ["external_load_1", "force_external"]
+shape = []
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.concentrated[].amplitude"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "The amplitude that scales this group over time, 1-based into tcurves(:)."
+
+[[field]]
+id = "steps0.load.point.pxyz"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.pload%pxyz"
+source = ["LOA.external_load_1.point_load_force"]
+consumers = ["external_load_1", "force_external"]
+shape = ["point_force_dofs"]
+dtype = "f64"
+unit = "N"
+owner = "ProblemState.steps[0].load.concentrated[].value"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "The force vector, one component per degree of freedom. legacy's `nudofn` is its length and is not stored separately."
+
+[[field]]
+id = "steps0.load.point.list"
+checkpoint = "model_ready"
+legacy_symbol = "applied_load.pload%list"
+source = ["LOA.external_load_1.point_load_nodes"]
+consumers = ["external_load_1", "force_external"]
+shape = ["point_force_nodes"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.steps[0].load.concentrated[].nodes"
+index_by = "component"
+compare = { rule = "ignore", reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "loads.sha256"
+reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
+note = "The nodes the force acts on. legacy's `npload` is its length and is not stored separately."

@@ -4,7 +4,7 @@
      不复制「当前在做 / 下一步」。.ccg/tasks/*/task.json 是执行器的工作队列，
      不是状态；两者不一致时以本文件为准。 -->
 
-更新日期：2026-09-16。此文件只登记已经发生的事；阶段验收以证据包为准。
+更新日期：2026-09-17。此文件只登记已经发生的事；阶段验收以证据包为准。
 
 ## 验收链（2026-09-12 总览时清点）
 
@@ -18,7 +18,8 @@
 | M5 现代输入闭环 | 完成 5/5 | **ACCEPTED（窄口径）** 2026-09-13 | `docs/m5/M5-report.md` + `docs/m5/authoring-contract.md` + `tools/yl_modern_check.py`（N1/N2/N3，release 门禁） |
 | M6.4 材料域第一能力（CLASSICALEP/MC） | 完成 5/5 | **ACCEPTED（窄口径）** 2026-09-14 | `docs/m6/material-domain.md` + `cases/golden/plasticity/mini_mc`（三块严格相等，含 PLASTICSTRAIN） |
 | M6.5 强度折减 + 材料曲线（MAT_DE / mat_curve） | 完成 4/4 | **ACCEPTED（窄口径）** 2026-09-15 | `docs/m6/material-domain.md` §9 + `cases/golden/plasticity/slope_srm`（600 块 541 200 值 `max|d|=0`，**非零 PLASTICSTRAIN 18 924/45 100**） |
-| M7 `.loa` 输入家族 Phase 1–3（普查 + 契约 + 校验器 + 反例 + 面荷载/多分析步逐位等价） | 完成 | **未签收** | `docs/m7/loa-family-report.md` + `docs/m5/authoring-contract.md` §2.1/§8/§9 + `cases/golden/loads_2d/wall_reservoir`（**两分析步 + 施工分期 + 静水压，4 块 552 值 `max|d|=0`**；12 条反例，40/40） |
+| M7 `.loa` 输入家族 Phase 1–3（面荷载 + 多分析步） | 完成 | **ACCEPTED（窄口径）** 2026-09-17 | `docs/m7/loa-family-report.md` + `docs/m5/authoring-contract.md` §2.1/§8/§9 + `cases/golden/loads_2d/wall_reservoir`（**两分析步 + 施工分期 + 静水压，4 块 552 值 `max|d|=0`**） |
+| M7 Phase 4（集中力） | 完成 | **未签收** | `docs/m7/loa-family-report.md` Phase 4 + `cases/golden/loads_2d/beam_point_load`（**2 块 756 值 `max|d|=0`**，体力为零故位移场完全由集中力决定；6 条反例）+ 新门禁 `tools/yl_step_scope_check.py` |
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
@@ -54,7 +55,7 @@ M1 的形式验收缺口（没有阶段矩阵、条件解除未经第二方逐�
 | 功能域 | 旧字段 | 语义 | 内部结构 | 新 schema | 回归证据 | 里程碑 |
 |---|---|---|---|---|---|---|
 | **静力（2D Q4 线弹性 / 重力 / 单增量 / PROFILE）** | 已登记 157 处 | 已摸清（有具名缺口） | `ProblemState` + `deck_residue_t` + 运行存在面 | **v1 契约可完整表达两例** | **状态等价与数值等价均已证（严格相等）；新格式亦严格复现冻结参考** | M1～M5 完成，M5 已签收（窄口径） |
-| 荷载扩展（点/边/梁板荷载、压力面） | `.loa` 共 52 处读取（其中 32 处不在静力路径上） | **已普查，52 处逐条归类** | `surface_edges[]` + `steps[].load.pressure[]` 已进入 | **v1 契约已表达幅值/面/荷载对象 + 多分析步** | **`wall_reservoir` 逐位一致**（4 块 552 值）；集中力/梁/板仍未开始 | M7 Phase 3 完成 |
+| 荷载扩展（点/边/梁板荷载、压力面） | `.loa` 共 52 处读取（其中 32 处不在静力路径上） | **已普查，52 处逐条归类** | `surface_edges[]` + `steps[].load.{pressure,concentrated}[]` 已进入 | **v1 契约已表达幅值/面/集中力/荷载对象 + 多分析步** | **`wall_reservoir`（4 块 552 值）与 `beam_point_load`（2 块 756 值）均逐位一致**；梁/板荷载仍未开始 | M7 Phase 4 完成 |
 | 求解器变体（PARDISO 等） | `.sol` 29 + iafile 5 | 未开始 | — | — | — | M5 |
 | 输出与观测点 | `.opr` 10 | 未开始 | — | — | — | M5 |
 | 材料（非弹性本构、属性曲线、液化） | `.mat` 104 + 4 | CLASSICALEP/MC 与 MAT_DE 已摸清，其余未开始 | `material_t` 已分派 | 两种模型进入白名单 | `mini_mc` / `slope_srm` 逐位一致 | M6.4 / M6.5 已签收（窄口径） |

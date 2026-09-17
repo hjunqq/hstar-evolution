@@ -185,6 +185,11 @@ contains
     ! one-step analysis; commit now checks this against the step count rather than
     ! against 1, so a disagreement is a finding instead of a silently truncated run.
     call opt_set(residue%runblks, int(max(1, int(doc%count_of('step'))), int32))
+    ! The .loa counts the residue carries. They were pinned at 0 by the default table
+    ! while no deck had a load with a count; the load domain gave them real values, and a
+    ! carrier that says 0 while commit publishes 4 is a carrier nobody can trust.
+    call opt_set(residue%nedge, int(count_of_edges(doc), int32))
+    call opt_set(residue%nplgroup, int(count_of_type(doc, 'concentrated'), int32))
     if (allocated(residue%uinitial)) deallocate (residue%uinitial)
     allocate (residue%uinitial(max(1, int(doc%count_of('step')))))
     residue%uinitial = 0_int32
@@ -206,6 +211,31 @@ contains
     n = 0
     if (found) n = int(d)
   end function int_at_dim
+
+  !> How many surface edges the whole file declares, across every named face.
+  integer function count_of_edges(doc) result(n)
+    type(toml_doc_t), intent(in) :: doc
+    integer :: i, k
+    n = 0
+    do i = 1, int(doc%count_of('surface'))
+      k = doc%find('surface['//itoa(i)//'].edges.count')
+      if (k /= 0_int32) n = n + int(doc%entry(k)%ivalue)
+    end do
+  end function count_of_edges
+
+  !> How many loads of one type step 1 carries. Step 1 because the counts legacy reads
+  !> once are the first step's, and a deck whose steps disagree is refused in commit.
+  integer function count_of_type(doc, which) result(n)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: which
+    integer :: i, k
+    n = 0
+    do i = 1, int(doc%count_of('step[1].load'))
+      k = doc%find('step[1].load['//itoa(i)//'].type')
+      if (k == 0_int32) cycle
+      if (trim(doc%entry(k)%svalue) == which) n = n + 1
+    end do
+  end function count_of_type
 
   pure function itoa(v) result(out)
     integer, intent(in) :: v
