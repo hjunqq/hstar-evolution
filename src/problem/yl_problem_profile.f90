@@ -238,8 +238,17 @@ module yl_problem_profile
     ! visible failure rather than a guessed node count. On the modern path `element` is the
     ! AUTHOR's statement of the element type and is whitelisted in the authoring key table,
     ! which is where a statement by the author belongs.
+    ! Carried as TEXT since M9 even though it holds one value: the row became set-capable
+    ! when the line-element domain needed {1,5,25}, and `gate_int_set` reuses the build's
+    ! one spelling for "a set of admissible values" (text_in_set). The ProblemState
+    ! component is still an integer.
+    !
+    ! It admits 5 ALONE because no admitted golden deck reaches kind 1 or 25: every real
+    ! 2-D line-element deck also needs CONCRETE and PARDISO, both out of scope (see
+    ! docs/m9/l2-element-domain.md). Widening the set is a one-line change the moment a
+    ! deck can be driven -- a whitelist entry is a claim, and this one has no deck yet.
     capability_item_t('G1', 'element.kind_code', 'sections[]', 'element_kind',                      &
-                      PROFILE_KIND_INT, 5_int32, '', .false.),                                      &
+                      PROFILE_KIND_TEXT, 0_int32, '5', .false.),                                   &
     capability_item_t('G1', 'element.class', 'sections[]', 'class',                                 &
                       PROFILE_KIND_TEXT, 0_int32, 'CO', .false.),                                   &
     capability_item_t('G1', 'element.fields', 'sections[]', 'fields',                               &

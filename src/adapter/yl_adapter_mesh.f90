@@ -21,7 +21,7 @@
 !   parse_glb has run is this module's OWN invariant broken, not a statement about
 !   the user's deck (PE_INTERNAL, not PE_UNSUPPORTED or PE_INVALID_INPUT).
 !
-!   Sizing every read from `ctx%ndimn` / `ctx%nnode` removes the MISPARSE risk the
+!   Sizing every read from `ctx%ndimn` / `ctx%group_nnode(igroup)` removes the MISPARSE risk the
 !   old hardcode carried (a 3D or non-Q4 deck no longer desyncs the cursor merely by
 !   being read). What is left is a WHITELIST question -- is this build allowed to
 !   run a 3D deck or a non-Q4 element at all -- and that is answered two ways here:
@@ -88,7 +88,7 @@ module yl_adapter_mesh
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
                                 PE_STAGE_ADAPT
-  use yl_problem_profile, only: capability_expect_int
+  use yl_problem_profile, only: capability_expect_int, capability_expect_text
   use yl_adapter_parts, only: deck_context_t, reject_dialect
 
   implicit none
@@ -196,12 +196,12 @@ contains
       return
     end if
     if (.not. allocated(ctx%nelgroup) .or. .not. allocated(ctx%group_matno) &
-        .or. .not. allocated(ctx%group_kind)) then
+        .or. .not. allocated(ctx%group_kind) .or. .not. allocated(ctx%group_nnode)) then
       loc = make_source_location(file='.ele', reader='read_element', line=1087_int32)
       call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
                       rule_id='A-ELE/context-incomplete', object_path='mesh.elements', &
                       message='deck_context_t is marked filled but nelgroup/group_matno/' &
-                      //'group_kind were never allocated', source=loc))
+                      //'group_kind/group_nnode were never allocated', source=loc))
       return
     end if
 
@@ -213,10 +213,16 @@ contains
       return
     end if
 
-    allocate (lnods(ctx%nnode))
     irec = 0_int32
     do igroup = 1_int32, size(ctx%nelgroup)
       if (.not. element_kind_ok(errors, ctx%group_kind(igroup), igroup)) return
+
+      ! PER GROUP, because legacy reads `.ele` inside its own group loop with that group's
+      ! nnode (Elements.f90:1081-1087). rcbeam is the first golden deck to put records of
+      ! different lengths in one file: 600 Q4 rows of 4 node ids, then 121 line-element
+      ! rows of 2. A single mesh-wide node count would silently mis-parse the second half.
+      if (allocated(lnods)) deallocate (lnods)
+      allocate (lnods(ctx%group_nnode(igroup)))
 
       allocate (group_elements(ctx%nelgroup(igroup)))
       do k = 1_int32, ctx%nelgroup(igroup)
@@ -241,7 +247,7 @@ contains
         call opt_set(element%material, ctx%group_matno(igroup))
         call opt_set(element%kind, ctx%group_kind(igroup))
         if (allocated(element%nodes)) deallocate (element%nodes)
-        allocate (element%nodes(ctx%nnode))
+        allocate (element%nodes(ctx%group_nnode(igroup)))
         element%nodes = lnods
 
         call builder_add_element(b, element, loc, errors)
@@ -304,33 +310,60 @@ contains
                         expected=itoa(expected))
   end function dimension_ok
 
-  ! G1 element.kind_code (yl_problem_profile.f90) is the single source of truth for
-  ! the whitelisted element kind (5 == Q4). Checked here, unlike dimension_ok's
-  ! check, because a non-Q4 kind is this parser's OWN reason for existing: it was
-  ! written to shape a Q4 connectivity record and nothing else, so there is no
-  ! "spend the read anyway and let a later stage catch it" option worth taking --
-  ! ctx%nnode may coincidentally match some other kind's node count (e.g. legacy's
-  ! H4 is also 4-node, Elements.f90) and produce a record that parses cleanly but
-  ! means nothing this build understands. `igroup` is the 1-based section position
-  ! (ctx%group_kind is now per-section, adapter-contract.md §2.3), reported as the
-  ! index so a rejection on section 2 is not indistinguishable from one on section 1.
+  ! G1 element.kind_code (yl_problem_profile.f90) is the single source of truth for the
+  ! whitelisted element kinds. Checked here, unlike dimension_ok's check, because an
+  ! unadmitted kind is this parser's OWN reason for existing: the node count it would size
+  ! the read with comes from that kind, and an unknown kind leaves it 0. There is no
+  ! "spend the read anyway and let a later stage catch it" option worth taking, because a
+  ! node count can COINCIDE across families (legacy's H4 is 4-node like Q4, and kinds 1
+  ! and 25 are both 2-node) and produce a record that parses cleanly while meaning
+  ! something else entirely.
+  !
+  ! The row became a SET in M9 ({1,5,25}); the gate keeps it in one place and this reads it
+  ! through `capability_expect_text`, so the parser and the gate still cannot disagree.
+  ! `igroup` is the 1-based section position (ctx%group_kind is per-section,
+  ! adapter-contract.md §2.3), reported as the index so a rejection on section 2 is not
+  ! indistinguishable from one on section 1.
   logical function element_kind_ok(errors, element_kind, igroup) result(ok)
     type(problem_errors_t), intent(inout) :: errors
     integer(int32), intent(in) :: element_kind, igroup
-    integer(int32) :: expected
+    character(len=:), allocatable :: expected
     logical :: found
     type(source_location_t) :: loc
 
-    call capability_expect_int('element.kind_code', expected, found)
+    call capability_expect_text('element.kind_code', expected, found)
     ok = .true.
     if (.not. found) return
-    if (element_kind == expected) return
+    if (kind_in_set(element_kind, expected)) return
 
     ok = .false.
     loc = make_source_location(file='.glb', reader='global_data', line=1216_int32)
     call reject_dialect(errors, 'A-ELE', 'element-kind', loc, actual=itoa(element_kind), &
-                        expected=itoa(expected), idx=igroup)
+                        expected=expected, idx=igroup)
   end function element_kind_ok
+
+  !> Is `k` one of the `|`-separated integers in `set`? The same spelling the capability
+  !> table uses everywhere else; kept here rather than shared with the pipeline's
+  !> `text_in_set` because the adapter does not import the pipeline's private helpers.
+  pure logical function kind_in_set(k, set) result(yes)
+    integer(int32), intent(in) :: k
+    character(len=*), intent(in) :: set
+    character(len=:), allocatable :: want
+    integer :: from, bar
+    want = itoa(k)
+    yes = .true.
+    from = 1
+    do
+      bar = index(set(from:), '|')
+      if (bar == 0) then
+        if (set(from:) == want) return
+        exit
+      end if
+      if (set(from:from + bar - 2) == want) return
+      from = from + bar
+    end do
+    yes = .false.
+  end function kind_in_set
 
   ! .ele ran out of records before sum(ctx%nelgroup) was consumed. The symmetric
   ! "too many" case is handled inline in parse_ele (it needs one more read attempt

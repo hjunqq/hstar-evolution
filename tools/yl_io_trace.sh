@@ -84,7 +84,12 @@ fi
 # And, reported rather than enforced: how this build compares with the frozen reference.
 # A large difference here would mean the trace build is a different program, which is
 # worth seeing even though it is not what this tool is for.
+# .json or .json.gz: yl_freeze compresses a big reference and yl_compare reads either.
+# rcbeam is the first traced case whose reference is compressed, and without this the
+# comparison died on a missing file AFTER the evidence had already been collected --
+# a non-zero exit that said "trace failed" about a step this tool only reports.
 REF_RES="$CASE_DIR/reference/results.json"
+[ -f "$REF_RES" ] || REF_RES="$CASE_DIR/reference/results.json.gz"
 python3 "$ROOT/tools/yl_parse_flavia.py" "$WORK/1.flavia.res" -o "$WORK/results.json" >/dev/null
 if python3 "$ROOT/tools/yl_compare.py" "$REF_RES" "$WORK/results.json" -o "$OUT/compare-vs-reference.json" >/dev/null; then
     echo "OK: $CASE_ID traced; instrumentation inert, and this build also matches the frozen reference exactly"

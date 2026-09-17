@@ -155,3 +155,32 @@ reference = "reference/"
 #         nmats/ngroup 2 -> 1, one Q4 group
 # Everything else (.pre .opr .tem .ftr .ifs .nrt .aqu) is byte-identical to mini_mc, and the
 # .loa differs only in the group count. The mesh is mini_mc's: 30 nodes, 20 Q4 elements.
+
+[[case]]
+id = "elements_2d.rcbeam"
+path = "golden/elements_2d/rcbeam"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/rcbeam"
+source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
+input_manifest = "golden/elements_2d/rcbeam/input-manifest.json"
+purpose = "the second element family: a MIXED-topology mesh (Q4 + L2 + steel) in one .ele, and a section property that lives on the material"
+migration_phase = "M9"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# Chosen by measuring, not by taste. The two decks named as starting points were both
+# falsified: test_beam2d declares MDOFN=2 and an L2 group with dofs (1,2), then constrains
+# ifixvar=4 -- pristine legacy SIGSEGVs on it and our 1..mdofn guard is right; pile_beam's
+# .glb is an older dialect that pristine legacy cannot read either. Of the 2-D decks that
+# DO carry a line-element group, rcbeam is the smallest that runs, and its 1.flavia.res is
+# BYTE-IDENTICAL to the pristine 5414e73 snapshot's.
+#
+# It could not run here until 2026-09-17: our own M1-03 guard read `mmats` as a material
+# count when it is a RECORD count, and every rod/beam deck attaches a second record
+# (GEOMETRY ROD_or_BEAM) to a material that already has a MECHANICAL one. That is PD-2 in
+# docs/m8/pre-migration-defects.md -- migration-introduced, and NOT part of this domain's
+# capability.
+#
+# The three element families are what the deck needs, not a choice: no 2-D deck in the
+# corpus uses kind 1 without kind 25 (reinforcement and its bond element always come as a
+# pair), and self-made decks are not admissible evidence.

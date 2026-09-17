@@ -148,7 +148,6 @@ module yl_adapter_parts
     logical :: filled = .false.        ! parse_glb sets this last; readers must check it
     integer(int32) :: ndimn = 0        ! GLB.global_data.sizes_and_switches
     integer(int32) :: ngroup = 0       ! GLB.global_data.sizes_and_switches
-    integer(int32) :: nnode = 0        ! nodes per element of the (single) group
     integer(int32) :: element_kind = 0 ! group header `index`; 5 is Q4
     !> Per-section data from `.glb`'s group-header loop, in group order.
     !>
@@ -169,6 +168,13 @@ module yl_adapter_parts
     integer(int32), allocatable :: nelgroup(:)     ! elements in each section
     integer(int32), allocatable :: group_matno(:)  ! each section's header material id
     integer(int32), allocatable :: group_kind(:)   ! each section's element-kind index
+    !> Nodes per element, PER GROUP. It replaced a single `nnode` scalar in M9, and the
+    !> scalar was the one place in the adapter that assumed a mesh has exactly one element
+    !> kind. legacy never assumed that: it reads `.ele` INSIDE the group loop with that
+    !> group's own nnode (Elements.f90:1081-1087), which is why a deck like rcbeam can put
+    !> 4-node and 2-node records in one file. Derived from `group_kind` through
+    !> `nodes_of_kind`, never read from the deck.
+    integer(int32), allocatable :: group_nnode(:)
     !> `character(50)` in legacy (Global.f90:99 declares
     !> `character(50) type_problem,type_solver,type_load,type_ABC,type_solver_ctt`).
     !> An earlier draft of this record typed it `integer(int32)`, which would have made

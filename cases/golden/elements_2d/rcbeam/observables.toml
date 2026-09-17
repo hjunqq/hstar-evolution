@@ -1,0 +1,46 @@
+# 观察量登记。按 M0-05a 的纪律：在任何结果数值被查看之前登记。
+# 本文件登记的是**结构**（块名、分量名、节点数），不是数值；分量名取自
+# 1.flavia.res 的块头，节点/单元数取自 1.glb 的 NPOIN/NELEM。
+version = 1
+case_id = "elements_2d.rcbeam"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 793
+expected_element_count = 721
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较；.rtt/.gpv/.bar/.bem 为二进制或派生输出，不解析。本算例 gid_f / gid_Y / gid_bcs 也为 1，但它们不写入 1.flavia.res——gid_bcs 另写 1bcs.flavia.res，不在观察面上"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+block = "DISPLACEMENT"   # the result block this assertion is about
+# N4：本算例不是退化的。它不是断言某个数值，而是断言荷载确实作用到了混合网格上。
+must_be_nonzero = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true
+
+# 本算例真正新增的能力观察量是**混合拓扑**本身：同一个 .ele 里三种单元族、
+# 三种不同的每记录节点数。它在 1.flavia.res 上没有独立的块——它的效果体现在
+# 位移与应力场里——所以登记在这里作为能力声明，由 §capability 说明，
+# 而不是伪造一个观察量。
+[capability]
+element_families = [
+  { kind_code = 1,  mesh_tag = "L2", class = "CO", nnode = 2, groups = 1, elements = 60,  note = "杆/配筋；与 Q4 走同一条高斯积分路径，thick = props%geometry%aera" },
+  { kind_code = 5,  mesh_tag = "Q4", class = "CO", nnode = 4, groups = 1, elements = 600, note = "既有能力" },
+  { kind_code = 25, mesh_tag = "L2", class = "CO", nnode = 2, groups = 1, elements = 61,  note = "steel 粘结单元；prot/icpspring/rotation 由网格派生，不是输入" },
+]
+mixed_topology = true
+section_property = "area"   # legacy props%geometry%aera，来自 .mat 的 GEOMETRY ROD_or_BEAM 记录
+substeps = 30
+note = "三个组的 nnode 分别是 4 / 2 / 2；legacy 在组循环里按各组 nnode 读 .ele，这正是本域要打开的东西"

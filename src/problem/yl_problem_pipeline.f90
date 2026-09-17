@@ -109,12 +109,28 @@ module yl_problem_pipeline
   ! ROW, never the rule id; see the block comment above capability_row_count.
   public :: capability_row_count, capability_row_id, capability_row_exercised
   public :: capability_first_uncovered
+  !> Legacy's compile-time kind -> node-count data (Elements.f90's `*_define`). Exported so
+  !> the deck adapter sizes its `.ele` reads from the SAME table this module validates
+  !> connectivity length against (V13); two copies of it would be a defect waiting to
+  !> happen the first time a third element family arrives.
+  public :: nodes_of_kind
 
-  ! The one element kind this build knows the connectivity length of. The value is NOT
-  ! a capability constant -- the capability table says which kinds are supported, this
-  ! says how many nodes a kind has -- so it is not a second copy of that table.
+  ! The element kinds this build knows the connectivity length of. These values are NOT
+  ! capability constants -- the capability table says which kinds are SUPPORTED, this says
+  ! how many nodes a kind HAS -- so this is not a second copy of that table. The numbers
+  ! are legacy compile-time data: Elements.f90's `*_define(elkn(n))` routines set both the
+  ! index and nnode, so `q4_define` fixes 5 -> 4, `l2_define` 1 -> 2, `steel_define` 25 -> 2.
+  !
+  ! Kinds 1 and 25 arrived with the 2-D line-element domain (M9). They are DIFFERENT
+  ! families that happen to share a node count: 1 is a rod/continuum line element that
+  ! takes the same Gauss path as Q4, 25 is the bond element with its own formulation
+  ! (Stiff.f90:121/572). Sharing nnode is a fact about topology, not about either family.
   integer(int32), parameter :: ELEMENT_KIND_Q4 = 5_int32
   integer(int32), parameter :: ELEMENT_NODES_Q4 = 4_int32
+  integer(int32), parameter :: ELEMENT_KIND_L2 = 1_int32
+  integer(int32), parameter :: ELEMENT_NODES_L2 = 2_int32
+  integer(int32), parameter :: ELEMENT_KIND_STEEL = 25_int32
+  integer(int32), parameter :: ELEMENT_NODES_STEEL = 2_int32
 
   ! The CAE key of the one M3-02 default profile row.
   character(len=*), parameter :: KEY_STRESS_COMPONENTS = 'plane_strain.stress_components'
@@ -1169,8 +1185,8 @@ contains
     if (allocated(state%sections)) then
       do i = 1, size(state%sections)
         call gate_text(errors, 'element.type', 'sections', 'element', state%sections(i)%element, i)
-        call gate_int(errors, 'element.kind_code', 'sections', 'element_kind', &
-                      state%sections(i)%element_kind, i)
+        call gate_int_set(errors, 'element.kind_code', 'sections', 'element_kind', &
+                          state%sections(i)%element_kind, i)
         call gate_text(errors, 'element.class', 'sections', 'class', state%sections(i)%class, i)
         call gate_text(errors, 'element.fields', 'sections', 'fields', state%sections(i)%fields, i)
         call gate_text(errors, 'element.formulation', 'sections', 'formulation', &
@@ -1241,6 +1257,31 @@ contains
     if (actual == int(want)) return
     call gate_reject(errors, item, object, 'size', itoa(actual), itoa(int(want)))
   end subroutine gate_size
+
+  !> An INTEGER component whose capability row names a SET of admissible values.
+  !>
+  !> `element.kind_code` was a single integer while one element family was admitted. The
+  !> second family made it a set, and the set spelling already existed -- `|`-separated,
+  !> the same one the authoring key table and gate_text use. Rather than give the
+  !> capability table a second list mechanism for integers, the row carries the set as
+  !> text and the value is stringified here: one spelling of "a set of admissible values"
+  !> in the whole build. The ProblemState component stays an integer, which is what it is.
+  subroutine gate_int_set(errors, item, object, field, value, idx)
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), intent(in) :: item, object, field
+    type(opt_int), intent(in) :: value
+    integer, intent(in), optional :: idx
+    character(len=:), allocatable :: want
+    integer(int32) :: got
+    logical :: found
+
+    call capability_expect_text(item, want, found)
+    if (.not. found) return
+    call opt_get(value, got, found)
+    if (.not. found) return             ! requiredness belongs to V1, not to the gate
+    if (text_in_set(itoa(int(got)), want)) return
+    call gate_reject(errors, item, object, field, itoa(int(got)), want, idx)
+  end subroutine gate_int_set
 
   subroutine gate_text(errors, item, object, field, value, idx)
     type(problem_errors_t), intent(inout) :: errors
@@ -2067,13 +2108,15 @@ contains
     integer(int32), intent(in) :: kind_code
     integer, intent(out) :: n
     logical, intent(out) :: known
-    if (kind_code == ELEMENT_KIND_Q4) then
-      n = int(ELEMENT_NODES_Q4)
-      known = .true.
-    else
+    known = .true.
+    select case (kind_code)
+    case (ELEMENT_KIND_Q4);    n = int(ELEMENT_NODES_Q4)
+    case (ELEMENT_KIND_L2);    n = int(ELEMENT_NODES_L2)
+    case (ELEMENT_KIND_STEEL); n = int(ELEMENT_NODES_STEEL)
+    case default
       n = 0
       known = .false.
-    end if
+    end select
   end subroutine nodes_of_kind
 
   ! The element kind to judge an element's connectivity by: its own when finalize has

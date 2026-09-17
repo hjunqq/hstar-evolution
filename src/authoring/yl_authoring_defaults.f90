@@ -321,6 +321,12 @@ contains
     character(len=*), intent(in) :: element
     select case (trim(element))
     case ('Q4'); k = 5_int32
+    ! The 2-D line families. Both are 2-node and they are NOT interchangeable: L2 is the
+    ! rod/continuum line element that takes Q4's Gauss path, STEEL is the bond element with
+    ! its own formulation (Stiff.f90:121/572). The author names the family; the kind code
+    ! is what legacy dispatches on.
+    case ('L2'); k = 1_int32
+    case ('STEEL'); k = 25_int32
     case default; k = 0_int32
     end select
   end function element_kind_of
@@ -329,6 +335,8 @@ contains
     character(len=*), intent(in) :: element
     select case (trim(element))
     case ('Q4'); n = 4_int32
+    case ('L2'); n = 2_int32
+    case ('STEEL'); n = 2_int32
     case default; n = 0_int32
     end select
   end function nodes_per_element

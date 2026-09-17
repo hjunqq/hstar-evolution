@@ -207,7 +207,7 @@ module yl_authoring_keys
     key_t('surface[].edges.count',         TV_INT,  .true.,  ''),                            &
     key_t('solver.linear',                 TV_STR,  .true.,  'profile'),                     &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
-    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y'),               &
+    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y'),           &
     key_t('output.field.count',            TV_INT,  .true.,  ''),                            &
     key_t('output.stress_averaging',       TV_STR,  .true.,                                  &
           'none|smoothed|direct|smoothed_legacy|direct_legacy')]

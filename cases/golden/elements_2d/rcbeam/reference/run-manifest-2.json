@@ -1,0 +1,1456 @@
+{
+  "manifest_version": 1,
+  "case_id": "elements_2d.rcbeam",
+  "case_dir": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/elements_2d/rcbeam",
+  "label": "ref2",
+  "status": "COMPLETED",
+  "expected_status": "COMPLETED",
+  "expectation_met": true,
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+    "sha256": "34fa42087a58d2b4026446ddf609250933020f171253021383e74d6d687dd98f"
+  },
+  "build_manifest": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/release/build-manifest.json",
+    "profile": "release",
+    "binary_sha256": "34fa42087a58d2b4026446ddf609250933020f171253021383e74d6d687dd98f"
+  },
+  "platform": {
+    "os": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "hostname": "FemChat"
+  },
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "timeout_seconds": 600.0,
+  "input_check_before": {
+    "ok": true,
+    "problems": []
+  },
+  "input_check_after": {
+    "ok": true,
+    "problems": []
+  },
+  "process": {
+    "command": [
+      "/home/huijun/HSTAR_Next/hstar-evolution/build/release/hstar",
+      "--adapter=off"
+    ],
+    "cwd": "/tmp/yl-freeze.rbmzhja9/elements_2d.rcbeam/20260917T081630Z_214a8b89_ref2/work",
+    "started_at": "2026-09-17T08:16:30+00:00",
+    "wall_seconds": 6.479,
+    "user_seconds": 6.314308,
+    "system_seconds": 0.140094,
+    "max_rss_kib": 42524,
+    "returncode": 0,
+    "signal": null,
+    "timed_out": false,
+    "stderr_bytes": 16,
+    "stderr_unexpected_lines": [],
+    "stderr_crash_pattern": false,
+    "inputs_copied": [
+      "1.aqu",
+      "1.cor",
+      "1.ele",
+      "1.ftr",
+      "1.glb",
+      "1.ifs",
+      "1.loa",
+      "1.man",
+      "1.mat",
+      "1.nrt",
+      "1.opr",
+      "1.pre",
+      "1.sol",
+      "1.tem",
+      "inp"
+    ]
+  },
+  "required_output": {
+    "file": "1.flavia.res",
+    "present": true,
+    "bytes": 5765220,
+    "sha256": "5f693a31de74b46705a13e3d5d53d477874d944a89dae704eca136a68be43f6d",
+    "parse": {
+      "ok": true,
+      "problems": [],
+      "summary": {
+        "blocks": [
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.0016779921
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 406766.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.1,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 495612.38
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.1,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.0033559842
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 813531.99
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.2,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 991224.75
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.2,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.0050339763
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 1220298.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.3,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 1486837.1
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.3,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.0067119683
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 1627064.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.4,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 1982449.5
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.4,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.0
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.0083975564
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2016856.2
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.5,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 2468761.8
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.5,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.030110762
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.01009968
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2358541.4
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.6,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 2929952.2
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.6,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.10067197
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.011822368
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2634657.8
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.7,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 3353838.9
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.7,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.18988981
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.013567376
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2838791.6
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.8,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 3734587.5
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.8,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.28848818
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.015339669
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2964001.3
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 0.9,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 4063140.3
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 0.9,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.394432
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.017139603
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 3005463.2
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 4337002.2
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.52083895
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.018934488
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2940104.6
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.1,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 4571490.9
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.1,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.7113763
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.020590085
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2685729.8
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.2,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 4898876.4
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.2,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.85225047
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.022172431
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 2207086.6
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.3,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 5148111.7
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.3,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.92601102
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.023735568
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 1660519.4
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.4,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 5290880.4
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.4,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.96300213
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.025285819
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 1180584.0
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.5,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 5211070.4
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.5,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.98150095
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.026828711
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 812373.35
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.6,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 4912330.8
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.6,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99075047
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.028391911
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 552971.33
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.7,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 4364099.5
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.7,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99537523
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.030005831
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 382270.08
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.8,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 3585786.3
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.8,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99768762
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.031730612
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 1.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 278874.3
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.9,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 2587070.8
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 1.9,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99884381
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.033548892
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 216283.24
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 1687403.6
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.9994219
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.035312998
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.1,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 172885.48
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.1,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 1173437.0
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.1,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99971095
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.037059336
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.2,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 142035.2
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.2,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 786398.64
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.2,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99985548
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.038796836
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.3,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 124822.4
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.3,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 550298.61
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.3,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99992774
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.040567768
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.4,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 118343.16
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.4,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 436797.7
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.4,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99996387
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.042377883
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.5,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 116241.55
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.5,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 373792.66
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.5,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99998193
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.044183725
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.6,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 115782.28
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.6,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 329859.93
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.6,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99999097
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.045967342
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.7,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 116670.49
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.7,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 301507.39
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.7,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99999548
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.047726252
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.8,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 118682.21
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.8,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 286109.61
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.8,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99999774
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.04946665
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 2.9,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 121473.14
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.9,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 279686.29
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 2.9,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99999887
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 3.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 0.051195347
+          },
+          {
+            "name": "tofor",
+            "result_type": 2,
+            "step": 3.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 793,
+            "max_abs": 124742.67
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 3.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 793,
+            "max_abs": 278772.61
+          },
+          {
+            "name": "Yield",
+            "result_type": 1,
+            "step": 3.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 793,
+            "max_abs": 0.99999944
+          }
+        ]
+      }
+    }
+  },
+  "outputs": [
+    {
+      "name": "1.act",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.bar",
+      "bytes": 65430,
+      "sha256": "20eac6b5c34af1913df56199cc665bdc0f14d51f34966029347dca3c6b69d7d7"
+    },
+    {
+      "name": "1.bem",
+      "bytes": 248250,
+      "sha256": "213a84bd45abc7b96646f528396556ea830e3e4499db86abb3e13c04d55806a0"
+    },
+    {
+      "name": "1.chk",
+      "bytes": 950319,
+      "sha256": "32942ee8af6392531a51f33f6e11ad2dba3720062339ecb529f9a7425ae4703e"
+    },
+    {
+      "name": "1.ctr",
+      "bytes": 7620,
+      "sha256": "466ac268c7d0fe583bdb98980149c3d30b5ca2d21c55937477c0ea0a0cbdaa93"
+    },
+    {
+      "name": "1.ctt",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.dis",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.fai",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.msh",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.res",
+      "bytes": 5765220,
+      "sha256": "5f693a31de74b46705a13e3d5d53d477874d944a89dae704eca136a68be43f6d"
+    },
+    {
+      "name": "1.ftf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.gdm",
+      "bytes": 1110,
+      "sha256": "8a74cf69e51b1d3cdf7e0c6fa69401c31b905059260fabaa99ae1d7d91720592"
+    },
+    {
+      "name": "1.gpv",
+      "bytes": 8242290,
+      "sha256": "0b7ba60b8b261d4b749b1177306b006cdb1e630ff87827cf233acc8b3449146f"
+    },
+    {
+      "name": "1.ini",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.inw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.oew",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ogw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ojw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.opw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.res",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.resb",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.rtt",
+      "bytes": 269964,
+      "sha256": "ce168161f85fb3117993ec2f0850bde833f4bb25f5fc082af66dd3e4ee90866f"
+    },
+    {
+      "name": "1.stf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.sto",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1bcs.flavia.msh",
+      "bytes": 5062,
+      "sha256": "1974caa0d4b4f01e69a2fcb06c7caae3b64b6f39318ea6650b33a544b680fa73"
+    },
+    {
+      "name": "1bcs.flavia.res",
+      "bytes": 144210,
+      "sha256": "f1320e26b00ca649b1028a3896326fa87fecf493190e47706d54e1f4b057b74e"
+    }
+  ],
+  "diagnostics": [],
+  "diagnostics_malformed": [],
+  "check_summary": null,
+  "check_malformed": [],
+  "protocol_violation": null,
+  "core_dump": false,
+  "state": null,
+  "finished_at": "2026-09-17T08:16:37+00:00",
+  "run_dir": "/tmp/yl-freeze.rbmzhja9/elements_2d.rcbeam/20260917T081630Z_214a8b89_ref2"
+}

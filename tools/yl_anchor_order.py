@@ -112,9 +112,25 @@ def gdb_script(binary: Path, sites: list[str], log: Path, out: Path) -> str:
     return f"{len(sites)} sites -> {n} breakpoint locations"
 
 
+def case_path(case_id: str) -> str:
+    """The case's directory, from cases/manifest.toml rather than from its family name.
+
+    It used to be `cases/golden/static_2d/<name>`, which is the same defect
+    tools/yl_io_trace.sh already fixed for itself: the family prefix is part of the case
+    ID, not a constant. It went unnoticed while the only cases this check reached were the
+    two static ones, and bit the moment the reader inventory's case list grew past them --
+    `plasticity.mini_mc` resolved to `cases/golden/static_2d/mini_mc`, which does not exist.
+    """
+    doc = tomllib.loads((ROOT / "cases/manifest.toml").read_text(encoding="utf-8"))
+    for c in doc["case"]:
+        if c["id"] == case_id:
+            return "cases/" + c["path"]
+    raise SystemExit(f"{case_id}: not in cases/manifest.toml")
+
+
 def run_case(case_id: str, binary: Path, sites: list[str], keep: Path | None) -> list[str]:
     """Return the ordered list of site strings as they were hit."""
-    case_dir = ROOT / "cases/golden/static_2d" / case_id.split(".", 1)[1]
+    case_dir = ROOT / case_path(case_id)
     if not case_dir.is_dir():
         raise SystemExit(f"case directory missing: {case_dir}")
     subprocess.run([sys.executable, str(ROOT / "tools/yl_manifest.py"), "check",

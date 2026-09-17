@@ -525,19 +525,17 @@ contains
     character(len=*), intent(in) :: prefix
     type(deck_context_t), intent(inout) :: ctx
     type(problem_errors_t), intent(inout) :: errors
-    integer :: u, ios, i, g, nsec, nn
+    integer :: u, ios, i, g, nsec, nn, k
     integer(int32) :: id
-    integer(int32), allocatable :: nodes(:), counts(:)
+    integer(int32), allocatable :: nodes(:), counts(:), nodes_extra(:)
 
     nsec = int(doc%count_of('section'))
     ctx%filled = .true.
     ctx%ndimn = int_at(doc, 'mesh.dimension')
     ctx%ngroup = int(nsec, int32)
-    ctx%nnode = nodes_per_element(text_at(doc, 'section[1].element'))
     ctx%element_kind = element_kind_of(text_at(doc, 'section[1].element'))
     ctx%type_abc = 'FIX'
     ctx%nbackdt = 0_int32
-    nn = int(ctx%nnode)
 
     ! Element-to-section membership is POSITIONAL, which is legacy's own rule: read_element
     ! walks the file group by group, taking nelgroup elements for each. Some `.ele` files
@@ -555,41 +553,71 @@ contains
       counts(i) = int_at(doc, 'elset['//itoa(int(g))//'].element_count')
     end do
 
-    allocate (nodes(nn))
+    ! The per-section arrays come FIRST now, because the `.ele` walk below needs each
+    ! section's node count to size its reads. They used to be filled afterwards, from a
+    ! single mesh-wide `nnode` taken off section 1 -- the modern path's copy of the same
+    ! one-element-kind assumption the adapter carried, and the one M9 had to remove.
+    if (allocated(ctx%nelgroup)) deallocate (ctx%nelgroup)
+    if (allocated(ctx%group_matno)) deallocate (ctx%group_matno)
+    if (allocated(ctx%group_kind)) deallocate (ctx%group_kind)
+    if (allocated(ctx%group_nnode)) deallocate (ctx%group_nnode)
+    allocate (ctx%nelgroup(nsec), ctx%group_matno(nsec), ctx%group_kind(nsec), &
+              ctx%group_nnode(nsec))
+    do i = 1, nsec
+      ctx%nelgroup(i) = counts(i)
+      ctx%group_matno(i) = int(material_index(doc,                                            &
+                               text_at(doc, 'section['//itoa(i)//'].material')), int32)
+      ctx%group_kind(i) = element_kind_of(text_at(doc, 'section['//itoa(i)//'].element'))
+      ctx%group_nnode(i) = nodes_per_element(text_at(doc, 'section['//itoa(i)//'].element'))
+      if (counts(i) == 0_int32) then
+        call fail(errors, 'section['//itoa(i)//'].elset',                                     &
+                  'the mesh file has no element in this section''s group')
+      end if
+    end do
+    if (errors%any()) return
+
+    ! Walk `.ele` SECTION BY SECTION, in declaration order, reading each section's own
+    ! record length -- legacy's own rule (read_element is called inside the group loop,
+    ! Elements.f90:1081-1087). Counting the whole file with one record length would
+    ! mis-parse the moment two sections disagree about it, which is precisely what a
+    ! mixed-topology deck does.
     open (newunit=u, file=prefix//'.ele', status='old', action='read', iostat=ios)
     if (ios /= 0) then
       call fail(errors, 'mesh.file', 'cannot open '//prefix//'.ele')
       return
     end if
     g = 0_int32
-    do
-      read (u, *, iostat=ios) id, nodes(1:nn)
-      if (ios /= 0) exit
-      g = g + 1_int32
-    end do
+    sections: do i = 1, nsec
+      nn = int(ctx%group_nnode(i))
+      if (nn <= 0) then
+        call fail(errors, 'section['//itoa(i)//'].element',                                   &
+                  'this build does not know how many nodes that element type has, so the '//  &
+                  'mesh file cannot be read for this section')
+        exit sections
+      end if
+      if (allocated(nodes)) deallocate (nodes)
+      allocate (nodes(nn))
+      do k = 1, int(counts(i))
+        read (u, *, iostat=ios) id, nodes(1:nn)
+        if (ios /= 0) exit sections
+        g = g + 1_int32
+      end do
+    end do sections
+    ! One more record than the counts claim is a mismatch in the other direction.
+    if (.not. errors%any() .and. ios == 0) then
+      allocate (nodes_extra(1))
+      read (u, *, iostat=ios) id, nodes_extra(1)
+      if (ios == 0) g = g + 1_int32
+      deallocate (nodes_extra)
+    end if
     close (u)
 
-    if (g /= sum(counts(1:nsec))) then
+    if (.not. errors%any() .and. g /= sum(counts(1:nsec))) then
       call fail(errors, 'elset[].element_count',                                              &
                 'the element counts add up to '//itoa(int(sum(counts(1:nsec))))//             &
                 ' but '//prefix//'.ele holds '//itoa(int(g))//' elements')
       return
     end if
-
-    if (allocated(ctx%nelgroup)) deallocate (ctx%nelgroup)
-    if (allocated(ctx%group_matno)) deallocate (ctx%group_matno)
-    if (allocated(ctx%group_kind)) deallocate (ctx%group_kind)
-    allocate (ctx%nelgroup(nsec), ctx%group_matno(nsec), ctx%group_kind(nsec))
-    do i = 1, nsec
-      ctx%nelgroup(i) = counts(i)
-      ctx%group_matno(i) = int(material_index(doc,                                            &
-                               text_at(doc, 'section['//itoa(i)//'].material')), int32)
-      ctx%group_kind(i) = element_kind_of(text_at(doc, 'section['//itoa(i)//'].element'))
-      if (counts(i) == 0_int32) then
-        call fail(errors, 'section['//itoa(i)//'].elset',                                     &
-                  'the mesh file has no element in this section''s group')
-      end if
-    end do
   end subroutine fill_context
 
   ! ------------------------------------------------------------------ lookups ----

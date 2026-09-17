@@ -547,6 +547,7 @@ contains
       if (allocated(ctx%nelgroup)) deallocate (ctx%nelgroup)
       if (allocated(ctx%group_matno)) deallocate (ctx%group_matno)
       if (allocated(ctx%group_kind)) deallocate (ctx%group_kind)
+      if (allocated(ctx%group_nnode)) deallocate (ctx%group_nnode)
     end if
     call builder_begin(b)
     call step_parts_reset(parts)
@@ -684,12 +685,12 @@ contains
     ctx%filled = .true.
     ctx%ndimn = 2_int32
     ctx%ngroup = 1_int32
-    ctx%nnode = 4_int32
     ctx%element_kind = 5_int32
-    allocate (ctx%nelgroup(1), ctx%group_matno(1), ctx%group_kind(1))
+    allocate (ctx%nelgroup(1), ctx%group_matno(1), ctx%group_kind(1), ctx%group_nnode(1))
     ctx%nelgroup = 256_int32
     ctx%group_matno = 1_int32
     ctx%group_kind = 5_int32
+    ctx%group_nnode = 4_int32
     ctx%type_abc = 'FIX'
     ctx%type_problem = 'Q'
     ctx%nbackdt = 0_int32
@@ -698,7 +699,7 @@ contains
     select case (variant)
     case ('W')        ! the whitelisted context, unchanged
     case ('DIM3');    ctx%ndimn = 3_int32
-    case ('KIND7');   ctx%group_kind = 7_int32
+    case ('KIND7');   ctx%group_kind = 7_int32; ctx%group_nnode = 0_int32
     case ('BACKDT2'); ctx%nbackdt = 2_int32
     case ('MIF');     ctx%type_abc = 'MIF'
     case ('NTRANS1'); ctx%ntrans = 1_int32

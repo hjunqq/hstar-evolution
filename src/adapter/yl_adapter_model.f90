@@ -149,6 +149,7 @@ module yl_adapter_model
                                 make_problem_error, PE_INVALID_INPUT, PE_STAGE_ADAPT
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
+  use yl_problem_pipeline, only: nodes_of_kind
   use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, section_parts_t, &
                                LEN_TYPE_ABC, reject_dialect
 
@@ -295,6 +296,7 @@ contains
     type(interactions_t) :: inter
     type(output_t) :: outp
     integer(int32) :: ctx_gindex, ctx_nnode
+    logical :: kind_known
     ctx_gindex = 0_int32
     ctx_nnode = 0_int32
 
@@ -929,11 +931,12 @@ contains
     if (ngroup <= 0_int32) then
       allocate (secparts%sections(0))
       allocate (activation(0))
-      allocate (ctx%nelgroup(0), ctx%group_matno(0), ctx%group_kind(0))
+      allocate (ctx%nelgroup(0), ctx%group_matno(0), ctx%group_kind(0), ctx%group_nnode(0))
     else
       allocate (secparts%sections(ngroup))
       allocate (activation(ngroup))
-      allocate (ctx%nelgroup(ngroup), ctx%group_matno(ngroup), ctx%group_kind(ngroup))
+      allocate (ctx%nelgroup(ngroup), ctx%group_matno(ngroup), ctx%group_kind(ngroup), &
+                ctx%group_nnode(ngroup))
       do igroup = 1, ngroup
         ! seq 61 -- RD: GLB.global_data.group_header (Global.f90:1216), loop igroup=1..ngroup
         read (unit, *, iostat=ios, iomsg=iomsg_buf) gname, gkname, gindex, gclass, &
@@ -1056,20 +1059,12 @@ contains
         call opt_set(activation(igroup)%material, matno_process(igroup))
         call opt_set(activation(igroup)%active, appear_process(igroup))
 
-        ! deck_context_t (adapter-contract.md SS2.2) describes "the (single) group"; take
-        ! group 1's element kind/node count as the value every other parser sees. The
-        ! nnode mapping is legacy compile-time DATA (Elements.f90:135 `q4_define(elkn(5))`
-        ! via `kinddefine`, not a deck value) -- 5 is the only kind this parser can name
-        ! with confidence; anything else is 0 and lets the capability gate's rejection of
-        ! that element_kind be the visible failure rather than a guessed node count.
-        if (igroup == 1_int32) then
-          ctx_gindex = gindex
-          if (gindex == 5_int32) then
-            ctx_nnode = 4_int32
-          else
-            ctx_nnode = 0_int32
-          end if
-        end if
+        ! deck_context_t (adapter-contract.md SS2.2) used to describe "the (single) group"
+        ! and carried group 1's node count as the value every other parser saw. That was
+        ! the adapter's last assumption that a mesh has one element kind; M9 replaced it
+        ! with the per-group array below. `ctx_gindex` stays: it is group 1's KIND, which
+        ! the .pre parser still uses, and it is a different question from node counts.
+        if (igroup == 1_int32) ctx_gindex = gindex
 
         ! deck_context_t's per-section arrays (adapter-contract.md SS2.3, added after
         ! L2-a's first integration run): .ele carries no group boundary of its own, so
@@ -1080,6 +1075,13 @@ contains
         ctx%nelgroup(igroup) = gnelgroup
         ctx%group_matno(igroup) = gmatno
         ctx%group_kind(igroup) = gindex
+        ! The node count is DERIVED from the kind through the same table the validator
+        ! judges connectivity length by (V13), not guessed here. An unknown kind leaves 0,
+        ! so the capability gate's rejection of that element_kind stays the visible
+        ! failure rather than a mis-sized read -- the reason the old scalar said 0 too.
+        call nodes_of_kind(gindex, ctx_nnode, kind_known)
+        if (.not. kind_known) ctx_nnode = 0_int32
+        ctx%group_nnode(igroup) = ctx_nnode
 
         ! ---------------------------------------------------------------------------
         ! INTERLEAVING (module header): this group's .ele elements are read here by
@@ -1216,7 +1218,6 @@ contains
     ! ("parse_glb sets this last; readers must check it").
     ctx%ndimn = ndimn
     ctx%ngroup = ngroup
-    ctx%nnode = ctx_nnode
     ctx%element_kind = ctx_gindex
     ctx%type_abc = type_ABC
     ctx%type_problem = type_problem

@@ -71,15 +71,76 @@ is whitelisted; this parser only knows how to shape a Q4 connectivity record
 
 ## 4. 验收判据（初始全部未通过）
 
-1. `rcbeam` 冻结参考：3 次运行 `1.flavia.res` 逐字节相同 — `passes: false`
+1. `rcbeam` 冻结参考：3 次运行 `1.flavia.res` 逐字节相同 — **`passes: true`**（120 块 / 214 110 值）
 2. 现代输入独立驱动 `rcbeam`（工作目录只有 `case.toml` + `.cor`/`.ele`），与冻结参考
-   `atol = rtol = 0` — `passes: false`
-3. 既有七个 golden 算例逐位不变 — `passes: false`
+   `atol = rtol = 0` — `passes: false`，**被 CONCRETE + PARDISO 阻塞**，见 §5
+3. 既有七个 golden 算例逐位不变 — **`passes: true`**（保留下来的机制类改动惰性由此证明）
 4. 混合拓扑由**每组** `nnode` 驱动，且有反例：组声明的单元族与 `.ele` 记录长度不符时按名拒绝 — `passes: false`
 5. 截面面积走 `[[section]]`，且两个方向都有反例（非线单元写 `area`／线单元不写 `area`） — `passes: false`
 6. 不新增 `Iy`/`Iz`/`J`/转动自由度/局部坐标的任何 schema 字段 — `passes: false`
 
-## 5. 前置
+## 5. 收口状态：**suspended**（2026-09-17）
+
+判据 2 走不通，原因是量出来的，不是估计：**四个候选 deck 全部同时需要
+`CONCRETE` 与 `PARDISO`**。
+
+| deck | TYPE_SOLVER | Q4 组材料 |
+|---|---|---|
+| `rcbeam` | **PARDISO** | **CONCRETE**（icr=3） |
+| `rcbeam_crack` | PARDISO | CONCRETE |
+| `tunnel` | PARDISO | CONCRETE |
+| `tunnel_sl` | PARDISO | CONCRETE |
+
+（`.mat` 里出现的 `CAMCLAY` 是第 12/15 行的**注释**，不是材料记录——这次先查了。）
+
+`CONCRETE` 已于 2026-09-17 由负责人裁定暂缓，`PARDISO` 属未开始的求解器变体域，
+而且正是该裁定引述的 CONCRETE 前置条件本身。因此本域停在判据 2，
+状态 **suspended，前置条件 = CONCRETE + PARDISO**。
+
+rcbeam 的 gdb 取证还显示它触及**四个**未迁移域，远不止一个单元族：
+
+| 未注册站点 | 属于 |
+|---|---|
+| `Solver.f90:7772-7794` | PARDISO 求解器输入 |
+| `Material.f90:250/256/257`、`:666` | 材料属性曲线 与 CONCRETE 记录 |
+| `Global.f90:1499-1529` | `.nrt` 插值组（几何域 M6.2） |
+| `Global.f90:1042/1043`、`Output.f90:1303` | `bcs` 输出文件 |
+
+这条证据本身说明 rcbeam **不是任何东西的最小切片**，佐证了暂停的判断。
+它的取证保存在 `suspended/evidence/rcbeam/`，**不进** `docs/m1/evidence/` 的门禁通配，
+因为那 16 个站点未注册会让 reader inventory 红掉，而注册它们就是开启上述四个域。
+
+### 保留了什么
+
+机制类改动保留，且都由七个既有 golden 逐位不变证明惰性：
+
+- `deck_context_t` 的 `nnode` 标量 → `group_nnode(:)`，经 `nodes_of_kind` 派生；
+  现代路径 `fill_context` 同样改为逐 section 走 `.ele`。这是适配器最后一处
+  「一个网格一种单元」的假设，**legacy 从来没有这个假设**。
+- `nodes_of_kind` 认识 kind 1 / 25 的节点数——那是 legacy 的编译期事实，不是能力声明。
+- `element_kind_of` / `nodes_per_element` 认识 `L2` / `STEEL` 的名字，同理。
+- 能力行 `element.kind_code` 改为**集合语义**（`gate_int_set` + `text_in_set`），
+  但**取值仍只有 `5`**。
+
+### 撤回了什么，以及为什么
+
+能力**声明**类改动全部撤回，因为没有任何被接纳的算例能证明它们：
+
+- `sections[].cross_section_area`（类型 / map 行 / `.mat` GEOMETRY 分支 / commit / authoring 键与规则）
+- `MAT.material_set.geometry_section` reader 行
+- `section[].element` 白名单里的 `L2` / `STEEL`
+- `output.field` 里的 `bcs`
+- map 单位表里的 `m2`
+
+撤回的直接原因是一条门禁规则，而它是对的：
+`yl_state_map.py` 要求**任何 map 字段的来源 reader 必须被某个被接纳的算例执行**
+（`reader ... has empty executed_by`）。这正是「没有真实 deck 就不能声称一个字段」的机制表达。
+与其绕开它，不如承认这一层现在没有证据。
+
+完整改动保存在 [`suspended/section-area-and-element-whitelist.patch`](suspended/section-area-and-element-whitelist.patch)，
+恢复时按上表逐条放回即可；白名单加一个取值是一行改动。
+
+## 5b. 前置
 
 `PD-2`（`mmats` 守卫）已于 2026-09-17 修复，四个算例因此恢复可运行。
 见 [`../m8/pre-migration-defects.md`](../m8/pre-migration-defects.md)。它**不计入**本域能力。

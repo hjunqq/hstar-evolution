@@ -1,0 +1,94 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-17T08:14:22+00:00",
+  "root": "cases/golden/elements_2d/rcbeam/legacy",
+  "file_count": 15,
+  "total_bytes": 101986,
+  "excludes": [],
+  "meta": {
+    "case_id": "elements_2d.rcbeam",
+    "source_repository": "/home/huijun/HSTAR_Next/cases",
+    "source_commit": "d3e921cb416722d8b46ab64dab177dee1e17abe3",
+    "source_path": "cases/rcbeam",
+    "actually_opened_load_file": "1.loa",
+    "note": "Solver inputs only, the 15 names legacy opens in Global.f90:631-670. The source dir also holds run outputs (.chk/.gpv/.rtt/.bar/.bem/.ctr/.gdm/.flavia.*/1bcs.flavia.*) and a 1.nrt.bak that were not imported. Unlike the other golden decks there is no 1.LOA: this deck has a single lower-case load file and no case-insensitive collision."
+  },
+  "case_insensitive_collisions": [],
+  "files": [
+    {
+      "path": "1.aqu",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "1.cor",
+      "bytes": 39650,
+      "sha256": "a5f77af9f1cc42a69712e5400a3dad5a04d86c557b6942562c7f56e7eee89a64"
+    },
+    {
+      "path": "1.ele",
+      "bytes": 42282,
+      "sha256": "0305f50aab3c95465f7d05143d0f42c758c190329aa024b91c2b00fc8d6a534c"
+    },
+    {
+      "path": "1.ftr",
+      "bytes": 74,
+      "sha256": "5b814f989887fabfe216e9f6f1b2d4a87c87b676570d894927fe38ca9d4e0123"
+    },
+    {
+      "path": "1.glb",
+      "bytes": 6746,
+      "sha256": "70ec5ea7fbbcde7694749832a5854675475b1b56cea4c12eaeeb2a626a8c71e8"
+    },
+    {
+      "path": "1.ifs",
+      "bytes": 96,
+      "sha256": "4a9dbe511ac6f5d60c8bbadc4759cc273b891f5e0da02dd084495fdd8d63e622"
+    },
+    {
+      "path": "1.loa",
+      "bytes": 966,
+      "sha256": "00d5d6ffd75d7aa2fa14ba1b6f0ccd37bba6f2dddfaeca921fade173c0ec8858"
+    },
+    {
+      "path": "1.man",
+      "bytes": 140,
+      "sha256": "d460ac0abd777b46067496b1c07d9f33dd00c6ee6bdc9071b0faeafffaebb14d"
+    },
+    {
+      "path": "1.mat",
+      "bytes": 2534,
+      "sha256": "09993286ab1f8195ffd619e1cb3f4fd70f1b833671cf9d879b97cc18aacf1da9"
+    },
+    {
+      "path": "1.nrt",
+      "bytes": 7544,
+      "sha256": "557391ccd5be869d18a2863e439aa1cea27bb2e0bb5a4fc5c6e00386b4aeac51"
+    },
+    {
+      "path": "1.opr",
+      "bytes": 477,
+      "sha256": "3232428a3c077a8829a8877051a59b9a10f8344736ffd3daa1ee1350c70f0528"
+    },
+    {
+      "path": "1.pre",
+      "bytes": 1002,
+      "sha256": "62324c146d8bdd16ca09e9e3c41ef5a4710b73f799e1e3cf0bb9b6c1dd72d01e"
+    },
+    {
+      "path": "1.sol",
+      "bytes": 50,
+      "sha256": "af0ea8dc37f61ddc3974349545b6d5b2d58d1b84619e95bcc6226892514d986a"
+    },
+    {
+      "path": "1.tem",
+      "bytes": 354,
+      "sha256": "1a013a16b13c6e57ac0c296a2ca7c5937bca7cf6b5fe5bfe0544645967042be4"
+    },
+    {
+      "path": "inp",
+      "bytes": 71,
+      "sha256": "fec43e97e94d091f2327003dae2f5a86a9f41c996294efeb5778fb45fe0f58fe"
+    }
+  ]
+}
