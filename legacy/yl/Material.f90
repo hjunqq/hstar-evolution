@@ -236,7 +236,7 @@
     character (30) name,phase,material,criteria,property,type_curve
     character (10 ) model
     character (80) text
-    logical,allocatable::yl_seen(:)   ! M1-03: imat already defined
+    logical,allocatable::yl_seen(:,:); integer(ink) yl_pcls   ! M1-03: (imat,class); 1 MECHANICAL/other 2 HEAT 3 GEOMETRY
 
     allocate(props(nmats))
 
@@ -271,9 +271,9 @@
     call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_title_2,0)
     read(munit,*,iostat=yl_ios,iomsg=yl_msg)mmats  ! !20200617
     call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_nmats,0)
-    call diag_range(RD_MAT_material_set_nmats,0,'nmats',int(mmats,i8),int(nmats,i8),int(nmats,i8))   ! M1-03: must equal .glb nmats (props is sized by it)
+    call diag_range(RD_MAT_material_set_nmats,0,'nmats',int(mmats,i8),int(nmats,i8),int(3*nmats,i8))   ! M1-03: mmats counts RECORDS
     call diag_flush_stage()
-    allocate(yl_seen(nmats)) ; yl_seen=.false.
+    allocate(yl_seen(nmats,3)) ; yl_seen=.false.
 
     do jmat=1,mmats
 
@@ -283,10 +283,10 @@
         read(munit,*,iostat=yl_ios,iomsg=yl_msg)property,name,imat
         call diag_check_read(yl_ios,yl_msg,RD_MAT_material_set_material_header,0)
         call diag_range(RD_MAT_material_set_material_header,jmat,'imat',int(imat,i8),1_i8,int(nmats,i8))   ! M1-03: props(imat) is written next
+        call diag_flush_stage(); yl_pcls=1; if(property(1:1)=='H')yl_pcls=2; if(property(1:1)=='G')yl_pcls=3
+        if(yl_seen(imat,yl_pcls))call diag_dup(RD_MAT_material_set_material_header,jmat,'imat',int(imat,i8))
         call diag_flush_stage()
-        if(yl_seen(imat))call diag_dup(RD_MAT_material_set_material_header,jmat,'imat',int(imat,i8))
-        call diag_flush_stage()
-        yl_seen(imat)=.true.
+        yl_seen(imat,yl_pcls)=.true.
 
         print *,property,name,imat
 

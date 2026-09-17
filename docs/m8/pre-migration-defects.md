@@ -39,6 +39,69 @@
 
 ---
 
+## PD-2 · `mmats` 被当成材料数，而它是记录数
+
+| | |
+|---|---|
+| 日期 | 2026-09-17 |
+| 位置 | `legacy/yl/Material.f90` 239 / 274 / 276 / 286 / 287 / 289（六行，**行数不变**） |
+| 阻塞的算例 | `cases/cases/rcbeam`、`rcbeam_crack`、`tunnel`、`tunnel_sl` —— 四个**真实且可运行**的 2-D L2 算例 |
+| 归属 | **迁移引入**（M1-03 守卫），不是 legacy 缺陷 |
+
+**与 PD-1 的区别，必须说清楚**：PD-1 是 legacy 自己的缺陷，我们修它是为了拿到参考；
+PD-2 是**我们自己的守卫写错了**，它拒绝了 legacy 一直能跑的算例。两者都属「可验收性恢复」，
+但性质相反，不能混为一类。
+
+### 怎么发现的
+
+四个算例在未改动的 5414e73 快照上 `rc=0` 且产出正常结果（5.7 MB / 5.7 MB / 2.5 MB / 43.7 MB），
+在本仓库的构建上却停在：
+
+```
+code=RANGE reader="MAT.material_set.nmats" site="Material.f90:272"
+field="nmats" value="3" allowed="2..2"
+```
+
+### 原因
+
+`mmats` 数的是 `.mat` 里的**记录**，不是材料。一个材料可以带多条属性记录——
+`MECHANICAL`、`HEAT`、`GEOMETRY`（Material.f90:294 / 994 / 1013）——而**每一个 2-D 杆/梁算例
+都会给一个已经有 `MECHANICAL` 记录的材料再挂一条 `GEOMETRY ROD_or_BEAM` 截面记录**：
+
+```
+             MECHANICAL               SOLID    1
+             MECHANICAL               SOLID    2
+               GEOMETRY         ROD_or_BEAM    2     <- 第三条记录，imat 仍是 2
+```
+
+两条 M1-03 守卫都是在「每个材料恰好一条记录」的算例上标定的：
+`mmats == nmats`，以及按 `imat` 判重。前者直接拒绝，后者即使放宽前者也会误报。
+
+**一个被证伪的推断**：最初判断这是 `props(nmats+1)` 越界写——把 `.mat` 里的
+`material_serial N` 标题行误读成了 `imat`。用 `-check bounds,pointers` 的快照构建跑
+`rcbeam`，`rc=0` 无越界，推断被推翻；真正的 `imat` 来自下一行的第三个字段，始终在 1..nmats 内。
+
+### 修法
+
+- `mmats` 的范围由 `nmats..nmats` 改为 `nmats..3*nmats`（三个属性类，每类至多一条）；
+- 判重的键由 `imat` 改为 `(imat, 属性类)`——同一材料上出现**两条同类**记录仍然是重复。
+
+两条都保持 fail-closed，`imat` 超出 `1..nmats` 仍然是越界。
+按仓库既有纪律用 `;` 连接语句，**文件行数不变**，因此 io 站点普查和所有读取站点行号原地不动
+（`scan --check` 实测 `CENSUS CURRENT`），六个算例的 gdb 证据无需重采。
+
+### 惰性与恢复证据
+
+- **惰性**：七个 golden 算例逐位不变（`MODERN PASS`，`max|d| = 0`），两条 N4 断言照常成立。
+  机械确认：`yl_seen` / `yl_pcls` 在全树只出现在这五行上，`diag_range` / `diag_dup` 的参数
+  全是 `intent(in)`，不可能写回任何数值路径。
+- **恢复**：四个算例现在都 `rc=0`。`rcbeam` / `rcbeam_crack` / `tunnel` 的
+  `1.flavia.res` 与快照二进制**逐字节相同**。`tunnel_sl` 在 1 626 300 个值里有 1 586 个不同，
+  `max|d| = 1e-8`（应力量级 1e-5~1e-3，200 个块的强非线性分期开挖）——属于已登记的
+  **构建独立性**未决债务那一条轴，与本次改动无关（见上一条机械确认）。
+
+---
+
 ## 不予修复的登记
 
 同批查清但**不**修的，列在这里，以免以后重复调查：
