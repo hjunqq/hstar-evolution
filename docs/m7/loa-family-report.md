@@ -349,3 +349,52 @@ amplitude = "constant"
 （`beam_point_load` 覆盖）。`.tem` 在 58 个 deck 里**全部为空段**，已按 `empty_section` 处理。
 
 所以在白名单自己的形状里，**唯一一个还有 11 个真实 deck 支撑的未覆盖能力是 CAMCLAY**。
+
+> **上面这一段是错的，2026-09-17 当天更正——见 §5。** `CAMCLAY` 那 11 个命中来自 `.mat`
+> **文件头的注释块**（每个 `.mat` 都列着所有可选模型名），不是材料记录。语料里没有任何
+> 一条 CAMCLAY 材料记录。更正后的普查见下一节。
+
+
+## 5. 更正：CAMCLAY 不存在，而且我查错了语料
+
+**错误**：上一节说「11 个 CAMCLAY deck」。那 11 个命中是 `.mat` 头部注释里的
+`CAMCLAY    :Pc, lamda, Mg, Mf, D0, D1,gaama` 这一行——每个 `.mat` 都有。
+按材料**记录**（`nmats` 之后、行首是模型名且后跟数字）重新统计，全树 1284 条材料记录：
+
+| 模型 | 记录数 |
+|---|---|
+| `ELASTIC_ISOTROPIC` | 1284 |
+| `CLASSICALEP` | 28 |
+| `CONCRETE` | 14 |
+| `JANBU` / `GOODMAN` / `DUNCANCHANG` | 各 1 |
+| **`CAMCLAY`** | **0** |
+
+**第二个错误更重要**：我只普查了 `hstar_jobs`（230 个作业目录），而 golden 算例真正的来源
+`HSTAR_Next/cases/cases` 是一个 **93 个算例的策展库**，目录名本身就是一张能力矩阵
+（`mini_goodman`、`new_duncan_chang`、`test_beam2d`、`pile_beam`、`mini_thermal`、
+`test_terzaghi`、`test_arclength`、`rcbeam`…）。优先级应该由它来定，而不是由作业目录。
+
+### 该库里 2-D / `Q` / `PROFILE` 的 28 个算例，实跑一遍的结果
+
+能跑出结果的包括 `benchmark_50x50`、`gravdam_static_demo`、`mini_gravdam`、`temp_stress`、
+`train01_gravdam_static`、以及一批 `test_*`。**但是**：
+
+* 名字叫 `test_duncan_chang` 的算例，`.mat` 里只有 `ELASTIC_ISOTROPIC`——10 节点 4 单元，
+  是个占位桩。`test_*` 这一族大多如此：名字写的是**打算测什么**，不是 deck 里有什么。
+* 真正带未覆盖材料模型的 2-D/PROFILE 算例只有两个，而它们**都崩**：
+  `mini_goodman`（GOODMAN+JANBU）**SIGSEGV，无结果**；
+  `new_duncan_chang`（DUNCANCHANG）**SIGSEGV**，崩在写出结果之后。
+* `CONCRETE` 的 4 个算例全部要 PARDISO，其中两个还是 3-D——都在暂停清单上。
+* `pile_beam` 与 `test_beam2d` 退出码 2（`.pre` 触发 M1-03 语义守卫），也没有结果。
+
+### 结论
+
+**在当前白名单形状（2-D / Q / PROFILE）内，没有任何一个未覆盖的材料能力有可用的真实算例。**
+两个候选算例崩溃——那是一条独立的、更早就登记过的线索（M6 优先级表里的同一对算例），
+应当先查崩溃，而不是先扩能力：**一个唯一算例会崩的能力，没有参考基准，也就没有验收判据。**
+
+### 顺带更正一条关于梁的说法
+
+前一节说「L2 单元只出现在那个 3-D 大模型里」。在策展库里不成立：`test_beam2d` 与
+`pile_beam` 都是 **2-D / Q / PROFILE 且使用 L2 单元**的算例。但它们的 `nbeamload` 仍然是 0，
+所以**梁荷载没有算例这一结论不变**，裁定 1 不受影响。
