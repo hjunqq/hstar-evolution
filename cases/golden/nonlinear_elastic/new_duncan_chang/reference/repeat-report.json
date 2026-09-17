@@ -1,0 +1,38 @@
+{
+ "case_id": "nonlinear_elastic.new_duncan_chang",
+ "test_id": "B02",
+ "frozen_at": "2026-09-17T03:23:27+00:00",
+ "binary_sha256": "55805994e3c4bbd77994c8fcaab3a6855f1a3393439fd7f61de439f223cd9b3d",
+ "build_profile": "release",
+ "entry": "--adapter=off (legacy readers); the reference is what LEGACY produces",
+ "threads": {
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1"
+ },
+ "runs": [
+  {
+   "label": "ref1",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "d0434227d295368674eee1d7929b254d9de8fc43edbc7ffb385613027a14fade"
+  },
+  {
+   "label": "ref2",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "d0434227d295368674eee1d7929b254d9de8fc43edbc7ffb385613027a14fade"
+  },
+  {
+   "label": "ref3",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "d0434227d295368674eee1d7929b254d9de8fc43edbc7ffb385613027a14fade"
+  }
+ ],
+ "all_completed": true,
+ "flavia_res_identical": true,
+ "comparison_rule": "atol = rtol = 0 (B02)"
+}

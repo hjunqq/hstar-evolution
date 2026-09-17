@@ -128,3 +128,30 @@ reference = "reference/"
 # golden case whose displacement field is decided entirely by the new capability: lose the
 # point load and the answer is not wrong, it is identically zero.
 
+
+[[case]]
+id = "nonlinear_elastic.new_duncan_chang"
+path = "golden/nonlinear_elastic/new_duncan_chang"
+source_repository = "/home/huijun/HSTAR_Next/cases"
+source_path = "cases/new_duncan_chang"
+source_commit = "d3e921cb416722d8b46ab64dab177dee1e17abe3"
+input_manifest = "golden/nonlinear_elastic/new_duncan_chang/input-manifest.json"
+purpose = "the material domain's second constitutive model: DUNCANCHANG (EB variant), a nonlinear-elastic parameter system driven over 10 load substeps"
+migration_phase = "M8"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# This deck could not be frozen before 2026-09-17: it SIGSEGV'd, on the pristine legacy
+# snapshot as well as here. The cause was legacy's own -- Stiff.f90 read an uninitialised
+# kind_wt and dereferenced an unallocated isatu on every visit after the first. That one-line
+# repair is a PRE-MIGRATION DEFECT FIX, recorded in docs/m8/sigsegv-investigation.md and
+# docs/m8/pre-migration-defects.md; it is NOT part of the DUNCANCHANG modernisation.
+#
+# Capability delta against plasticity.mini_mc, measured file by file rather than assumed:
+#   .mat  DUNCANCHANG + the EB sub-record          <- the new capability
+#   .man  nstep 1 -> 10, miter 10 -> 20            <- already in [step.controls]
+#   .glb  type_nl 4 -> 5 (stiffness_update)        <- already admitted by the whitelist
+#         res_s 0 -> 1                             <- binary 1.res only, not an observable
+#         nmats/ngroup 2 -> 1, one Q4 group
+# Everything else (.pre .opr .tem .ftr .ifs .nrt .aqu) is byte-identical to mini_mc, and the
+# .loa differs only in the group count. The mesh is mini_mc's: 30 nodes, 20 Q4 elements.

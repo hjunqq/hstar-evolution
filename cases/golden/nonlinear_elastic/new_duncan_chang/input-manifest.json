@@ -1,0 +1,107 @@
+{
+  "manifest_version": 1,
+  "generated_at": "2026-09-17T03:22:27+00:00",
+  "root": "cases/golden/nonlinear_elastic/new_duncan_chang/legacy",
+  "file_count": 16,
+  "total_bytes": 13794,
+  "excludes": [],
+  "meta": {
+    "case_id": "nonlinear_elastic.new_duncan_chang",
+    "source_repository": "/home/huijun/HSTAR_Next/cases",
+    "source_commit": "d3e921cb416722d8b46ab64dab177dee1e17abe3",
+    "source_path": "cases/new_duncan_chang",
+    "actually_opened_load_file": "1.loa",
+    "note": "Solver inputs only, the same 16-name set mini_mc imports; the source dir also holds run outputs (.chk/.res/.rtt/.gpv/.flavia.*) that were not imported. In the source tree 1.loa is a symlink to 1.LOA; it is materialised here as a real file with identical bytes, as mini_mc does."
+  },
+  "case_insensitive_collisions": [
+    {
+      "paths": [
+        "1.LOA",
+        "1.loa"
+      ],
+      "identical_bytes": true
+    }
+  ],
+  "files": [
+    {
+      "path": "1.LOA",
+      "bytes": 347,
+      "sha256": "9381ab97d2c4d32bf07cf18162e40ed7c0dd760b1638142069f356dd1ec7d548"
+    },
+    {
+      "path": "1.aqu",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "1.cor",
+      "bytes": 792,
+      "sha256": "21bd65638372dd192d87266734a2e4ac9105720fed493401df46ebb34655d508"
+    },
+    {
+      "path": "1.ele",
+      "bytes": 411,
+      "sha256": "99f5ce7223de89d9a8ddb194dadcc0932acab634fc96ee81163b153969fa8dd1"
+    },
+    {
+      "path": "1.ftr",
+      "bytes": 72,
+      "sha256": "5a6bc4c49e60511b7ab9080c1779320847979214450fa5306248bc25014e6bfc"
+    },
+    {
+      "path": "1.glb",
+      "bytes": 2407,
+      "sha256": "b7b5ee1b0b3dbc4d2cd46258f1fb8eb10711e22db2a79da66dfabcacb266a22a"
+    },
+    {
+      "path": "1.ifs",
+      "bytes": 73,
+      "sha256": "237a1f4f804e4815f29cb4f4b643089e363b398f6a6c4120713f22e3c728eb9b"
+    },
+    {
+      "path": "1.loa",
+      "bytes": 347,
+      "sha256": "9381ab97d2c4d32bf07cf18162e40ed7c0dd760b1638142069f356dd1ec7d548"
+    },
+    {
+      "path": "1.man",
+      "bytes": 97,
+      "sha256": "22ef6b858c23763835db472b6b0b264574f526b33b4c831de02662b6d2510eaa"
+    },
+    {
+      "path": "1.mat",
+      "bytes": 463,
+      "sha256": "f513eb66aa1a399eadd50ee9a38117259b8fbf4c066e1bb29d54bbf96e29af6f"
+    },
+    {
+      "path": "1.nrt",
+      "bytes": 91,
+      "sha256": "969193fc453109c96ba5786cc5085c77c29b3a4466e518287a86f42a2b5e25d4"
+    },
+    {
+      "path": "1.opr",
+      "bytes": 219,
+      "sha256": "2b23bff52983db51251a327e6d9e2472188df582e86993eaca3348f943b9f02c"
+    },
+    {
+      "path": "1.pre",
+      "bytes": 156,
+      "sha256": "491f05c034c7e4bc63189472370cccb7305e50c8409393bdfe2fc6051c6e816f"
+    },
+    {
+      "path": "1.sol",
+      "bytes": 8000,
+      "sha256": "731953774729842473e89657d1ee94b7efdd6fb83562e31bc675c39dd6573b91"
+    },
+    {
+      "path": "1.tem",
+      "bytes": 248,
+      "sha256": "110dabf3b657fd524285aa54cf178bfe7c9c33ac3cc48308ce4b465b733f1bd0"
+    },
+    {
+      "path": "inp",
+      "bytes": 71,
+      "sha256": "fec43e97e94d091f2327003dae2f5a86a9f41c996294efeb5778fb45fe0f58fe"
+    }
+  ]
+}

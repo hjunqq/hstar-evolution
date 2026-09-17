@@ -1,0 +1,17 @@
+# 容差登记。沿用静力阶段已定案的口径，不因为是新算例而重新放宽。
+version = 1
+case_id = "nonlinear_elastic.new_duncan_chang"
+comparison_rule = "abs(actual - reference) <= atol + rtol * abs(reference), per component, after shape/ID/finite checks"
+
+[repeat]           # B02：同二进制、单线程、三次运行
+atol = 0.0
+rtol = 0.0
+
+[cross_path]       # 新旧入口路径
+# ADR-0008 §4 的结论是**测量**得到的（8 次重复 × 2 例 = 56 对，max|d| 处处为 0），
+# 它界定的是那个二进制、那两份输入、那个环境下的噪声。本算例是新输入，严格来说
+# 不在那次测量的范围内——所以这里先用严格相等**作为判据**，若某次比较出现非零差异，
+# 处理方式是查缺陷或按同样方法**先测噪声**，不是直接放宽。
+status = "assumed-strict, to be re-measured if a non-zero difference ever appears"
+atol = 0.0
+rtol = 0.0

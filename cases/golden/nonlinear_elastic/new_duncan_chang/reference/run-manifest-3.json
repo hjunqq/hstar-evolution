@@ -1,0 +1,537 @@
+{
+  "manifest_version": 1,
+  "case_id": "nonlinear_elastic.new_duncan_chang",
+  "case_dir": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/nonlinear_elastic/new_duncan_chang",
+  "label": "ref3",
+  "status": "COMPLETED",
+  "expected_status": "COMPLETED",
+  "expectation_met": true,
+  "binary": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/m8-release/hstar",
+    "sha256": "55805994e3c4bbd77994c8fcaab3a6855f1a3393439fd7f61de439f223cd9b3d"
+  },
+  "build_manifest": {
+    "path": "/home/huijun/HSTAR_Next/hstar-evolution/build/m8-release/build-manifest.json",
+    "profile": "release",
+    "binary_sha256": "55805994e3c4bbd77994c8fcaab3a6855f1a3393439fd7f61de439f223cd9b3d"
+  },
+  "platform": {
+    "os": "Linux-7.0.0-31-generic-x86_64-with-glibc2.39",
+    "machine": "x86_64",
+    "hostname": "FemChat"
+  },
+  "threads": {
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1"
+  },
+  "timeout_seconds": 600.0,
+  "input_check_before": {
+    "ok": true,
+    "problems": []
+  },
+  "input_check_after": {
+    "ok": true,
+    "problems": []
+  },
+  "process": {
+    "command": [
+      "/home/huijun/HSTAR_Next/hstar-evolution/build/m8-release/hstar",
+      "--adapter=off"
+    ],
+    "cwd": "/tmp/yl-freeze.jdspbxh5/nonlinear_elastic.new_duncan_chang/20260917T032327Z_a6931821_ref3/work",
+    "started_at": "2026-09-17T03:23:27+00:00",
+    "wall_seconds": 0.032,
+    "user_seconds": 0.017561,
+    "system_seconds": 0.007607,
+    "max_rss_kib": 24748,
+    "returncode": 0,
+    "signal": null,
+    "timed_out": false,
+    "stderr_bytes": 16,
+    "stderr_unexpected_lines": [],
+    "stderr_crash_pattern": false,
+    "inputs_copied": [
+      "1.LOA",
+      "1.aqu",
+      "1.cor",
+      "1.ele",
+      "1.ftr",
+      "1.glb",
+      "1.ifs",
+      "1.loa",
+      "1.man",
+      "1.mat",
+      "1.nrt",
+      "1.opr",
+      "1.pre",
+      "1.sol",
+      "1.tem",
+      "inp"
+    ]
+  },
+  "required_output": {
+    "file": "1.flavia.res",
+    "present": true,
+    "bytes": 58180,
+    "sha256": "d0434227d295368674eee1d7929b254d9de8fc43edbc7ffb385613027a14fade",
+    "parse": {
+      "ok": true,
+      "problems": [],
+      "summary": {
+        "blocks": [
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 1.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 1.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 58106.507
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 2.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 2.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 2.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 3.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 3.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 3.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 4.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 4.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 4.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 5.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 5.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 5.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 6.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 6.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 6.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 7.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 7.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 7.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 8.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 8.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 8.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 9.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 9.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 9.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          },
+          {
+            "name": "DISPLACEMENT",
+            "result_type": 2,
+            "step": 10.0,
+            "components": [],
+            "ncomp": 2,
+            "nodes": 30,
+            "max_abs": 0.021259781
+          },
+          {
+            "name": "STRESS",
+            "result_type": 3,
+            "step": 10.0,
+            "components": [
+              "SIGXX",
+              "SIGYY",
+              "SIGXY",
+              "SIGZZ"
+            ],
+            "ncomp": 4,
+            "nodes": 30,
+            "max_abs": 154507.5
+          },
+          {
+            "name": "PLASTICSTRAIN",
+            "result_type": 1,
+            "step": 10.0,
+            "components": [],
+            "ncomp": 1,
+            "nodes": 30,
+            "max_abs": 62167.489
+          }
+        ]
+      }
+    }
+  },
+  "outputs": [
+    {
+      "name": "1.act",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.bar",
+      "bytes": 810,
+      "sha256": "6f30d3381976fba4dd79f2ccafa541fbfc4407e382956da924ea720d87aabe27"
+    },
+    {
+      "name": "1.bem",
+      "bytes": 1620,
+      "sha256": "8b4e55ad3b91534b8def577138b606987fe15475451b3209d0eeae3e05755716"
+    },
+    {
+      "name": "1.chk",
+      "bytes": 12613,
+      "sha256": "49efc691eccba5a129313c58ba74ff097791a9f98888d8dea6501ace0bdb1ae4"
+    },
+    {
+      "name": "1.ctr",
+      "bytes": 2540,
+      "sha256": "995ebd9106eefd3cede2c5ab61cdb86056b1a08e45dc540f7b1c97df0f1f0d47"
+    },
+    {
+      "name": "1.ctt",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.dis",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.fai",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.msh",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.flavia.res",
+      "bytes": 58180,
+      "sha256": "d0434227d295368674eee1d7929b254d9de8fc43edbc7ffb385613027a14fade"
+    },
+    {
+      "name": "1.ftf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.gdm",
+      "bytes": 370,
+      "sha256": "608a9144a4877235c6cba573b42d6e8019bd253ab4f2b08ba8d310699d25178d"
+    },
+    {
+      "name": "1.gpv",
+      "bytes": 111830,
+      "sha256": "d4de12b4d76ea5839aecf69f80a4661e359bae83f67282bbd8c28ac6ba2a09a7"
+    },
+    {
+      "name": "1.ini",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.inw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.oew",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ogw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.ojw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.opw",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.res",
+      "bytes": 21600,
+      "sha256": "9d2f758eca216fba971541f45301541dbb15a0a11b5334d505af4bc1034829d1"
+    },
+    {
+      "name": "1.resb",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.rtt",
+      "bytes": 9836,
+      "sha256": "1636e5833b7840c4854892629b5611cc864b7f5ab1fefe80afe65ef3ae00d01a"
+    },
+    {
+      "name": "1.stf",
+      "bytes": 0,
+      "sha256": null
+    },
+    {
+      "name": "1.sto",
+      "bytes": 0,
+      "sha256": null
+    }
+  ],
+  "diagnostics": [],
+  "diagnostics_malformed": [],
+  "check_summary": null,
+  "check_malformed": [],
+  "protocol_violation": null,
+  "core_dump": false,
+  "state": null,
+  "finished_at": "2026-09-17T03:23:27+00:00",
+  "run_dir": "/tmp/yl-freeze.jdspbxh5/nonlinear_elastic.new_duncan_chang/20260917T032327Z_a6931821_ref3"
+}

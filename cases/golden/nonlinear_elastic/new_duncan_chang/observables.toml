@@ -1,0 +1,47 @@
+# 观察量登记。按 M0-05a 的纪律：在任何结果数值被查看之前登记。
+# 本文件登记的是**结构**（块名、分量名、节点数），不是数值；分量名取自
+# 1.flavia.res 的块头，节点/单元数取自 1.glb 的 NPOIN/NELEM。
+version = 1
+case_id = "nonlinear_elastic.new_duncan_chang"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 30
+expected_element_count = 20
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较；.rtt/.stf/.res 为二进制，不解析。本算例 .glb 的 res_s = 1（mini_mc 是 0），它只控制二进制 1.res 的写出（Output.f90:3425/3454），不进入本文件登记的观察量"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true
+
+[[observable]]
+id = "plastic_strain"
+kind = "nodal_scalar"
+components = ["PLASTICSTRAIN"]
+unit = "1"
+required = true
+note = "gid_ep = 1，与 mini_mc 相同。DUNCANCHANG 是非线性**弹性**本构，不产生塑性应变；本块登记在这里是因为 .glb 要求写出它，而不是因为它是本算例的能力观察量"
+
+# 本算例真正新增的能力观察量是位移与应力在 10 个荷载子步上的**非线性**演化：
+# Duncan-Chang 的切线模量随应力状态变化，弹性材料在同一网格同一重力下会给出
+# 与子步数无关的解。因此 must_be_nonzero 落在 DISPLACEMENT 上，并在 §capability
+# 里额外记一条：本算例的 nstep = 10（mini_mc 是 1），少一个子步答案就会不同。
+[capability]
+constitutive_model = "DUNCANCHANG"
+variant = "EB"
+nonlinear_substeps = 10
+stiffness_update = "first_iteration"   # legacy type_nl = 5
+note = "参数取自 1.mat：cohes/phi/k/n/Rf/Nur/Kur/P0/Pa + EB 分支的 Kb/m/dphi。type_problem = 'Q'，因此 legacy 不读 F 型的 k1/k2/nd/lamdaMax；kind_wt = 0，因此不读 phi_s/k_s"
