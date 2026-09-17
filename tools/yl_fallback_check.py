@@ -62,7 +62,10 @@ def main(argv=None):
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--binary", default=str(ROOT / "build/release/hstar"))
     a = ap.parse_args(argv)
-    binary = Path(a.binary)
+    # resolve(): F4 launches the binary with cwd set to a temporary deck directory, so a
+    # relative --binary would not exist from there. F1-F3 go through yl_run.py, which
+    # resolves it itself -- which is why this only ever bit the last check.
+    binary = Path(a.binary).resolve()
     if not binary.is_file():
         raise SystemExit(f"binary missing: {binary} (run tools/build.sh release)")
 

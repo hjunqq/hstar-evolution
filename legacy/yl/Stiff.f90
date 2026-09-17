@@ -815,6 +815,7 @@
                     qmax=element(ielem)%field(1)%gpvar(nstre+1,igaus)
                     smax=element(ielem)%field(1)%gpvar(nstre+2,igaus)
                 endif
+                kind_wt=props(matno)%mechanical%solid%kind_wt !fix: assigned only in the branch above
                 isat=0
                 if(kind_wt/=0) &
                     isat=element(ielem)%field(1)%isatu(igaus)
