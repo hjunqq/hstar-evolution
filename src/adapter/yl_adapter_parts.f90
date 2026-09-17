@@ -93,7 +93,7 @@ module yl_adapter_parts
   use iso_fortran_env, only: int32
   use yl_problem_optional, only: opt_text, opt_value_or
   use yl_problem_types, only: controls_t, load_t, output_t, boundary_t, activation_t,          &
-                              solver_t, profile_t, section_t
+                              solver_t, profile_t, section_t, initial_stress_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,           &
                                make_problem_error, PE_UNSUPPORTED, PE_INTERNAL,                &
                                PE_STAGE_ADAPT, PE_EXIT_INTERNAL
@@ -118,6 +118,7 @@ module yl_adapter_parts
     type(controls_t) :: controls
     type(load_t) :: load
     type(output_t) :: output
+    type(initial_stress_t) :: initial_stress
     ! Collections. Unallocated means the owning parser never ran; allocated with
     ! size 0 means it ran and found none -- the same three-state reading every
     ! collection carries in this repository (ADR-0002).
@@ -177,6 +178,12 @@ module yl_adapter_parts
     !> so everything that is not MIF takes the ordinary path. Comparing against 'FIX'
     !> instead would reject every value legacy accepts except that one literal.
     character(len=LEN_TYPE_ABC) :: type_abc = ''
+    !> GLB.global_data.problem_type (Global.f90:789). Carried because `.mat`'s
+    !> DUNCANCHANG branch reads a RECORD conditionally on it (Material.f90:515): under
+    !> 'F' there are four more numbers before the bulk-law record, and a parser that did
+    !> not know which problem type it was in would walk straight past them and
+    !> desynchronise the rest of the file.
+    character(len=LEN_TYPE_ABC) :: type_problem = ''
     integer(int32) :: nbackdt = 0      ! GLB.global_data.init_and_blocks
     integer(int32) :: ntrans = 0       ! GLB.global_data.init_and_blocks
   end type deck_context_t

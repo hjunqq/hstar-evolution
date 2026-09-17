@@ -19,6 +19,11 @@ kind = "nodal_vector"
 components = ["ux", "uy"]
 unit = "m"
 required = true
+# N4. 这不是在断言某个具体数值，而是断言这个算例不是退化的：20 个单元在自重下必然产生
+# 非零位移。冻结参考让 N2 已经能发现「本构没跑」（弹性解与 Duncan-Chang 解不可能逐位
+# 相同），N4 防的是另一件事——从一次退化运行重新冻结参考。
+block = "DISPLACEMENT"   # the result block this assertion is about
+must_be_nonzero = true
 
 [[observable]]
 id = "stress"

@@ -796,12 +796,17 @@ contains
     end if
 
     ! seq 46 -- RD: GLB.global_data.hdam (Global.f90:1079) -- nblks==1
+    ! ONE record holding one value per block, and it is the step's initial-stress datum:
+    ! `steps[0].initial_stress.fill_elevation`. nblks is pinned to 1 above, so element 1 IS
+    ! this parser's only step; the per-block nature of the field is carried by the contract
+    ! writing it under the step, not by this read.
     allocate (hdam(1))
     read (unit, *, iostat=ios, iomsg=iomsg_buf) hdam(1:nblks)
     loc = here(1079_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'control.glb', 'hdam', iomsg_buf); return
     end if
+    call opt_set(parts%initial_stress%fill_elevation, hdam(1))
 
     ! seq 47 -- RD: GLB.global_data.title#24 (Global.f90:1082)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -1214,6 +1219,7 @@ contains
     ctx%nnode = ctx_nnode
     ctx%element_kind = ctx_gindex
     ctx%type_abc = type_ABC
+    ctx%type_problem = type_problem
     ctx%nbackdt = nbackdT
     ctx%ntrans = ntrans
     ctx%filled = .true.

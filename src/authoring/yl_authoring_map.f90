@@ -37,7 +37,7 @@ module yl_authoring_map
                               amplitude_point_t, solver_t, boundary_t, controls_t,           &
                               gravity_t, load_t, output_t, output_field_t, step_t,           &
                               surface_edge_t, pressure_t, concentrated_t,                     &
-                              activation_t, nset_t
+                              activation_t, nset_t, initial_stress_t
   use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,        &
                                make_problem_error, make_source_location,                     &
                                PE_INVALID_INPUT, PE_EXIT_INPUT,                        &
@@ -58,7 +58,7 @@ module yl_authoring_map
                                 builder_step_set_procedure, builder_step_set_load_mode,      &
                                 builder_step_set_controls, builder_step_set_load,            &
                                 builder_step_set_output, builder_step_add_boundary,          &
-                                builder_step_add_activation
+                                builder_step_add_activation, builder_step_set_initial_stress
   use yl_problem_pipeline, only: prepare_problem
   use yl_problem_profile, only: PROFILE_TAG
   use yl_adapter_parts, only: deck_context_t, deck_context_reset
@@ -111,6 +111,7 @@ contains
     type(output_t) :: outp
     type(step_t) :: step_val
     type(activation_t) :: act
+    type(initial_stress_t) :: ist
     type(nset_t) :: ns
     integer(int32), allocatable :: ids(:), nodes(:)
     character(len=TOML_LEN_PATH) :: gp, lp
@@ -208,6 +209,38 @@ contains
         call opt_set(mat%plasticity%yield_stress_curve, 0_int32)
         call opt_set(mat%plasticity%friction_angle_curve, 0_int32)
         call opt_set(mat%plasticity%dilation_angle_curve, 0_int32)
+      end if
+      ! The DUNCANCHANG block, on the same terms: `bulk_modulus_law` being set is what
+      ! makes the commit allocate legacy's DuncanChang record, so the block is written
+      ! whole or not at all. `cohesion` and `friction_angle` are read from the SAME two
+      ! keys the plasticity block reads -- one spelling per physical quantity, which is
+      ! only possible because the two blocks are mutually exclusive by model.
+      if (doc%find('material['//itoa(i)//'].bulk_modulus_law') /= 0_int32) then
+        call opt_set(mat%duncan_chang%bulk_modulus_law,                                       &
+             text_at(doc, 'material['//itoa(i)//'].bulk_modulus_law'))
+        call opt_set(mat%duncan_chang%cohesion, real_at(doc, 'material['//itoa(i)//'].cohesion'))
+        call opt_set(mat%duncan_chang%friction_angle,                                         &
+             real_at(doc, 'material['//itoa(i)//'].friction_angle'))
+        call opt_set(mat%duncan_chang%modulus_number,                                         &
+             real_at(doc, 'material['//itoa(i)//'].modulus_number'))
+        call opt_set(mat%duncan_chang%modulus_exponent,                                       &
+             real_at(doc, 'material['//itoa(i)//'].modulus_exponent'))
+        call opt_set(mat%duncan_chang%failure_ratio,                                          &
+             real_at(doc, 'material['//itoa(i)//'].failure_ratio'))
+        call opt_set(mat%duncan_chang%unload_modulus_number,                                  &
+             real_at(doc, 'material['//itoa(i)//'].unload_modulus_number'))
+        call opt_set(mat%duncan_chang%unload_modulus_exponent,                                &
+             real_at(doc, 'material['//itoa(i)//'].unload_modulus_exponent'))
+        call opt_set(mat%duncan_chang%reference_pressure,                                     &
+             real_at(doc, 'material['//itoa(i)//'].reference_pressure'))
+        call opt_set(mat%duncan_chang%min_confining_pressure,                                 &
+             real_at(doc, 'material['//itoa(i)//'].min_confining_pressure'))
+        call opt_set(mat%duncan_chang%bulk_modulus_number,                                    &
+             real_at(doc, 'material['//itoa(i)//'].bulk_modulus_number'))
+        call opt_set(mat%duncan_chang%bulk_modulus_exponent,                                  &
+             real_at(doc, 'material['//itoa(i)//'].bulk_modulus_exponent'))
+        call opt_set(mat%duncan_chang%friction_angle_reduction,                               &
+             real_at(doc, 'material['//itoa(i)//'].friction_angle_reduction'))
       end if
       call builder_add_material(b, mat, here(line_at(doc, 'material['//itoa(i)//'].name')), errors)
       if (builder_failed(b)) return
@@ -318,6 +351,18 @@ contains
         ctrl%tolerance_dof = real_at(doc, 'step['//itoa(st)//'].controls.tolerance_dof')
         call builder_step_set_controls(b, sb, ctrl, here(line_at(doc, 'step['//itoa(st)//'].controls.increments')), errors)
         if (builder_failed(b)) return
+
+        ! Written only when the author stated one. `initial_stress_requires` has already
+        ! refused both halves of the mistake -- a DUNCANCHANG case without it, and a
+        ! non-DUNCANCHANG case with it -- so absence here means the case genuinely has no
+        ! depth-derived initial stress, and the commit poisons legacy's hdam accordingly.
+        if (doc%find('step['//itoa(st)//'].initial_stress.fill_elevation') /= 0_int32) then
+          call opt_set(ist%fill_elevation,                                                        &
+               real_at(doc, 'step['//itoa(st)//'].initial_stress.fill_elevation'))
+          call builder_step_set_initial_stress(b, sb, ist,                                         &
+               here(line_at(doc, 'step['//itoa(st)//'].initial_stress.fill_elevation')), errors)
+          if (builder_failed(b)) return
+        end if
 
         call default_load(ld)
         call opt_set(ld%gravity%recompute_every, 1_int32)

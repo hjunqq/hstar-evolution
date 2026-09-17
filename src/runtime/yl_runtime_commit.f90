@@ -103,7 +103,7 @@ module yl_runtime_commit
                         interpolation_group, unode_elements,                                    &
                         probn, outplot, type_problem, type_solver, type_load, type_ABC,         &
                         mat_curve,                                                              &
-                        type_nl, nonsym, NGRAV, nmats, nblks, uinitial,                         &
+                        type_nl, nonsym, NGRAV, nmats, nblks, uinitial, hdam,                   &
                         gid_u, gid_s, gid_ms, gid_f, gid_rot, gid_v, gid_a, gid_T, gid_P,       &
                         gid_Pv, gid_ep, gid_Y, gid_FC, gid_Ns, gid_Ss, gid_Mxy, gid_bem,        &
                         gid_wh, gid_wv, gid_bcs,                                                &
@@ -119,7 +119,7 @@ module yl_runtime_commit
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
-                       material_1
+                       material_1, material_5
 
   use yl_problem_types, only: problem_state_t, boundary_t, step_t, output_field_t,          &
                               concentrated_t
@@ -572,6 +572,7 @@ contains
     integer(ink) :: s_nbeamload, s_nplateload
     integer(ink) :: s_ntemp_surface, s_ntedge, s_ntelgroup, s_npipe
     integer(ink), allocatable :: s_uinitial(:)
+    real(irk), allocatable :: s_hdam(:)
     ! staging: plain arrays
     integer(ink), allocatable :: s_lmdofn(:), s_lcdofn(:), s_nodfn(:,:), s_iffix(:)
     integer(ink), allocatable :: s_appear(:), s_ice0(:)
@@ -1236,6 +1237,39 @@ contains
           sk%ClassicalEP%cfrict = int(opt_or(problem%materials(id_)%plasticity%friction_angle_curve), ink)
           sk%ClassicalEP%cdilan = int(opt_or(problem%materials(id_)%plasticity%dilation_angle_curve), ink)
         end if
+        ! The second per-model block, on exactly the terms of the first: allocated only
+        ! when the model has one, because EBMOD and its callers reach it through
+        ! `props(matno)%mechanical%solid%DuncanChang%...` without re-testing the model
+        ! name, so an unconditional allocate would hand an elastic material a
+        ! constitutive record full of poison.
+        !
+        ! phi_s and k_s are the exception to "assign only what was authored". Legacy does
+        ! NOT read them for this deck (kind_wt == 0, Material.f90:539) -- it DERIVES them,
+        ! at 533-537, by copying phi and k, and EBMOD reads them under `isat > 0`
+        ! (Stiff.f90:6691-6694). Reproducing that copy here is reproducing legacy's own
+        ! initialisation, not inventing a value; leaving them poisoned would differ from
+        ! the legacy path the moment anything ever set isat.
+        if (opt_is_set(problem%materials(id_)%duncan_chang%bulk_modulus_law)) then
+          allocate (sk%DuncanChang)
+          call poison_duncanchang(sk%DuncanChang)
+          associate (dc => problem%materials(id_)%duncan_chang)
+            sk%DuncanChang%model = opt_text_or(dc%bulk_modulus_law)
+            sk%DuncanChang%cohes = real(opt_or_real(dc%cohesion), irk)
+            sk%DuncanChang%phi   = real(opt_or_real(dc%friction_angle), irk)
+            sk%DuncanChang%k     = real(opt_or_real(dc%modulus_number), irk)
+            sk%DuncanChang%n     = real(opt_or_real(dc%modulus_exponent), irk)
+            sk%DuncanChang%Rf    = real(opt_or_real(dc%failure_ratio), irk)
+            sk%DuncanChang%Nur   = real(opt_or_real(dc%unload_modulus_exponent), irk)
+            sk%DuncanChang%Kur   = real(opt_or_real(dc%unload_modulus_number), irk)
+            sk%DuncanChang%P0    = real(opt_or_real(dc%min_confining_pressure), irk)
+            sk%DuncanChang%Pa    = real(opt_or_real(dc%reference_pressure), irk)
+            sk%DuncanChang%Kb    = real(opt_or_real(dc%bulk_modulus_number), irk)
+            sk%DuncanChang%m     = real(opt_or_real(dc%bulk_modulus_exponent), irk)
+            sk%DuncanChang%dphi  = real(opt_or_real(dc%friction_angle_reduction), irk)
+          end associate
+          sk%DuncanChang%phi_s = sk%DuncanChang%phi     ! Material.f90:533-534
+          sk%DuncanChang%k_s   = sk%DuncanChang%k       ! Material.f90:536-537
+        end if
       end associate
     end do
     ! sections[].thickness is authored on the SECTION and stored on the MATERIAL
@@ -1402,6 +1436,21 @@ contains
     s_uinitial = STAGE_POISON_I
     s_uinitial = int(residue%uinitial, ink)
 
+    ! hdam: one elevation per block, and unlike uinitial it comes from ProblemState rather
+    ! than from the residue -- steps[].initial_stress.fill_elevation. Legacy allocates it
+    ! for EVERY deck (Global.f90:965) and only the DUNCANCHANG path ever reads it, so the
+    ! array is always published and a step that stated no elevation keeps the poison. That
+    ! is deliberate: huge() times a density is an absurd stress that stops the run, whereas
+    ! a silent 0.0 is a perfectly plausible elevation and would be indistinguishable from
+    ! an author who meant sea level. The authoring validator refuses the combination that
+    ! would reach it (initial_stress_requires), so the poison is a backstop, not the gate.
+    allocate (s_hdam(n_steps))
+    s_hdam = STAGE_POISON_R
+    do i = 1, n_steps
+      if (opt_is_set(problem%steps(i)%initial_stress%fill_elevation))                          &
+        s_hdam(i) = real(opt_or_real(problem%steps(i)%initial_stress%fill_elevation), irk)
+    end do
+
     ! Existence face (ADR-0009). Poisoned like every other buffer: a row that is declared
     ! and never written must show up as huge(), not as a plausible zero.
     allocate (s_ex_order_time_mdofn(size(existence%order_time_mdofn)))
@@ -1507,6 +1556,7 @@ contains
     call move_alloc(s_tcurvegravity, tcurvegravity)
     call move_alloc(s_props, props)
     call move_alloc(s_uinitial, uinitial)
+    call move_alloc(s_hdam, hdam)
 
     ! --- the EXISTENCE FACE (ADR-0009) -----------------------------------------------
     ! Written in its own pass, in the same WRITE phase, so it cannot introduce a second
@@ -1998,6 +2048,7 @@ contains
     ! would NOT catch dropping either pointer deallocate, exactly as measured for
     ! props(i)%mechanical%solid (design 5.1.3). That blind spot closes at step 6, not here.
     if (allocated(uinitial)) deallocate (uinitial)
+    if (allocated(hdam)) deallocate (hdam)
     if (allocated(tcurves)) then
       do i = 1, size(tcurves)
         if (associated(tcurves(i)%ttime_curve)) deallocate (tcurves(i)%ttime_curve)
@@ -2018,6 +2069,8 @@ contains
             ! material. Every other model pointer on the skeleton is still null (null_solid).
             if (associated(props(i)%mechanical%solid%ClassicalEP))                            &
               deallocate (props(i)%mechanical%solid%ClassicalEP)
+            if (associated(props(i)%mechanical%solid%DuncanChang))                            &
+              deallocate (props(i)%mechanical%solid%DuncanChang)
             deallocate (props(i)%mechanical%solid)
           end if
           deallocate (props(i)%mechanical)
@@ -2993,6 +3046,29 @@ contains
     ep%cfrict = STAGE_POISON_I
     ep%cdilan = STAGE_POISON_I
   end subroutine poison_classicalep
+
+  ! material_5: 12 of its 21 components, the ones the DUNCANCHANG commit below assigns.
+  ! The nine it does NOT assign -- G/F/Vtf (the EV/CR bulk law), k1/k2/nd/lamdaMax (the
+  ! type_problem=='F' record) and phi_s/k_s (the kind_wt>0 record) -- are deliberately
+  ! left alone, per rule 1 of the STAGE_POISON note: poisoning a component this module
+  ! never writes would publish a sentinel into a legacy record. All three groups are
+  ! refused upstream, so nothing reads them.
+  subroutine poison_duncanchang(dc)
+    type(material_5), intent(inout) :: dc
+    dc%model = ''
+    dc%cohes = STAGE_POISON_R
+    dc%phi = STAGE_POISON_R
+    dc%k = STAGE_POISON_R
+    dc%n = STAGE_POISON_R
+    dc%Rf = STAGE_POISON_R
+    dc%Nur = STAGE_POISON_R
+    dc%Kur = STAGE_POISON_R
+    dc%P0 = STAGE_POISON_R
+    dc%Pa = STAGE_POISON_R
+    dc%Kb = STAGE_POISON_R
+    dc%m = STAGE_POISON_R
+    dc%dphi = STAGE_POISON_R
+  end subroutine poison_duncanchang
 
   subroutine null_solid(sk)
     type(solid_skeleton), intent(inout) :: sk

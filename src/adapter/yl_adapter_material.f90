@@ -134,6 +134,8 @@ contains
     integer(int32) :: csigma0, cfrict, cdilan
     real(real64) :: density, ratio, thickness, e, nu, alfa, density_w
     real(real64) :: sigma0, hardening, frict_angle, dilan_angle
+    character(len=20) :: dc_law
+    real(real64) :: dc(12)   ! cohes phi K n Rf Nur Kur P0 Pa Kb m dphi -- see read_duncanchang
     real(real64), allocatable :: mat_thickness(:)   ! thickness by material id, filled below
     type(material_t) :: mat
     type(source_location_t) :: loc
@@ -282,13 +284,18 @@ contains
       ! material_select (Material.f90:457): one branch per constitutive model, each with
       ! its own extra records. ELASTIC_ISOTROPIC reads nothing more, which is the only
       ! reason the static slice could ignore this select entirely.
-      if (trim(material) /= 'ELASTIC_ISOTROPIC' .and. trim(material) /= 'CLASSICALEP') then
+      if (trim(material) /= 'ELASTIC_ISOTROPIC' .and. trim(material) /= 'CLASSICALEP'        &
+          .and. trim(material) /= 'DUNCANCHANG') then
         call mat_reject(errors, 'model', 457_int32, trim(material), rec=jmat)
         return
       end if
       if (trim(material) == 'CLASSICALEP') then
         call read_classicalep(unit, jmat, criteria, sigma0, hardening, frict_angle,           &
                               dilan_angle, csigma0, cfrict, cdilan, errors)
+        if (errors%any()) return
+      end if
+      if (trim(material) == 'DUNCANCHANG') then
+        call read_duncanchang(unit, jmat, ctx, dc_law, dc, errors)
         if (errors%any()) return
       end if
 
@@ -318,6 +325,24 @@ contains
         call opt_set(mat%plasticity%yield_stress_curve, csigma0)
         call opt_set(mat%plasticity%friction_angle_curve, cfrict)
         call opt_set(mat%plasticity%dilation_angle_curve, cdilan)
+      end if
+      if (trim(material) == 'DUNCANCHANG') then
+        ! Positional, in legacy's own read order, so the mapping stays checkable against
+        ! Material.f90:504-513 and 529-531 line by line. `dc` is documented at its
+        ! declaration and filled in exactly one place.
+        call opt_set(mat%duncan_chang%bulk_modulus_law, trim(dc_law))
+        call opt_set(mat%duncan_chang%cohesion,                dc(1))
+        call opt_set(mat%duncan_chang%friction_angle,          dc(2))
+        call opt_set(mat%duncan_chang%modulus_number,          dc(3))
+        call opt_set(mat%duncan_chang%modulus_exponent,        dc(4))
+        call opt_set(mat%duncan_chang%failure_ratio,           dc(5))
+        call opt_set(mat%duncan_chang%unload_modulus_exponent, dc(6))
+        call opt_set(mat%duncan_chang%unload_modulus_number,   dc(7))
+        call opt_set(mat%duncan_chang%min_confining_pressure,  dc(8))
+        call opt_set(mat%duncan_chang%reference_pressure,      dc(9))
+        call opt_set(mat%duncan_chang%bulk_modulus_number,     dc(10))
+        call opt_set(mat%duncan_chang%bulk_modulus_exponent,   dc(11))
+        call opt_set(mat%duncan_chang%friction_angle_reduction, dc(12))
       end if
       ! `thickness` (Material.f90:319) is NOT a materials[] field -- its ProblemState
       ! owner is sections[].thickness (docs/m2/state-field-map.toml id
@@ -391,6 +416,61 @@ contains
       return
     end if
   end subroutine read_classicalep
+
+  !> The DUNCANCHANG branch of material_select (Material.f90:501-543).
+  !>
+  !> Two records here, and like read_classicalep the SECOND one's shape depends on what
+  !> the first said -- `model` selects between an EV/CR trio (G/F/Vtf) and an EB trio
+  !> (Kb/m/dphi). Getting that wrong desynchronises every read after it in the file, so
+  !> the law is whitelisted BETWEEN the two records, not afterwards.
+  !>
+  !> Two further records legacy can read in this branch are refused elsewhere rather than
+  !> here, and both refusals are load-bearing for the cursor being where this routine
+  !> leaves it:
+  !>   Material.f90:515-520  k1/k2/nd/lamdaMax, read when type_problem == 'F'. Checked
+  !>                         here against the .glb value the context carries, because it
+  !>                         is a RECORD this routine would otherwise walk past.
+  !>   Material.f90:539-542  phi_s/k_s, read when kind_wt > 0. The common-record gate
+  !>                         above has already refused a non-zero kind_wt for every model,
+  !>                         so that record cannot be present; re-checked by assertion
+  !>                         rather than re-read.
+  subroutine read_duncanchang(unit, jmat, ctx, law, dc, errors)
+    integer, intent(in) :: unit
+    integer(int32), intent(in) :: jmat
+    type(deck_context_t), intent(in) :: ctx
+    character(len=*), intent(out) :: law
+    real(real64), intent(out) :: dc(12)
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=200) :: iomsg_buf
+    integer(int32) :: ios
+
+    dc = 0.0_real64
+
+    ! RD: MAT.material_set.duncanchang (Material.f90:504) -- model + nine numbers, in
+    ! legacy's order: cohes phi K n Rf Nur Kur P0 Pa.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) law, dc(1), dc(2), dc(3), dc(4), dc(5),      &
+                                                 dc(6), dc(7), dc(8), dc(9)
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.duncanchang',            &
+                          504_int32, rec=jmat)) return
+
+    ! Material.f90:515 reads a further record when type_problem is 'F'. This build's decks
+    ! are 'Q'; refusing by name here keeps the refusal next to the record it is about.
+    if (trim(ctx%type_problem) == 'F') then
+      call mat_reject(errors, 'duncanchang-f-problem', 515_int32, trim(ctx%type_problem),    &
+                      rec=jmat)
+      return
+    end if
+
+    if (trim(law) /= 'EB') then
+      call mat_reject(errors, 'duncanchang-bulk-law', 522_int32, trim(law), rec=jmat)
+      return
+    end if
+
+    ! RD: MAT.material_set.duncanchang_eb (Material.f90:529) -- Kb, m, dphi.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) dc(10), dc(11), dc(12)
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.duncanchang_eb',         &
+                          529_int32, rec=jmat)) return
+  end subroutine read_duncanchang
 
   ! Section -> material -> thickness (adapter-contract.md §2.4). Positional: section
   ! `igroup` is `secparts%sections(igroup)`, whose material is `ctx%group_matno(igroup)`

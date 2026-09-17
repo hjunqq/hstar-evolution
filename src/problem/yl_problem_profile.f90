@@ -101,14 +101,20 @@ module yl_problem_profile
   integer, parameter :: LEN_RULE = 24
   integer, parameter :: LEN_PATH = 40
   integer, parameter :: LEN_FIELD = 24
-  integer, parameter :: LEN_VALUE = 32
+  ! Sized by the longest whitelist string in the gate table ('ELASTIC_ISOTROPIC|
+  ! CLASSICALEP|DUNCANCHANG', 41), with room to spare. It was 32 and silently TRUNCATED
+  ! that value the day DUNCANCHANG was added, so the refusal read `...|DU` and the gate
+  ! rejected the very deck it had just been widened for -- caught by the modern gate, not
+  ! by anything here. T6b now asserts no gate row is filled to its declared length.
+  integer, parameter :: LEN_VALUE = 64
   integer, parameter :: LEN_DTYPE = 8
   ! Dialect-row columns. LEN_COND is sized by the longest condition in the table
   ! ('stochastic-curve-modifier-unsupported', 37); LEN_MESSAGE by the longest
-  ! message (188). Both are asserted against the table by the dialect self-test,
-  ! so a row that would silently truncate fails the suite instead of shipping.
+  ! message (227, A-MAT/duncanchang-bulk-law). Both are asserted against the table by the
+  ! dialect self-test, so a row that would silently truncate fails the suite instead of
+  ! shipping -- which is exactly what happened when DUNCANCHANG lengthened two of them.
   integer, parameter :: LEN_COND = 40
-  integer, parameter :: LEN_MESSAGE = 200
+  integer, parameter :: LEN_MESSAGE = 256
 
   ! --- profile identity -------------------------------------------------------
 
@@ -247,7 +253,8 @@ module yl_problem_profile
     capability_item_t('G3', 'material.kind', 'materials[]', 'kind',                                 &
                       PROFILE_KIND_TEXT, 0_int32, 'MECHANICAL', .false.),                           &
     capability_item_t('G3', 'material.model', 'materials[]', 'model',                               &
-                      PROFILE_KIND_TEXT, 0_int32, 'ELASTIC_ISOTROPIC|CLASSICALEP', .false.),        &
+                      PROFILE_KIND_TEXT, 0_int32,                                                   &
+                      'ELASTIC_ISOTROPIC|CLASSICALEP|DUNCANCHANG', .false.),                        &
     capability_item_t('G4', 'solver.linear', 'solver', 'linear',                                    &
                       PROFILE_KIND_TEXT, 0_int32, 'PROFILE', .false.),                              &
     capability_item_t('G4', 'solver.symmetric', 'solver', 'symmetric',                              &
@@ -584,8 +591,23 @@ module yl_problem_profile
                       item='mat.material', object_path='materials',                                                 &
                       field='model', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &
                       message='material_select (Material.f90:457) has a branch per constitutive model, each '//   &
-                              'with its own extra records; only ELASTIC_ISOTROPIC and CLASSICALEP are '//   &
-                              'whitelisted (capability row G3 material.model)'),                                    &
+                              'with its own extra records; only ELASTIC_ISOTROPIC, CLASSICALEP and '//   &
+                              'DUNCANCHANG are whitelisted (capability row G3 material.model)'),                    &
+    capability_item_t(rule_id='A-MAT', condition='duncanchang-bulk-law',                                            &
+                      item='mat.dc_model', object_path='materials',                                                 &
+                      field='duncan_chang.bulk_modulus_law', stage=CAP_STAGE_ADAPT,                                 &
+                      value_kind=PROFILE_KIND_NONE,                                                                 &
+                      message='DUNCANCHANG branches again on the bulk law (Material.f90:522-531) and the '//   &
+                              'record shape DEPENDS on that branch -- EV/CR read G/F/Vtf, EB reads '//   &
+                              'Kb/m/dphi -- so a wrong guess desynchronises every later read; only EB '//   &
+                              'is whitelisted'),                                                                    &
+    capability_item_t(rule_id='A-MAT', condition='duncanchang-f-problem',                                           &
+                      item='mat.dc_f_record', object_path='materials',                                              &
+                      field='duncan_chang.bulk_modulus_law', stage=CAP_STAGE_ADAPT,                                 &
+                      value_kind=PROFILE_KIND_NONE,                                                                 &
+                      message='under type_problem==''F'' DUNCANCHANG reads four more numbers '//   &
+                              '(k1/k2/nd/lamdaMax, Material.f90:515-520) before the bulk-law record; '//   &
+                              'this build whitelists Q'),                                                           &
     capability_item_t(rule_id='A-MAT', condition='plasticity-criterion',                                            &
                       item='mat.criteria', object_path='materials',                                                 &
                       field='plasticity.criterion', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,            &

@@ -5368,3 +5368,255 @@ determinism = "deterministic"
 snapshot_file = "loads.sha256"
 reason = "the .loa load family: concentrated forces. The static_2d slice has no point load, so the field is absent on both frozen golden decks and is not on the observation face (ADR-0009). The load domain accepts on final numerical equivalence instead"
 note = "The nodes the force acts on. legacy's `npload` is its length and is not stored separately."
+
+[[field]]
+id = "materials.duncan_chang.model"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%model"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "str"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.bulk_modulus_law"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "which bulk-modulus law follows; 'EB' is the whitelist (Material.f90:522-531)"
+
+[[field]]
+id = "materials.duncan_chang.cohes"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%cohes"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].duncan_chang.cohesion"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "cohesion c, used by EBMOD's Qf = 2c*cos(phi) + 2*p3*sin(phi)"
+
+[[field]]
+id = "materials.duncan_chang.phi"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%phi"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "deg"
+owner = "ProblemState.materials[].duncan_chang.friction_angle"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "friction angle; EBMOD takes SINd()/COSd() of it, so degrees not radians"
+
+[[field]]
+id = "materials.duncan_chang.k"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%K"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.modulus_number"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "modulus number K in E_t = K*Pa*(p3/Pa)**n*(1-Rf*S)**2"
+
+[[field]]
+id = "materials.duncan_chang.n"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%n"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.modulus_exponent"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "modulus exponent n, same expression"
+
+[[field]]
+id = "materials.duncan_chang.rf"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%Rf"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.failure_ratio"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "failure ratio Rf, same expression"
+
+[[field]]
+id = "materials.duncan_chang.kur"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%Kur"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.unload_modulus_number"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "unload-reload modulus number in E_ur = Kur*Pa*(p3/Pa)**Nur"
+
+[[field]]
+id = "materials.duncan_chang.nur"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%Nur"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.unload_modulus_exponent"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "unload-reload modulus EXPONENT, not a Poisson ratio (Stiff.f90:6727)"
+
+[[field]]
+id = "materials.duncan_chang.pa"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%Pa"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].duncan_chang.reference_pressure"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "atmospheric reference pressure, the normalising constant of every power law here"
+
+[[field]]
+id = "materials.duncan_chang.p0"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%P0"
+source = ["MAT.material_set.duncanchang"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].duncan_chang.min_confining_pressure"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "minimum confining pressure; p3 is clamped up to it before every power (Stiff.f90:6701)"
+
+[[field]]
+id = "materials.duncan_chang.kb"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%Kb"
+source = ["MAT.material_set.duncanchang_eb"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.bulk_modulus_number"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "bulk modulus number in B_t = Kb*Pa*(p3/Pa)**m; EB record only"
+
+[[field]]
+id = "materials.duncan_chang.m"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%m"
+source = ["MAT.material_set.duncanchang_eb"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].duncan_chang.bulk_modulus_exponent"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "bulk modulus exponent m, same expression; EB record only"
+
+[[field]]
+id = "materials.duncan_chang.dphi"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%DuncanChang%dphi"
+source = ["MAT.material_set.duncanchang_eb"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "deg"
+owner = "ProblemState.materials[].duncan_chang.friction_angle_reduction"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model DUNCANCHANG parameter; only nonlinear_elastic.new_duncan_chang carries a DUNCANCHANG material, so the field is absent on the static_2d and plasticity golden decks and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "friction-angle reduction per log cycle: phi = phi - dphi*log10(p3/Pa); EB record only"
+
+[[field]]
+id = "steps0.initial_stress.hdam"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.hdam"
+source = ["GLB.global_data.hdam"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nblks"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.steps[0].initial_stress.fill_elevation"
+index_by = "steps[].index"
+compare = { rule = "ignore", reason = "per-step initial-stress datum; only the DUNCANCHANG path reads it on this build, so it is absent on every other golden deck and is not on the observation face (ADR-0009). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "steps.json"
+reason = "per-step initial-stress datum; only the DUNCANCHANG path reads it on this build, so it is absent on every other golden deck and is not on the observation face (ADR-0009). The material domain accepts on final numerical equivalence instead"
+note = "an ELEVATION, not a thickness: every consumer uses hdam(iblks) - gpcod(ndimn). legacy reads the whole array in ONE record (Global.f90:1079) but indexes it per block, so the contract writes it under the step and the step-scope gate classifies it per_block"

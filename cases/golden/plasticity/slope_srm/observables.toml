@@ -52,6 +52,7 @@ unit = "1"
 required = true
 # The criterion, not a description: this block must contain NON-ZERO values, or the case
 # does not exercise what it exists for. Checked by tools/yl_modern_check.py (N4).
+block = "PLASTICSTRAIN"   # the result block this assertion is about
 must_be_nonzero = true
 note = """**本算例存在的理由**：`mini_mc` 的这一块恒为 0（不屈服），
 所以它只能确立读取/映射/分派链路，不能确立塑性回映。本算例必须出现**非零**塑性应变，

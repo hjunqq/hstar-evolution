@@ -1,0 +1,115 @@
+# The material domain's SECOND constitutive model, on mini_mc's mesh.
+#
+# Duncan-Chang is nonlinear ELASTIC: EBMOD (Stiff.f90:6665) recomputes a tangent Young's
+# modulus and Poisson ratio from the current stress state every time it is called, and
+# nothing yields. That is why this deck walks the load on in 10 substeps where mini_mc
+# takes one: with a stress-dependent tangent the answer depends on the path, and a single
+# step would not be the same analysis.
+#
+# See docs/m5/authoring-contract.md and docs/m8/duncan-chang.md.
+version = 1
+
+[case]
+name        = "new_duncan_chang"
+units       = "SI"
+description = "30-node, 20-element 2D Q4 plane-strain block of Duncan-Chang (E-B) soil under self-weight, applied over 10 substeps with the initial stiffness"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name          = "soil"
+element_count = 20
+
+# x = 0 edge slides in y; y = 0 edge slides in x -- mini_mc's mesh and mini_mc's supports.
+[[nset]]
+name  = "sym_x"
+nodes = [1, 6, 7, 12, 13, 18, 19, 24, 25, 30]
+
+[[nset]]
+name  = "sym_y"
+nodes = [1, 2, 3, 4, 5, 6]
+
+[[material]]
+name    = "soil"
+model   = "duncanchang"
+density = 1800.0
+E       = 5.0e7          # the COMMON record's elastic modulus, Material.f90:310
+nu      = 0.3            # likewise; EBMOD overrides both with its tangent values
+thermal_expansion = 1.0e-5   # 1/K, from the deck
+# The bulk law selects the shape of the second record; only E-B is admitted here.
+bulk_modulus_law = "EB"
+cohesion         = 1.0e4     # Pa
+friction_angle   = 35.0      # degrees; EBMOD takes SINd()/COSd() of it
+modulus_number   = 300.0     # K    } E_t = K*Pa*(p3/Pa)**n * (1 - Rf*S)**2
+modulus_exponent = 0.5       # n    }
+failure_ratio    = 0.7       # Rf
+unload_modulus_number   = 360.0   # Kur } E_ur = Kur*Pa*(p3/Pa)**Nur
+unload_modulus_exponent = 0.3     # Nur } an exponent, not a Poisson ratio
+reference_pressure      = 1.013e5 # Pa, atmospheric
+min_confining_pressure  = 1.013e5 # P0; p3 is clamped up to this before every power
+bulk_modulus_number     = 300.0   # Kb } B_t = Kb*Pa*(p3/Pa)**m
+bulk_modulus_exponent   = 0.5     # m  }
+friction_angle_reduction = 0.0    # dphi; phi = phi - dphi*log10(p3/Pa)
+
+[[section]]
+name        = "soil"
+elset       = "soil"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "soil"
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[step]]
+name      = "self_weight"
+procedure = "static"
+load_mode = "load"
+reset_state   = false   # legacy uinitial = 0
+active_elsets = ["soil"]
+
+# The elevation the first-visit confining stress is measured down from (legacy hdam).
+# This deck puts it at the mesh origin, so every Gauss point starts below it.
+[step.initial_stress]
+fill_elevation = 0.0
+
+[step.controls]
+increments      = 1
+substeps        = 10    # ten load steps: the tangent is re-evaluated on each
+time_increment  = 1.0
+max_iterations  = 20
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+# legacy type_nl = 5. NOT "every_iteration" like mini_mc: this deck rebuilds the tangent
+# once per substep and then iterates with it, and the two are different analyses.
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "sym_x"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "sym_y"
+dof   = [2]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+[solver]
+linear = "profile"
+
+[output]
+format = "gid"
+field  = ["u", "s", "ep"]
+stress_averaging = "direct"

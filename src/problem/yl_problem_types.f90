@@ -130,6 +130,55 @@ module yl_problem_types
     type(opt_int) :: dilation_angle_curve    !@off-face: materials.plasticity.cdilan
   end type plasticity_t
 
+  ! The SECOND per-model block, and the one that proves the shape above was right: it is a
+  ! sibling of plasticity_t, not thirteen more optional components on material_t.
+  !
+  ! DUNCANCHANG is a nonlinear-ELASTIC law, not a plasticity model: EBMOD (Stiff.f90:6665)
+  ! recomputes a tangent Young's modulus and Poisson ratio from the current stress state
+  ! every time it is called; nothing yields and no plastic strain accumulates.
+  !
+  ! Legacy reads a model selector and nine numbers (Material.f90:504-513), then a further
+  ! record whose SHAPE depends on that selector (521-531). Only the `EB` branch is carried
+  ! here -- it is the one the real deck uses -- so `bulk_modulus_number`, `bulk_modulus_exponent`
+  ! and `friction_angle_reduction` are the EB record, and legacy's `EV`/`CR` trio
+  ! (G / F / Vtf) has no component at all. That is the refusal: a capability with no field
+  ! to put it in cannot be silently half-read.
+  !
+  ! Two further records legacy can read here are likewise absent by construction:
+  !   k1/k2/nd/lamdaMax  read only when type_problem == 'F' (Material.f90:515-520); this
+  !                      build whitelists 'Q'.
+  !   phi_s/k_s          read only when kind_wt > 0 (Material.f90:539-542); this build
+  !                      refuses a non-zero wetting kind in the material gate already.
+  !
+  !   bulk_modulus_law        legacy `model`; 'EB' is the whitelist
+  !   cohesion            Pa  legacy `cohes`
+  !   friction_angle      deg legacy `phi`; EBMOD takes SINd()/COSd() of it, so degrees
+  !   modulus_number      1   legacy `K`   } E_t = K * Pa * (p3/Pa)**n * (1 - Rf*S)**2
+  !   modulus_exponent    1   legacy `n`   }
+  !   failure_ratio       1   legacy `Rf`
+  !   unload_modulus_number   1   legacy `Kur` } E_ur = Kur * Pa * (p3/Pa)**Nur
+  !   unload_modulus_exponent 1   legacy `Nur` } an EXPONENT, not a Poisson ratio
+  !   reference_pressure  Pa  legacy `Pa`; atmospheric pressure, the normalising constant
+  !   min_confining_pressure  Pa  legacy `P0`; p3 is clamped up to it before every power
+  !   bulk_modulus_number     1   legacy `Kb` } B_t = Kb * Pa * (p3/Pa)**m, EB record
+  !   bulk_modulus_exponent   1   legacy `m`  }
+  !   friction_angle_reduction deg legacy `dphi`; phi = phi - dphi*log10(p3/Pa), EB record
+  type, public :: duncan_chang_t
+    type(opt_text) :: bulk_modulus_law        !@off-face: materials.duncan_chang.model
+    type(opt_real) :: cohesion                !@off-face: materials.duncan_chang.cohes
+    type(opt_real) :: friction_angle          !@off-face: materials.duncan_chang.phi
+    type(opt_real) :: modulus_number          !@off-face: materials.duncan_chang.k
+    type(opt_real) :: modulus_exponent        !@off-face: materials.duncan_chang.n
+    type(opt_real) :: failure_ratio           !@off-face: materials.duncan_chang.rf
+    type(opt_real) :: unload_modulus_number   !@off-face: materials.duncan_chang.kur
+    type(opt_real) :: unload_modulus_exponent !@off-face: materials.duncan_chang.nur
+    type(opt_real) :: reference_pressure      !@off-face: materials.duncan_chang.pa
+    type(opt_real) :: min_confining_pressure  !@off-face: materials.duncan_chang.p0
+    type(opt_real) :: bulk_modulus_number     !@off-face: materials.duncan_chang.kb
+    type(opt_real) :: bulk_modulus_exponent   !@off-face: materials.duncan_chang.m
+    type(opt_real) :: friction_angle_reduction !@off-face: materials.duncan_chang.dphi
+  end type duncan_chang_t
+
   type, public :: material_t
     type(opt_int) :: id
     type(opt_text) :: name
@@ -146,6 +195,8 @@ module yl_problem_types
     type(opt_int) :: wetting_kind
     !> Set only when `model` is a plasticity model; absent for ELASTIC_ISOTROPIC.
     type(plasticity_t) :: plasticity
+    !> Set only when `model` is DUNCANCHANG; absent for every other model.
+    type(duncan_chang_t) :: duncan_chang
   end type material_t
 
   ! --- sections ---------------------------------------------------------------
@@ -363,6 +414,23 @@ module yl_problem_types
     integer(int32), allocatable :: stress_averaging(:)   ! 1, one per section
   end type output_t
 
+  !> The datum a step's initial confining stress is measured down from.
+  !>
+  !> legacy `hdam(iblks)`. It is an ELEVATION in mesh coordinates, not a thickness: every
+  !> consumer uses the DEPTH below it, `hdam(iblks) - gpcod(ndimn)` (Stiff.f90:801,
+  !> Residu.f90:2975, Fem.f90:11156). On the DUNCANCHANG path that depth becomes the
+  !> Gauss point's initial vertical stress the first time the point is visited,
+  !> `px = (hdam - y) * density * g * ratio`, clamped up to `min_confining_pressure`.
+  !>
+  !> PER STEP, not per analysis: legacy reads the whole array in one record but indexes it
+  !> by block (`hdam(1:nblks)`, Global.f90:1079), and a staged fill is exactly the case
+  !> where the surface rises from one block to the next. So the contract writes it under
+  !> the step and the step-scope gate classifies it `per_block` -- no cross-step refusal.
+  type, public :: initial_stress_t
+    !> m, in mesh coordinates.
+    type(opt_real) :: fill_elevation       !@off-face: steps0.initial_stress.hdam
+  end type initial_stress_t
+
   type, public :: step_t
     type(opt_text) :: procedure
     type(opt_text) :: load_mode
@@ -371,6 +439,9 @@ module yl_problem_types
     type(activation_t), allocatable :: activation(:)
     type(load_t) :: load
     type(output_t) :: output
+    !> Meaningful only for a model that derives an initial stress from depth; on this
+    !> build that is DUNCANCHANG alone, and the profile requires it exactly there.
+    type(initial_stress_t) :: initial_stress
   end type step_t
 
   ! --- root -------------------------------------------------------------------

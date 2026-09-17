@@ -72,7 +72,7 @@ module yl_authoring_keys
     key_t('nset[].nodes[]',                TV_INT,  .false., ''),                            &
     key_t('nset[].nodes.count',            TV_INT,  .true.,  ''),                            &
     key_t('material[].name',               TV_STR,  .true.,  ''),                            &
-    key_t('material[].model',              TV_STR,  .true.,  'elastic_isotropic|classicalep'), &
+    key_t('material[].model',              TV_STR,  .true.,  'elastic_isotropic|classicalep|duncanchang'), &
     key_t('material[].density',            TV_REAL, .true.,  ''),                            &
     key_t('material[].E',                  TV_REAL, .true.,  ''),                            &
     key_t('material[].nu',                 TV_REAL, .true.,  ''),                            &
@@ -88,6 +88,27 @@ module yl_authoring_keys
     key_t('material[].hardening',          TV_REAL, .false., ''),                            &
     key_t('material[].friction_angle',     TV_REAL, .false., ''),                            &
     key_t('material[].dilation_angle',     TV_REAL, .false., ''),                            &
+    ! The DUNCANCHANG block, on the same terms as the plasticity block above: optional as
+    ! keys, required-together by model_requires. `cohesion` and `friction_angle` are NOT
+    ! repeated here -- both models read a cohesion and a friction angle and they mean the
+    ! same thing, so [[material]] keeps ONE spelling for each and model_requires demands
+    ! them of both models. That is the whole point of a unified material object: a second
+    ! constitutive model adds the parameters it alone has, not a parallel vocabulary.
+    !
+    ! Only the EB bulk law is admitted. legacy's EV/CR branch reads a different record
+    ! (G/F/Vtf, Material.f90:524-526) for which this build has no ProblemState component,
+    ! and a law with nowhere to put its parameters must be refused rather than half-read.
+    key_t('material[].bulk_modulus_law',   TV_STR,  .false., 'EB'),                          &
+    key_t('material[].modulus_number',     TV_REAL, .false., ''),                            &
+    key_t('material[].modulus_exponent',   TV_REAL, .false., ''),                            &
+    key_t('material[].failure_ratio',      TV_REAL, .false., ''),                            &
+    key_t('material[].unload_modulus_number',   TV_REAL, .false., ''),                       &
+    key_t('material[].unload_modulus_exponent', TV_REAL, .false., ''),                       &
+    key_t('material[].reference_pressure', TV_REAL, .false., ''),                            &
+    key_t('material[].min_confining_pressure', TV_REAL, .false., ''),                        &
+    key_t('material[].bulk_modulus_number',     TV_REAL, .false., ''),                       &
+    key_t('material[].bulk_modulus_exponent',   TV_REAL, .false., ''),                       &
+    key_t('material[].friction_angle_reduction', TV_REAL, .false., ''),                      &
     key_t('section[].name',                TV_STR,  .true.,  ''),                            &
     key_t('section[].elset',               TV_STR,  .true.,  ''),                            &
     key_t('section[].element',             TV_STR,  .true.,  'Q4'),                          &
@@ -138,6 +159,13 @@ module yl_authoring_keys
     ! step existed -- "does this step inherit what the last one did" is the central
     ! question of a staged analysis, and it cannot be guessed.
     key_t('step[].reset_state',            TV_BOOL, .true.,  ''),                            &
+    ! The elevation this step's initial confining stress is measured down from (legacy
+    ! `hdam(iblks)`). Optional as a key and required by initial_stress_requires exactly
+    ! when a DUNCANCHANG material is present -- it is that model's first-visit branch
+    ! (Stiff.f90:801) that turns the depth below this datum into a stress, and no other
+    ! model this build admits reads it at all. A PHYSICAL choice, so it carries no
+    ! default: 0.0 is a real elevation, not "unspecified".
+    key_t('step[].initial_stress.fill_elevation', TV_REAL, .false., ''),                     &
     key_t('step[].active_elsets[]',        TV_STR,  .false., ''),                            &
     key_t('step[].active_elsets.count',    TV_INT,  .true.,  ''),                            &
     key_t('step[].strength_reduction.amplitude', TV_STR, .false., ''),                       &
@@ -251,6 +279,7 @@ contains
     call resolve_active_elsets(doc, file, errors)
     call resolve_step_amplitude(doc, file, errors)
     call model_requires(doc, file, errors)
+    call initial_stress_requires(doc, file, errors)
     call load_mode_requires(doc, file, errors)
     call load_type_requires(doc, file, errors)
     call check_loads(doc, file, errors)
@@ -281,44 +310,128 @@ contains
     type(toml_doc_t), intent(in) :: doc
     character(len=*), intent(in) :: file
     type(problem_errors_t), intent(inout) :: errors
-    character(len=*), parameter :: FIELDS(4) = [character(len=15) ::                          &
-      'cohesion', 'hardening', 'friction_angle', 'dilation_angle']
-    integer(int32) :: i, k, kc
+    !> Parameters BOTH non-linear models read, under one spelling each. Required of
+    !> classicalep and of duncanchang, forbidden on an elastic material.
+    character(len=*), parameter :: SHARED(2) = [character(len=24) ::                          &
+      'cohesion', 'friction_angle']
+    !> classicalep alone.
+    character(len=*), parameter :: PLASTIC_ONLY(2) = [character(len=24) ::                    &
+      'hardening', 'dilation_angle']
+    !> duncanchang alone. `bulk_modulus_law` leads because it is the selector: legacy
+    !> reads a DIFFERENT second record depending on it (Material.f90:522-531).
+    character(len=*), parameter :: DUNCAN_ONLY(11) = [character(len=24) ::                    &
+      'bulk_modulus_law', 'modulus_number', 'modulus_exponent', 'failure_ratio',              &
+      'unload_modulus_number', 'unload_modulus_exponent', 'reference_pressure',               &
+      'min_confining_pressure', 'bulk_modulus_number', 'bulk_modulus_exponent',               &
+      'friction_angle_reduction']
+    integer(int32) :: i, k, kc, kmodel
     character(len=TOML_LEN_PATH) :: base
-    logical :: plastic
-    integer :: f
+    character(len=LEN_ALLOW) :: model
+    logical :: plastic, duncan
 
     do i = 1_int32, doc%count_of('material')
       base = 'material['//itoa(i)//']'
-      k = doc%find(trim(base)//'.model')
-      if (k == 0_int32) cycle                  ! a missing model is require_all's finding
-      plastic = trim(doc%entry(k)%svalue) == 'classicalep'
+      kmodel = doc%find(trim(base)//'.model')
+      if (kmodel == 0_int32) cycle             ! a missing model is require_all's finding
+      model = doc%entry(kmodel)%svalue
+      plastic = trim(model) == 'classicalep'
+      duncan  = trim(model) == 'duncanchang'
+
       kc = doc%find(trim(base)//'.criterion')
       if (plastic .and. kc == 0_int32) then
-        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(kmodel)%line,     &
                    trim(base)//'.criterion',                                                  &
                    'model "classicalep" needs a yield criterion', '', 'mohr_coulomb')
       end if
       if (.not. plastic .and. kc /= 0_int32) then
+        ! DUNCANCHANG is nonlinear ELASTIC: EBMOD recomputes a tangent modulus from the
+        ! current stress and nothing yields, so a yield criterion here would be a
+        ! statement about the model that is simply untrue.
         call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(kc)%line,         &
                    trim(base)//'.criterion',                                                  &
                    'only a plasticity model takes a yield criterion',                         &
-                   trim(doc%entry(k)%svalue), 'classicalep')
+                   trim(model), 'classicalep')
       end if
-      do f = 1, size(FIELDS)
-        k = doc%find(trim(base)//'.'//trim(FIELDS(f)))
-        if (plastic .and. k == 0_int32) then
-          call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, 0_int32,                  &
-                     trim(base)//'.'//trim(FIELDS(f)),                                        &
-                     'the mohr_coulomb criterion needs this parameter', '', 'a real number')
-        else if (.not. plastic .and. k /= 0_int32) then
-          call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,        &
-                     trim(base)//'.'//trim(FIELDS(f)),                                        &
-                     'only a plasticity model takes this parameter', '', '')
-        end if
-      end do
+
+      call group_requires(doc, file, base, SHARED, plastic .or. duncan,                       &
+                          'this model needs this parameter',                                  &
+                          'only a non-linear model takes this parameter', errors)
+      call group_requires(doc, file, base, PLASTIC_ONLY, plastic,                             &
+                          'the mohr_coulomb criterion needs this parameter',                  &
+                          'only a plasticity model takes this parameter', errors)
+      call group_requires(doc, file, base, DUNCAN_ONLY, duncan,                               &
+                          'model "duncanchang" needs this parameter',                         &
+                          'only model "duncanchang" takes this parameter', errors)
     end do
   end subroutine model_requires
+
+  !> Required-together, or forbidden-together, for one material and one group of keys.
+  !>
+  !> Split out when the second constitutive model arrived: with one model the two halves
+  !> could be written inline, with two they would have been copied three times, and a
+  !> copied "is it required here" test is exactly where the next model's parameters get
+  !> silently accepted on the wrong material.
+  subroutine group_requires(doc, file, base, fields, wanted, missing_msg, extra_msg, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file, base, fields(:), missing_msg, extra_msg
+    logical, intent(in) :: wanted
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: k
+    integer :: f
+
+    do f = 1, size(fields)
+      k = doc%find(trim(base)//'.'//trim(fields(f)))
+      if (wanted .and. k == 0_int32) then
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, 0_int32,                    &
+                   trim(base)//'.'//trim(fields(f)), missing_msg, '', 'a real number')
+      else if (.not. wanted .and. k /= 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+                   trim(base)//'.'//trim(fields(f)), extra_msg, '', '')
+      end if
+    end do
+  end subroutine group_requires
+
+  !> `step[].initial_stress.fill_elevation` is required exactly when a DUNCANCHANG material
+  !> is present, and forbidden otherwise.
+  !>
+  !> Same shape as model_requires and load_mode_requires, and the same reason: "required"
+  !> is a property of a PAIR, here (this step, the models the case declares). Written on a
+  !> case with no DUNCANCHANG material the datum would be read into `hdam` and never
+  !> consumed, so the author would never learn their elevation did nothing; omitted on a
+  !> case that has one, the first Gauss-point visit would take its initial stress from a
+  !> value nobody wrote.
+  subroutine initial_stress_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: i, k
+    logical :: any_duncan
+    character(len=TOML_LEN_PATH) :: base
+
+    any_duncan = .false.
+    do i = 1_int32, doc%count_of('material')
+      k = doc%find('material['//itoa(i)//'].model')
+      if (k == 0_int32) cycle
+      if (trim(doc%entry(k)%svalue) == 'duncanchang') any_duncan = .true.
+    end do
+
+    do i = 1_int32, doc%count_of('step')
+      base = 'step['//trim(itoa(i))//']'
+      k = doc%find(trim(base)//'.initial_stress.fill_elevation')
+      if (any_duncan .and. k == 0_int32) then
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, 0_int32,                    &
+                   trim(base)//'.initial_stress.fill_elevation',                              &
+                   'a duncanchang material takes its first-visit stress from the depth '//    &
+                   'below this elevation, so every step must state one', '',                  &
+                   'an elevation in mesh coordinates')
+      else if (.not. any_duncan .and. k /= 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+                   trim(base)//'.initial_stress.fill_elevation',                              &
+                   'no material in this case derives an initial stress from depth, so '//     &
+                   'legacy would never read this elevation', '', '')
+      end if
+    end do
+  end subroutine initial_stress_requires
 
   !> The strength-reduction curve is required with its mode and forbidden without it.
   !> Same shape as `model_requires`, and the same reason: "required" is a property of the

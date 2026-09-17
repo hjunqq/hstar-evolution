@@ -163,10 +163,24 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
 
 - `mesh.dimension = 2`；`mesh.format = "hstar-legacy-cor-ele"`
 - `section.element = "Q4"`；`section.formulation = "plane_strain"`
-- `material.model ∈ {"elastic_isotropic", "classicalep"}`；
+- `material.model ∈ {"elastic_isotropic", "classicalep", "duncanchang"}`；
   `classicalep` 需要 `criterion = "mohr_coulomb"` 及 `cohesion` / `hardening` /
   `friction_angle` / `dilation_angle`（**角度单位是度**，legacy 直接 `tand()`），
   且这些字段**只允许**出现在塑性材料上——两个方向都有反例
+- `duncanchang`（2026-09-17）需要 `bulk_modulus_law = "EB"` 及
+  `modulus_number` / `modulus_exponent` / `failure_ratio` /
+  `unload_modulus_number` / `unload_modulus_exponent` /
+  `reference_pressure` / `min_confining_pressure` /
+  `bulk_modulus_number` / `bulk_modulus_exponent` / `friction_angle_reduction`，
+  外加与 `classicalep` **共用同一拼写**的 `cohesion` 与 `friction_angle`。
+  共用是有意的：两个模型都读一个凝聚力和一个摩擦角，含义相同，所以 `[[material]]`
+  对每个物理量只保留一种写法，由 `model_requires` 分别向两个模型索取——
+  统一材料对象的意义就在这里，第二个本构补它独有的参数，而不是另起一套词汇。
+  这些字段同样**只允许**出现在 `duncanchang` 上，两个方向都有反例。
+  `duncanchang` 是非线性**弹性**本构（EBMOD 每次按当前应力重算切线模量，不屈服），
+  因此写 `criterion` 会被拒。只放行 `EB`：legacy 的 `EV`/`CR` 分支读的是另一条记录
+  （`G`/`F`/`Vtf`，Material.f90:524-526），本构建没有对应的 ProblemState 组件，
+  一条参数无处安放的定律只能拒绝，不能读一半
 - `step.procedure = "static"`；`step.controls.increments = 1`
 - `step.controls.stiffness_update ∈ {"first_iteration", "every_iteration"}`（legacy `type_nl` 5 / 4）
 - 边界只有给定位移（`value`），`dof ∈ {1,2}`
@@ -181,6 +195,12 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
   `nnode==8 .and. ndimn==3` 下成立，2-D Q4 走同一条 else 分支。实测而非推断——改成
   `"smoothed"` 仍严格复现冻结参考，改成 `"none"` 应力偏离 1.5e5、位移不变。）
 - `[[step]]` 一个或多个（2026-09-16）。每个 step 必须写 `active_elsets` 与 `reset_state`
+- `step.initial_stress.fill_elevation`（legacy `hdam(iblks)`，2026-09-17）：**当且仅当**
+  本算例存在 `duncanchang` 材料时每个 step 必填，否则禁止出现——两个方向都有反例。
+  它是**高程**不是厚度：所有消费者用的都是它以下的深度 `hdam(iblks) - gpcod(ndimn)`，
+  DUNCANCHANG 首访分支据此得到该高斯点的初始竖向应力。属于物理选择，因此不带默认值：
+  0.0 是一个真实高程，不是「未指定」。legacy 一条记录读完整个数组但**按块索引**，
+  所以契约把它写在 step 下，step-scope 归类为 `per_block`，不做跨 step 一致性拒绝
 - 各 step 的边界条件必须**完全相同**：`runtime.dof.fixed_mask` 只提交一次（取 step 1），   逐步变化的约束会静默地整场沿用 step 1 —— 由 `commit_step_invariants` 按名拒绝
 - 每个 step 恰好一个 `type = "gravity"` 荷载：ProblemState 的每步只有一份重力记录（legacy 的 `gravy` / `factg` / `tcurvegravity`）
 

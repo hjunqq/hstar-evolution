@@ -85,7 +85,7 @@ creep_model,liquefaction,wetting_kind}` + `sections[].thickness`。
 | `ELASTIC_SPRING` | 467 | 1 | legacy-only |
 | `ELASTIC_EP` | 475 | ≥1 | legacy-only |
 | `STEEL_EP` / `STEEL_SP` | 485 / 495 | ≥1 | legacy-only（配筋域 M6.8） |
-| `DUNCANCHANG` | 501 | 多条 | legacy-only（下一批候选） |
+| `DUNCANCHANG` | 501 | 多条 | **白名单内（2026-09-17，仅 `EB` 分支）**，见 `docs/m8/duncan-chang.md` |
 | `GOODMAN` | 544 | 多条 | legacy-only（接触/节理面） |
 | `CAMCLAY` | 655 | 1 | legacy-only |
 | `CONCRETE` | 664 | 多条 | legacy-only（损伤域） |
@@ -504,8 +504,8 @@ PASS  blocks=600 values=541200 mismatches=0 max|d|=0.000e+00
 |---|---|---|---|
 | `CLASSICALEP` / **MCJOINT** | `train05_slope_stability` | **rc=0**，1.07 MB | 可用 |
 | **CONCRETE** | `train06_concrete_damage` | **rc=0**，219 KB | 可用 |
-| **DUNCANCHANG** | `new_duncan_chang`（唯一） | **rc=174 SIGSEGV**（第 2 步） | **不可用** |
-| **GOODMAN** | `mini_goodman` | **rc=174 SIGSEGV** | 不可用 |
+| **DUNCANCHANG** | `new_duncan_chang`（唯一） | rc=174 SIGSEGV → **2026-09-17 定性为 legacy 原有缺陷并修复（PD-1）**，现 rc=0 | **可用，参考已冻结** |
+| **GOODMAN** | `mini_goodman` | **rc=174 SIGSEGV** → 2026-09-17 定性为**算例缺陷**（自造 deck，b2 组配 4 节点 `.ele`），不修 | 不可用 |
 | | `goodmanLU` | rc=2，`.ftr` EOF | 不可用 |
 | | `static` | rc=24 | 不可用 |
 | `jliqu`（抗液化） | `fix` | rc=2，`.glb` 解析错 | 不可用；且 `type_problem='F'`，不在本域 |

@@ -204,6 +204,21 @@ program yl_adapter_dialect_test
                   '  MC  5.0e4  0.0'//new_line('a')//'  30.0  15.0'//new_line('a')//'  1'//   &
                   new_line('a')//'  0  0', &
                   'W')
+    ! The two DUNCANCHANG rows, for the same reason as the CLASSICALEP pair above: the
+    ! deck has to REACH the branch, so the material line becomes a DUNCANCHANG one and the
+    ! branch's own records follow it.
+    call run_case('A-MAT', 'duncanchang-bulk-law', 'mat', 20, &
+                  'DUNCANCHANG       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000'//   &
+                  'E-01       1.000E-05  0  0  0'//new_line('a')//'  0  0       1.000E+03'//new_line('a')//   &
+                  '  EV       1.000E+04  35  300  0.5  0.7  0.3  360.0       1.013E+05       1.013E+05', &
+                  'W')
+    ! Same material record, a LEGAL bulk law, and the refusal comes from the context
+    ! instead: under 'F' there are four more numbers before it that this build cannot read.
+    call run_case('A-MAT', 'duncanchang-f-problem', 'mat', 20, &
+                  'DUNCANCHANG       2.400E+03       1.000E+00       1.000E+00       2.500E+10       2.000'//   &
+                  'E-01       1.000E-05  0  0  0'//new_line('a')//'  0  0       1.000E+03'//new_line('a')//   &
+                  '  EB       1.000E+04  35  300  0.5  0.7  0.3  360.0       1.013E+05       1.013E+05', &
+                  'PROB_F')
     call run_case('A-SOL', 'pivot-file', 'sol', 2, '  1  0  1  1', 'W')
     call run_case('A1', 'stochastic-curve-modifier-unsupported', 'loa', 3, '  2  LINEAR  1  2', 'W')
     call run_case('A2', 'curve-type-unsupported', 'loa', 3, '  2  HARMONIC  0  2', 'W')
@@ -292,6 +307,22 @@ contains
       end if
     end do
     call check('T4  the two partitions are contiguous and gate-first', .true.)
+
+    ! T6b is T6 for the GATE half of the table, and it exists because T6 did not cover it:
+    ! a gate row's whitelist lives in `text_value`, LEN_VALUE was 32, and adding
+    ! DUNCANCHANG made that string 41 characters. It was truncated to `...|DU` and the gate
+    ! then refused the deck it had just been widened to accept. A component filled exactly
+    ! to its declared length was almost certainly cut off on the way in.
+    do i = 1, capability_count()
+      call capability_table_row(i, row, found)
+      if (.not. found) cycle
+      call check('T6b '//trim(row%rule_id)//' '//trim(row%item)//' is not truncated by '//    &
+                 'LEN_VALUE / LEN_PATH / LEN_KEY / LEN_FIELD',                                &
+                 len_trim(row%text_value) < len(row%text_value) .and.                         &
+                 len_trim(row%object_path) < len(row%object_path) .and.                       &
+                 len_trim(row%item) < len(row%item) .and.                                     &
+                 len_trim(row%field) < len(row%field))
+    end do
 
     ! T5/T6/T7 are per-dialect-row well-formedness. Every one of them is a way a row can
     ! be added that compiles, walks and never says anything useful.
@@ -660,6 +691,7 @@ contains
     ctx%group_matno = 1_int32
     ctx%group_kind = 5_int32
     ctx%type_abc = 'FIX'
+    ctx%type_problem = 'Q'
     ctx%nbackdt = 0_int32
     ctx%ntrans = 0_int32
 
@@ -670,6 +702,11 @@ contains
     case ('BACKDT2'); ctx%nbackdt = 2_int32
     case ('MIF');     ctx%type_abc = 'MIF'
     case ('NTRANS1'); ctx%ntrans = 1_int32
+    ! The `.mat` DUNCANCHANG branch reads a further RECORD when type_problem is 'F'
+    ! (Material.f90:515). The counter-example for that refusal therefore needs a context,
+    ! not a second deck file: the fact lives in deck_context_t precisely because .mat has
+    ! to branch on something .glb established.
+    case ('PROB_F');  ctx%type_problem = 'F'
     case default
       call check('C   unknown context variant '//variant, .false.)
     end select

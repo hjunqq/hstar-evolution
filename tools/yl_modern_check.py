@@ -102,21 +102,31 @@ def stage(case_dir: Path, work: Path) -> Path:
 
 
 def nonzero_required(case_dir: Path, results: Path) -> list[tuple[str, int]]:
-    """(block name, non-zero count) for every observable the case declares must_be_nonzero."""
+    """(block name, non-zero count) for every observable the case declares must_be_nonzero.
+
+    The observable names the RESULT BLOCK it is about, in `block`. It used to be matched
+    through `components`, which worked only because the one case that used it had a block
+    whose name equalled its single component name ("PLASTICSTRAIN"). The first observable
+    that did not -- DISPLACEMENT, whose components are ux/uy -- matched nothing at all, and
+    the assertion silently asserted nothing while the gate stayed green. Measured
+    2026-09-17. So the block is stated, and an observable that names a block the results do
+    not contain is reported as a count of -1, which the caller treats as a failure: a
+    must_be_nonzero that checks nothing is worse than none, because it reads as evidence.
+    """
     obs = case_dir / "observables.toml"
     if not obs.is_file():
         return []
     doc = tomllib.loads(obs.read_text(encoding="utf-8"))
-    wanted = {c for o in doc.get("observable", []) if o.get("must_be_nonzero")
-              for c in o.get("components", [])}
+    wanted = {o.get("block") for o in doc.get("observable", []) if o.get("must_be_nonzero")}
+    wanted.discard(None)
     if not wanted:
         return []
     parsed = json.loads(results.read_text(encoding="utf-8"))
-    counts: dict[str, int] = {}
+    counts: dict[str, int] = {b: -1 for b in wanted}
     for b in parsed["blocks"]:
         if b["name"] not in wanted:
             continue
-        counts[b["name"]] = counts.get(b["name"], 0) + sum(
+        counts[b["name"]] = max(counts[b["name"]], 0) + sum(
             1 for row in b["rows"].values() for v in row if v != 0.0)
     return sorted(counts.items())
 
@@ -170,7 +180,11 @@ def main(argv=None):
                 problems.append(f"N2 {cid}: the modern path does not reproduce the reference")
             for block, n in nonzero_required(case_dir, out):
                 print(f"  N4 {cid:<28} {block} non-zero values: {n}")
-                if n == 0:
+                if n < 0:
+                    problems.append(f"N4 {cid}: {block} is declared must_be_nonzero but the "
+                                    f"results carry no such block -- the assertion checks "
+                                    f"nothing")
+                elif n == 0:
                     problems.append(f"N4 {cid}: {block} is declared must_be_nonzero and is "
                                     f"all zeros -- the case does not exercise what it is for")
 
@@ -289,6 +303,64 @@ def main(argv=None):
                         case=multi)
         if "reads once" not in blob and "static" not in blob:
             problems.append("N3 steps disagree: the refusal did not say what it compared")
+
+    # b6 -- the DUNCANCHANG block. Five controls, because the model adds five distinct ways
+    # to be wrong and each has a different verdict. PREDICTED BEFORE RUNNING, all on the
+    # deck that actually has the model except where noted:
+    #   c1  bulk law "EV"            exit 3, names bulk_modulus_law and EV  (capability)
+    #   c2  a parameter deleted      exit 2, names failure_ratio            (missing field)
+    #   c3  fill_elevation deleted   exit 2, names initial_stress.fill_elevation
+    #   c4  fill_elevation on mini_mc exit 2, names initial_stress.fill_elevation
+    #   c5  a DC parameter on an elastic material   exit 2, names modulus_number
+    # and what must stay SILENT: none of these may touch the six N2 comparisons above.
+    duncan = next((c["id"] for c in _doc.get("case", [])
+                   if (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
+                   and 'model   = "duncanchang"' in
+                       (ROOT / "cases" / c["path"] / "modern/case.toml").read_text(encoding="utf-8")),
+                  None)
+    if duncan is not None:
+        blob = rejected("duncanchang bulk law EV", "--input=case.toml",
+                        sub('bulk_modulus_law = "EB"', 'bulk_modulus_law = "EV"'), case=duncan)
+        if "bulk_modulus_law" not in blob or "EV" not in blob:
+            problems.append("N3 duncanchang bulk law: the refusal named neither the key nor "
+                            "the value")
+
+        blob = rejected("duncanchang parameter missing", "--input=case.toml",
+                        lambda t: "\n".join(l for l in t.splitlines()
+                                            if not l.startswith("failure_ratio")) + "\n",
+                        case=duncan)
+        if "failure_ratio" not in blob:
+            problems.append("N3 duncanchang parameter missing: the refusal did not name the key")
+
+        blob = rejected("duncanchang without a datum", "--input=case.toml",
+                        lambda t: "\n".join(l for l in t.splitlines()
+                                            if not l.startswith("fill_elevation")) + "\n",
+                        case=duncan)
+        if "fill_elevation" not in blob:
+            problems.append("N3 duncanchang without a datum: the refusal did not name the key")
+
+    # c4/c5 run on a case with NO duncanchang material: the forbidden-without-the-model
+    # half. Without these two the required-together rule would be satisfied by a validator
+    # that simply accepted the keys everywhere.
+    plain = next((c["id"] for c in _doc.get("case", [])
+                  if (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
+                  and 'model   = "duncanchang"' not in
+                      (ROOT / "cases" / c["path"] / "modern/case.toml").read_text(encoding="utf-8")),
+                 None)
+    if plain is not None:
+        blob = rejected("a datum with no model that reads it", "--input=case.toml",
+                        sub("[step.controls]",
+                            "[step.initial_stress]\nfill_elevation = 0.0\n\n[step.controls]"),
+                        case=plain)
+        if "fill_elevation" not in blob:
+            problems.append("N3 datum with no model: the refusal did not name the key")
+
+        blob = rejected("a duncanchang parameter on another model", "--input=case.toml",
+                        sub("[[section]]", "modulus_number = 300.0\n\n[[section]]"),
+                        case=plain)
+        if "modulus_number" not in blob:
+            problems.append("N3 duncanchang parameter on another model: the refusal did not "
+                            "name the key")
 
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",

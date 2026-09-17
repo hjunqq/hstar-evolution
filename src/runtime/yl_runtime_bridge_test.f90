@@ -45,7 +45,7 @@ program yl_runtime_bridge_test
                         lineload, linet,                                                        &
                         coord, appear_process, matno_process, average_appear,                   &
                         nmats, nblks, restart, ttime,                                            &
-                        uinitial, probn, outplot, type_problem, type_solver, type_load,         &
+                        uinitial, hdam, probn, outplot, type_problem, type_solver, type_load,   &
                         type_ABC, type_nl, nonsym, NGRAV, gid_u, gid_s, gid_ms, gid_f,          &
                         gid_rot, gid_v, gid_a, gid_T, gid_P, gid_Pv, gid_ep, gid_Y, gid_FC,     &
                         gid_Ns, gid_Ss, gid_Mxy, gid_bem, gid_wh, gid_wv, gid_bcs,              &
@@ -1627,7 +1627,7 @@ contains
                      allocated(coord) .or. allocated(appear_process) .or.                       &
                      allocated(matno_process) .or. allocated(average_appear) .or.               &
                      allocated(factg) .or. allocated(tcurvegravity) .or.            &
-                     allocated(uinitial)))
+                     allocated(uinitial) .or. allocated(hdam)))
 
     ! --- a fresh commit after release works again ---------------------------------
     call commit_legacy_globals(problem, residue, ex, rt, errors)

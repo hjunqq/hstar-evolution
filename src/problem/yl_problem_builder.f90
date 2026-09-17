@@ -75,7 +75,7 @@ module yl_problem_builder
                               nset_t, material_t, section_t, amplitude_t, &
                               amplitude_point_t, interactions_t, solver_t, step_t, &
                               controls_t, load_t, output_t, boundary_t, activation_t, &
-                              surface_edge_t
+                              surface_edge_t, initial_stress_t
   use yl_problem_errors, only: problem_error_t, problem_errors_t, source_location_t, &
                                make_problem_error, PE_INVALID_INPUT
 
@@ -101,6 +101,7 @@ module yl_problem_builder
   public :: builder_step_begin, builder_step_finish
   public :: builder_step_set_procedure, builder_step_set_load_mode
   public :: builder_step_set_controls, builder_step_set_load, builder_step_set_output
+  public :: builder_step_set_initial_stress
   public :: builder_step_add_boundary, builder_step_boundary_empty
   public :: builder_step_add_activation, builder_step_activation_empty
 
@@ -197,11 +198,13 @@ module yl_problem_builder
     logical :: has_controls = .false.
     logical :: has_load = .false.
     logical :: has_output = .false.
+    logical :: has_initial_stress = .false.
     type(opt_text) :: procedure_name
     type(opt_text) :: load_mode
     type(controls_t) :: controls
     type(load_t) :: load
     type(output_t) :: output
+    type(initial_stress_t) :: initial_stress
     integer(int32) :: st_boundary = COLL_UNSET
     integer(int32) :: n_boundary = 0_int32
     type(boundary_t), allocatable :: buf_boundary(:)
@@ -1028,6 +1031,26 @@ contains
     sb%has_output = .true.
   end subroutine builder_step_set_output
 
+  !> Optional, unlike its four siblings: a case with no depth-derived initial stress has
+  !> nothing to put here, and the authoring validator -- not the builder -- is where
+  !> "required for a DUNCANCHANG case" is decided. The duplicate guard is the same.
+  subroutine builder_step_set_initial_stress(b, sb, value, loc, errors)
+    type(problem_builder_t), intent(inout) :: b
+    type(step_builder_t), intent(inout) :: sb
+    type(initial_stress_t), intent(in) :: value
+    type(source_location_t), intent(in) :: loc
+    type(problem_errors_t), intent(inout) :: errors
+    if (.not. allow_sub(b, sb%begun, 'steps[].initial_stress', loc, errors)) return
+    if (sb%has_initial_stress) then
+      call fail(b, errors, 'builder.duplicate_singleton', 'steps[].initial_stress', '', &
+                'this step already has an initial stress datum', 'one declaration', &
+                'a second declaration', loc)
+      return
+    end if
+    sb%initial_stress = value
+    sb%has_initial_stress = .true.
+  end subroutine builder_step_set_initial_stress
+
   subroutine builder_step_add_boundary(b, sb, value, loc, errors)
     type(problem_builder_t), intent(inout) :: b
     type(step_builder_t), intent(inout) :: sb
@@ -1129,6 +1152,7 @@ contains
       candidate%controls = sb%controls
       candidate%load = sb%load
       candidate%output = sb%output
+      candidate%initial_stress = sb%initial_stress
       select case (sb%st_boundary)
       case (COLL_EMPTY);  allocate(candidate%boundary(0))
       case (COLL_FILLED); allocate(candidate%boundary(sb%n_boundary))

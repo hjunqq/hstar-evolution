@@ -156,6 +156,7 @@ module yl_adapter_driver
                                 builder_step_set_procedure, builder_step_set_load_mode, &
                                 builder_step_set_controls, builder_step_set_load, &
                                 builder_step_set_output, builder_step_add_boundary, &
+                                builder_step_set_initial_stress, &
                                 builder_step_boundary_empty, builder_step_add_activation, &
                                 builder_step_activation_empty
   use yl_problem_pipeline, only: prepare_problem
@@ -363,6 +364,11 @@ contains
       if (builder_failed(b)) exit parse_all
 
       call builder_step_set_output(b, sb, parts%output, loc, errors)
+      if (builder_failed(b)) exit parse_all
+
+      ! parse_glb always fills this (the `.glb` record is unconditional), so unlike the
+      ! collections below there is no "the parser never ran" state to distinguish.
+      call builder_step_set_initial_stress(b, sb, parts%initial_stress, loc, errors)
       if (builder_failed(b)) exit parse_all
 
       ! boundary(:)/activation(:): unallocated means the owning parser never got this
