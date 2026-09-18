@@ -160,3 +160,21 @@ FALLBACK PASS
 
 本算例的参考因此记录为
 `{"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "MKL_DYNAMIC": "FALSE"}`。
+
+## 后记（2026-09-18）：判据 5 在 `rcbeam` 上补上了
+
+本文件结论不变——**`damage_2d.concrete_gravdam` 这个 deck 确实不触发损伤**，
+它的 `Yield` 非零值全部是 PD-3 写进输出槽的未初始化局部量。
+
+但 CONCRETE 的损伤路径本身**已经有可验收证据**了，只是在另一个算例上：
+M9 的 `elements_2d.rcbeam`（`crack_model = 3`）在同一条断言下是
+**5 371 个落在 (0,1]、区间外 0 个**，并且现代输入与冻结参考逐位一致
+（120 块 / 214 110 值 / `max|d| = 0.000e+00`）。见
+[`../m9/l2-element-domain.md`](../m9/l2-element-domain.md) §5。
+
+也就是说本域的两半现在分别由两个真实算例支撑：
+读取/映射/派发链路由 `concrete_gravdam` 证明（最小切片、唯一差值就是 `model: CONCRETE`），
+损伤演化由 `rcbeam` 证明（真实非线性响应被触发）。
+签收口径由负责人决定；本文件只负责把两边各自确立了什么写清楚。
+
+N4 的 `in_range` 就是这一课的机械化：`must_be_nonzero` 单独通过过一次，靠的是垃圾值。

@@ -20,6 +20,10 @@
 | M6.5 强度折减 + 材料曲线（MAT_DE / mat_curve） | 完成 4/4 | **ACCEPTED（窄口径）** 2026-09-15 | `docs/m6/material-domain.md` §9 + `cases/golden/plasticity/slope_srm`（600 块 541 200 值 `max|d|=0`，**非零 PLASTICSTRAIN 18 924/45 100**） |
 | M7 `.loa` 输入家族 Phase 1–3（面荷载 + 多分析步） | 完成 | **ACCEPTED（窄口径）** 2026-09-17 | `docs/m7/loa-family-report.md` + `docs/m5/authoring-contract.md` §2.1/§8/§9 + `cases/golden/loads_2d/wall_reservoir`（**两分析步 + 施工分期 + 静水压，4 块 552 值 `max|d|=0`**） |
 | M7 Phase 4（集中力） | 完成 | **未签收** | `docs/m7/loa-family-report.md` Phase 4 + `cases/golden/loads_2d/beam_point_load`（**2 块 756 值 `max|d|=0`**，体力为零故位移场完全由集中力决定；6 条反例）+ 新门禁 `tools/yl_step_scope_check.py` |
+| M8 `DUNCANCHANG`（非线性弹性） | 完成 | **未签收** | `docs/m8/duncanchang.md` + `cases/golden/nonlinear_elastic/new_duncan_chang`（30 块 2 100 值 `max|d|=0`）。前置 `PD-1`（`kind_wt` 读未赋值局部量）单列在 `docs/m8/pre-migration-defects.md`，**不计入本域能力** |
+| M10 `PARDISO`（第二个线性求解器） | 完成 | **未签收** | `docs/m10/pardiso.md` + `cases/golden/solver_2d/benchmark_100x100`（2 块 61 206 值 `max|d|=0`）。**冻结参考自此包含执行环境**：`tools/yl_run.pinned_env()` 定义线程数与 MKL 变量，两个 checker 复用同一环境——未钉线程时 3 次运行 3 个哈希，钉住后 1 个 |
+| M11 `CONCRETE`（损伤本构） | 完成 | **未签收** | `docs/m11/concrete.md` + `cases/golden/damage_2d/concrete_gravdam`（30 块 3 220 值 `max|d|=0`）。**该算例不触发损伤**（`Yield` 全部越界，是 `PD-3` 写进输出槽的未初始化局部量）；损伤路径真正被触发的证据在 M9 的 `rcbeam` 上，见下一行 |
+| M9 2-D 线单元域（L2 / STEEL） | 完成 6/6 | **未签收** | `docs/m9/l2-element-domain.md` + `cases/golden/elements_2d/rcbeam`（**120 块 214 110 值 `max|d|=0`**，Q4×600 + L2×60 + STEEL×61 混合拓扑）。同时补上 M11 欠下的判据：`Yield` **5 371 个落在 (0,1]、区间外 0 个**。本轮真正打开六个域（单元族 / 截面面积 / `crack_model=3` / 材料曲线读丢 / `.nrt` 插值约束 / `[bond]` 粘结律），并去掉了适配器、`build_runtime`、commit 三层各自的「一个网格一种单元」假设 |
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
