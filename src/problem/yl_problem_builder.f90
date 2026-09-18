@@ -73,6 +73,7 @@ module yl_problem_builder
   use yl_problem_optional, only: opt_int, opt_text, opt_set
   use yl_problem_types, only: problem_state_t, case_t, node_t, element_t, elset_t, &
                               nset_t, material_t, section_t, amplitude_t, &
+                              interpolation_t, &
                               amplitude_point_t, interactions_t, solver_t, step_t, &
                               controls_t, load_t, output_t, boundary_t, activation_t, &
                               surface_edge_t, initial_stress_t
@@ -90,6 +91,7 @@ module yl_problem_builder
   public :: builder_add_element, builder_elements_empty
   public :: builder_add_elset, builder_elsets_empty
   public :: builder_add_nset, builder_nsets_empty
+  public :: builder_add_interpolation, builder_interpolation_empty
   public :: builder_add_material, builder_materials_empty
   public :: builder_add_section, builder_sections_empty
   public :: builder_add_amplitude, builder_amplitudes_empty
@@ -154,6 +156,12 @@ module yl_problem_builder
     integer(int32) :: st_nsets = COLL_UNSET
     integer(int32) :: n_nsets = 0_int32
     type(nset_t), allocatable :: buf_nsets(:)
+    ! mesh.interpolation: the node-interpolation constraints (legacy `trans`). Its own
+    ! collection rather than a field of nset, because an entry names one constrained node
+    ! and the nodes it follows, which is a different shape from "a set of nodes".
+    integer(int32) :: st_interpolation = COLL_UNSET
+    integer(int32) :: n_interpolation = 0_int32
+    type(interpolation_t), allocatable :: buf_interpolation(:)
 
     integer(int32) :: st_materials = COLL_UNSET
     integer(int32) :: n_materials = 0_int32
@@ -450,6 +458,12 @@ contains
                           candidate%mesh%nsets(:) = b%buf_nsets(1:b%n_nsets)
       end select
 
+      select case (b%st_interpolation)
+      case (COLL_EMPTY);  allocate(candidate%mesh%interpolation(0))
+      case (COLL_FILLED); allocate(candidate%mesh%interpolation(b%n_interpolation))
+                          candidate%mesh%interpolation(:) = b%buf_interpolation(1:b%n_interpolation)
+      end select
+
       select case (b%st_materials)
       case (COLL_EMPTY);  allocate(candidate%materials(0))
       case (COLL_FILLED); allocate(candidate%materials(b%n_materials))
@@ -656,6 +670,38 @@ contains
     b%buf_nsets(b%n_nsets) = value
     b%st_nsets = COLL_FILLED
   end subroutine builder_add_nset
+
+  ! ==========================================================================
+  ! mesh.interpolation
+  ! ==========================================================================
+
+  subroutine builder_add_interpolation(b, value, loc, errors)
+    type(problem_builder_t), intent(inout) :: b
+    type(interpolation_t), intent(in) :: value
+    type(source_location_t), intent(in) :: loc
+    type(problem_errors_t), intent(inout) :: errors
+    type(interpolation_t), allocatable :: tmp(:)
+    if (.not. allow_add(b, b%st_interpolation, 'mesh.interpolation', &
+                        b%n_interpolation + 1_int32, loc, errors)) return
+    if (.not. allocated(b%buf_interpolation)) then
+      allocate(b%buf_interpolation(SEED_CAPACITY))
+    else if (b%n_interpolation >= int(size(b%buf_interpolation), int32)) then
+      allocate(tmp(2 * size(b%buf_interpolation)))
+      tmp(1:b%n_interpolation) = b%buf_interpolation(1:b%n_interpolation)
+      call move_alloc(tmp, b%buf_interpolation)
+    end if
+    b%n_interpolation = b%n_interpolation + 1_int32
+    b%buf_interpolation(b%n_interpolation) = value
+    b%st_interpolation = COLL_FILLED
+  end subroutine builder_add_interpolation
+
+  subroutine builder_interpolation_empty(b, loc, errors)
+    type(problem_builder_t), intent(inout) :: b
+    type(source_location_t), intent(in) :: loc
+    type(problem_errors_t), intent(inout) :: errors
+    if (.not. allow_empty(b, b%st_interpolation, 'mesh.interpolation', loc, errors)) return
+    b%st_interpolation = COLL_EMPTY
+  end subroutine builder_interpolation_empty
 
   subroutine builder_nsets_empty(b, loc, errors)
     type(problem_builder_t), intent(inout) :: b

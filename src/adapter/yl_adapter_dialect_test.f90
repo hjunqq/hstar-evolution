@@ -55,7 +55,7 @@ program yl_adapter_dialect_test
                               dialect_row_exercised, dialect_first_uncovered
   use yl_adapter_fem90, only: parse_inp, parse_man
   use yl_adapter_model, only: parse_glb
-  use yl_adapter_mesh, only: parse_cor, parse_ele
+  use yl_adapter_mesh, only: parse_cor, parse_ele, parse_nrt
   use yl_adapter_material, only: parse_mat, parse_sol
   use yl_adapter_load, only: parse_loa, parse_pre
   use yl_adapter_temper, only: parse_tem
@@ -166,6 +166,12 @@ program yl_adapter_dialect_test
     call run_case('A-GLB', 'water-pipe-nonzero', 'glb', 73, '  1', 'W')
     call run_case('A-COR', 'dimension', 'cor', 0, '', 'DIM3')
     call run_case('A-ELE', 'element-kind', 'ele', 0, '', 'KIND7')
+    ! The golden .nrt declares no interpolation group (three lines: two titles and a 0), so
+    ! the counter-example has to MAKE one -- line 3 becomes the count 1 plus a group header
+    ! on its own record. `translg = 0` is the layout legacy reads a TITLE for, which this
+    ! parser does not admit.
+    call run_case('A-NRT', 'interpolation-layout', 'nrt', 3, &
+                  '       1'//new_line('a')//'      61       0', 'W')
     call run_case('A-MAT', 'property', 'mat', 17, '          THERMAL           SOLID     1', 'W')
     call run_case('A-MAT', 'phase-count', 'mat', 18, '  2', 'W')
     call run_case('A-MAT', 'phase', 'mat', 19, '               FLUID', 'W')
@@ -575,6 +581,7 @@ contains
     case ('glb'); call parse_glb(unit, ctx, b, parts, sparts, secparts, residue, existence, errs)
     case ('cor'); call parse_cor(unit, ctx, b, errs)
     case ('ele'); call parse_ele(unit, ctx, b, errs)
+    case ('nrt'); call parse_nrt(unit, ctx, b, errs)
     case ('mat'); call parse_mat(unit, ctx, b, secparts, errs)
     case ('sol'); call parse_sol(unit, ctx, b, sparts, errs)
     case ('loa'); call parse_loa(unit, ctx, b, parts, residue, errs)

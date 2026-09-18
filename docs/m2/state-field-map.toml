@@ -5865,54 +5865,54 @@ id = "mesh.interpolation.node"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.trans%nintf"
 source = ["NRT.global_data.transgroup_header", "NRT.global_data.interp_node"]
-consumers = ["global_data"]
+consumers = ["global_data", "PROFILE", "MAIN_PARDISO"]
 shape = ["ntransnode"]
 dtype = "i32"
 unit = "1"
-owner = "not_migrated"
+owner = "ProblemState.mesh.interpolation[].node"
 index_by = "component"
-compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). READ ON EVERY PATH since 2026-09-18: it was registered as a pass-through on the strength of Global.f90:1489-1531 carrying no yl_input_enabled guard, but global_data does not run on the adapter path, so the constraints were simply absent there -- elements_2d.rcbeam solved 1581 equations against legacy's 1459. It is owned by ProblemState like any other input. Absent (zero-length) on the eight decks whose .nrt declares no group, so it is not on the observation face (ADR-0009); the element domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "constraints.sha256"
-reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead"
-note = "two readers, one row, because the group header has no state of its own: `ntransnode` and `translg` are LOCALS of global_data (Global.f90:547) that size the loop and select the record shape (0 / 99 / other), and the only thing that survives the subroutine is what this loop writes into `trans`. rcbeam is translg=99 with 61 nodes. `nintf` sizes the two records after it, so it is read between them"
+reason = "legacy's nodal interpolation table (trans). READ ON EVERY PATH since 2026-09-18: it was registered as a pass-through on the strength of Global.f90:1489-1531 carrying no yl_input_enabled guard, but global_data does not run on the adapter path, so the constraints were simply absent there -- elements_2d.rcbeam solved 1581 equations against legacy's 1459. It is owned by ProblemState like any other input. Absent (zero-length) on the eight decks whose .nrt declares no group, so it is not on the observation face (ADR-0009); the element domain accepts on final numerical equivalence instead"
+note = "two readers, one row, because the group header has no state of its own: ntransnode and translg are LOCALS of global_data (Global.f90:547) that size the loop and select the record shape (0 / 99 / other). rcbeam is translg=99 with 61 nodes. nintf sizes the two records after it, so it is read between them"
 
 [[field]]
 id = "mesh.interpolation.source_nodes"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.trans%listf"
 source = ["NRT.global_data.interp_list"]
-consumers = ["global_data"]
+consumers = ["global_data", "PROFILE", "MAIN_PARDISO"]
 shape = ["ntransnode", "nintf"]
 dtype = "i32"
 unit = "id"
-owner = "not_migrated"
+owner = "ProblemState.mesh.interpolation[].sources"
 index_by = "component"
-compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). READ ON EVERY PATH since 2026-09-18: it was registered as a pass-through on the strength of Global.f90:1489-1531 carrying no yl_input_enabled guard, but global_data does not run on the adapter path, so the constraints were simply absent there -- elements_2d.rcbeam solved 1581 equations against legacy's 1459. It is owned by ProblemState like any other input. Absent (zero-length) on the eight decks whose .nrt declares no group, so it is not on the observation face (ADR-0009); the element domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "constraints.sha256"
-reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead"
-note = "expanded per DOF through nodfn, so one record feeds mdofn slots of trans"
+reason = "legacy's nodal interpolation table (trans). READ ON EVERY PATH since 2026-09-18: it was registered as a pass-through on the strength of Global.f90:1489-1531 carrying no yl_input_enabled guard, but global_data does not run on the adapter path, so the constraints were simply absent there -- elements_2d.rcbeam solved 1581 equations against legacy's 1459. It is owned by ProblemState like any other input. Absent (zero-length) on the eight decks whose .nrt declares no group, so it is not on the observation face (ADR-0009); the element domain accepts on final numerical equivalence instead"
+note = "the nodes this node interpolates from. legacy expands one record into mdofn variable records through nodfn, which is why RuntimeState holds it per VARIABLE and ProblemState per NODE"
 
 [[field]]
 id = "mesh.interpolation.weights"
 checkpoint = "model_ready"
 legacy_symbol = "global_var.trans%rintf"
 source = ["NRT.global_data.interp_weights"]
-consumers = ["global_data"]
+consumers = ["global_data", "PROFILE", "MAIN_PARDISO"]
 shape = ["ntransnode", "nintf"]
 dtype = "f64"
 unit = "1"
-owner = "not_migrated"
+owner = "ProblemState.mesh.interpolation[].weights"
 index_by = "component"
-compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). READ ON EVERY PATH since 2026-09-18: it was registered as a pass-through on the strength of Global.f90:1489-1531 carrying no yl_input_enabled guard, but global_data does not run on the adapter path, so the constraints were simply absent there -- elements_2d.rcbeam solved 1581 equations against legacy's 1459. It is owned by ProblemState like any other input. Absent (zero-length) on the eight decks whose .nrt declares no group, so it is not on the observation face (ADR-0009); the element domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "constraints.sha256"
-reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead"
-note = "the interpolation weights, one per entry of listf; rcbeam's sum to 1 per node"
+reason = "legacy's nodal interpolation table (trans). READ ON EVERY PATH since 2026-09-18: it was registered as a pass-through on the strength of Global.f90:1489-1531 carrying no yl_input_enabled guard, but global_data does not run on the adapter path, so the constraints were simply absent there -- elements_2d.rcbeam solved 1581 equations against legacy's 1459. It is owned by ProblemState like any other input. Absent (zero-length) on the eight decks whose .nrt declares no group, so it is not on the observation face (ADR-0009); the element domain accepts on final numerical equivalence instead"
+note = "the interpolation weights, one per entry of sources; rcbeam s sum to 1 per node"
 
 [[field]]
 id = "materials.curve.header"

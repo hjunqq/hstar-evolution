@@ -822,7 +822,18 @@ contains
     do i = 1, int(s_ntotv)
       s_trans(i)%nintf = STAGE_POISON_I
       s_trans(i)%nintf = int(runtime%dof%interpolation_count(i), ink)
-      nullify (s_trans(i)%listf, s_trans(i)%rintf)
+      ! The two lists are allocated EXACTLY where legacy allocates them -- inside
+      ! `if (nintf /= 0)` (Global.f90:1531-1533) -- and nullified elsewhere. An
+      ! unconditional allocate would give every free variable a zero-length pair legacy
+      ! never creates, and the releaser would then have to guess which it owned.
+      if (s_trans(i)%nintf > 0_ink) then
+        allocate (s_trans(i)%listf(s_trans(i)%nintf))
+        allocate (s_trans(i)%rintf(s_trans(i)%nintf))
+        s_trans(i)%listf = int(runtime%dof%interpolation_sources(i)%values, ink)
+        s_trans(i)%rintf = real(runtime%dof%interpolation_weights(i)%values, irk)
+      else
+        nullify (s_trans(i)%listf, s_trans(i)%rintf)
+      end if
     end do
 
     ! Element records: the four per-element pointer payloads plus the two Gauss rules.
@@ -2233,7 +2244,17 @@ contains
       end do
       deallocate (tcurves)
     end if
-    if (allocated(trans)) deallocate (trans)
+    ! trans carries two POINTER payloads since M9 (the .nrt interpolation lists), so it is
+    ! unwound innermost first like tcurves above. Before rcbeam the array held only
+    ! `nintf` and a bare deallocate was enough -- and a bare deallocate now would leak one
+    ! pair per interpolated variable, which LeakSanitizer would see and a reader would not.
+    if (allocated(trans)) then
+      do i = 1, size(trans)
+        if (associated(trans(i)%listf)) deallocate (trans(i)%listf)
+        if (associated(trans(i)%rintf)) deallocate (trans(i)%rintf)
+      end do
+      deallocate (trans)
+    end if
 
     ! props: the two-level chain, unwound INNERMOST FIRST. Deallocating props(i)%mechanical
     ! before its %solid would lose the only handle on the solid_skeleton -- the same shape

@@ -168,32 +168,20 @@ migration_phase = "M9"
 status = "reference-frozen"
 verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
 reference = "reference/"
-# The modern gate is OFF while M9 is open, and this is what it is hiding, stated so that
-# nobody has to guess (2026-09-18):
+# The modern gate is ON and the case is bit-exact from modern input alone (2026-09-18):
+#   120 blocks, 214 110 values, mismatches = 0, max|d| = 0.000e+00
+#   Yield: 5377 values in (0,1], none outside -- CONCRETE's damage branch is really taken.
 #
-#   The modern deck EXISTS and RUNS end to end -- 120 blocks, 214 110 values, and 5377
-#   `Yield` values in (0,1] with none outside, so CONCRETE's damage branch is genuinely
-#   exercised here in a way damage_2d.concrete_gravdam never managed (PD-3).
-#   It does NOT yet reproduce the frozen reference: 133 477 mismatches, max|d| = 2.617e5.
-#
-#   The divergence is NOT the deck's. Measured the same day: `--adapter=off` on this deck
-#   is bit-exact against the reference, while the ADAPTER path on the SAME legacy deck
-#   gives the identical 133 477 / 2.617e5 as the modern path. So both modern-side paths
-#   agree with each other and differ from the legacy readers -- the fault is in the
-#   adapter -> RuntimeState -> commit chain for the line-element families, not in
-#   modern/case.toml. It grows linearly with the load factor from substep 1 (relative
-#   ~1.8e-4), so it is an elastic setup difference and not the damage path.
-#
-#   LOCALISED, 2026-09-18, from the equation count in 1.chk and nothing cleverer:
-#     ntotv = 1586 on both paths;  legacy Neq = 1459 = 1586 - 122 - 5
-#                                  adapter Neq = 1581 = 1586 -   0 - 5
-#     122 = the 61 interpolated nodes x 2 dofs; 5 = the prescribed dofs.
-#   The adapter path applies the prescribed constraints and NOT the .nrt interpolation
-#   constraints, so the structure is 122 equations too free. See docs/m9 for why the
-#   "legacy reads .nrt on both paths" claim was wrong: the reads carry no yl_input_enabled
-#   guard, but global_data itself does not run on the adapter path, and absence of a guard
-#   is not evidence of execution.
-modern_gate = false
+# It was off for part of that day, and what it was hiding is worth keeping: the modern path
+# and the ADAPTER path agreed with each other and both differed from the legacy readers by
+# 133 477 values. The equation count named the cause exactly --
+#   ntotv = 1586 on both;  legacy Neq = 1459 = 1586 - 122 - 5
+#                          adapter Neq = 1581 = 1586 -   0 - 5
+#   122 = the 61 interpolated nodes x 2 dofs;  5 = the prescribed dofs
+# -- the .nrt interpolation constraints were never applied, because they had been
+# registered as a pass-through legacy reads for itself. It does not: `global_data` never
+# runs on the adapter path. `parse_nrt` now reads the table on both paths and commit
+# publishes trans%nintf/listf/rintf, and both paths reproduce the reference exactly.
 # Chosen by measuring, not by taste. The two decks named as starting points were both
 # falsified: test_beam2d declares MDOFN=2 and an L2 group with dofs (1,2), then constrains
 # ifixvar=4 -- pristine legacy SIGSEGVs on it and our 1..mdofn guard is right; pile_beam's

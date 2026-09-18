@@ -166,7 +166,7 @@ module yl_adapter_driver
                               section_parts_t, section_parts_reset
   use yl_adapter_fem90, only: parse_inp, parse_man
   use yl_adapter_model, only: parse_glb
-  use yl_adapter_mesh, only: parse_cor, parse_ele
+  use yl_adapter_mesh, only: parse_cor, parse_ele, parse_nrt
   use yl_adapter_material, only: parse_mat, parse_sol
   use yl_adapter_load, only: parse_loa, parse_pre
   use yl_adapter_temper, only: parse_tem
@@ -206,7 +206,7 @@ contains
     type(manifest_t), allocatable, intent(inout) :: manifest
     type(problem_errors_t), intent(inout) :: errors
 
-    integer :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem
+    integer :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem, u_nrt
     character(len=:), allocatable :: prefix
     type(problem_builder_t) :: b
     type(deck_context_t) :: ctx
@@ -224,6 +224,7 @@ contains
     u_inp = UNSET_UNIT; u_glb = UNSET_UNIT; u_cor = UNSET_UNIT; u_ele = UNSET_UNIT
     u_mat = UNSET_UNIT; u_sol = UNSET_UNIT; u_loa = UNSET_UNIT; u_pre = UNSET_UNIT
     u_tem = UNSET_UNIT
+    u_nrt = UNSET_UNIT
     u_man = UNSET_UNIT
 
     call deck_context_reset(ctx)
@@ -263,6 +264,9 @@ contains
       call open_deck_unit(join_path(dir, prefix//'.tem'), '.tem', errors, u_tem, ok) ! Global.f90:661
       if (.not. ok) exit parse_all
 
+      call open_deck_unit(join_path(dir, prefix//'.nrt'), '.nrt', errors, u_nrt, ok) ! Global.f90:646
+      if (.not. ok) exit parse_all
+
       ! -- inp: no ctx dependency (see module header); called first, matching Fem.f90 --
       mark = errors%count()
       call parse_inp(u_inp, ctx, b, residue, errors)
@@ -280,6 +284,14 @@ contains
 
       mark = errors%count()
       call parse_ele(u_ele, ctx, b, errors)
+      if (errors%count() > mark) exit parse_all
+
+      ! .nrt goes with the mesh, and after .ele: an interpolation entry names node ids, so
+      ! the nodes have to exist first for a later validator to have anything to check
+      ! against. Added 2026-09-18 -- until then nothing read this file on the adapter path
+      ! and the constraints it carries were silently absent (docs/m9).
+      mark = errors%count()
+      call parse_nrt(u_nrt, ctx, b, errors)
       if (errors%count() > mark) exit parse_all
 
       mark = errors%count()
@@ -413,7 +425,7 @@ contains
       exit parse_all
     end do parse_all
 
-    call close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem)
+    call close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem, u_nrt)
 
     ! Transactional: any finding raised above (from a parser or from this routine) means
     ! `problem`/`manifest` must stay exactly as the caller passed them in.
@@ -528,9 +540,10 @@ contains
   ! never opened. Called exactly once, on every exit path (contract SS2's unit lifetime
   ! belongs to this driver alone; a unit left open on a failure branch would be this
   ! module's own defect, not a deck's).
-  subroutine close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem)
+  subroutine close_all(u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man, u_tem, u_nrt)
     integer, intent(inout) :: u_inp, u_glb, u_cor, u_ele, u_mat, u_sol, u_loa, u_pre, u_man
-    integer, intent(inout) :: u_tem
+    integer, intent(inout) :: u_tem, u_nrt
+    call close_if_open(u_nrt)
     call close_if_open(u_man)
     call close_if_open(u_pre)
     call close_if_open(u_loa)

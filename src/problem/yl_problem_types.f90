@@ -83,12 +83,32 @@ module yl_problem_types
     integer(int32), allocatable :: nodes(:)
   end type nset_t
 
+  !> One NODE-INTERPOLATION constraint: this node's motion is a weighted average of other
+  !> nodes' (legacy `trans`, filled from `.nrt` at Global.f90:1502-1531).
+  !>
+  !> It lives under `mesh` and not under `steps[].boundary` for the reason the data itself
+  !> gives: it is mesh-generator output keyed by node id, read ONCE for the whole analysis
+  !> rather than per block, and it constrains a node to other nodes rather than to a value.
+  !> A boundary record is (variable, value); this is (variable, variables, weights).
+  !>
+  !> Not a pass-through, though it looked like one for most of 2026-09-18: legacy reads
+  !> `.nrt` inside `global_data`, and `global_data` does not run on the adapter path, so
+  !> the table has to cross the seam like every other input. The equation count is what
+  !> settled it -- 122 dofs' worth of constraints silently absent. See docs/m9.
+  type, public :: interpolation_t
+    type(opt_int) :: node              !@off-face: mesh.interpolation.node
+    integer(int32), allocatable :: sources(:)   !@off-face: mesh.interpolation.source_nodes
+    real(real64), allocatable :: weights(:)     !@off-face: mesh.interpolation.weights
+  end type interpolation_t
+
   type, public :: mesh_t
     type(opt_int) :: dimension
     type(node_t), allocatable :: nodes(:)
     type(element_t), allocatable :: elements(:)
     type(elset_t), allocatable :: elsets(:)
     type(nset_t), allocatable :: nsets(:)
+    !> Empty on every deck without a `.nrt` interpolation group, which is eight of the nine.
+    type(interpolation_t), allocatable :: interpolation(:)
   end type mesh_t
 
   ! --- materials --------------------------------------------------------------

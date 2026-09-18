@@ -149,6 +149,11 @@ module yl_runtime_types
     integer(int32), allocatable :: values(:)
   end type index_list_t
 
+  !> The real-valued sibling of index_list_t, for a ragged per-variable weight list.
+  type, public :: real_list_t
+    real(real64), allocatable :: values(:)
+  end type real_list_t
+
   ! --- dof --------------------------------------------------------------------
   ! RuntimeState.dof (9 mapped rows) plus the two M3-02 deferred component counts.
 
@@ -181,8 +186,15 @@ module yl_runtime_types
     !> Per variable, in metres. All zero at model_ready; the amplitude scaling happens
     !> after increment_ready(1,1).
     real(real64), allocatable :: prescribed_value(:)          !@map: runtime.dof.fixed
-    !> Per variable interpolation-source count; zero on this path, no .nrt input.
+    !> Per variable interpolation-source count. Zero on every deck whose `.nrt` declares no
+    !> group, which is eight of the nine; elements_2d.rcbeam has 61 nodes x 2 dofs of them.
     integer(int32), allocatable :: interpolation_count(:)     !@map: runtime.dof.trans_nintf
+    !> Per variable: the VARIABLE indices it interpolates from, and their weights. Empty
+    !> where interpolation_count is 0. legacy expands one .nrt node record into mdofn of
+    !> these through nodfn (Global.f90:1524-1535), which is why they are per variable and
+    !> not per node.
+    type(index_list_t), allocatable :: interpolation_sources(:)  !@map: runtime.dof.trans_listf
+    type(real_list_t), allocatable :: interpolation_weights(:)   !@map: runtime.dof.trans_rintf
     !> Per element: the element's ordered global variable indices.
     type(index_list_t), allocatable :: element_variables(:)   !@map: runtime.dof.ldofs
     !> Per element: the same indices split per field.

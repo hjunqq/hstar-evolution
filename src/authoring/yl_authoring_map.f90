@@ -62,7 +62,7 @@ module yl_authoring_map
   use yl_problem_pipeline, only: prepare_problem
   use yl_problem_profile, only: PROFILE_TAG
   use yl_adapter_parts, only: deck_context_t, deck_context_reset
-  use yl_adapter_mesh, only: parse_cor, parse_ele
+  use yl_adapter_mesh, only: parse_cor, parse_ele, parse_nrt
   use yl_authoring_toml, only: toml_doc_t, TOML_LEN_PATH
   use yl_authoring_defaults
 
@@ -96,7 +96,7 @@ contains
     type(amplitude_builder_t) :: ab
     type(deck_context_t) :: ctx
     type(problem_state_t), allocatable :: draft
-    integer :: mark0, u_cor, u_ele, ios, i, j, k, n, iset, st, ie, ip, e1, e2
+    integer :: mark0, u_cor, u_ele, ios, i, j, k, n, iset, st, ie, ip, e1, e2, u_nrt
     logical :: ok
     character(len=:), allocatable :: prefix
     type(case_t) :: cs
@@ -163,6 +163,19 @@ contains
     end if
     call parse_ele(u_ele, ctx, b, errors)
     close (u_ele)
+    if (errors%count() > mark0) return
+
+    ! `.nrt` is the third mesh file, read by the SAME parser the adapter uses, and it is
+    ! staged with the other two. It carries the node-interpolation constraints; a deck
+    ! without any still ships the file with a zero group count, which is what every golden
+    ! deck but rcbeam has.
+    open (newunit=u_nrt, file=prefix//'.nrt', status='old', action='read', iostat=ios)
+    if (ios /= 0) then
+      call fail(errors, 'mesh.file', 'cannot open '//prefix//'.nrt')
+      return
+    end if
+    call parse_nrt(u_nrt, ctx, b, errors)
+    close (u_nrt)
     if (errors%count() > mark0) return
 
     ! --- node sets ----------------------------------------------------------------

@@ -473,6 +473,8 @@ contains
 
     integer(int32), allocatable :: flat(:)
     integer :: ig, il, ie, inode, idofn, ipoin, kpoin, idofs, ntotv, n
+    integer :: i, k, jpoin, nintf, itotv
+    integer(int32) :: itmp
     character(len=:), allocatable :: policy
     logical :: found
 
@@ -582,9 +584,65 @@ contains
       end do
     end do
 
-    ! --- trans%nintf: no .nrt input on this path (Global.f90:1489) ----------
+    ! --- trans: the .nrt node-interpolation table (Global.f90:1502-1535) ----
+    !
+    ! Legacy expands ONE node record into mdofn variable records: for each enabled
+    ! component it looks the constrained node's variable up through nodfn and stores the
+    ! SAME source list mapped through nodfn for that component. So an entry that names
+    ! node 733 following nodes (1,5,140,141) becomes, for component 1, variable
+    ! nodfn(1,733) following variables nodfn(1,1), nodfn(1,5), ... -- and again for
+    ! component 2. That expansion is done here, where nodfn exists.
+    !
+    ! Until 2026-09-18 this read `no .nrt input on this path` and wrote zeros. It was not
+    ! a simplification, it was a missing constraint: elements_2d.rcbeam then solved 1581
+    ! equations against legacy's 1459, the difference being exactly these 61 x 2 dofs.
     allocate (cand%dof%interpolation_count(ntotv))
     cand%dof%interpolation_count = 0_int32
+    allocate (cand%dof%interpolation_sources(ntotv))
+    allocate (cand%dof%interpolation_weights(ntotv))
+    if (allocated(problem%mesh%interpolation)) then
+      do i = 1, size(problem%mesh%interpolation)
+        call opt_get(problem%mesh%interpolation(i)%node, itmp, found)
+        if (.not. found) cycle
+        kpoin = node_index(shape, itmp)
+        if (kpoin < 1) then
+          call raise_row(errors, 'INV-TRANS-NODE', 'interpolated-node-exists',                 &
+                         'an interpolation entry names a node the mesh does not have',         &
+                         actual=itoa(int(itmp)), idx=i)
+          return
+        end if
+        if (.not. allocated(problem%mesh%interpolation(i)%sources) .or.                        &
+            .not. allocated(problem%mesh%interpolation(i)%weights)) cycle
+        nintf = size(problem%mesh%interpolation(i)%sources)
+        if (size(problem%mesh%interpolation(i)%weights) /= nintf) then
+          call raise_row(errors, 'INV-TRANS-SHAPE', 'sources-and-weights-agree',               &
+                         'an interpolation entry has a different number of sources and '//     &
+                         'weights', actual=itoa(size(problem%mesh%interpolation(i)%weights)),  &
+                         expected=itoa(nintf), idx=i)
+          return
+        end if
+        do idofn = 1, shape%nfdof
+          itotv = int(cand%dof%node_variables(int(cand%dof%component_to_active(idofn)), kpoin))
+          if (itotv < 1) cycle
+          cand%dof%interpolation_count(itotv) = int(nintf, int32)
+          allocate (cand%dof%interpolation_sources(itotv)%values(nintf))
+          allocate (cand%dof%interpolation_weights(itotv)%values(nintf))
+          do k = 1, nintf
+            jpoin = node_index(shape, problem%mesh%interpolation(i)%sources(k))
+            if (jpoin < 1) then
+              call raise_row(errors, 'INV-TRANS-SOURCE', 'interpolation-source-exists',        &
+                             'an interpolation entry follows a node the mesh does not have',   &
+                             actual=itoa(int(problem%mesh%interpolation(i)%sources(k))), idx=i)
+              return
+            end if
+            cand%dof%interpolation_sources(itotv)%values(k) =                                  &
+              cand%dof%node_variables(int(cand%dof%component_to_active(idofn)), jpoin)
+            cand%dof%interpolation_weights(itotv)%values(k) =                                  &
+              problem%mesh%interpolation(i)%weights(k)
+          end do
+        end do
+      end do
+    end if
 
     ! iffix / fixed are sized here and filled by build_boundary, which is where the
     ! prescriptions are known. They are recorded there, not here.

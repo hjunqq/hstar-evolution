@@ -81,10 +81,12 @@ module yl_adapter_mesh
 
   use iso_fortran_env, only: int32, real64, iostat_end
   use yl_problem_optional, only: opt_set
-  use yl_problem_types, only: node_t, element_t, elset_t
+  use yl_problem_types, only: interpolation_t, &
+                               node_t, element_t, elset_t
   use yl_problem_builder, only: problem_builder_t, builder_add_node, builder_nodes_empty, &
                                  builder_add_element, builder_elements_empty, &
-                                 builder_add_elset, builder_elsets_empty, builder_failed
+                                 builder_add_elset, builder_elsets_empty, builder_failed, &
+                                 builder_add_interpolation, builder_interpolation_empty
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
                                 PE_STAGE_ADAPT
@@ -94,10 +96,126 @@ module yl_adapter_mesh
   implicit none
   private
 
-  public :: parse_cor, parse_ele
+  public :: parse_cor, parse_ele, parse_nrt
 
 
 contains
+
+  ! The `.nrt` node-interpolation table (Global.f90:1489-1531).
+  !
+  ! WHY THIS PARSER EXISTS, AND WHY IT DID NOT UNTIL 2026-09-18
+  !   The four reads below were registered in docs/m1/adapter-coverage.toml as "not
+  !   adapted: legacy reads this file on both paths", on the strength of there being no
+  !   `yl_input_enabled` guard around them. The guard really is absent, and the conclusion
+  !   was wrong anyway: `global_data` does not RUN on the adapter path, so nothing read the
+  !   table there. The cost was exact and measurable -- elements_2d.rcbeam solved with 1581
+  !   equations where legacy solves 1459, the difference being 61 interpolated nodes x 2
+  !   dofs of constraints that were simply never applied.
+  !
+  !   The lesson is the project's own rule, which I had stopped applying: absence of a
+  !   guard is a fact about code SHAPE; execution is a fact that has to be measured.
+  !
+  ! WHAT IT REFUSES
+  !   `translg` selects the record shape of everything after it, so it is checked BETWEEN
+  !   records like every other selector in this adapter: 99 reads `ipoin/nintf` per node,
+  !   0 reads a TITLE first and then acts only when that title starts 'TRAL', anything else
+  !   reads neither and silently drops the group. Only 99 is whitelisted -- it is what the
+  !   one real deck with a non-empty table uses.
+  subroutine parse_nrt(unit, ctx, b, errors)
+    integer, intent(in) :: unit
+    type(deck_context_t), intent(in) :: ctx
+    type(problem_builder_t), intent(inout) :: b
+    type(problem_errors_t), intent(inout) :: errors
+
+    integer(int32) :: ios, transgroup, ig, itrans, ntransnode, translg, nintf, ipoin, total
+    character(len=256) :: text, iomsg_buf
+    type(interpolation_t) :: entry
+    type(source_location_t) :: loc
+
+    total = 0_int32
+
+    ! RD: NRT.global_data.title#1 (Global.f90:1490) -- a title line, discarded.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) text
+    if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.title#1', 1490_int32)) return
+    ! RD: NRT.global_data.title#2 (Global.f90:1492) -- a title line, discarded.
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) text
+    if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.title#2', 1492_int32)) return
+    ! RD: NRT.global_data.transgroup (Global.f90:1494)
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) transgroup
+    if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.transgroup', &
+                          1494_int32)) return
+
+    do ig = 1_int32, transgroup
+      ! RD: NRT.global_data.transgroup_header (Global.f90:1499)
+      read (unit, *, iostat=ios, iomsg=iomsg_buf) ntransnode, translg
+      if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.transgroup_header', &
+                            1499_int32, rec=ig)) return
+      if (translg /= 99_int32) then
+        loc = make_source_location(file='.nrt', reader='global_data', line=1499_int32)
+        call reject_dialect(errors, 'A-NRT', 'interpolation-layout', loc, actual=itoa(translg))
+        return
+      end if
+      do itrans = 1_int32, ntransnode
+        ! RD: NRT.global_data.interp_node (Global.f90:1526)
+        read (unit, *, iostat=ios, iomsg=iomsg_buf) ipoin, nintf
+        if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.interp_node', &
+                              1526_int32, rec=itrans)) return
+        if (nintf < 1_int32) then
+          loc = make_source_location(file='.nrt', reader='global_data', line=1526_int32)
+          call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
+                          rule_id='A-NRT/source-count', object_path='mesh.interpolation', &
+                          index=itrans, field='sources', &
+                          message='an interpolated node must follow at least one source', &
+                          actual=itoa(nintf), expected='>= 1', source=loc))
+          return
+        end if
+        if (allocated(entry%sources)) deallocate (entry%sources)
+        if (allocated(entry%weights)) deallocate (entry%weights)
+        allocate (entry%sources(nintf), entry%weights(nintf))
+        ! RD: NRT.global_data.interp_list (Global.f90:1528)
+        read (unit, *, iostat=ios, iomsg=iomsg_buf) entry%sources
+        if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.interp_list', &
+                              1528_int32, rec=itrans)) return
+        ! RD: NRT.global_data.interp_weights (Global.f90:1529)
+        read (unit, *, iostat=ios, iomsg=iomsg_buf) entry%weights
+        if (.not. nrt_read_ok(errors, ios, iomsg_buf, 'NRT.global_data.interp_weights', &
+                              1529_int32, rec=itrans)) return
+        call opt_set(entry%node, ipoin)
+        loc = make_source_location(file='.nrt', reader='global_data', line=1526_int32)
+        call builder_add_interpolation(b, entry, loc, errors)
+        if (builder_failed(b)) return
+        total = total + 1_int32
+      end do
+    end do
+
+    ! An EMPTY table is a decision, not an omission: eight of the nine golden decks carry a
+    ! `.nrt` whose transgroup is 0, and the collection has to say so rather than stay unset.
+    if (total == 0_int32) then
+      loc = make_source_location(file='.nrt', reader='global_data', line=1494_int32)
+      call builder_interpolation_empty(b, loc, errors)
+    end if
+    ! ctx is unused here -- the table is sized entirely by its own records. Kept in the
+    ! signature so every mesh parser is called the same way by the driver.
+    if (.not. ctx%filled) return
+  end subroutine parse_nrt
+
+  logical function nrt_read_ok(errors, ios, iomsg_buf, reader, line, rec) result(ok)
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32), intent(in) :: ios
+    character(len=*), intent(in) :: iomsg_buf, reader
+    integer(int32), intent(in) :: line
+    integer(int32), intent(in), optional :: rec
+    type(source_location_t) :: loc
+    ok = ios == 0_int32
+    if (ok) return
+    loc = make_source_location(file='.nrt', reader=reader, line=line)
+    call errors%add(make_problem_error(code=PE_INVALID_INPUT, stage=PE_STAGE_ADAPT, &
+                    rule_id='A-NRT/'//trim(reader), object_path='mesh.interpolation', &
+                    index=merge(rec, 0_int32, present(rec)), &
+                    message='the .nrt record did not read: '//trim(iomsg_buf), &
+                    source=loc))
+  end function nrt_read_ok
+
 
   ! RD: COR.global_data.node_coordinates (Global.f90:1176)
   ! One record per node: `i0, coord(1:ndimn,ipoin)`. Legacy loops ipoin=1..npoin with

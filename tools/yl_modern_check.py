@@ -98,34 +98,17 @@ def mesh_prefix(deck: Path) -> str:
     raise SystemExit(f"{deck}: no `file = \"...\"` line under [mesh]")
 
 
-MESH_FILES = {
-    "hstar-legacy-cor-ele": (".cor", ".ele"),
-    # The node-interpolation table is mesh-generator output indexed by node id, and legacy
-    # reads it on the modern path exactly as it reads .ele (neither read is guarded by
-    # yl_input_enabled). So it is staged, not authored -- and which files get staged is
-    # read off `mesh.format`, never widened silently.
-    "hstar-legacy-cor-ele-nrt": (".cor", ".ele", ".nrt"),
-}
-
-
-def mesh_format(deck: Path) -> str:
-    """`mesh.format` out of the contract deck, by the same line-regex rule as mesh_prefix."""
-    for line in deck.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"\s*format\s*=\s*\"([^\"]*)\"\s*(#.*)?$", line)
-        if m:
-            return m.group(1)
-    raise SystemExit(f"{deck}: no `format = \"...\"` line under [mesh]")
+# The three mesh files every deck ships. `.nrt` is here for the same reason `.cor` and
+# `.ele` are: mesh-generator output, keyed by node id, read by the adapter's own parser on
+# both entry paths. A deck with no interpolation still writes one with a zero group count.
+MESH_SUFFIXES = (".cor", ".ele", ".nrt")
 
 
 def stage(case_dir: Path, work: Path) -> Path:
     """The mesh and the contract deck. Nothing else -- see N1."""
     deck = case_dir / "modern/case.toml"
     prefix = mesh_prefix(deck)
-    fmt = mesh_format(deck)
-    if fmt not in MESH_FILES:
-        raise SystemExit(f"{deck}: mesh.format {fmt!r} is not one this gate knows how to "
-                         f"stage; add it to MESH_FILES with the files it names")
-    for suffix in MESH_FILES[fmt]:
+    for suffix in MESH_SUFFIXES:
         src = case_dir / "legacy" / (prefix + suffix)
         shutil.copyfile(src, work / src.name)
     shutil.copyfile(deck, work / "case.toml")
@@ -500,7 +483,8 @@ def main(argv=None):
         # deck. Without it the required-together rule would be satisfied by a validator that
         # accepted the keys on any material.
         blob = rejected("concrete parameter on another model", "--input=case.toml",
-                        sub('name    = "rock"', 'crack_model = 6\nname    = "rock"'), case=conc)
+                        resub(r'(model   = "elastic_isotropic")',
+                              r'\g<1>\ncrack_model = 6'), case=conc)
         if "crack_model" not in blob:
             problems.append("N3 concrete parameter on another model: the refusal did not name "
                             "the key")

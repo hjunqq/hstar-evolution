@@ -552,7 +552,14 @@ module yl_problem_profile
                       item='glb.group_index', object_path='sections[]',                                             &
                       field='element_kind', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                    &
                       message='only the capability table''s element.kind_code (Q4) is whitelisted; this parser '//   &
-                              'only knows how to shape a Q4 connectivity record')]
+                              'only knows how to shape a Q4 connectivity record'),                                  &
+    capability_item_t(rule_id='A-NRT', condition='interpolation-layout',                                            &
+                      item='nrt.translg', object_path='mesh.interpolation',                                         &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='the .nrt group layout selects the record shape of everything after it '//   &
+                              '(Global.f90:1502/1525): 99 reads ipoin/nintf per node, 0 reads a TITLE '//   &
+                              'first and acts only on ''TRAL'', anything else reads neither; only 99 '//   &
+                              'is whitelisted')]
 
   ! .mat and .sol -- yl_adapter_material. A-MAT/contact-material and
   ! A-MAT/nonlinear-normal-stiffness share (rule_id, object_path, field) and differ only

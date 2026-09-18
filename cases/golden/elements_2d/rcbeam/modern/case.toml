@@ -28,10 +28,10 @@ description = "793-node, 721-element 2D reinforced-concrete beam: Q4 concrete bo
 
 [mesh]
 file      = "1"
-# The node-interpolation table (1.nrt) ships with the mesh: 61 nodes, each tied to 4
-# source nodes with weights. legacy reads it on both paths (no yl_input_enabled guard at
-# Global.f90:1489-1531), exactly as it reads 1.ele.
-format    = "hstar-legacy-cor-ele-nrt"
+# The mesh is the usual three files. 1.nrt carries this deck's node-interpolation table
+# (61 nodes, each following 4 source nodes with weights); the adapter's own parser reads
+# it, exactly as it reads 1.cor and 1.ele.
+format    = "hstar-legacy-cor-ele"
 dimension = 2
 
 [[elset]]

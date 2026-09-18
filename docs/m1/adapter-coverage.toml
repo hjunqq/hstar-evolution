@@ -41,57 +41,17 @@ state_target = "empty_section"
 reason = "the count record of an empty section; zero on both golden decks, so no surface-force or gap record follows it"
 
 # ---------------------------------------------------------------------------- .nrt ----
-# Interpolation ("transgroup") section. Same shape: a count that is zero on both decks.
-
-[[not_adapted]]
-id = "NRT.global_data.title#1"
-state_target = "title_skip"
-reason = "title line of an empty .nrt section"
-
-[[not_adapted]]
-id = "NRT.global_data.title#2"
-state_target = "title_skip"
-reason = "title line of an empty .nrt section"
-
-[[not_adapted]]
-id = "NRT.global_data.transgroup"
-state_target = "empty_section"
-reason = "interpolation-group count. Zero on eight golden decks; 1 on elements_2d.rcbeam, which is what made the four rows below necessary. Not adapted because .nrt is a MESH-COMPANION file, staged verbatim and read by legacy on both paths -- see the evidence on the rows below"
-
-# rcbeam opened this section for real (transgroup=1, translg=99, 61 nodes x 4 weights).
-# The table is a node-interpolation constraint indexed by node id, produced by the mesh
-# generator -- the same kind of thing .cor and .ele are -- so it is shipped with the mesh
-# rather than authored, and legacy reads it on the modern path too. That is why these four
-# carry real state_targets and yet have no adapter parser.
-
-[[not_adapted]]
-id = "NRT.global_data.transgroup_header"
-state_target = "not_migrated"
-reason = "ntransnode/translg: the group header. `translg` SELECTS the shape of every record after it (0 / 99 / other), so it could not be walked past blindly -- but it does not have to be walked past at all, because legacy still reads this file on the modern path"
-evidence = "CORRECTED 2026-09-18, later the same day. The first version of this row said legacy reads 1.nrt on BOTH paths because Global.f90:1489-1531 carries no yl_input_enabled guard. The guard is indeed absent and the conclusion was still wrong: global_data does not RUN on the adapter path at all, so absence of a guard says nothing about execution. Measured from the equation count in 1.chk: ntotv = 1586 on both paths, but Neq = 1459 with the legacy readers (1586 - 122 interpolated dofs - 5 prescribed) against 1581 on the adapter path (1586 - 0 - 5). The interpolation constraints are NOT applied there. These rows are therefore a KNOWN GAP, not an accounted-for pass-through, and elements_2d.rcbeam cannot close until the table is carried across the seam. Registered here so the gap is visible rather than implied."
-
-[[not_adapted]]
-id = "NRT.global_data.interp_node"
-state_target = "not_migrated"
-reason = "ipoin/nintf for one interpolated node; `nintf` sizes the two records after it"
-evidence = "CORRECTED 2026-09-18, later the same day. The first version of this row said legacy reads 1.nrt on BOTH paths because Global.f90:1489-1531 carries no yl_input_enabled guard. The guard is indeed absent and the conclusion was still wrong: global_data does not RUN on the adapter path at all, so absence of a guard says nothing about execution. Measured from the equation count in 1.chk: ntotv = 1586 on both paths, but Neq = 1459 with the legacy readers (1586 - 122 interpolated dofs - 5 prescribed) against 1581 on the adapter path (1586 - 0 - 5). The interpolation constraints are NOT applied there. These rows are therefore a KNOWN GAP, not an accounted-for pass-through, and elements_2d.rcbeam cannot close until the table is carried across the seam. Registered here so the gap is visible rather than implied."
-
-[[not_adapted]]
-id = "NRT.global_data.interp_list"
-state_target = "not_migrated"
-reason = "the source nodes one interpolated node reads from"
-evidence = "CORRECTED 2026-09-18, later the same day. The first version of this row said legacy reads 1.nrt on BOTH paths because Global.f90:1489-1531 carries no yl_input_enabled guard. The guard is indeed absent and the conclusion was still wrong: global_data does not RUN on the adapter path at all, so absence of a guard says nothing about execution. Measured from the equation count in 1.chk: ntotv = 1586 on both paths, but Neq = 1459 with the legacy readers (1586 - 122 interpolated dofs - 5 prescribed) against 1581 on the adapter path (1586 - 0 - 5). The interpolation constraints are NOT applied there. These rows are therefore a KNOWN GAP, not an accounted-for pass-through, and elements_2d.rcbeam cannot close until the table is carried across the seam. Registered here so the gap is visible rather than implied."
-
-[[not_adapted]]
-id = "NRT.global_data.interp_weights"
-state_target = "not_migrated"
-reason = "the interpolation weights, one per entry of listf"
-evidence = "CORRECTED 2026-09-18, later the same day. The first version of this row said legacy reads 1.nrt on BOTH paths because Global.f90:1489-1531 carries no yl_input_enabled guard. The guard is indeed absent and the conclusion was still wrong: global_data does not RUN on the adapter path at all, so absence of a guard says nothing about execution. Measured from the equation count in 1.chk: ntotv = 1586 on both paths, but Neq = 1459 with the legacy readers (1586 - 122 interpolated dofs - 5 prescribed) against 1581 on the adapter path (1586 - 0 - 5). The interpolation constraints are NOT applied there. These rows are therefore a KNOWN GAP, not an accounted-for pass-through, and elements_2d.rcbeam cannot close until the table is carried across the seam. Registered here so the gap is visible rather than implied."
-
-# ---------------------------------------------------------------------------- .ifs ----
-# Fluid-structure interaction and absorbing boundaries (M7 scope). Four sections, each a
-# title plus a count, all zero on both decks. The whitelist admits no FSI capability, and
-# `interactions.absorbing.type` is pinned to legacy's own no-absorbing sentinel 'FIX'.
+# NOTHING HERE ANY MORE, and the emptiness is the point (2026-09-18).
+#
+# The seven .nrt readers used to sit in this file under "legacy reads it on both paths;
+# there is no second reader to write". The claim rested on Global.f90:1489-1531 carrying no
+# `yl_input_enabled` guard. The guard is genuinely absent and the conclusion was still
+# wrong: `global_data` does not RUN on the adapter path, so the table was read by nobody
+# there. elements_2d.rcbeam paid for it exactly -- 1581 equations against legacy's 1459,
+# the difference being 61 interpolated nodes x 2 dofs of constraints that never existed.
+#
+# `parse_nrt` (src/adapter/yl_adapter_mesh.f90) now reproduces all seven, so the rows are
+# deleted the way this file's header says rows get deleted: by writing the parser.
 
 [[not_adapted]]
 id = "IFS.stiff_interface_fluid_solid.title#1"

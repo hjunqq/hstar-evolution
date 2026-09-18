@@ -64,13 +64,14 @@ module yl_authoring_keys
     key_t('case.units',                    TV_STR,  .true.,  'SI'),                          &
     key_t('case.description',              TV_STR,  .false., ''),                            &
     key_t('mesh.file',                     TV_STR,  .true.,  ''),                            &
-    ! `mesh.format` names the FILE SET the deck ships, which is why admitting the node
-    ! interpolation table is a second format value rather than a boolean saying "there is
-    ! another file". `.nrt` is mesh-generator output indexed by node id, like `.cor` and
-    ! `.ele`, and legacy reads all three on the modern path (no yl_input_enabled guard at
-    ! Global.f90:1489-1531 or Elements.f90:1087) -- so it is staged verbatim, not authored.
-    key_t('mesh.format',                   TV_STR,  .true.,                                  &
-          'hstar-legacy-cor-ele|hstar-legacy-cor-ele-nrt'),                                   &
+    ! `mesh.format` names the FILE SET the deck ships: `<prefix>.cor`, `.ele` and `.nrt`.
+    ! All three are mesh-generator output keyed by node or element id, all three are read
+    ! by the SAME adapter parsers on both entry paths, and every deck in the corpus ships
+    ! all three (a deck with no interpolation still writes a `.nrt` whose group count is 0).
+    ! It briefly had a second value, "hstar-legacy-cor-ele-nrt", on 2026-09-18, while the
+    ! `.nrt` was believed to be a pass-through legacy read for itself; once `parse_nrt`
+    ! existed the distinction had nothing left to name and the value was withdrawn.
+    key_t('mesh.format',                   TV_STR,  .true.,  'hstar-legacy-cor-ele'),        &
     key_t('mesh.dimension',                TV_INT,  .true.,  '2'),                           &
     key_t('elset[].name',                  TV_STR,  .true.,  ''),                            &
     key_t('elset[].element_count',         TV_INT,  .true.,  ''),                            &
