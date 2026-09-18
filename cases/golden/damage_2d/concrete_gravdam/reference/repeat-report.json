@@ -1,0 +1,39 @@
+{
+ "case_id": "damage_2d.concrete_gravdam",
+ "test_id": "B02",
+ "frozen_at": "2026-09-17T14:50:26+00:00",
+ "binary_sha256": "451e96f9df0786492efb741461a7564c3ad69c52348b4b6818e053dc2e4d4108",
+ "build_profile": "release",
+ "entry": "--adapter=off (legacy readers); the reference is what LEGACY produces",
+ "threads": {
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1",
+  "MKL_DYNAMIC": "FALSE"
+ },
+ "runs": [
+  {
+   "label": "ref1",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "5f3036c863225b2b05dd500ffb9b2443219f45b5ed17ddd849fb33b2a5d711a3"
+  },
+  {
+   "label": "ref2",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "5f3036c863225b2b05dd500ffb9b2443219f45b5ed17ddd849fb33b2a5d711a3"
+  },
+  {
+   "label": "ref3",
+   "status": "COMPLETED",
+   "wall_seconds": null,
+   "max_rss_kib": null,
+   "flavia_res_sha256": "5f3036c863225b2b05dd500ffb9b2443219f45b5ed17ddd849fb33b2a5d711a3"
+  }
+ ],
+ "all_completed": true,
+ "flavia_res_identical": true,
+ "comparison_rule": "atol = rtol = 0 (B02)"
+}

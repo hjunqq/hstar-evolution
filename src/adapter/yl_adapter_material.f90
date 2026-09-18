@@ -135,6 +135,8 @@ contains
     real(real64) :: density, ratio, thickness, e, nu, alfa, density_w
     real(real64) :: sigma0, hardening, frict_angle, dilan_angle
     character(len=20) :: dc_law
+    real(real64) :: cc(8)          ! A B C D Fc Ct Gf h -- see read_concrete
+    integer(int32) :: cc_icr
     real(real64) :: dc(12)   ! cohes phi K n Rf Nur Kur P0 Pa Kb m dphi -- see read_duncanchang
     real(real64), allocatable :: mat_thickness(:)   ! thickness by material id, filled below
     type(material_t) :: mat
@@ -285,7 +287,7 @@ contains
       ! its own extra records. ELASTIC_ISOTROPIC reads nothing more, which is the only
       ! reason the static slice could ignore this select entirely.
       if (trim(material) /= 'ELASTIC_ISOTROPIC' .and. trim(material) /= 'CLASSICALEP'        &
-          .and. trim(material) /= 'DUNCANCHANG') then
+          .and. trim(material) /= 'DUNCANCHANG' .and. trim(material) /= 'CONCRETE') then
         call mat_reject(errors, 'model', 457_int32, trim(material), rec=jmat)
         return
       end if
@@ -296,6 +298,10 @@ contains
       end if
       if (trim(material) == 'DUNCANCHANG') then
         call read_duncanchang(unit, jmat, ctx, dc_law, dc, errors)
+        if (errors%any()) return
+      end if
+      if (trim(material) == 'CONCRETE') then
+        call read_concrete(unit, jmat, cc, cc_icr, errors)
         if (errors%any()) return
       end if
 
@@ -343,6 +349,19 @@ contains
         call opt_set(mat%duncan_chang%bulk_modulus_number,     dc(10))
         call opt_set(mat%duncan_chang%bulk_modulus_exponent,   dc(11))
         call opt_set(mat%duncan_chang%friction_angle_reduction, dc(12))
+      end if
+      if (trim(material) == 'CONCRETE') then
+        ! Positional, in legacy's own read order, so the mapping stays checkable against
+        ! Material.f90:666-674 line by line.
+        call opt_set(mat%concrete%dev_stress_quadratic,  cc(1))
+        call opt_set(mat%concrete%dev_stress_linear,     cc(2))
+        call opt_set(mat%concrete%principal_stress,      cc(3))
+        call opt_set(mat%concrete%mean_stress,           cc(4))
+        call opt_set(mat%concrete%compressive_strength,  cc(5))
+        call opt_set(mat%concrete%tensile_ratio,         cc(6))
+        call opt_set(mat%concrete%fracture_energy,       cc(7))
+        call opt_set(mat%concrete%characteristic_length, cc(8))
+        call opt_set(mat%concrete%crack_model,           cc_icr)
       end if
       ! `thickness` (Material.f90:319) is NOT a materials[] field -- its ProblemState
       ! owner is sections[].thickness (docs/m2/state-field-map.toml id
@@ -416,6 +435,40 @@ contains
       return
     end if
   end subroutine read_classicalep
+
+  !> The CONCRETE branch of material_select (Material.f90:664-674).
+  !>
+  !> One record of nine values. The ninth, `icr`, is a SELECTOR and decides what legacy
+  !> does next, which is why it is checked here rather than afterwards:
+  !>
+  !>   icr == 2         reads a FURTHER record (ft0/eft/at/bt/alfat, Material.f90:700)
+  !>   icr in {3,5,6}   reads nothing more, and instead DERIVES bb and et0 (:684-692)
+  !>   other            neither
+  !>
+  !> Only 6 is whitelisted -- the one a real deck exercises. Admitting 3 as well would be
+  !> a claim with no deck behind it: rcbeam uses 3, but rcbeam is M9's and suspended.
+  !> Getting the branch wrong would not produce a wrong number, it would desynchronise the
+  !> file, which is the same reason the DUNCANCHANG bulk law is checked between records.
+  subroutine read_concrete(unit, jmat, cc, icr, errors)
+    integer, intent(in) :: unit
+    integer(int32), intent(in) :: jmat
+    real(real64), intent(out) :: cc(8)
+    integer(int32), intent(out) :: icr
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=200) :: iomsg_buf
+    integer(int32) :: ios
+
+    cc = 0.0_real64
+    ! RD: MAT.material_set.concrete (Material.f90:666)
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) cc(1), cc(2), cc(3), cc(4), cc(5), cc(6),    &
+                                                 cc(7), cc(8), icr
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.concrete',               &
+                          666_int32, rec=jmat)) return
+    if (icr /= 6_int32) then
+      call mat_reject(errors, 'concrete-crack-model', 666_int32, itoa(icr), rec=jmat)
+      return
+    end if
+  end subroutine read_concrete
 
   !> The DUNCANCHANG branch of material_select (Material.f90:501-543).
   !>

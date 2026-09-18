@@ -1,0 +1,132 @@
+# The CONCRETE damage model, on a real 2-D gravity-dam slice.
+#
+# Chosen by censusing the whole corpus for a CONCRETE deck that is 2-D and has no
+# line-element group: there are exactly two such files and they are the same deck. Every
+# other CONCRETE deck needs something out of scope -- 3-D, or multi-block, or the L2 family
+# suspended with M9. Relative to static_2d.cooks_membrane the only difference is CONCRETE
+# itself; PARDISO was migrated in M10 and is this deck's other prerequisite.
+#
+# The capability observable is `Yield`. mini_mc's PLASTICSTRAIN block was all zeros, which
+# established the reading and dispatch chain but never proved the return mapping ran; this
+# deck's Yield is non-zero from substep 2 onward, so the damage path is genuinely exercised.
+#
+# See docs/m5/authoring-contract.md and docs/m11/concrete.md.
+version = 1
+
+[case]
+name        = "concrete_gravdam"
+units       = "SI"
+description = "46-node, 32-element 2D Q4 plane-strain gravity dam: elastic foundation and a CONCRETE damage body, self-weight over 10 substeps, PARDISO"
+
+[mesh]
+file      = "1"
+format    = "hstar-legacy-cor-ele"
+dimension = 2
+
+[[elset]]
+name          = "foundation"
+element_count = 20
+
+[[elset]]
+name          = "dam"
+element_count = 12
+
+[[nset]]
+name  = "sym_x"
+nodes = [1, 6, 7, 12, 13, 18, 19, 24, 25, 30]
+
+[[nset]]
+name  = "base"
+nodes = [1, 2, 3, 4, 5, 6]
+
+[[material]]
+name    = "rock"
+model   = "elastic_isotropic"
+density = 2400.0
+E       = 2.0e10
+nu      = 0.2
+thermal_expansion = 1.0e-5
+
+[[material]]
+name    = "concrete"
+model   = "concrete"
+density = 2400.0
+E       = 3.17e10
+nu      = 0.2
+thermal_expansion = 6.0e-6
+# The failure surface, named for what each coefficient multiplies:
+#   eqstr = A*steff^2/Fc + B*steff + C*sigma1 + 3*D*smean
+dev_stress_quadratic = 0.013
+dev_stress_linear    = 0.1177
+principal_stress     = 0.7509
+mean_stress          = 0.246
+compressive_strength = 3.480e7   # Pa
+tensile_ratio        = 0.1       # Ft/Fc
+fracture_energy      = 100.0     # N/m
+characteristic_length = 0.1      # m; the softening law divides by it
+crack_model          = 6         # legacy icr; 3/5/6 derive bb and et0 instead of reading more
+
+[[section]]
+name        = "foundation"
+elset       = "foundation"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "rock"
+
+[[section]]
+name        = "dam"
+elset       = "dam"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+[[amplitude]]
+name   = "constant"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[step]]
+name      = "self_weight"
+procedure = "static"
+load_mode = "load"
+reset_state   = false
+active_elsets = ["foundation", "dam"]
+
+[step.controls]
+increments      = 1
+substeps        = 10
+time_increment  = 1.0
+max_iterations  = 30
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "sym_x"
+dof   = [1]
+value = 0.0
+
+[[step.boundary]]
+nset  = "base"
+dof   = [2]
+value = 0.0
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "constant"
+apply_to  = "all"
+
+[solver]
+linear = "pardiso"
+
+[solver.pardiso]
+matrix_type   = -2
+threads       = 4
+message_level = 0
+
+[output]
+format = "gid"
+field  = ["u", "s", "y"]   # y = the damage indicator; the capability observable
+stress_averaging = "direct"

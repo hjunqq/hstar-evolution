@@ -124,7 +124,7 @@ module yl_runtime_commit
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
-                       material_1, material_5
+                       material_1, material_5, material_4
 
   use yl_problem_types, only: problem_state_t, boundary_t, step_t, output_field_t,          &
                               concentrated_t
@@ -1276,6 +1276,40 @@ contains
           sk%DuncanChang%phi_s = sk%DuncanChang%phi     ! Material.f90:533-534
           sk%DuncanChang%k_s   = sk%DuncanChang%k       ! Material.f90:536-537
         end if
+        ! The third per-model block, on the same terms as the first two.
+        if (opt_is_set(problem%materials(id_)%concrete%crack_model)) then
+          allocate (sk%Concrete)
+          call poison_concrete(sk%Concrete)
+          associate (cn => problem%materials(id_)%concrete)
+            sk%Concrete%A   = real(opt_or_real(cn%dev_stress_quadratic), irk)
+            sk%Concrete%B   = real(opt_or_real(cn%dev_stress_linear), irk)
+            sk%Concrete%C   = real(opt_or_real(cn%principal_stress), irk)
+            sk%Concrete%D   = real(opt_or_real(cn%mean_stress), irk)
+            sk%Concrete%Fc  = real(opt_or_real(cn%compressive_strength), irk)
+            sk%Concrete%Ct  = real(opt_or_real(cn%tensile_ratio), irk)
+            sk%Concrete%Gf  = real(opt_or_real(cn%fracture_energy), irk)
+            sk%Concrete%h   = real(opt_or_real(cn%characteristic_length), irk)
+            sk%Concrete%icr = int(opt_or(cn%crack_model), ink)
+          end associate
+          ! DERIVED BY THE READER, NOT BY THE DECK -- Material.f90:684-694, the branch
+          ! `icr in {3,5,6}` takes. Reproduced here rather than recomputed differently:
+          ! the expression is transcribed from legacy verbatim, including the clamp at
+          ! zero, because the acceptance criterion is bit-exactness and a re-derived
+          ! "equivalent" form is exactly how a 1-ULP divergence gets in. `e` is the same
+          ! elastic modulus the common SOLID record supplied, which is why this sits after
+          ! sk%e is assigned.
+          !
+          ! Only this branch is reachable: the adapter refuses any crack model but 6.
+          block
+            real(irk) :: ft_, x0_
+            ft_ = sk%Concrete%Fc * sk%Concrete%Ct
+            x0_ = ft_ / sk%e
+            sk%Concrete%bb = 3. / (x0_ * (2. * sk%Concrete%Gf * sk%e /                        &
+                                          (sk%Concrete%h * ft_**2) - 1))
+            if (sk%Concrete%bb < 0.) sk%Concrete%bb = 0.
+            sk%Concrete%et0 = x0_
+          end block
+        end if
       end associate
     end do
     ! sections[].thickness is authored on the SECTION and stored on the MATERIAL
@@ -2093,6 +2127,8 @@ contains
               deallocate (props(i)%mechanical%solid%ClassicalEP)
             if (associated(props(i)%mechanical%solid%DuncanChang))                            &
               deallocate (props(i)%mechanical%solid%DuncanChang)
+            if (associated(props(i)%mechanical%solid%Concrete))                                &
+              deallocate (props(i)%mechanical%solid%Concrete)
             deallocate (props(i)%mechanical%solid)
           end if
           deallocate (props(i)%mechanical)
@@ -3091,6 +3127,20 @@ contains
     dc%m = STAGE_POISON_R
     dc%dphi = STAGE_POISON_R
   end subroutine poison_duncanchang
+
+  ! material_4: the 9 components the CONCRETE commit assigns plus the 2 it derives. The
+  ! rest of the type -- at/bt/alfat/t1..t4/ft0/eft and the compressive twins -- belongs to
+  ! the `icr == 2` branch, which the adapter refuses; legacy leaves them untouched on this
+  ! path too, so poisoning them would differ from the legacy path rather than match it.
+  subroutine poison_concrete(cn)
+    type(material_4), intent(inout) :: cn
+    cn%A = STAGE_POISON_R;  cn%B = STAGE_POISON_R
+    cn%C = STAGE_POISON_R;  cn%D = STAGE_POISON_R
+    cn%Fc = STAGE_POISON_R; cn%Ct = STAGE_POISON_R
+    cn%Gf = STAGE_POISON_R; cn%h = STAGE_POISON_R
+    cn%icr = STAGE_POISON_I
+    cn%bb = STAGE_POISON_R; cn%et0 = STAGE_POISON_R
+  end subroutine poison_concrete
 
   subroutine null_solid(sk)
     type(solid_skeleton), intent(inout) :: sk

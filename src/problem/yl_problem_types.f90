@@ -179,6 +179,49 @@ module yl_problem_types
     type(opt_real) :: friction_angle_reduction !@off-face: materials.duncan_chang.dphi
   end type duncan_chang_t
 
+  ! The THIRD per-model block. CONCRETE is a damage model: a four-coefficient failure
+  ! surface decides when damage starts, and a softening law carries it afterwards.
+  !
+  ! The coefficient names come from what each one MULTIPLIES in legacy's own expression
+  ! (Residu.f90:3265), not from its legacy letter -- rule 10 forbids harvesting A/B/C/D,
+  ! and the letters say nothing anyway:
+  !
+  !     eqstr = A*steff**2/Fc + B*steff + C*sigma1 + 3*D*smean
+  !             ^dev quadratic  ^dev linear ^principal  ^mean
+  !
+  ! with `steff` the equivalent deviatoric stress, `sigma1` the major principal stress and
+  ! `smean` the mean stress. Damage begins where `eqstr` reaches `compressive_strength`.
+  !
+  ! ONLY the parameters this build's deck uses are here. legacy's material_4 also carries
+  ! at/bt/alfat/t1..t4/ft0/eft and the compressive twins ac/bc/..., which belong to the
+  ! `crack_model == 2` branch (Material.f90:700) -- a branch that reads a FURTHER record
+  ! and that the adapter refuses by name. Two more, `bb` and `et0`, are DERIVED by legacy's
+  ! reader rather than read (Material.f90:684-692), so they are reproduced by the bridge
+  ! and are not authored fields either.
+  !
+  !   dev_stress_quadratic  1   legacy `A`
+  !   dev_stress_linear     1   legacy `B`
+  !   principal_stress      1   legacy `C`
+  !   mean_stress           1   legacy `D`
+  !   compressive_strength  Pa  legacy `Fc`
+  !   tensile_ratio         1   legacy `Ct`, which legacy's own comment defines as Ft/Fc
+  !   fracture_energy       N/m legacy `Gf`
+  !   characteristic_length m   legacy `h`, the regularisation length the softening law
+  !                             divides by, so the answer depends on it
+  !   crack_model           id  legacy `icr`; it SELECTS a branch, including one that reads
+  !                             another record, so it is whitelisted rather than carried freely
+  type, public :: concrete_t
+    type(opt_real) :: dev_stress_quadratic   !@off-face: materials.concrete.a
+    type(opt_real) :: dev_stress_linear      !@off-face: materials.concrete.b
+    type(opt_real) :: principal_stress       !@off-face: materials.concrete.c
+    type(opt_real) :: mean_stress            !@off-face: materials.concrete.d
+    type(opt_real) :: compressive_strength   !@off-face: materials.concrete.fc
+    type(opt_real) :: tensile_ratio          !@off-face: materials.concrete.ct
+    type(opt_real) :: fracture_energy        !@off-face: materials.concrete.gf
+    type(opt_real) :: characteristic_length  !@off-face: materials.concrete.h
+    type(opt_int)  :: crack_model            !@off-face: materials.concrete.icr
+  end type concrete_t
+
   type, public :: material_t
     type(opt_int) :: id
     type(opt_text) :: name
@@ -197,6 +240,8 @@ module yl_problem_types
     type(plasticity_t) :: plasticity
     !> Set only when `model` is DUNCANCHANG; absent for every other model.
     type(duncan_chang_t) :: duncan_chang
+    !> Set only when `model` is CONCRETE; absent for every other model.
+    type(concrete_t) :: concrete
   end type material_t
 
   ! --- sections ---------------------------------------------------------------

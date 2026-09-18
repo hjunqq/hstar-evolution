@@ -402,6 +402,38 @@ def main(argv=None):
             problems.append("N3 pardiso settings on a profile case: the refusal did not name "
                             "the key")
 
+    # b8 -- the CONCRETE block. PREDICTED BEFORE RUNNING:
+    #   k1  crack_model = 2        exit 3, names the key and the value   (capability)
+    #   k2  a parameter deleted    exit 2, names the key                 (missing field)
+    #   k3  the block on another model   exit 2, names the key           (forbidden)
+    # SILENT: none of these may disturb the nine N2 comparisons above.
+    conc = next((c["id"] for c in _doc.get("case", [])
+                 if (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
+                 and 'model   = "concrete"' in
+                     (ROOT / "cases" / c["path"] / "modern/case.toml").read_text(encoding="utf-8")),
+                None)
+    if conc is not None:
+        blob = rejected("concrete crack model 2", "--input=case.toml",
+                        sub("crack_model          = 6", "crack_model          = 2"), case=conc)
+        if "crack_model" not in blob:
+            problems.append("N3 concrete crack model: the refusal did not name the key")
+
+        blob = rejected("concrete without a strength", "--input=case.toml",
+                        lambda t: "\n".join(l for l in t.splitlines()
+                                            if not l.startswith("compressive_strength")) + "\n",
+                        case=conc)
+        if "compressive_strength" not in blob:
+            problems.append("N3 concrete without a strength: the refusal did not name the key")
+
+        # The forbidden direction: a CONCRETE parameter on the elastic material in the SAME
+        # deck. Without it the required-together rule would be satisfied by a validator that
+        # accepted the keys on any material.
+        blob = rejected("concrete parameter on another model", "--input=case.toml",
+                        sub('name    = "rock"', 'crack_model = 6\nname    = "rock"'), case=conc)
+        if "crack_model" not in blob:
+            problems.append("N3 concrete parameter on another model: the refusal did not name "
+                            "the key")
+
     # c -- several findings at once, each reported exactly once.
     blob = rejected("three findings", "--input=case.toml",
                     lambda t: sub("density = 2400.0", 'density = "heavy"')(

@@ -263,7 +263,7 @@ module yl_problem_profile
                       PROFILE_KIND_TEXT, 0_int32, 'MECHANICAL', .false.),                           &
     capability_item_t('G3', 'material.model', 'materials[]', 'model',                               &
                       PROFILE_KIND_TEXT, 0_int32,                                                   &
-                      'ELASTIC_ISOTROPIC|CLASSICALEP|DUNCANCHANG', .false.),                        &
+                      'ELASTIC_ISOTROPIC|CLASSICALEP|DUNCANCHANG|CONCRETE', .false.),               &
     capability_item_t('G4', 'solver.linear', 'solver', 'linear',                                    &
                       PROFILE_KIND_TEXT, 0_int32, 'PROFILE|PARDISO', .false.),                      &
     ! PARDISO's matrix type selects the FACTORISATION: -2 is real symmetric indefinite, 2
@@ -607,7 +607,16 @@ module yl_problem_profile
                       field='model', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &
                       message='material_select (Material.f90:457) has a branch per constitutive model, each '//   &
                               'with its own extra records; only ELASTIC_ISOTROPIC, CLASSICALEP and '//   &
-                              'DUNCANCHANG are whitelisted (capability row G3 material.model)'),                    &
+                              'DUNCANCHANG and CONCRETE are whitelisted (capability row G3 '//   &
+                              'material.model)'),                                                                   &
+    capability_item_t(rule_id='A-MAT', condition='concrete-crack-model',                                            &
+                      item='mat.icr', object_path='materials',                                                      &
+                      field='concrete.crack_model', stage=CAP_STAGE_ADAPT,                                          &
+                      value_kind=PROFILE_KIND_NONE,                                                                 &
+                      message='CONCRETE branches on the crack model (Material.f90:676-712): 2 reads a '//   &
+                              'FURTHER record of ft0/eft/at/bt/alfat, 3/5/6 read nothing more and '//   &
+                              'derive bb/et0 instead, so a wrong guess desynchronises the file; only '//   &
+                              '6 is whitelisted'),                                                                  &
     capability_item_t(rule_id='A-MAT', condition='duncanchang-bulk-law',                                            &
                       item='mat.dc_model', object_path='materials',                                                 &
                       field='duncan_chang.bulk_modulus_law', stage=CAP_STAGE_ADAPT,                                 &

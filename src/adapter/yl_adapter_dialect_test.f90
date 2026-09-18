@@ -219,6 +219,15 @@ program yl_adapter_dialect_test
                   'E-01       1.000E-05  0  0  0'//new_line('a')//'  0  0       1.000E+03'//new_line('a')//   &
                   '  EB       1.000E+04  35  300  0.5  0.7  0.3  360.0       1.013E+05       1.013E+05', &
                   'PROB_F')
+    ! The CONCRETE row, for the same reason as the DUNCANCHANG pair: the deck has to REACH
+    ! the branch, so the material line becomes a CONCRETE one and the branch's own record
+    ! follows it, with a crack model this build does not admit. 2 is the interesting wrong
+    ! value -- it is the one that makes legacy read a FURTHER record.
+    call run_case('A-MAT', 'concrete-crack-model', 'mat', 20, &
+                  'CONCRETE       2.400E+03       1.000E+00       1.000E+00       3.170E+10       2.000'//   &
+                  'E-01       6.000E-06  0  0  0'//new_line('a')//'  0  0  0       1.000E+03'//   &
+                  new_line('a')//'  0.013  0.1177  0.7509  0.246       3.480E+07  0.1  100  0.1  2', &
+                  'W')
     call run_case('A-SOL', 'pivot-file', 'sol', 2, '  1  0  1  1', 'W')
     call run_case('A1', 'stochastic-curve-modifier-unsupported', 'loa', 3, '  2  LINEAR  1  2', 'W')
     call run_case('A2', 'curve-type-unsupported', 'loa', 3, '  2  HARMONIC  0  2', 'W')

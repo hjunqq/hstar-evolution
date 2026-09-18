@@ -1,0 +1,57 @@
+# 观察量登记。按 M0-05a 的纪律：在任何结果数值被查看之前登记。
+# 本文件登记的是**结构**（块名、分量名、节点数），不是数值。
+version = 1
+case_id = "damage_2d.concrete_gravdam"
+units = "SI"
+
+[source]
+file = "1.flavia.res"
+format = "gid-flavia-ascii"
+header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
+expected_node_count = 46
+expected_element_count = 32
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较"
+
+[[observable]]
+id = "displacement"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "m"
+required = true
+
+[[observable]]
+id = "stress"
+kind = "nodal_tensor"
+components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
+unit = "Pa"
+required = true
+
+# 本算例的能力观察量**本应**是 `Yield`（gid_Y = 1，槽位 gpvar(nstre+2) 存 `damage`）。
+#
+# **实测结果是：它不能充当这个证据。** 460 个值里 291 个恰好为 0、169 个大于 1e9，
+# 落在 (0,1) 的**一个都没有**——而 `damage` 只能取 0 或 1-sqrt(cc)，永远不可能大于 1。
+# 那 169 个是 legacy 卸载分支未初始化 `damage` 的残留栈值（PD-3，Residu.f90:3656→3696）。
+#
+# 因此 must_be_nonzero **不设**在这里：它会以垃圾值为由通过，比不设更坏。
+# 本算例确立的是读取/映射/派发链路，不是损伤路径；CONCRETE 能力不由它签收。
+# 与 mini_mc 的 PLASTICSTRAIN 全零属同一类记账，见 docs/m11/concrete.md §3。
+[[observable]]
+id = "yield"
+kind = "nodal_scalar"
+components = ["Yield"]
+unit = "1"
+required = true
+# 不设 block/must_be_nonzero：见上。
+
+[capability]
+constitutive_model = "CONCRETE"
+crack_model = 6              # legacy icr；本 deck 的取值
+authored_parameters = ["A", "B", "C", "D", "Fc", "Ct", "Gf", "h", "icr"]
+derived_at_read = ["bb", "et0"]   # Material.f90:684-692，icr ∈ {3,5,6} 分支
+substeps = 10
+linear_solver = "PARDISO"    # M10 已迁移，本轮的前置条件
+note = """相对 static_2d.cooks_membrane 的差值只有 CONCRETE 本身：2-D、Q、NBLKS=1、
+两个 Q4 组、nscurve=0、PARDISO（已迁移）。适配器对它的**唯一**发现就是
+materials[2].model = CONCRETE。
+icr=6 走 Material.f90:684 的派生分支（与 icr 3/5 同一支），**不再多读一条记录**；
+icr=2 才会再读 ft0/eft/at/bt/alfat，本 deck 不涉及，按名拒绝。"""

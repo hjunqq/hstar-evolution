@@ -1,0 +1,533 @@
+{
+  "structure_ok": true,
+  "problems": [],
+  "blocks": [
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "Yield",
+      "ok": true,
+      "n_values": 46,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 1.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 2.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 2.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 20,
+      "max_abs_diff": 19812500000.0,
+      "max_abs_diff_at": {
+        "node": 35,
+        "component": 1,
+        "reference": 19812500000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 2.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 3.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 3.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 18,
+      "max_abs_diff": 23775000000.0,
+      "max_abs_diff_at": {
+        "node": 43,
+        "component": 1,
+        "reference": 23775000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 3.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 4.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 4.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 20,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 45,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 4.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 5.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 5.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 20,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 43,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 5.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 6.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 6.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 19,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 31,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 6.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": true,
+      "n_values": 92,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 7.0
+    },
+    {
+      "name": "STRESS",
+      "ok": true,
+      "n_values": 184,
+      "n_mismatch": 0,
+      "max_abs_diff": 0.0,
+      "max_abs_diff_at": null,
+      "max_norm_diff": 0.0,
+      "max_norm_diff_at": null,
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 7.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 19,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 46,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 7.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": false,
+      "n_values": 92,
+      "n_mismatch": 1,
+      "max_abs_diff": 9.999999960041972e-13,
+      "max_abs_diff_at": {
+        "node": 39,
+        "component": 1,
+        "reference": -6.5126274e-05,
+        "actual": -6.5126273e-05
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 39,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 8.0
+    },
+    {
+      "name": "STRESS",
+      "ok": false,
+      "n_values": 184,
+      "n_mismatch": 3,
+      "max_abs_diff": 0.0010000000002037268,
+      "max_abs_diff_at": {
+        "node": 35,
+        "component": 3,
+        "reference": -20716.255,
+        "actual": -20716.254
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 35,
+        "component": 3
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 8.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 18,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 34,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 8.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": false,
+      "n_values": 92,
+      "n_mismatch": 2,
+      "max_abs_diff": 9.99999999392329e-14,
+      "max_abs_diff_at": {
+        "node": 44,
+        "component": 1,
+        "reference": -7.7422051e-06,
+        "actual": -7.742205e-06
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 44,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 9.0
+    },
+    {
+      "name": "STRESS",
+      "ok": false,
+      "n_values": 184,
+      "n_mismatch": 10,
+      "max_abs_diff": 0.0010000000002037268,
+      "max_abs_diff_at": {
+        "node": 43,
+        "component": 4,
+        "reference": -32103.108,
+        "actual": -32103.107
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 39,
+        "component": 3
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 9.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 20,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 33,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 9.0
+    },
+    {
+      "name": "DISPLACEMENT",
+      "ok": false,
+      "n_values": 92,
+      "n_mismatch": 12,
+      "max_abs_diff": 1.0000000003410059e-10,
+      "max_abs_diff_at": {
+        "node": 46,
+        "component": 2,
+        "reference": -0.0039032033,
+        "actual": -0.0039032034
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 33,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 10.0
+    },
+    {
+      "name": "STRESS",
+      "ok": false,
+      "n_values": 184,
+      "n_mismatch": 31,
+      "max_abs_diff": 0.10000000000582077,
+      "max_abs_diff_at": {
+        "node": 46,
+        "component": 2,
+        "reference": -176229.24,
+        "actual": -176229.34
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 33,
+        "component": 3
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 10.0
+    },
+    {
+      "name": "Yield",
+      "ok": false,
+      "n_values": 46,
+      "n_mismatch": 15,
+      "max_abs_diff": 31700000000.0,
+      "max_abs_diff_at": {
+        "node": 31,
+        "component": 1,
+        "reference": 31700000000.0,
+        "actual": 0.0
+      },
+      "max_norm_diff": "inf",
+      "max_norm_diff_at": {
+        "node": 26,
+        "component": 1
+      },
+      "atol": 0.0,
+      "rtol": 0.0,
+      "step": 10.0
+    }
+  ],
+  "passed": false,
+  "n_blocks": 30,
+  "n_values": 3220,
+  "n_mismatch": 228,
+  "max_abs_diff": 31700000000.0,
+  "first_mismatch": {
+    "block": "Yield",
+    "step": 2.0,
+    "node": 26,
+    "component": 1,
+    "reference": 2641666700.0,
+    "actual": 0.0,
+    "why": "outside tolerance"
+  },
+  "reference": "/home/huijun/HSTAR_Next/hstar-evolution/cases/golden/damage_2d/concrete_gravdam/reference/results.json",
+  "actual": "/tmp/yl-io-trace.cg0eOG/results.json",
+  "tolerance_section": "exact"
+}

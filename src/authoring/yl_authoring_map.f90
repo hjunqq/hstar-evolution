@@ -242,6 +242,26 @@ contains
         call opt_set(mat%duncan_chang%friction_angle_reduction,                               &
              real_at(doc, 'material['//itoa(i)//'].friction_angle_reduction'))
       end if
+      ! The CONCRETE block, written whole or not at all; `crack_model` being set is what
+      ! makes the commit allocate legacy's Concrete record and run its derivation.
+      if (doc%find('material['//itoa(i)//'].crack_model') /= 0_int32) then
+        call opt_set(mat%concrete%crack_model, int_at(doc, 'material['//itoa(i)//'].crack_model'))
+        call opt_set(mat%concrete%dev_stress_quadratic,                                       &
+             real_at(doc, 'material['//itoa(i)//'].dev_stress_quadratic'))
+        call opt_set(mat%concrete%dev_stress_linear,                                          &
+             real_at(doc, 'material['//itoa(i)//'].dev_stress_linear'))
+        call opt_set(mat%concrete%principal_stress,                                           &
+             real_at(doc, 'material['//itoa(i)//'].principal_stress'))
+        call opt_set(mat%concrete%mean_stress, real_at(doc, 'material['//itoa(i)//'].mean_stress'))
+        call opt_set(mat%concrete%compressive_strength,                                       &
+             real_at(doc, 'material['//itoa(i)//'].compressive_strength'))
+        call opt_set(mat%concrete%tensile_ratio,                                              &
+             real_at(doc, 'material['//itoa(i)//'].tensile_ratio'))
+        call opt_set(mat%concrete%fracture_energy,                                            &
+             real_at(doc, 'material['//itoa(i)//'].fracture_energy'))
+        call opt_set(mat%concrete%characteristic_length,                                      &
+             real_at(doc, 'material['//itoa(i)//'].characteristic_length'))
+      end if
       call builder_add_material(b, mat, here(line_at(doc, 'material['//itoa(i)//'].name')), errors)
       if (builder_failed(b)) return
     end do

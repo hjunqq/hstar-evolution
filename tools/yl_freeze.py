@@ -41,6 +41,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
+# One definition of "the environment a reference means"; see yl_run.pinned_env.
+import importlib.util as _ilu
+_spec = _ilu.spec_from_file_location("yl_run", ROOT / "tools/yl_run.py")
+_yl_run = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_yl_run)
+
+
 
 def sha256(p: Path) -> str:
     return hashlib.sha256(p.read_bytes()).hexdigest()
@@ -138,7 +144,11 @@ def main(argv=None):
         "binary_sha256": sha256(binary),
         "build_profile": "release",
         "entry": "--adapter=off (legacy readers); the reference is what LEGACY produces",
-        "threads": {k: os.environ.get(k, "1") for k in ("OMP_NUM_THREADS", "MKL_NUM_THREADS")},
+        # Recorded from the environment the runs were actually made under -- see
+        # yl_run.pinned_env. Reading it out of os.environ was wrong twice over: the runner
+        # sets these for the child process, not for this one, and the key list was a
+        # hand-maintained subset that had already lost MKL_DYNAMIC.
+        "threads": {k: _yl_run.pinned_env()[k] for k in _yl_run.PINNED_KEYS},
         "runs": records,
         "all_completed": True,
         "flavia_res_identical": True,

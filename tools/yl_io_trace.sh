@@ -98,9 +98,17 @@ else
     python3 - "$OUT/compare-vs-reference.json" <<'PYEOF'
 import json, sys
 d = json.load(open(sys.argv[1]))
+# Build independence is a ROUNDOFF-scale story. Saying so about a difference of any size
+# is how a structural divergence gets filed as noise: on 2026-09-18 this line reported
+# max|d| = 3.17e10 -- a material's Young's modulus, from legacy's uninitialised `damage`
+# (PD-3) -- as "build independence", and it nearly went in the record that way.
+big = d["max_abs_diff"] > 1.0
 print(f"    note: the trace build differs from the release reference on "
-      f"{d['n_mismatch']}/{d['n_values']} values, max|d| = {d['max_abs_diff']:.3e} -- "
-      f"that is build independence (open debt), not instrumentation")
+      f"{d['n_mismatch']}/{d['n_values']} values, max|d| = {d['max_abs_diff']:.3e}"
+      + ("" if big else " -- that is build independence (open debt), not instrumentation"))
+if big:
+    print("    WARNING: that is FAR too large to be build independence. Something structural "
+          "differs between the two builds; do not record this as noise without explaining it.")
 PYEOF
 fi
 python3 - "$BIN" "$OUT" <<'PY'

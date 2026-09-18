@@ -145,7 +145,11 @@ DTYPES = {"i32", "i64", "f64", "str", "bool"}
 # acceptance criterion IS bit-exactness. Converting would insert a rounding step between
 # the author's number and the solver for no physical gain. The authoring contract states
 # the unit on the field instead.
-UNITS = {"1", "id", "m", "N", "N/m3", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
+# N/m arrived with CONCRETE: fracture energy, i.e. energy per unit crack AREA, which in a
+# plane-strain slice of unit thickness is energy per unit length. Distinct from the N/m3
+# already in this set (a body force) -- worth spelling out, because the two look alike and
+# mean nothing like each other.
+UNITS = {"1", "id", "m", "N", "N/m", "N/m3", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
 DETERMINISM = {"deterministic", "uninitialized", "pointer", "order_dependent"}
 COMPARE_RULES = {"exact", "abs_tol", "rel_tol", "hash", "ignore"}
 OWNER_BUCKETS = {"derived", "not_migrated"}   # owners that are labels, not paths (rule 21)

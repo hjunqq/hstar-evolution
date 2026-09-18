@@ -388,6 +388,7 @@ contains
     case ('elastic_isotropic'); s = 'ELASTIC_ISOTROPIC'
     case ('classicalep');        s = 'CLASSICALEP'
     case ('duncanchang');        s = 'DUNCANCHANG'
+    case ('concrete');           s = 'CONCRETE'
     case default; s = ''
     end select
   end function legacy_material_name

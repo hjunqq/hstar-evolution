@@ -348,6 +348,10 @@ def normalize_state(yl_state, mp, raw: Path, out: Path) -> dict:
     }
 
 
+#: The keys pinned_env() controls. Recorded with every run and every frozen reference.
+PINNED_KEYS = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "MKL_DYNAMIC")
+
+
 def pinned_env() -> dict:
     """The environment every run of the solver must use, frozen references included.
 
@@ -371,6 +375,7 @@ def pinned_env() -> dict:
     """
     env = {k: v for k, v in os.environ.items() if k not in ("LD_LIBRARY_PATH", "LD_PRELOAD")}
     env.update({"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "MKL_DYNAMIC": "FALSE"})
+    assert set(PINNED_KEYS) <= set(env), "PINNED_KEYS and pinned_env() have drifted apart"
     return env
 
 
@@ -414,7 +419,12 @@ def run(args: argparse.Namespace) -> int:
         "binary": {"path": str(binary), "sha256": sha256(binary)},
         "build_manifest": None,
         "platform": {"os": platform.platform(), "machine": platform.machine(), "hostname": platform.node()},
-        "threads": {"OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+        # The environment is part of what a reference MEANS, so it is recorded from the
+        # thing that was actually applied rather than re-listed by hand. The hand-written
+        # version had already drifted: it named OMP_NUM_THREADS and MKL_NUM_THREADS but
+        # not MKL_DYNAMIC, which pinned_env() also sets and which decides whether MKL may
+        # vary the thread count at run time.
+        "threads": {k: pinned_env()[k] for k in PINNED_KEYS},
         "timeout_seconds": args.timeout,
         "input_check_before": None,
         "input_check_after": None,

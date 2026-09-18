@@ -208,3 +208,25 @@ reference = "reference/"
 #
 # It also answers the question the domain opened with: CONCRETE is NOT coupled to PARDISO.
 # 45 of the corpus's PARDISO decks use ELASTIC_ISOTROPIC alone, so no joint slice is needed.
+
+[[case]]
+id = "damage_2d.concrete_gravdam"
+path = "golden/damage_2d/concrete_gravdam"
+source_repository = "/home/huijun/HSTAR_Next/hstar_jobs"
+source_path = "0406_210921_443f933d"
+source_commit = "n/a (job directory, not a git tree)"
+input_manifest = "golden/damage_2d/concrete_gravdam/input-manifest.json"
+purpose = "the CONCRETE damage model: the first golden case whose capability block is a damage indicator that is actually non-zero"
+migration_phase = "M11"
+status = "reference-frozen"
+verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
+reference = "reference/"
+# Found by censusing the WHOLE corpus for a real CONCRETE deck that is 2-D and carries no
+# line-element group. There are exactly two such .glb files and they are the same deck.
+# Every other CONCRETE deck needs something out of scope:
+#   damage / train06_concrete_damage   3-D (and train06 is also multi-block)
+#   rcbeam / rcbeam_crack / tunnel / tunnel_sl   the L2 family, suspended with M9
+#
+# 46 nodes, 32 elements, two Q4 groups, NBLKS=1, nscurve=0, PARDISO. Byte-identical to the
+# pristine 5414e73 snapshot, and the adapter's only finding on it is the CONCRETE model.
+# The job directory is the same source wall_reservoir and beam_point_load came from.

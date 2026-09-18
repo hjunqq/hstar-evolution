@@ -5674,3 +5674,165 @@ determinism = "deterministic"
 snapshot_file = "numerics.json"
 reason = "PARDISO solver setting; only solver_2d.benchmark_100x100 selects PARDISO, so the field is absent on every other golden deck and is not on the observation face (ADR-0009). The solver domain accepts on final numerical equivalence instead"
 note = "PARDISO message level; 0 is silent. Module-scope in SOLVER (Solver.f90:21)"
+
+[[field]]
+id = "materials.concrete.a"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%A"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].concrete.dev_stress_quadratic"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "coefficient of the quadratic deviatoric term in legacy's failure surface eqstr = A*steff**2/Fc + B*steff + C*sigma1 + 3*D*smean (Residu.f90:3265)"
+
+[[field]]
+id = "materials.concrete.b"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%B"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].concrete.dev_stress_linear"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "coefficient of the linear deviatoric term, same expression"
+
+[[field]]
+id = "materials.concrete.c"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%C"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].concrete.principal_stress"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "coefficient of the major principal stress, same expression"
+
+[[field]]
+id = "materials.concrete.d"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%D"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].concrete.mean_stress"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "coefficient of the mean stress (entered as 3*D), same expression"
+
+[[field]]
+id = "materials.concrete.fc"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%Fc"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "Pa"
+owner = "ProblemState.materials[].concrete.compressive_strength"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "compressive strength; damage begins where eqstr reaches it, and it also normalises the quadratic term"
+
+[[field]]
+id = "materials.concrete.ct"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%Ct"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "1"
+owner = "ProblemState.materials[].concrete.tensile_ratio"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "legacy's own comment defines it as Ft/Fc, so the tensile strength is derived from it rather than authored"
+
+[[field]]
+id = "materials.concrete.gf"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%Gf"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "N/m"
+owner = "ProblemState.materials[].concrete.fracture_energy"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "fracture energy; feeds the derived softening parameter bb (Material.f90:688)"
+
+[[field]]
+id = "materials.concrete.h"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%h"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "m"
+owner = "ProblemState.materials[].concrete.characteristic_length"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "the regularisation length the softening law divides by (Material.f90:688), so the answer depends on it -- legacy calls it `mesh size`"
+
+[[field]]
+id = "materials.concrete.icr"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%mechanical%solid%Concrete%icr"
+source = ["MAT.material_set.concrete"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "i32"
+unit = "id"
+owner = "ProblemState.materials[].concrete.crack_model"
+index_by = "materials[].id"
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+note = "SELECTS the crack model, and one value (2) makes legacy read a further record, so it is whitelisted rather than carried freely"

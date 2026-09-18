@@ -72,7 +72,7 @@ module yl_authoring_keys
     key_t('nset[].nodes[]',                TV_INT,  .false., ''),                            &
     key_t('nset[].nodes.count',            TV_INT,  .true.,  ''),                            &
     key_t('material[].name',               TV_STR,  .true.,  ''),                            &
-    key_t('material[].model',              TV_STR,  .true.,  'elastic_isotropic|classicalep|duncanchang'), &
+    key_t('material[].model',              TV_STR,  .true.,  'elastic_isotropic|classicalep|duncanchang|concrete'), &
     key_t('material[].density',            TV_REAL, .true.,  ''),                            &
     key_t('material[].E',                  TV_REAL, .true.,  ''),                            &
     key_t('material[].nu',                 TV_REAL, .true.,  ''),                            &
@@ -109,6 +109,23 @@ module yl_authoring_keys
     key_t('material[].bulk_modulus_number',     TV_REAL, .false., ''),                       &
     key_t('material[].bulk_modulus_exponent',   TV_REAL, .false., ''),                       &
     key_t('material[].friction_angle_reduction', TV_REAL, .false., ''),                      &
+    ! The CONCRETE block, on the same terms as the two before it: optional as keys,
+    ! required-together by model_requires. The four coefficients are named for what they
+    ! MULTIPLY in the failure surface, not for legacy's letters -- see concrete_t.
+    !
+    ! `crack_model` selects a BRANCH, and one of its values makes legacy read a further
+    ! record, so it carries a whitelist rather than being a free integer. Only 6 is
+    ! admitted: it is what the one real deck uses. rcbeam uses 3, but rcbeam is M9's and
+    ! suspended, so admitting 3 would be a claim with no deck behind it.
+    key_t('material[].dev_stress_quadratic',  TV_REAL, .false., ''),                         &
+    key_t('material[].dev_stress_linear',     TV_REAL, .false., ''),                         &
+    key_t('material[].principal_stress',      TV_REAL, .false., ''),                         &
+    key_t('material[].mean_stress',           TV_REAL, .false., ''),                         &
+    key_t('material[].compressive_strength',  TV_REAL, .false., ''),                         &
+    key_t('material[].tensile_ratio',         TV_REAL, .false., ''),                         &
+    key_t('material[].fracture_energy',       TV_REAL, .false., ''),                         &
+    key_t('material[].characteristic_length', TV_REAL, .false., ''),                         &
+    key_t('material[].crack_model',           TV_INT,  .false., '6'),                        &
     key_t('section[].name',                TV_STR,  .true.,  ''),                            &
     key_t('section[].elset',               TV_STR,  .true.,  ''),                            &
     key_t('section[].element',             TV_STR,  .true.,  'Q4'),                          &
@@ -332,6 +349,13 @@ contains
     !> classicalep alone.
     character(len=*), parameter :: PLASTIC_ONLY(2) = [character(len=24) ::                    &
       'hardening', 'dilation_angle']
+    !> concrete alone. `crack_model` leads because it is the selector, exactly like
+    !> `bulk_modulus_law`: legacy reads a different next record depending on it
+    !> (Material.f90:700 for crack model 2; nothing more for 3/5/6).
+    character(len=*), parameter :: CONCRETE_ONLY(9) = [character(len=24) ::                   &
+      'crack_model', 'dev_stress_quadratic', 'dev_stress_linear', 'principal_stress',         &
+      'mean_stress', 'compressive_strength', 'tensile_ratio', 'fracture_energy',              &
+      'characteristic_length']
     !> duncanchang alone. `bulk_modulus_law` leads because it is the selector: legacy
     !> reads a DIFFERENT second record depending on it (Material.f90:522-531).
     character(len=*), parameter :: DUNCAN_ONLY(11) = [character(len=24) ::                    &
@@ -342,7 +366,7 @@ contains
     integer(int32) :: i, k, kc, kmodel
     character(len=TOML_LEN_PATH) :: base
     character(len=LEN_ALLOW) :: model
-    logical :: plastic, duncan
+    logical :: plastic, duncan, concrete
 
     do i = 1_int32, doc%count_of('material')
       base = 'material['//itoa(i)//']'
@@ -351,6 +375,7 @@ contains
       model = doc%entry(kmodel)%svalue
       plastic = trim(model) == 'classicalep'
       duncan  = trim(model) == 'duncanchang'
+      concrete = trim(model) == 'concrete'
 
       kc = doc%find(trim(base)//'.criterion')
       if (plastic .and. kc == 0_int32) then
@@ -377,6 +402,9 @@ contains
       call group_requires(doc, file, base, DUNCAN_ONLY, duncan,                               &
                           'model "duncanchang" needs this parameter',                         &
                           'only model "duncanchang" takes this parameter', errors)
+      call group_requires(doc, file, base, CONCRETE_ONLY, concrete,                           &
+                          'model "concrete" needs this parameter',                            &
+                          'only model "concrete" takes this parameter', errors)
     end do
   end subroutine model_requires
 
