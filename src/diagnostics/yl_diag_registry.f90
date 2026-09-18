@@ -12,7 +12,7 @@ module yl_diag_registry
   implicit none
   public
 
-  integer, parameter :: YL_NREADERS = 179
+  integer, parameter :: YL_NREADERS = 187
   integer, parameter :: YL_LEN_READER_ID = 96
   integer, parameter :: YL_LEN_READER_SITE = 32
   integer, parameter :: YL_LEN_READER_FILE = 16
@@ -97,109 +97,117 @@ module yl_diag_registry
   integer, parameter :: RD_NRT_global_data_title_1 = 74
   integer, parameter :: RD_NRT_global_data_title_2 = 75
   integer, parameter :: RD_NRT_global_data_transgroup = 76
-  integer, parameter :: RD_GLB_global_data_title_35 = 77
-  integer, parameter :: RD_GLB_global_data_tension_joint_count = 78
-  integer, parameter :: RD_GLB_global_data_title_36 = 79
-  integer, parameter :: RD_GLB_global_data_contact_joint_count = 80
-  integer, parameter :: RD_INP_FEM90_runblks = 81
-  integer, parameter :: RD_MAT_material_set_title_1 = 82
-  integer, parameter :: RD_MAT_material_set_curve_count = 83
-  integer, parameter :: RD_MAT_material_set_comment_line_count = 84
-  integer, parameter :: RD_MAT_material_set_comment_line_1 = 85
-  integer, parameter :: RD_MAT_material_set_title_2 = 86
-  integer, parameter :: RD_MAT_material_set_nmats = 87
-  integer, parameter :: RD_MAT_material_set_title_3 = 88
-  integer, parameter :: RD_MAT_material_set_material_header = 89
-  integer, parameter :: RD_MAT_material_set_material_nphase = 90
-  integer, parameter :: RD_MAT_material_set_material_phase = 91
-  integer, parameter :: RD_MAT_material_set_elastic_isotropic = 92
-  integer, parameter :: RD_MAT_material_set_elastic_extra = 93
-  integer, parameter :: RD_GLB_contact_point_to_point_title_1 = 94
-  integer, parameter :: RD_GLB_contact_point_to_point_contact_control = 95
-  integer, parameter :: RD_GLB_link_concrete_and_steel_title_1 = 96
-  integer, parameter :: RD_GLB_link_concrete_and_steel_rc_steel_count = 97
-  integer, parameter :: RD_GLB_link_concrete_and_water_pipe_title_1 = 98
-  integer, parameter :: RD_GLB_link_concrete_and_water_pipe_water_pipe_count = 99
-  integer, parameter :: RD_IFS_stiff_interface_fluid_solid_title_1 = 100
-  integer, parameter :: RD_IFS_stiff_interface_fluid_solid_ifs_group_count = 101
-  integer, parameter :: RD_IFS_stiff_absorb_fluid_title_1 = 102
-  integer, parameter :: RD_IFS_stiff_absorb_fluid_absorb_fluid_count = 103
-  integer, parameter :: RD_IFS_stiff_absorb_solid_title_1 = 104
-  integer, parameter :: RD_IFS_stiff_absorb_solid_absorb_solid_count = 105
-  integer, parameter :: RD_IFS_stiff_ifs2006_title_1 = 106
-  integer, parameter :: RD_IFS_stiff_ifs2006_ifs_edge_count = 107
-  integer, parameter :: RD_OPR_output_read_title_1 = 108
-  integer, parameter :: RD_OPR_output_read_title_2 = 109
-  integer, parameter :: RD_OPR_output_read_output_control = 110
-  integer, parameter :: RD_OPR_output_read_title_3 = 111
-  integer, parameter :: RD_OPR_output_read_title_4 = 112
-  integer, parameter :: RD_OPR_output_read_label1_title = 113
-  integer, parameter :: RD_OPR_output_read_label2_title = 114
-  integer, parameter :: RD_OPR_output_read_label3_title = 115
-  integer, parameter :: RD_LOA_external_load_1_title_1 = 116
-  integer, parameter :: RD_LOA_external_load_1_curve_count = 117
-  integer, parameter :: RD_LOA_external_load_1_curve_header = 118
-  integer, parameter :: RD_LOA_external_load_1_curve_points = 119
-  integer, parameter :: RD_LOA_external_load_1_curve_factors = 120
-  integer, parameter :: RD_LOA_external_load_1_title_2 = 121
-  integer, parameter :: RD_LOA_external_load_1_point_load_count = 122
-  integer, parameter :: RD_LOA_external_load_1_title_3 = 123
-  integer, parameter :: RD_LOA_external_load_1_edge_count = 124
-  integer, parameter :: RD_MAT_material_set_duncanchang = 125
-  integer, parameter :: RD_MAT_material_set_duncanchang_eb = 126
-  integer, parameter :: RD_MAT_material_set_concrete = 127
-  integer, parameter :: RD_MAT_material_set_classicalep_criteria = 128
-  integer, parameter :: RD_MAT_material_set_classicalep_angles = 129
-  integer, parameter :: RD_MAT_material_set_classicalep_csigma0 = 130
-  integer, parameter :: RD_MAT_material_set_classicalep_angle_curves = 131
-  integer, parameter :: RD_PRE_prescrib_set_title_1 = 132
-  integer, parameter :: RD_PRE_prescrib_set_set_count = 133
-  integer, parameter :: RD_PRE_prescrib_set_reached_only_Prescrib_213 = 134
-  integer, parameter :: RD_PRE_prescrib_set_set_header = 135
-  integer, parameter :: RD_PRE_prescrib_set_set_nodes = 136
-  integer, parameter :: RD_PRE_prescrib_set_set_values = 137
-  integer, parameter :: RD_LOA_external_load_2_title_1 = 138
-  integer, parameter :: RD_LOA_external_load_2_title_2 = 139
-  integer, parameter :: RD_LOA_external_load_2_edge_load_groups = 140
-  integer, parameter :: RD_LOA_external_load_2_title_3 = 141
-  integer, parameter :: RD_LOA_external_load_2_gravity = 142
-  integer, parameter :: RD_LOA_external_load_2_gravity_curve_title = 143
-  integer, parameter :: RD_LOA_external_load_2_gravity_curves = 144
-  integer, parameter :: RD_LOA_external_load_2_title_4 = 145
-  integer, parameter :: RD_LOA_external_load_2_beam_load_count = 146
-  integer, parameter :: RD_LOA_external_load_2_title_5 = 147
-  integer, parameter :: RD_LOA_external_load_2_plate_load_count = 148
-  integer, parameter :: RD_TEM_boundt_title_1 = 149
-  integer, parameter :: RD_TEM_boundt_temp_surface_count = 150
-  integer, parameter :: RD_TEM_boundt_title_2 = 151
-  integer, parameter :: RD_TEM_boundt_temp_edge_count = 152
-  integer, parameter :: RD_TEM_boundt_label11_title = 153
-  integer, parameter :: RD_TEM_boundt_title_3 = 154
-  integer, parameter :: RD_TEM_boundt_temp_elgroup_count = 155
-  integer, parameter :: RD_TEM_boundt_title_4 = 156
-  integer, parameter :: RD_TEM_boundt_title_5 = 157
-  integer, parameter :: RD_TEM_boundt_pipe_count = 158
-  integer, parameter :: RD_SOL_PARDISO_title_1 = 159
-  integer, parameter :: RD_SOL_PARDISO_control = 160
-  integer, parameter :: RD_SOL_PARDISO_title_2 = 161
-  integer, parameter :: RD_SOL_PARDISO_isdefault = 162
-  integer, parameter :: RD_SOL_PROFILE_title_1 = 163
-  integer, parameter :: RD_SOL_PROFILE_profile_control = 164
-  integer, parameter :: RD_MAN_STATIC_U_title_1 = 165
-  integer, parameter :: RD_MAN_STATIC_U_nincs = 166
-  integer, parameter :: RD_MAN_STATIC_U_increment_control = 167
-  integer, parameter :: RD_MAN_STATIC_U_tolerances = 168
-  integer, parameter :: RD_LOA_external_load_1_edge_chunk_title = 169
-  integer, parameter :: RD_LOA_external_load_1_edge_chunk_header = 170
-  integer, parameter :: RD_LOA_external_load_1_edge_nodes = 171
-  integer, parameter :: RD_LOA_external_load_2_edge_load_group = 172
-  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution = 173
-  integer, parameter :: RD_LOA_external_load_1_point_load_group = 174
-  integer, parameter :: RD_LOA_external_load_1_point_load_force = 175
-  integer, parameter :: RD_LOA_external_load_1_point_load_nodes = 176
-  integer, parameter :: RD_LOA_external_load_1_point_load_extrapolation = 177
-  integer, parameter :: RD_LOA_external_load_2_edge_pressure_nodal = 178
-  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution_2 = 179
+  integer, parameter :: RD_NRT_global_data_transgroup_header = 77
+  integer, parameter :: RD_NRT_global_data_interp_node = 78
+  integer, parameter :: RD_NRT_global_data_interp_list = 79
+  integer, parameter :: RD_NRT_global_data_interp_weights = 80
+  integer, parameter :: RD_GLB_global_data_title_35 = 81
+  integer, parameter :: RD_GLB_global_data_tension_joint_count = 82
+  integer, parameter :: RD_GLB_global_data_title_36 = 83
+  integer, parameter :: RD_GLB_global_data_contact_joint_count = 84
+  integer, parameter :: RD_INP_FEM90_runblks = 85
+  integer, parameter :: RD_MAT_material_set_title_1 = 86
+  integer, parameter :: RD_MAT_material_set_curve_count = 87
+  integer, parameter :: RD_MAT_material_set_curve_header = 88
+  integer, parameter :: RD_MAT_material_set_curve_strain = 89
+  integer, parameter :: RD_MAT_material_set_curve_stress = 90
+  integer, parameter :: RD_MAT_material_set_comment_line_count = 91
+  integer, parameter :: RD_MAT_material_set_comment_line_1 = 92
+  integer, parameter :: RD_MAT_material_set_title_2 = 93
+  integer, parameter :: RD_MAT_material_set_nmats = 94
+  integer, parameter :: RD_MAT_material_set_title_3 = 95
+  integer, parameter :: RD_MAT_material_set_material_header = 96
+  integer, parameter :: RD_MAT_material_set_material_nphase = 97
+  integer, parameter :: RD_MAT_material_set_material_phase = 98
+  integer, parameter :: RD_MAT_material_set_elastic_isotropic = 99
+  integer, parameter :: RD_MAT_material_set_elastic_extra = 100
+  integer, parameter :: RD_GLB_contact_point_to_point_title_1 = 101
+  integer, parameter :: RD_GLB_contact_point_to_point_contact_control = 102
+  integer, parameter :: RD_GLB_link_concrete_and_steel_title_1 = 103
+  integer, parameter :: RD_GLB_link_concrete_and_steel_rc_steel_count = 104
+  integer, parameter :: RD_GLB_link_concrete_and_water_pipe_title_1 = 105
+  integer, parameter :: RD_GLB_link_concrete_and_water_pipe_water_pipe_count = 106
+  integer, parameter :: RD_IFS_stiff_interface_fluid_solid_title_1 = 107
+  integer, parameter :: RD_IFS_stiff_interface_fluid_solid_ifs_group_count = 108
+  integer, parameter :: RD_IFS_stiff_absorb_fluid_title_1 = 109
+  integer, parameter :: RD_IFS_stiff_absorb_fluid_absorb_fluid_count = 110
+  integer, parameter :: RD_IFS_stiff_absorb_solid_title_1 = 111
+  integer, parameter :: RD_IFS_stiff_absorb_solid_absorb_solid_count = 112
+  integer, parameter :: RD_IFS_stiff_ifs2006_title_1 = 113
+  integer, parameter :: RD_IFS_stiff_ifs2006_ifs_edge_count = 114
+  integer, parameter :: RD_OPR_output_read_title_1 = 115
+  integer, parameter :: RD_OPR_output_read_title_2 = 116
+  integer, parameter :: RD_OPR_output_read_output_control = 117
+  integer, parameter :: RD_OPR_output_read_title_3 = 118
+  integer, parameter :: RD_OPR_output_read_title_4 = 119
+  integer, parameter :: RD_OPR_output_read_label1_title = 120
+  integer, parameter :: RD_OPR_output_read_label2_title = 121
+  integer, parameter :: RD_OPR_output_read_label3_title = 122
+  integer, parameter :: RD_LOA_external_load_1_title_1 = 123
+  integer, parameter :: RD_LOA_external_load_1_curve_count = 124
+  integer, parameter :: RD_LOA_external_load_1_curve_header = 125
+  integer, parameter :: RD_LOA_external_load_1_curve_points = 126
+  integer, parameter :: RD_LOA_external_load_1_curve_factors = 127
+  integer, parameter :: RD_LOA_external_load_1_title_2 = 128
+  integer, parameter :: RD_LOA_external_load_1_point_load_count = 129
+  integer, parameter :: RD_LOA_external_load_1_title_3 = 130
+  integer, parameter :: RD_LOA_external_load_1_edge_count = 131
+  integer, parameter :: RD_MAT_material_set_duncanchang = 132
+  integer, parameter :: RD_MAT_material_set_duncanchang_eb = 133
+  integer, parameter :: RD_MAT_material_set_concrete = 134
+  integer, parameter :: RD_MAT_material_set_geometry_section = 135
+  integer, parameter :: RD_MAT_material_set_classicalep_criteria = 136
+  integer, parameter :: RD_MAT_material_set_classicalep_angles = 137
+  integer, parameter :: RD_MAT_material_set_classicalep_csigma0 = 138
+  integer, parameter :: RD_MAT_material_set_classicalep_angle_curves = 139
+  integer, parameter :: RD_PRE_prescrib_set_title_1 = 140
+  integer, parameter :: RD_PRE_prescrib_set_set_count = 141
+  integer, parameter :: RD_PRE_prescrib_set_reached_only_Prescrib_213 = 142
+  integer, parameter :: RD_PRE_prescrib_set_set_header = 143
+  integer, parameter :: RD_PRE_prescrib_set_set_nodes = 144
+  integer, parameter :: RD_PRE_prescrib_set_set_values = 145
+  integer, parameter :: RD_LOA_external_load_2_title_1 = 146
+  integer, parameter :: RD_LOA_external_load_2_title_2 = 147
+  integer, parameter :: RD_LOA_external_load_2_edge_load_groups = 148
+  integer, parameter :: RD_LOA_external_load_2_title_3 = 149
+  integer, parameter :: RD_LOA_external_load_2_gravity = 150
+  integer, parameter :: RD_LOA_external_load_2_gravity_curve_title = 151
+  integer, parameter :: RD_LOA_external_load_2_gravity_curves = 152
+  integer, parameter :: RD_LOA_external_load_2_title_4 = 153
+  integer, parameter :: RD_LOA_external_load_2_beam_load_count = 154
+  integer, parameter :: RD_LOA_external_load_2_title_5 = 155
+  integer, parameter :: RD_LOA_external_load_2_plate_load_count = 156
+  integer, parameter :: RD_TEM_boundt_title_1 = 157
+  integer, parameter :: RD_TEM_boundt_temp_surface_count = 158
+  integer, parameter :: RD_TEM_boundt_title_2 = 159
+  integer, parameter :: RD_TEM_boundt_temp_edge_count = 160
+  integer, parameter :: RD_TEM_boundt_label11_title = 161
+  integer, parameter :: RD_TEM_boundt_title_3 = 162
+  integer, parameter :: RD_TEM_boundt_temp_elgroup_count = 163
+  integer, parameter :: RD_TEM_boundt_title_4 = 164
+  integer, parameter :: RD_TEM_boundt_title_5 = 165
+  integer, parameter :: RD_TEM_boundt_pipe_count = 166
+  integer, parameter :: RD_SOL_PARDISO_title_1 = 167
+  integer, parameter :: RD_SOL_PARDISO_control = 168
+  integer, parameter :: RD_SOL_PARDISO_title_2 = 169
+  integer, parameter :: RD_SOL_PARDISO_isdefault = 170
+  integer, parameter :: RD_SOL_PROFILE_title_1 = 171
+  integer, parameter :: RD_SOL_PROFILE_profile_control = 172
+  integer, parameter :: RD_MAN_STATIC_U_title_1 = 173
+  integer, parameter :: RD_MAN_STATIC_U_nincs = 174
+  integer, parameter :: RD_MAN_STATIC_U_increment_control = 175
+  integer, parameter :: RD_MAN_STATIC_U_tolerances = 176
+  integer, parameter :: RD_LOA_external_load_1_edge_chunk_title = 177
+  integer, parameter :: RD_LOA_external_load_1_edge_chunk_header = 178
+  integer, parameter :: RD_LOA_external_load_1_edge_nodes = 179
+  integer, parameter :: RD_LOA_external_load_2_edge_load_group = 180
+  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution = 181
+  integer, parameter :: RD_LOA_external_load_1_point_load_group = 182
+  integer, parameter :: RD_LOA_external_load_1_point_load_force = 183
+  integer, parameter :: RD_LOA_external_load_1_point_load_nodes = 184
+  integer, parameter :: RD_LOA_external_load_1_point_load_extrapolation = 185
+  integer, parameter :: RD_LOA_external_load_2_edge_pressure_nodal = 186
+  integer, parameter :: RD_LOA_external_load_2_edge_load_distribution_2 = 187
 
   character(len=96), parameter :: YL_READER_ID(YL_NREADERS) = [character(len=96) :: &
     'INP.FEM90.title#1', &
@@ -278,6 +286,10 @@ module yl_diag_registry
     'NRT.global_data.title#1', &
     'NRT.global_data.title#2', &
     'NRT.global_data.transgroup', &
+    'NRT.global_data.transgroup_header', &
+    'NRT.global_data.interp_node', &
+    'NRT.global_data.interp_list', &
+    'NRT.global_data.interp_weights', &
     'GLB.global_data.title#35', &
     'GLB.global_data.tension_joint_count', &
     'GLB.global_data.title#36', &
@@ -285,6 +297,9 @@ module yl_diag_registry
     'INP.FEM90.runblks', &
     'MAT.material_set.title#1', &
     'MAT.material_set.curve_count', &
+    'MAT.material_set.curve_header', &
+    'MAT.material_set.curve_strain', &
+    'MAT.material_set.curve_stress', &
     'MAT.material_set.comment_line_count', &
     'MAT.material_set.comment_line#1', &
     'MAT.material_set.title#2', &
@@ -329,6 +344,7 @@ module yl_diag_registry
     'MAT.material_set.duncanchang', &
     'MAT.material_set.duncanchang_eb', &
     'MAT.material_set.concrete', &
+    'MAT.material_set.geometry_section', &
     'MAT.material_set.classicalep_criteria', &
     'MAT.material_set.classicalep_angles', &
     'MAT.material_set.classicalep_csigma0', &
@@ -460,6 +476,10 @@ module yl_diag_registry
     'Global.f90:1492', &
     'Global.f90:1494', &
     'Global.f90:1496', &
+    'Global.f90:1499', &
+    'Global.f90:1526', &
+    'Global.f90:1528', &
+    'Global.f90:1529', &
     'Global.f90:1809', &
     'Global.f90:1812', &
     'Global.f90:1826', &
@@ -467,6 +487,9 @@ module yl_diag_registry
     'Fem.f90:185', &
     'Material.f90:243', &
     'Material.f90:245', &
+    'Material.f90:250', &
+    'Material.f90:256', &
+    'Material.f90:257', &
     'Material.f90:261', &
     'Material.f90:264', &
     'Material.f90:270', &
@@ -511,6 +534,7 @@ module yl_diag_registry
     'Material.f90:504', &
     'Material.f90:528', &
     'Material.f90:666', &
+    'Material.f90:1016', &
     'Material.f90:620', &
     'Material.f90:625', &
     'Material.f90:645', &
@@ -642,6 +666,10 @@ module yl_diag_registry
     '.nrt', &
     '.nrt', &
     '.nrt', &
+    '.nrt', &
+    '.nrt', &
+    '.nrt', &
+    '.nrt', &
     '.glb', &
     '.glb', &
     '.glb', &
@@ -659,6 +687,9 @@ module yl_diag_registry
     '.mat', &
     '.mat', &
     '.mat', &
+    '.mat', &
+    '.mat', &
+    '.mat', &
     '.glb', &
     '.glb', &
     '.glb', &
@@ -690,6 +721,7 @@ module yl_diag_registry
     '.loa', &
     '.loa', &
     '.loa', &
+    '.mat', &
     '.mat', &
     '.mat', &
     '.mat', &
@@ -824,6 +856,10 @@ module yl_diag_registry
     'nrtunit', &
     'nrtunit', &
     'nrtunit', &
+    'nrtunit', &
+    'nrtunit', &
+    'nrtunit', &
+    'nrtunit', &
     'gunit', &
     'gunit', &
     'gunit', &
@@ -841,6 +877,9 @@ module yl_diag_registry
     'munit', &
     'munit', &
     'munit', &
+    'munit', &
+    'munit', &
+    'munit', &
     'gunit', &
     'gunit', &
     'gunit', &
@@ -872,6 +911,7 @@ module yl_diag_registry
     'loadunit', &
     'loadunit', &
     'loadunit', &
+    'munit', &
     'munit', &
     'munit', &
     'munit', &
@@ -945,6 +985,14 @@ module yl_diag_registry
     'startup', &
     'startup', &
     'reached_only', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
+    'startup', &
     'startup', &
     'startup', &
     'startup', &
@@ -1204,6 +1252,10 @@ module yl_diag_registry
     'text:str', &
     'text:str', &
     'transgroup:int', &
+    'ntransnode:int,translg:int', &
+    'ipoin:int,nintf:int', &
+    'listf[1:nintf]:int', &
+    'rintf[1:nintf]:real', &
     'text:str', &
     'tsel:int', &
     'text:str', &
@@ -1211,6 +1263,9 @@ module yl_diag_registry
     'runblks:int', &
     'text:str', &
     'nscurve:int', &
+    'npoints:int,type_curve:str', &
+    'strain_curve[1:npoints]:real', &
+    'stress_curve[1:npoints]:real', &
     'nline:int', &
     'text:str', &
     'text:str', &
@@ -1263,6 +1318,8 @@ module yl_diag_registry
     'A:real:materials[].concrete.dev_stress_quadratic,B:real:materials[].concrete.dev_stress_linear,C&
     &:real:materials[].concrete.principal_stress,D:real:materials[].concrete.mean_stress,Fc:real:mate&
     &rials[].concrete.compressive_strength,Ct:real:materials[].concre', &
+    'aera:real:sections[].cross_section_area,J:real:not_migrated,Iy:real:not_migrated,Iz:real:not_mig&
+    &rated', &
     'criteria:str:materials[].plasticity.criterion,sigma0:real:materials[].plasticity.yield_stress,ha&
     &rdening:real:materials[].plasticity.hardening_modulus', &
     'frict_angle:real:materials[].plasticity.friction_angle,dilan_angle:real:materials[].plasticity.d&
@@ -1338,15 +1395,16 @@ module yl_diag_registry
     31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, &
     43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, &
     55, 1, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, &
-    1, 1, 2, 3, 66, 67, 68, 69, 5, 1, 2, 3, &
-    4, 5, 6, 7, 8, 9, 10, 11, 12, 70, 71, 72, &
-    73, 74, 75, 1, 2, 3, 4, 5, 6, 7, 8, 1, &
-    2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, &
-    6, 7, 8, 9, 13, 14, 21, 15, 16, 17, 18, 1, &
-    2, 0, 4, 5, 6, 9, 10, 11, 14, 15, 16, 17, &
-    18, 19, 20, 21, 1, 2, 3, 4, 5, 6, 7, 8, &
-    9, 10, 17, 18, 19, 20, 1, 2, 1, 2, 3, 4, &
-    10, 11, 12, 12, 13, 7, 8, 9, 0, 0, 0 &
+    1, 1, 2, 3, 4, 5, 6, 7, 66, 67, 68, 69, &
+    5, 1, 2, 3, 4, 5, 3, 4, 5, 6, 7, 8, &
+    9, 10, 11, 12, 70, 71, 72, 73, 74, 75, 1, 2, &
+    3, 4, 5, 6, 7, 8, 1, 2, 3, 4, 5, 6, &
+    7, 8, 1, 2, 3, 4, 5, 6, 7, 8, 9, 13, &
+    14, 21, 20, 15, 16, 17, 18, 1, 2, 0, 4, 5, &
+    6, 9, 10, 11, 14, 15, 16, 17, 18, 19, 20, 21, &
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 17, 18, &
+    19, 20, 1, 2, 1, 2, 3, 4, 10, 11, 12, 12, &
+    13, 7, 8, 9, 0, 0, 0 &
     ]
 
 end module yl_diag_registry

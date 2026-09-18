@@ -94,7 +94,7 @@ module yl_runtime_commit
                         coord, appear_process, matno_process, average_appear,                   &
                         lmdofn, lcdofn, nodfn, iffix, fixed, order_time_mdofn, tension_joint,   &
                         modf_dis_blocks, tlink, equvs_process, force_process,                   &
-                        pnorm, prot, icpnorm, lelenrt, icpspring,                              &
+                        pnorm, prot, icpnorm, lelenrt, icpspring, pstrain, ipp4,               &
                         listglocbeam, links, trans_c, tension_contact,                          &
                         result_zero, tofor, stfor, toforl, toform, delitfi, deltafi,            &
                         line_load_block, line_temp_block, lineload, linet,                      &
@@ -124,7 +124,7 @@ module yl_runtime_commit
   use meshfine, only: ice0
   use temperature, only: ntemp_surface, ntedge, ntelgroup, npipe
   use materials, only: props, material_property, mechanical_property, solid_skeleton,   &
-                       material_1, material_5, material_4
+                       material_1, material_5, material_4, geometry_property
 
   use yl_problem_types, only: problem_state_t, boundary_t, step_t, output_field_t,          &
                               concentrated_t
@@ -136,6 +136,8 @@ module yl_runtime_commit
                                make_source_location,                                            &
                                PE_INTERNAL, PE_EXIT_INTERNAL, PE_UNSUPPORTED, PE_EXIT_UNSUPPORTED
   use yl_runtime_geometry, only: geometry_rule
+  use elements, only: direct_beam
+  use yl_problem_pipeline, only: element_rules_of_kind
   use yl_runtime_contract, only: contract_expect_int
   use yl_runtime_types, only: runtime_state_t, runtime_status_get, runtime_status_count,        &
                               RUNTIME_VALUE_DEFINED, RUNTIME_VALUE_RESERVED,                    &
@@ -532,22 +534,33 @@ contains
     integer(ink) :: s_npoin, s_nelem, s_ngroup, s_ndimn, s_mdofn, s_cdofn, s_ntotv
     integer(ink) :: s_ndofix, s_ntcurve, s_iblks, s_lblks, s_lineload, s_linet
     integer :: nevab, ngaus, ngaus_mass, nnode
+    ! Per-element integration shape (M9): the kind's parent dimension, its rule count and
+    ! the two rules' point counts. `ngaus` / `ngaus_mass` above stay the CONTRACT's
+    ! declaration for the default kind; these are what each element is actually built with.
+    integer :: e_lndimn, e_nrules, e_ngaus, e_ngaus_mass, e_k, g_nnode, g_nevab
+    integer :: e_in, e_id
+    integer(ink) :: e_pdirect(2)
+    real(irk) :: e_dl, e_a3(3), e_elcod_g(3, 4)
+    logical :: e_known
     ! staging: the existence face (ADR-0009). One buffer per existence-face.toml row.
     integer(ink), allocatable :: s_ex_order_time_mdofn(:), s_ex_tension_joint(:)
     integer(ink), allocatable :: s_ex_modf_dis_blocks(:)
     integer(ink), allocatable :: s_ex_tlink(:,:), s_ex_equvs(:), s_ex_force_process(:)
     integer(ink), allocatable :: s_ex_listglocbeam(:), s_ex_tension_contact(:)
     integer(ink), allocatable :: s_ex_icpnorm(:), s_ex_lelenrt(:), s_ex_icpspring(:)
+    integer(ink), allocatable :: s_ex_ipp4(:)
+    real(irk), allocatable :: s_ex_pstrain(:)
     real(irk), allocatable :: s_ex_pnorm(:,:), s_ex_prot(:,:,:)
     ! staging: the ProblemState half's plain arrays (M4-01 step 3)
     real(irk), allocatable :: s_coord(:,:), s_factg(:)
     integer(ink), allocatable :: s_appear_process(:,:), s_matno_process(:,:)
     integer(ink), allocatable :: s_average_appear(:), s_tcurvegravity(:)
     type(material_property), allocatable :: s_props(:)
-    ! Gauss geometry scratch: sized for the one element shape this build admits (Q4 in
-    ! 2-D, 4-point stiffness rule and 16-point mass rule), like every other fixed extent
-    ! in this routine.
-    real(real64) :: g_djacb(16), g_gpcod(2, 16), g_cartd(2, 4, 4), g_djmin
+    ! Gauss geometry scratch, sized for the LARGEST admitted element shape rather than the
+    ! only one: Q4's 16-point mass rule, Q4's 4 nodes, and a parent dimension of 2. L2's
+    ! 2-point rules and 2 nodes fit inside it, and STEEL declares no rule at all. The
+    ! extents are maxima, and every call slices them to the element's own counts.
+    real(real64) :: g_djacb(16), g_gpcod(2, 16), g_cartd(2, 4, 16), g_djmin
     integer(int32) :: c_i32
     logical :: c_found
     ! n_materials / n_steps, NOT nmats / nblks. Those two names are use-associated from
@@ -831,6 +844,21 @@ contains
       ! would be a second derivation of something ProblemState already decided.
       s_element(ie)%index = int(opt_or(problem%mesh%elements(ie)%kind), ink)
       s_element(ie)%group = int(opt_or(problem%mesh%elements(ie)%elset), ink)
+      ! PER ELEMENT since M9. `nnode` and `nevab` above are element 1's, which was the
+      ! whole mesh's only while a mesh had one element kind; elements_2d.rcbeam carries
+      ! 4 / 2 / 2. Read off the RuntimeState arrays rather than re-derived, because
+      ! build_runtime has already sized them from the section's kind and a second
+      ! derivation here could disagree with the first.
+      nnode = size(runtime%element(ie)%field_coordinates, 2)
+      nevab = size(runtime%dof%element_variables(ie)%values)
+      call element_rules_of_kind(int(s_element(ie)%index, int32), e_lndimn, e_nrules,           &
+                                 e_ngaus, e_ngaus_mass, e_known)
+      if (.not. e_known) then
+        call fail(errors, 'element '//itoa(ie)//' has element kind '//                          &
+                  itoa(int(s_element(ie)%index))//', which this build has no integration '//    &
+                  'rule table for')
+        return
+      end if
       allocate (s_element(ie)%ldofs(nevab))
       s_element(ie)%ldofs = STAGE_POISON_I
       s_element(ie)%ldofs = int(runtime%dof%element_variables(ie)%values, ink)
@@ -851,6 +879,49 @@ contains
       allocate (s_element(ie)%field(1)%lnods_f(nnode))
       s_element(ie)%field(1)%lnods_f = STAGE_POISON_I
       s_element(ie)%field(1)%lnods_f = int(problem%mesh%elements(ie)%nodes, ink)
+
+      ! --- the 2-node element's local frame (Elements.f90:1118-1139) ---------------
+      !
+      ! A line element carries a ROTATION from the global axes to its own, and legacy
+      ! stores its node coordinates ALREADY ROTATED into that frame (:1135-1139), so the
+      ! Gauss geometry below must see the local coordinates, not the global ones. Q4 has
+      ! no such frame and this whole block is skipped for it, which is why nothing before
+      ! rcbeam needed it.
+      !
+      ! The frame itself is computed by LEGACY's `direct_beam`, not reproduced here -- the
+      ! same rule the Gauss geometry follows, and for the same reason (yl_runtime_geometry's
+      ! header). `point_direct` is passed as (0,0): in 2-D `direct_beam` returns at its
+      ! line 1463 before reading it, so the value cannot reach an expression. A 3-D beam
+      ! would read it, and 3-D is outside this build.
+      !
+      ! Kind 25 gets its rotation LATER, from legacy itself: steel_spring_parameter
+      ! (Material.f90:1151) assigns it from `prot`, which is why the bond element only has
+      ! the array allocated here and its contents left to legacy.
+      if (nnode == 2) then
+        allocate (s_element(ie)%rotation(s_ndimn, s_ndimn))
+        s_element(ie)%rotation = STAGE_POISON_R
+        if (s_element(ie)%index /= 25_ink) then
+          e_dl = sqrt(sum((s_element(ie)%field(1)%elcod_f(1:s_ndimn, 2) -                       &
+                           s_element(ie)%field(1)%elcod_f(1:s_ndimn, 1))**2))
+          if (e_dl <= 0.0_irk) then
+            call fail(errors, 'element '//itoa(ie)//' is a line element of zero length; its '// &
+                      'local frame is not defined')
+            return
+          end if
+          e_a3(1:s_ndimn) = (s_element(ie)%field(1)%elcod_f(1:s_ndimn, 2) -                     &
+                             s_element(ie)%field(1)%elcod_f(1:s_ndimn, 1))/e_dl
+          e_pdirect = 0_ink
+          call direct_beam(int(s_ndimn, ink), e_a3(1:s_ndimn), s_element(ie)%rotation,          &
+                           e_pdirect, s_element(ie)%field(1)%elcod_f)
+          e_elcod_g(1:s_ndimn, 1:nnode) = s_element(ie)%field(1)%elcod_f(1:s_ndimn, 1:nnode)
+          do e_in = 1, nnode
+            do e_id = 1, s_ndimn
+              s_element(ie)%field(1)%elcod_f(e_id, e_in) =                                      &
+                sum(s_element(ie)%rotation(e_id, 1:s_ndimn)*e_elcod_g(1:s_ndimn, e_in))
+            end do
+          end do
+        end if
+      end if
       ! DEFINED as zero, corrected 2026-09-10 (see yl_runtime_build.f90 for the finding).
       ! They were staged as RESERVED poison on the map's claim that legacy never
       ! initialises them; Global.f90:1325-1327 sets all three to 0.0 three lines after the
@@ -886,38 +957,47 @@ contains
       ! produced the 2026-09-14 cartd divergence (yl_runtime_geometry's header has the
       ! story). RuntimeState's job is existence and transport; this is neither, so it moved
       ! out and `build_runtime` no longer needs the legacy tree to build.
-      allocate (s_element(ie)%egaus(2))
-      call null_gauss(s_element(ie)%egaus(1))
-      call null_gauss(s_element(ie)%egaus(2))
-      allocate (s_element(ie)%egaus(1)%djacb(ngaus))
-      allocate (s_element(ie)%egaus(1)%gpcod(s_ndimn, ngaus))
-      allocate (s_element(ie)%egaus(1)%cartd(s_ndimn, nnode, ngaus))
-      s_element(ie)%egaus(1)%djacb = STAGE_POISON_R
-      s_element(ie)%egaus(1)%gpcod = STAGE_POISON_R
-      s_element(ie)%egaus(1)%cartd = STAGE_POISON_R
-      call geometry_rule(int(s_ndimn), nnode, int(ngaus),                                       &
-                         real(s_element(ie)%field(1)%elcod_f, real64), .true., ie,              &
-                         g_djacb(1:ngaus), g_gpcod(1:s_ndimn, 1:ngaus),                         &
-                         g_cartd(1:s_ndimn, 1:nnode, 1:ngaus), g_djmin)
-      if (g_djmin <= 0.0_real64) then
-        call fail(errors, 'element '//itoa(ie)//' has a non-positive Jacobian determinant '//   &
-                  'at a Gauss point; the connectivity is not counter-clockwise under the '//    &
-                  'contract node order')
-        return
+      ! Elements.f90:1116 -- the rules are allocated ONLY when the kind declares some.
+      ! STEEL (kind 25) declares `nr_intrules = 0` and legacy gives it no `egaus` at all,
+      ! so an unconditional `allocate(egaus(2))` here would hand the solver a shape legacy
+      ! never builds. Until M9 every admitted kind had two rules and the guard was invisible.
+      if (e_nrules > 0) then
+        allocate (s_element(ie)%egaus(e_nrules))
+        do e_k = 1, e_nrules
+          call null_gauss(s_element(ie)%egaus(e_k))
+        end do
+        allocate (s_element(ie)%egaus(1)%djacb(e_ngaus))
+        allocate (s_element(ie)%egaus(1)%gpcod(s_ndimn, e_ngaus))
+        allocate (s_element(ie)%egaus(1)%cartd(e_lndimn, nnode, e_ngaus))
+        s_element(ie)%egaus(1)%djacb = STAGE_POISON_R
+        s_element(ie)%egaus(1)%gpcod = STAGE_POISON_R
+        s_element(ie)%egaus(1)%cartd = STAGE_POISON_R
+        call geometry_rule(int(s_ndimn), e_lndimn, nnode, e_ngaus,                             &
+                           real(s_element(ie)%field(1)%elcod_f, real64), .true., ie,            &
+                           g_djacb(1:e_ngaus), g_gpcod(1:s_ndimn, 1:e_ngaus),                  &
+                           g_cartd(1:e_lndimn, 1:nnode, 1:e_ngaus), g_djmin)
+        if (g_djmin <= 0.0_real64) then
+          call fail(errors, 'element '//itoa(ie)//' has a non-positive Jacobian determinant '// &
+                    'at a Gauss point; the connectivity is not counter-clockwise under the '// &
+                    'contract node order')
+          return
+        end if
+        s_element(ie)%egaus(1)%djacb = real(g_djacb(1:e_ngaus), irk)
+        s_element(ie)%egaus(1)%gpcod = real(g_gpcod(1:s_ndimn, 1:e_ngaus), irk)
+        s_element(ie)%egaus(1)%cartd = real(g_cartd(1:e_lndimn, 1:nnode, 1:e_ngaus), irk)
       end if
-      s_element(ie)%egaus(1)%djacb = real(g_djacb(1:ngaus), irk)
-      s_element(ie)%egaus(1)%gpcod = real(g_gpcod(1:s_ndimn, 1:ngaus), irk)
-      s_element(ie)%egaus(1)%cartd = real(g_cartd(1:s_ndimn, 1:nnode, 1:ngaus), irk)
-      allocate (s_element(ie)%egaus(2)%djacb(ngaus_mass))
-      allocate (s_element(ie)%egaus(2)%gpcod(s_ndimn, ngaus_mass))
-      s_element(ie)%egaus(2)%djacb = STAGE_POISON_R
-      s_element(ie)%egaus(2)%gpcod = STAGE_POISON_R
-      call geometry_rule(int(s_ndimn), nnode, int(ngaus_mass),                                  &
-                         real(s_element(ie)%field(1)%elcod_f, real64), .false., ie,             &
-                         g_djacb(1:ngaus_mass), g_gpcod(1:s_ndimn, 1:ngaus_mass),               &
-                         g_cartd(1:s_ndimn, 1:nnode, 1:1), g_djmin)
-      s_element(ie)%egaus(2)%djacb = real(g_djacb(1:ngaus_mass), irk)
-      s_element(ie)%egaus(2)%gpcod = real(g_gpcod(1:s_ndimn, 1:ngaus_mass), irk)
+      if (e_nrules > 1) then
+        allocate (s_element(ie)%egaus(2)%djacb(e_ngaus_mass))
+        allocate (s_element(ie)%egaus(2)%gpcod(s_ndimn, e_ngaus_mass))
+        s_element(ie)%egaus(2)%djacb = STAGE_POISON_R
+        s_element(ie)%egaus(2)%gpcod = STAGE_POISON_R
+        call geometry_rule(int(s_ndimn), e_lndimn, nnode, e_ngaus_mass,                        &
+                           real(s_element(ie)%field(1)%elcod_f, real64), .false., ie,           &
+                           g_djacb(1:e_ngaus_mass), g_gpcod(1:s_ndimn, 1:e_ngaus_mass),        &
+                           g_cartd(1:e_lndimn, 1:nnode, 1:1), g_djmin)
+        s_element(ie)%egaus(2)%djacb = real(g_djacb(1:e_ngaus_mass), irk)
+        s_element(ie)%egaus(2)%gpcod = real(g_gpcod(1:s_ndimn, 1:e_ngaus_mass), irk)
+      end if
       ! egaus(2)%cartd stays null: legacy allocates cartd only for a rule whose name is
       ! not 'mass' (Elements.f90:1232), so an allocated one here would be a shape the
       ! solver never sees and a leak the releaser would have to guess at.
@@ -1005,16 +1085,24 @@ contains
       end do
       s_group(ig)%nrfields = int(nrf, ink)
 
-      ! sections.dof_count: DERIVED. nfdof = nevab / nnode, where both are runtime extents
-      ! (nevab = size(runtime%dof%element_variables(1)%values), nnode =
-      ! size(runtime%element(1)%field_coordinates, 2)) and the map states the relation as
-      ! "nevab = nfdof*nnode". Computed, not read, which is what DERIVED means here.
-      if (nnode <= 0 .or. mod(nevab, nnode) /= 0) then
-        call fail(errors, 'nevab '//itoa(nevab)//' is not a whole multiple of nnode '//         &
-                  itoa(nnode)//', so the per-field dof count nevab/nnode is not an integer')
+      ! sections.dof_count: DERIVED. nfdof = nevab / nnode, both runtime extents, with the
+      ! map stating the relation as "nevab = nfdof*nnode". Computed, not read, which is
+      ! what DERIVED means here.
+      !
+      ! Taken from THIS SECTION'S FIRST ELEMENT since M9. It used to read element 1 of the
+      ! whole mesh, which was this section's element only while a mesh had one element
+      ! kind; on a mixed mesh the quotient is still nfdof either way -- both extents scale
+      ! with nnode -- but reading another section's element to derive this section's
+      ! property is the kind of coincidence that stops being true without warning.
+      g_nnode = size(runtime%element(int(problem%mesh%elsets(ig)%elements(1)))%field_coordinates, 2)
+      g_nevab = size(runtime%dof%element_variables(                                             &
+                       int(problem%mesh%elsets(ig)%elements(1)))%values)
+      if (g_nnode <= 0 .or. mod(g_nevab, g_nnode) /= 0) then
+        call fail(errors, 'nevab '//itoa(g_nevab)//' is not a whole multiple of nnode '//       &
+                  itoa(g_nnode)//', so the per-field dof count nevab/nnode is not an integer')
         return
       end if
-      nfdof = nevab / nnode
+      nfdof = g_nevab / g_nnode
 
       ! sections.dof_list: PRECONDITION FIRST, then a copy.
       !
@@ -1321,6 +1409,28 @@ contains
       if (id_ >= 1 .and. id_ <= n_materials) then
         s_props(id_)%mechanical%solid%thickness =                                             &
           real(opt_or_real(problem%sections(ig)%thickness), irk)
+        ! The line element's cross-section, resolved the same way and in the same pass:
+        ! authored on the SECTION, stored by legacy on the MATERIAL. A second pointer
+        ! level, allocated only for a material a section actually gave an area to --
+        ! Stiff.f90:118 reaches it as `props(matno)%geometry%aera` without testing the
+        ! element kind first, so an unconditional allocate would hand every Q4 material a
+        ! geometry record full of nothing.
+        if (opt_is_set(problem%sections(ig)%cross_section_area) .and.                         &
+            .not. associated(s_props(id_)%geometry)) then
+          allocate (s_props(id_)%geometry)
+          nullify (s_props(id_)%geometry%rotlg, s_props(id_)%geometry%point_direct)
+          s_props(id_)%geometry%aera =                                                        &
+            real(opt_or_real(problem%sections(ig)%cross_section_area), irk)
+          ! J/Iy/Iz have no ProblemState component: they are the BEAM branch's
+          ! (Stiff.f90:206-213, kinds 20/21) and this build does not admit it. They are set
+          ! to zero rather than left undefined or poisoned because the value is known by
+          ! CONSTRUCTION -- yl_adapter_material refuses a geometry record whose J/Iy/Iz are
+          ! anything else, so zero is what the deck said, not a default invented here.
+          s_props(id_)%geometry%J = 0.0_irk
+          s_props(id_)%geometry%Iy = 0.0_irk
+          s_props(id_)%geometry%Iz = 0.0_irk
+          s_props(id_)%geometry%ipd = 0_ink
+        end if
       end if
     end do
 
@@ -1542,6 +1652,12 @@ contains
     allocate (s_ex_icpnorm(s_npoin));                  s_ex_icpnorm = 0_ink
     allocate (s_ex_lelenrt(s_nelem));                  s_ex_lelenrt = 0_ink
     allocate (s_ex_icpspring(s_npoin));                s_ex_icpspring = 0_ink
+    ! Two more from the SAME legacy statement block (Global.f90:712-714), added with M9's
+    ! line elements. They were missing rather than deliberately left out: nothing on the
+    ! Q4-only path reads either, so an unallocated `pstrain` was invisible until rcbeam
+    ! reached strain_for_steel_ (Fem.f90:17793) and segfaulted on it.
+    allocate (s_ex_ipp4(s_npoin));                     s_ex_ipp4 = 0_ink
+    allocate (s_ex_pstrain(s_npoin));                  s_ex_pstrain = 0.0_irk
 
     call verify_residue_against_gates(residue, problem, errors, ok, n_steps)
     if (.not. ok) return
@@ -1633,6 +1749,8 @@ contains
     call move_alloc(s_ex_icpnorm, icpnorm)                     !@existence: icpnorm
     call move_alloc(s_ex_lelenrt, lelenrt)                     !@existence: lelenrt
     call move_alloc(s_ex_icpspring, icpspring)                 !@existence: icpspring
+    call move_alloc(s_ex_ipp4, ipp4)                           !@existence: ipp4
+    call move_alloc(s_ex_pstrain, pstrain)                     !@existence: pstrain
     ! links and trans_c are derived-type arrays legacy allocates unconditionally
     ! (Global.f90:1138, :1772). nlinks is 0 on the whitelist, so links is empty; trans_c
     ! is per-node and legacy sets only %nintf = 0 right after allocating it.
@@ -2018,6 +2136,9 @@ contains
     if (allocated(element)) then
       do i = 1, size(element)
         if (associated(element(i)%ldofs)) deallocate (element(i)%ldofs)
+        ! The line element's local frame (M9). Released here beside ldofs because it is a
+        ! sibling pointer on the element, not a level below the field.
+        if (associated(element(i)%rotation)) deallocate (element(i)%rotation)
         if (associated(element(i)%field)) then
           do ig = 1, size(element(i)%field)
             if (associated(element(i)%field(ig)%lnods_f)) deallocate (element(i)%field(ig)%lnods_f)
@@ -2133,6 +2254,9 @@ contains
           end if
           deallocate (props(i)%mechanical)
         end if
+        ! The geometry record is a SIBLING of %mechanical on the material, not a level
+        ! below it, so it is released here rather than inside the chain above.
+        if (associated(props(i)%geometry)) deallocate (props(i)%geometry)
       end do
       deallocate (props)
     end if
@@ -2157,6 +2281,8 @@ contains
     if (allocated(icpnorm)) deallocate (icpnorm)                     !@existence: icpnorm
     if (allocated(lelenrt)) deallocate (lelenrt)                     !@existence: lelenrt
     if (allocated(icpspring)) deallocate (icpspring)                 !@existence: icpspring
+    if (allocated(ipp4)) deallocate (ipp4)                           !@existence: ipp4
+    if (allocated(pstrain)) deallocate (pstrain)                     !@existence: pstrain
     if (allocated(links)) deallocate (links)                         !@existence: links
     if (allocated(trans_c)) deallocate (trans_c)                     !@existence: trans_c
     if (allocated(lmdofn)) deallocate (lmdofn)

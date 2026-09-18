@@ -149,7 +149,7 @@ module yl_adapter_model
                                 make_problem_error, PE_INVALID_INPUT, PE_STAGE_ADAPT
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
-  use yl_problem_pipeline, only: nodes_of_kind
+  use yl_problem_pipeline, only: nodes_of_kind, element_name_of_kind
   use yl_adapter_parts, only: step_parts_t, deck_context_t, solver_parts_t, section_parts_t, &
                                LEN_TYPE_ABC, reject_dialect
 
@@ -266,7 +266,7 @@ contains
 
     ! group header loop (Global.f90:1216) and its per-field sub-records
     integer(int32) :: igroup, ifield
-    character(len=10) :: gname, gspecial, gsptype
+    character(len=10) :: gname, gspecial, gsptype, gfamily
     character(len=20) :: gkname
     integer(int32) :: gindex
     character(len=2) :: gclass
@@ -1038,7 +1038,17 @@ contains
         ! unset for parse_mat to fill, and the driver publishes the assembled whole with
         ! one builder_add_section call per section, never this parser.
         call opt_set(sec%name, trim(gkname))
-        call opt_set(sec%element, trim(gname))
+        ! The FAMILY, derived from the index -- NOT the deck's NAME tag. rcbeam writes
+        ! "L2" for both of its line groups and separates them only by index (1 vs 25), so
+        ! the tag is not a family name; see element_name_of_kind for why dropping it is
+        ! safe. An unknown index leaves the tag in place so the capability gate's
+        ! rejection of that kind stays the visible failure.
+        call element_name_of_kind(gindex, gfamily, kind_known)
+        if (kind_known) then
+          call opt_set(sec%element, trim(gfamily))
+        else
+          call opt_set(sec%element, trim(gname))
+        end if
         call opt_set(sec%element_kind, gindex)
         call opt_set(sec%class, trim(gclass))
         call opt_set(sec%fields, trim(gfieldid))

@@ -273,6 +273,12 @@ contains
       call opt_set(sec%element, text_at(doc, 'section['//itoa(i)//'].element'))
       call opt_set(sec%element_kind, element_kind_of(text_at(doc, 'section['//itoa(i)//'].element')))
       call opt_set(sec%formulation, formulation_code(text_at(doc, 'section['//itoa(i)//'].formulation')))
+      ! Written only for the family that takes one; `section_requires` has already refused
+      ! both halves of the mistake, so absence here means the section genuinely has no
+      ! authored cross-section and the commit leaves legacy's geometry record unallocated.
+      if (doc%find('section['//itoa(i)//'].area') /= 0_int32) then
+        call opt_set(sec%cross_section_area, real_at(doc, 'section['//itoa(i)//'].area'))
+      end if
       j = material_index(doc, text_at(doc, 'section['//itoa(i)//'].material'))
       call opt_set(sec%material, int(j, int32))
       call opt_set(sec%material_header, int(j, int32))
@@ -399,8 +405,29 @@ contains
         call opt_set(ld%gravity%magnitude, real_at(doc, trim(gp)//'.magnitude'))
         if (allocated(ld%gravity%amplitude)) deallocate (ld%gravity%amplitude)
         allocate (ld%gravity%amplitude(int(doc%count_of('section'))))
-        ld%gravity%amplitude = int(amplitude_index(doc,                                           &
-                                   text_at(doc, trim(gp)//'.amplitude')), int32)
+        ! `apply_to` finally does something (2026-09-18). It has been a validated key with
+        ! no consumer since M5 -- the validator refused a dangling name, and then the fan-out
+        ! below gave every section the curve anyway. Legacy's array is PER SECTION
+        ! (tcurvegravity(1:ngroup), Load.f90:988) and 0 means "no gravity curve for this
+        ! group", which is exactly what naming one elset means. rcbeam is the first deck
+        ! that needs it: its [1, 0, 0] puts self-weight on the concrete body only, not on
+        ! the reinforcement or the bond elements. `apply_to = "all"` -- what all eight
+        ! earlier decks write -- fans out unchanged, so this is inert on every one of them.
+        block
+          integer(int32) :: acurve, isec
+          character(len=TOML_LEN_PATH) :: target
+          acurve = int(amplitude_index(doc, text_at(doc, trim(gp)//'.amplitude')), int32)
+          target = text_at(doc, trim(gp)//'.apply_to')
+          if (trim(target) == 'all') then
+            ld%gravity%amplitude = acurve
+          else
+            ld%gravity%amplitude = 0_int32
+            do isec = 1_int32, int(doc%count_of('section'), int32)
+              if (text_at(doc, 'section['//itoa(isec)//'].elset') == trim(target)) &
+                ld%gravity%amplitude(isec) = acurve
+            end do
+          end if
+        end block
         if (allocated(ld%gravity%direction)) deallocate (ld%gravity%direction)
         allocate (ld%gravity%direction(2))
         ld%gravity%direction(1) = real_at(doc, trim(gp)//'.direction[1]')
@@ -475,6 +502,15 @@ contains
         call default_output(outp)
         call set_stress_averaging(outp, int(doc%count_of('section')),                             &
                                   stress_averaging_code(text_at(doc, 'output.stress_averaging')))
+        ! Per-section override, written only where the author stated one (see the key table).
+        block
+          integer(int32) :: isec
+          do isec = 1_int32, int(doc%count_of('section'), int32)
+            if (doc%find('section['//itoa(isec)//'].stress_averaging') == 0_int32) cycle
+            outp%stress_averaging(isec) =                                                     &
+              stress_averaging_code(text_at(doc, 'section['//itoa(isec)//'].stress_averaging'))
+          end do
+        end block
         call apply_output_fields(doc, outp)
         call builder_step_set_output(b, sb, outp, here(line_at(doc, 'output.format')), errors)
         if (builder_failed(b)) return
@@ -497,6 +533,18 @@ contains
               call opt_set(bnd%nset, nodes(k))
               call opt_set(bnd%dof, ids(j))
               call opt_set(bnd%value, real_at(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].value'))
+              if (doc%find('step['//itoa(st)//'].boundary['//itoa(i)//'].record_reaction') /= 0_int32) then
+                call opt_set(bnd%record_reaction, merge(1_int32, 0_int32,                     &
+                     doc%entry(doc%find('step['//itoa(st)//'].boundary['//itoa(i)//           &
+                                        '].record_reaction'))%lvalue))
+              end if
+              ! Written only when the author named one; `boundary_requires` has already
+              ! refused both halves of the mistake, so absence here means the prescribed
+              ! value is zero and default_boundary's itcurve = 0 is what legacy gets.
+              if (doc%find('step['//itoa(st)//'].boundary['//itoa(i)//'].amplitude') /= 0_int32) then
+                call opt_set(bnd%amplitude, int(amplitude_index(doc,                          &
+                     text_at(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].amplitude')), int32))
+              end if
               call builder_step_add_boundary(b, sb, bnd,                                          &
                    here(line_at(doc, 'step['//itoa(st)//'].boundary['//itoa(i)//'].nset')), errors)
               if (builder_failed(b)) return

@@ -915,3 +915,34 @@ needed it from commit. The MODERN path (--input=case.toml) skips that whole read
 there is no .glb -- so commit becomes the only thing that can establish it. out_gid_write
 reads icpnorm while writing the results, which is how the class announced itself.
 """
+
+[[array]]
+symbol = "ipp4"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "npoin"
+dtype = "i32"
+legacy_allocation = "Global.f90:712, zeroed on the same line"
+why = """
+The same class as icpspring and from the same statement block, added 2026-09-18 with the
+line-element domain. It was not overlooked on purpose: nothing on a Q4-only path reads it,
+so an unallocated one was invisible. elements_2d.rcbeam is the first deck whose element
+loop reaches the steel routines that do.
+"""
+
+[[array]]
+symbol = "pstrain"
+disposition = "required"
+value_source = "derived-zero"
+module = "global_var"
+extent = "npoin"
+dtype = "f64"
+legacy_allocation = "Global.f90:714, zeroed on the same line"
+why = """
+The reinforcement's axial strain, accumulated per node by strain_for_steel_
+(Fem.f90:17779-17798) over the kind-1 and kind-20 elements. Establishing it is not
+optional on a deck with a line-element group: that routine writes `pstrain(lnods)` with no
+allocation test, and on elements_2d.rcbeam an unallocated one was a SIGSEGV at Fem.f90:17793
+-- measured 2026-09-18, which is how this row was found.
+"""

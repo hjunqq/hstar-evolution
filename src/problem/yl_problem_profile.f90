@@ -243,12 +243,13 @@ module yl_problem_profile
     ! one spelling for "a set of admissible values" (text_in_set). The ProblemState
     ! component is still an integer.
     !
-    ! It admits 5 ALONE because no admitted golden deck reaches kind 1 or 25: every real
-    ! 2-D line-element deck also needs CONCRETE and PARDISO, both out of scope (see
-    ! docs/m9/l2-element-domain.md). Widening the set is a one-line change the moment a
-    ! deck can be driven -- a whitelist entry is a claim, and this one has no deck yet.
+    ! {1, 5, 25} since 2026-09-18, and each value has a deck behind it: 5 on eight, 1 and
+    ! 25 on elements_2d.rcbeam, which carries all three in ONE mesh. It admitted 5 alone
+    ! until then, not because the others were unknown but because every real 2-D
+    ! line-element deck also needs CONCRETE and PARDISO -- M11 and M10 removed both, which
+    ! is what made this a one-line change instead of a claim with no deck.
     capability_item_t('G1', 'element.kind_code', 'sections[]', 'element_kind',                      &
-                      PROFILE_KIND_TEXT, 0_int32, '5', .false.),                                   &
+                      PROFILE_KIND_TEXT, 0_int32, '1|5|25', .false.),                              &
     capability_item_t('G1', 'element.class', 'sections[]', 'class',                                 &
                       PROFILE_KIND_TEXT, 0_int32, 'CO', .false.),                                   &
     capability_item_t('G1', 'element.fields', 'sections[]', 'fields',                               &
@@ -557,11 +558,6 @@ module yl_problem_profile
   ! A-MAT/nonlinear-normal-stiffness share (rule_id, object_path, field) and differ only
   ! in `condition`: the pair the module header names as the reason the key is composed.
   type(capability_item_t), parameter :: DIALECT_MAT_SOL(*) = [                                                         &
-    capability_item_t(rule_id='A-MAT', condition='curve-count',                                                     &
-                      item='mat.nscurve', object_path='materials',                                                  &
-                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
-                      message='property curves (nscurve/=0) read npoints/type_curve/strain_curve/stress_curve '//   &
-                              'records this parser cannot shape (Material.f90:250-257)'),                           &
     capability_item_t(rule_id='A-MAT', condition='property',                                                        &
                       item='mat.property', object_path='materials',                                                 &
                       field='kind', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                            &
@@ -616,7 +612,7 @@ module yl_problem_profile
                       message='CONCRETE branches on the crack model (Material.f90:676-712): 2 reads a '//   &
                               'FURTHER record of ft0/eft/at/bt/alfat, 3/5/6 read nothing more and '//   &
                               'derive bb/et0 instead, so a wrong guess desynchronises the file; only '//   &
-                              '6 is whitelisted'),                                                                  &
+                              '6 and 3 are whitelisted'),                                                                  &
     capability_item_t(rule_id='A-MAT', condition='duncanchang-bulk-law',                                            &
                       item='mat.dc_model', object_path='materials',                                                 &
                       field='duncan_chang.bulk_modulus_law', stage=CAP_STAGE_ADAPT,                                 &

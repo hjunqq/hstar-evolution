@@ -63,6 +63,7 @@ module yl_runtime_build
   use iso_fortran_env, only: int32, int64, real64
   use yl_problem_optional, only: opt_int, opt_real, opt_get, opt_set, opt_is_set
   use yl_problem_types, only: problem_state_t, boundary_t
+  use yl_problem_pipeline, only: nodes_of_kind
   use yl_problem_errors, only: problem_errors_t, problem_error_t, make_problem_error,           &
                                PE_DANGLING_REF, PE_DUPLICATE_REF, PE_COUNT_MISMATCH,            &
                                PE_INVALID_INPUT, PE_INTERNAL, PE_EXIT_INTERNAL
@@ -132,6 +133,14 @@ module yl_runtime_build
     integer(int32), allocatable :: elem_of_id(:)      ! authored element id -> storage index
     integer(int32), allocatable :: group_list(:,:)    ! (max nelgroup, ngroup) element indices
     integer(int32), allocatable :: nelgroup(:)        ! elements per group
+    !> Per-ELEMENT node count and variable-list length. Until M9 these were the two
+    !> scalars above, which said "one element kind per mesh" -- an assumption legacy has
+    !> never had (it reads .ele inside the group loop, one group's nnode at a time,
+    !> Elements.f90:1081-1087). elements_2d.rcbeam carries 4 / 2 / 2 in ONE mesh, so the
+    !> scalars are now the CONTRACT's declaration for the default kind and these arrays
+    !> are what every per-element loop uses.
+    integer(int32), allocatable :: nnode_of(:)        ! (nelem) nodes on this element
+    integer(int32), allocatable :: nevab_of(:)        ! (nelem) nfdof * nnode_of
     real(real64), allocatable :: coord(:,:)           ! (ndimn, npoin), metres
   end type build_shape_t
 
@@ -296,7 +305,8 @@ contains
     type(build_shape_t), intent(out) :: shape
     type(problem_errors_t), intent(inout) :: errors
 
-    integer :: i, j, k, n, max_id, max_group, eid
+    integer :: i, j, k, n, max_id, max_group, eid, want
+    logical :: known
     integer(int32) :: value
     logical :: found
 
@@ -386,21 +396,65 @@ contains
       end do
     end do
 
-    ! INV-NEVAB, the precondition guard: every element must carry exactly the node
-    ! count the contract declares, or `nevab` is not nnode*nfdof and every per-element
-    ! vector below is the wrong length. Unreachable through the capability gate; this
-    ! is the answer a caller gets who skipped it.
+    ! INV-NEVAB, the precondition guard: every element must carry exactly the node count
+    ! ITS OWN KIND declares, or its variable list is not nnode*nfdof long and every
+    ! per-element vector below is the wrong length. The comparison used to be against one
+    ! mesh-wide `shape%nnode`; that made a mixed-topology mesh fail here rather than at the
+    ! capability gate, which is where an unsupported kind belongs. Unreachable through the
+    ! gate either way; this is the answer a caller gets who skipped it.
+    allocate (shape%nnode_of(shape%nelem), shape%nevab_of(shape%nelem))
+    shape%nnode_of = 0_int32
+    shape%nevab_of = 0_int32
     do i = 1, shape%nelem
-      n = 0
-      if (allocated(problem%mesh%elements(i)%nodes)) n = size(problem%mesh%elements(i)%nodes)
-      if (n /= shape%nnode) then
-                call raise_row(errors, 'INV-NEVAB', 'ldofs-length-is-nnode-x-ndofn',                     &
-                        'element carries a node count the contract does not declare',            &
-                        actual=itoa(n), expected=itoa(shape%nnode), idx=i)
+      call element_nnode(problem, shape, i, want, known)
+      if (.not. known) then
+        call raise_row(errors, 'INV-NEVAB', 'ldofs-length-is-nnode-x-ndofn',                     &
+                       'element belongs to a section whose element kind this build does '//      &
+                       'not know a node count for', idx=i)
         return
       end if
+      n = 0
+      if (allocated(problem%mesh%elements(i)%nodes)) n = size(problem%mesh%elements(i)%nodes)
+      if (n /= want) then
+                call raise_row(errors, 'INV-NEVAB', 'ldofs-length-is-nnode-x-ndofn',                     &
+                        'element carries a node count the contract does not declare',            &
+                        actual=itoa(n), expected=itoa(want), idx=i)
+        return
+      end if
+      shape%nnode_of(i) = int(want, int32)
+      shape%nevab_of(i) = int(shape%nfdof*want, int32)
     end do
   end subroutine derive_shape
+
+  !> Nodes on element `i`, from the KIND of the section it belongs to -- the same table
+  !> the validator judges connectivity by (V13) and the adapter sizes its .ele reads by.
+  !> Not read from the element: `mesh.elements[].kind` is a finalize derivation and may
+  !> still be unset here, exactly as effective_element_kind documents.
+  subroutine element_nnode(problem, shape, i, n, known)
+    type(problem_state_t), intent(in) :: problem
+    type(build_shape_t), intent(in) :: shape
+    integer, intent(in) :: i
+    integer, intent(out) :: n
+    logical, intent(out) :: known
+    integer(int32) :: kind_code, g
+
+    n = 0
+    known = .false.
+    call opt_get(problem%mesh%elements(i)%kind, kind_code, known)
+    if (.not. known) then
+      call opt_get(problem%mesh%elements(i)%elset, g, known)
+      if (.not. known) return
+      known = .false.
+      if (.not. allocated(problem%sections)) return
+      if (g < 1_int32 .or. g > int(size(problem%sections), int32)) return
+      call opt_get(problem%sections(g)%element_kind, kind_code, known)
+      if (.not. known) return
+    end if
+    call nodes_of_kind(kind_code, n, known)
+    if (.not. known) n = 0
+    ! shape is unused beyond keeping the call shape uniform with its siblings.
+    if (shape%nelem < 0) n = n
+  end subroutine element_nnode
 
   ! ==========================================================================
   ! dof
@@ -460,7 +514,7 @@ contains
       do il = 1, int(shape%nelgroup(ig))
         ie = int(shape%group_list(il, ig))
         if (ie < 1) cycle
-        do inode = 1, shape%nnode
+        do inode = 1, shape%nnode_of(ie)
           kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
           if (kpoin < 1) cycle
           do idofn = 1, shape%nfdof
@@ -500,10 +554,10 @@ contains
     allocate (cand%dof%element_variables(shape%nelem))
     allocate (cand%dof%element_field_variables(shape%nelem))
     do ie = 1, shape%nelem
-      allocate (cand%dof%element_variables(ie)%values(shape%nevab))
+      allocate (cand%dof%element_variables(ie)%values(shape%nevab_of(ie)))
       cand%dof%element_variables(ie)%values = 0_int32
       allocate (cand%dof%element_field_variables(ie)%fields(shape%nrfields))
-      allocate (cand%dof%element_field_variables(ie)%fields(1)%values(shape%nevab))
+      allocate (cand%dof%element_field_variables(ie)%fields(1)%values(shape%nevab_of(ie)))
       cand%dof%element_field_variables(ie)%fields(1)%values = 0_int32
     end do
     do ig = 1, shape%ngroup
@@ -511,7 +565,7 @@ contains
         ie = int(shape%group_list(il, ig))
         if (ie < 1) cycle
         idofs = 0
-        do inode = 1, shape%nnode
+        do inode = 1, shape%nnode_of(ie)
           kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
           if (kpoin < 1) cycle
           do idofn = 1, shape%nfdof
@@ -523,8 +577,8 @@ contains
             end if
           end do
         end do
-        cand%dof%element_variables(ie)%values(1:shape%nevab) =                                  &
-          cand%dof%element_field_variables(ie)%fields(1)%values(1:shape%nevab)
+        cand%dof%element_variables(ie)%values(1:shape%nevab_of(ie)) =                            &
+          cand%dof%element_field_variables(ie)%fields(1)%values(1:shape%nevab_of(ie))
       end do
     end do
 
@@ -545,15 +599,24 @@ contains
                           RUNTIME_VALUE_DEFINED, errors)
     call publish_i32(cand, record, 'runtime.dof.ntotv', int(ntotv, int32),                      &
                      RUNTIME_VALUE_DEFINED, errors)
-    n = shape%nevab*shape%nelem
-    allocate (flat(n))
+    ! Ragged, for the same reason the elcod flatten is: these vectors feed a manifest
+    ! hash, and padding two different meshes to a common length would hash them alike.
+    n = 0
     do ie = 1, shape%nelem
-      flat((ie - 1)*shape%nevab + 1:ie*shape%nevab) = cand%dof%element_variables(ie)%values
+      n = n + int(shape%nevab_of(ie))
+    end do
+    allocate (flat(n))
+    n = 0
+    do ie = 1, shape%nelem
+      flat(n + 1:n + int(shape%nevab_of(ie))) = cand%dof%element_variables(ie)%values
+      n = n + int(shape%nevab_of(ie))
     end do
     call publish_i32_list(cand, record, 'runtime.dof.ldofs', flat, RUNTIME_VALUE_DEFINED, errors)
+    n = 0
     do ie = 1, shape%nelem
-      flat((ie - 1)*shape%nevab + 1:ie*shape%nevab) =                                           &
+      flat(n + 1:n + int(shape%nevab_of(ie))) =                                                 &
         cand%dof%element_field_variables(ie)%fields(1)%values
+      n = n + int(shape%nevab_of(ie))
     end do
     call publish_i32_list(cand, record, 'runtime.dof.ldofs_f', flat, RUNTIME_VALUE_DEFINED, errors)
     deallocate (flat)
@@ -599,7 +662,7 @@ contains
       do il = 1, int(shape%nelgroup(ig))
         ie = int(shape%group_list(il, ig))
         if (ie < 1) cycle
-        do inode = 1, shape%nnode
+        do inode = 1, shape%nnode_of(ie)
           kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
           if (kpoin < 1) cycle
           appear_node(kpoin) = appear_node(kpoin) + 1_int32
@@ -634,7 +697,7 @@ contains
       do il = 1, int(shape%nelgroup(ig))
         ie = int(shape%group_list(il, ig))
         if (ie < 1) cycle
-        do inode = 1, shape%nnode
+        do inode = 1, shape%nnode_of(ie)
           kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
           if (kpoin < 1) cycle
           listx(kpoin) = listx(kpoin) + 1_int32
@@ -806,7 +869,7 @@ contains
       do il = 1, int(shape%nelgroup(ig))
         ie = int(shape%group_list(il, ig))
         if (ie < 1) cycle
-        do k = 1, shape%nevab
+        do k = 1, shape%nevab_of(ie)
           idofn = int(cand%dof%element_variables(ie)%values(k))
           if (idofn >= 1) cand%dof%fixed_mask(idofn) = mask_free
         end do
@@ -817,7 +880,7 @@ contains
     allocate (touched(shape%npoin))
     touched = 0_int32
     do ie = 1, shape%nelem
-      do inode = 1, shape%nnode
+      do inode = 1, shape%nnode_of(ie)
         kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
         if (kpoin >= 1) touched(kpoin) = 1_int32
       end do
@@ -941,7 +1004,7 @@ contains
           ie = int(cand%topology%sections(ig)%nodes(pos)%elements(il))
           if (ie < 1) cycle
           if (seen_before(cand%topology%sections(ig)%nodes(pos)%elements, il, int(ie, int32))) cycle
-          do inode = 1, shape%nnode
+          do inode = 1, shape%nnode_of(ie)
             kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
             if (kpoin /= ipoin) cycle
             do idofn = 1, shape%nfdof
@@ -1190,7 +1253,7 @@ contains
     real(real64) :: stiff_points(2, 4), stiff_weights(4)
     real(real64) :: mass_points(2, 16), mass_weights(16)
     integer(int32) :: skip
-    integer :: ie, inode, kpoin, n
+    integer :: ie, inode, kpoin, n, k
     logical :: found, ok
 
     if (injected(fail_at, BUILD_SITE_GAUSS)) then
@@ -1223,8 +1286,8 @@ contains
 
     allocate (cand%element(shape%nelem))
     do ie = 1, shape%nelem
-      allocate (cand%element(ie)%field_coordinates(shape%ndimn, shape%nnode))
-      do inode = 1, shape%nnode
+      allocate (cand%element(ie)%field_coordinates(shape%ndimn, shape%nnode_of(ie)))
+      do inode = 1, shape%nnode_of(ie)
         kpoin = node_index(shape, problem%mesh%elements(ie)%nodes(inode))
         cand%element(ie)%field_coordinates(:, inode) = shape%coord(:, kpoin)
       end do
@@ -1240,19 +1303,28 @@ contains
       ! counter-example to the determinism labels registered as a debt under M2
       ! judgement 10, and it is the shape that debt predicted: the gate enforces
       ! "labelled uninitialised => must be ignored", never "the label is right".
-      allocate (cand%element(ie)%total_load(shape%nevab))
-      allocate (cand%element(ie)%external_load(shape%nevab))
-      allocate (cand%element(ie)%body_load(shape%nevab))
+      allocate (cand%element(ie)%total_load(shape%nevab_of(ie)))
+      allocate (cand%element(ie)%external_load(shape%nevab_of(ie)))
+      allocate (cand%element(ie)%body_load(shape%nevab_of(ie)))
       cand%element(ie)%total_load = 0.0_real64
       cand%element(ie)%external_load = 0.0_real64
       cand%element(ie)%body_load = 0.0_real64
       call opt_set(cand%element(ie)%refinement_skip, skip)
     end do
 
-    n = shape%ndimn*shape%nnode
-    allocate (flat(n*shape%nelem))
+    ! Ragged since M9: each element contributes ndimn*its own nnode. The flattening is a
+    ! manifest hash input, so the order matters and the lengths must not be padded -- a
+    ! padded vector would hash the same for two different meshes.
+    n = 0
     do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = reshape(cand%element(ie)%field_coordinates, [n])
+      n = n + shape%ndimn*int(shape%nnode_of(ie))
+    end do
+    allocate (flat(n))
+    n = 0
+    do ie = 1, shape%nelem
+      k = shape%ndimn*int(shape%nnode_of(ie))
+      flat(n + 1:n + k) = reshape(cand%element(ie)%field_coordinates, [k])
+      n = n + k
     end do
     call publish_f64_list(cand, record, 'runtime.element.elcod_f', flat,                        &
                           RUNTIME_VALUE_DEFINED, errors)
@@ -1260,20 +1332,29 @@ contains
 
     ! DEFINED as zero (corrected 2026-09-10, see the allocation above). Published with
     ! their values rather than as `reserved`, because the value exists and legacy sets it.
-    n = shape%nevab
-    allocate (flat(n*shape%nelem))
+    n = 0
     do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = cand%element(ie)%total_load
+      n = n + int(shape%nevab_of(ie))
+    end do
+    allocate (flat(n))
+    n = 0
+    do ie = 1, shape%nelem
+      flat(n + 1:n + int(shape%nevab_of(ie))) = cand%element(ie)%total_load
+      n = n + int(shape%nevab_of(ie))
     end do
     call publish_f64_list(cand, record, 'runtime.element.tload', flat,                          &
                           RUNTIME_VALUE_DEFINED, errors)
+    n = 0
     do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = cand%element(ie)%external_load
+      flat(n + 1:n + int(shape%nevab_of(ie))) = cand%element(ie)%external_load
+      n = n + int(shape%nevab_of(ie))
     end do
     call publish_f64_list(cand, record, 'runtime.element.eload', flat,                          &
                           RUNTIME_VALUE_DEFINED, errors)
+    n = 0
     do ie = 1, shape%nelem
-      flat((ie - 1)*n + 1:ie*n) = cand%element(ie)%body_load
+      flat(n + 1:n + int(shape%nevab_of(ie))) = cand%element(ie)%body_load
+      n = n + int(shape%nevab_of(ie))
     end do
     call publish_f64_list(cand, record, 'runtime.element.rload', flat,                          &
                           RUNTIME_VALUE_DEFINED, errors)

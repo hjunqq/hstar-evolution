@@ -269,6 +269,22 @@ module yl_problem_types
     type(opt_int) :: uplift
     type(opt_real) :: local_axes           ! 1
     type(opt_real) :: thickness            ! m
+    !> Cross-sectional area of a line element. m2.
+    !>
+    !> The exact counterpart of `thickness`, and deliberately a sibling of it rather than a
+    !> reuse: for a 2-D continuum element legacy's `thick` is a thickness in metres, and for
+    !> a 2-node element it is an area in square metres (Stiff.f90:118 swaps the source), so
+    !> they are different physical quantities that happen to occupy the same slot in the
+    !> element routine. Giving them one component would make the unit depend on the element
+    !> kind, which is exactly the kind of implicit coupling ADR-0003 exists to prevent.
+    !>
+    !> Stored by legacy on the MATERIAL (`props(imat)%geometry%aera`, Material.f90:1016)
+    !> and owned here by the SECTION, the same indirection `thickness` already has and
+    !> resolved by the same bridge pass.
+    !> NOT called `area`: that is a legacy slot name (`global_var.element%area`, the steel
+    !> element's own computed area) and rule 10 forbids harvesting one into the types. The
+    !> two really are different quantities, so the deny list was right to stop it.
+    type(opt_real) :: cross_section_area   !@off-face: sections.cross_section_area
   end type section_t
 
   ! --- amplitudes -------------------------------------------------------------

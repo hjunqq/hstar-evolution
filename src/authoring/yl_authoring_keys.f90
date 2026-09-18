@@ -64,7 +64,13 @@ module yl_authoring_keys
     key_t('case.units',                    TV_STR,  .true.,  'SI'),                          &
     key_t('case.description',              TV_STR,  .false., ''),                            &
     key_t('mesh.file',                     TV_STR,  .true.,  ''),                            &
-    key_t('mesh.format',                   TV_STR,  .true.,  'hstar-legacy-cor-ele'),        &
+    ! `mesh.format` names the FILE SET the deck ships, which is why admitting the node
+    ! interpolation table is a second format value rather than a boolean saying "there is
+    ! another file". `.nrt` is mesh-generator output indexed by node id, like `.cor` and
+    ! `.ele`, and legacy reads all three on the modern path (no yl_input_enabled guard at
+    ! Global.f90:1489-1531 or Elements.f90:1087) -- so it is staged verbatim, not authored.
+    key_t('mesh.format',                   TV_STR,  .true.,                                  &
+          'hstar-legacy-cor-ele|hstar-legacy-cor-ele-nrt'),                                   &
     key_t('mesh.dimension',                TV_INT,  .true.,  '2'),                           &
     key_t('elset[].name',                  TV_STR,  .true.,  ''),                            &
     key_t('elset[].element_count',         TV_INT,  .true.,  ''),                            &
@@ -114,9 +120,9 @@ module yl_authoring_keys
     ! MULTIPLY in the failure surface, not for legacy's letters -- see concrete_t.
     !
     ! `crack_model` selects a BRANCH, and one of its values makes legacy read a further
-    ! record, so it carries a whitelist rather than being a free integer. Only 6 is
-    ! admitted: it is what the one real deck uses. rcbeam uses 3, but rcbeam is M9's and
-    ! suspended, so admitting 3 would be a claim with no deck behind it.
+    ! record, so it carries a whitelist rather than being a free integer. 6 and 3 are
+    ! admitted, one real deck each: concrete_gravdam uses 6, rcbeam uses 3. They read the
+    ! same record and derive the same way, and they differ downstream -- see read_concrete.
     key_t('material[].dev_stress_quadratic',  TV_REAL, .false., ''),                         &
     key_t('material[].dev_stress_linear',     TV_REAL, .false., ''),                         &
     key_t('material[].principal_stress',      TV_REAL, .false., ''),                         &
@@ -125,11 +131,28 @@ module yl_authoring_keys
     key_t('material[].tensile_ratio',         TV_REAL, .false., ''),                         &
     key_t('material[].fracture_energy',       TV_REAL, .false., ''),                         &
     key_t('material[].characteristic_length', TV_REAL, .false., ''),                         &
-    key_t('material[].crack_model',           TV_INT,  .false., '6'),                        &
+    key_t('material[].crack_model',           TV_INT,  .false., '3|6'),                      &
     key_t('section[].name',                TV_STR,  .true.,  ''),                            &
     key_t('section[].elset',               TV_STR,  .true.,  ''),                            &
-    key_t('section[].element',             TV_STR,  .true.,  'Q4'),                          &
+    ! Three element FAMILIES, one deck each behind them: Q4 on eight, L2 and STEEL on
+    ! elements_2d.rcbeam. The names are legacy's own (elkn(index)%name, Elements.f90:240 /
+    ! :259 / :366), uppercased. L2 and STEEL are both 2-node and are NOT interchangeable:
+    ! L2 takes Q4's Gauss path, STEEL has its own formulation (Stiff.f90:121/572).
+    key_t('section[].element',             TV_STR,  .true.,  'Q4|L2|STEEL'),                 &
+    ! The bar's cross-sectional area, m2. Required exactly for an L2 section and forbidden
+    ! everywhere else -- see section_requires, and note that STEEL is on the forbidden
+    ! side deliberately: the bond element has an area, but legacy DERIVES it from the mesh
+    ! (Material.f90:1113), so authoring one would invent an input legacy does not have.
+    key_t('section[].area',                TV_REAL, .false., ''),                            &
     key_t('section[].formulation',         TV_STR,  .true.,  'plane_strain'),                &
+    ! Per-section OVERRIDE of `output.stress_averaging`. legacy's flag is per group
+    ! (average_appear(1:ngroup), Global.f90:1023) and every deck up to rcbeam wrote one
+    ! value for every group, which is why the whole-model key came first and stays. rcbeam
+    ! is the first deck that differs across groups -- [1, 0, 0]: averaged nodal stresses on
+    ! the Q4 body, none on the two line-element groups. Optional, and with no default: a
+    ! section that says nothing takes the whole-model value, which is what it meant before.
+    key_t('section[].stress_averaging',    TV_STR,  .false.,                                 &
+          'none|smoothed|direct|smoothed_legacy|direct_legacy'),                             &
     key_t('section[].material',            TV_STR,  .true.,  ''),                            &
     key_t('amplitude[].name',              TV_STR,  .true.,  ''),                            &
     key_t('amplitude[].type',              TV_STR,  .true.,  'linear'),                      &
@@ -157,6 +180,15 @@ module yl_authoring_keys
     key_t('step[].boundary[].dof[]',       TV_INT,  .false., '1|2'),                         &
     key_t('step[].boundary[].dof.count',   TV_INT,  .true.,  ''),                            &
     key_t('step[].boundary[].value',       TV_REAL, .true.,  ''),                            &
+    ! The curve a PRESCRIBED DISPLACEMENT follows. Required exactly when `value` is
+    ! non-zero and forbidden when it is zero -- see boundary_requires.
+    key_t('step[].boundary[].amplitude',   TV_STR,  .false., ''),                            &
+    ! legacy `outfix`. A pure OUTPUT switch -- it changes no equation, and what it controls
+    ! (Output.f90:288-320) goes to the `outact` file, not to 1.flavia.res. So it keeps its
+    ! default of true, which is what eight decks write; rcbeam writes 0 on all four of its
+    ! sets, and until it arrived the default's justification read "1 on both frozen
+    ! references", which had simply stopped being true.
+    key_t('step[].boundary[].record_reaction', TV_BOOL, .false., ''),                        &
     ! legacy `type_load`. 'strength_reduction' is MAT_DE: the named amplitude's current
     ! factor scales the cohesion and tand(friction)/tand(dilation) every step
     ! (Stiff.f90:5779), which is what walks the model to failure. It is a property of the
@@ -222,6 +254,26 @@ module yl_authoring_keys
     key_t('surface[].edges[][]',           TV_INT,  .false., ''),                            &
     key_t('surface[].edges[].count',       TV_INT,  .false., ''),                            &
     key_t('surface[].edges.count',         TV_INT,  .true.,  ''),                            &
+    ! The reinforcement BOND model. legacy keeps these four on one .glb record
+    ! (Global.f90:1062) as globals, and they belong to the STEEL element family: they are
+    ! required exactly when the deck declares a STEEL section and forbidden otherwise --
+    ! see bond_requires. Named for what they do, not for legacy's spellings.
+    !
+    !   slip_law             `ikindks`, the tau(s) relation (Material.f90:1272-1331). A
+    !                        SELECTOR with no default: which bond law governs is physics.
+    !   stress_scale         `coefMpa`, the unit the law's coefficients are written in --
+    !                        the last two statements of the law are `ks = ks*coef*1000`
+    !                        and `tao = tao*coef`, so 1e6 means "the law is in MPa".
+    !   transverse_model     `doubsig`. 2 replaces the transverse bond stiffness with a
+    !                        fixed penalty (Stiff.f90:624-626) AND skips the second steel
+    !                        pass (Material.f90:1159). Spelled as what it does.
+    !   transverse_stiffness `ktan1`, that penalty, in 2-D. legacy's `ktan2` is its 3-D
+    !                        sibling (`if (ndimn==3)`, Stiff.f90:626) and has no key here:
+    !                        this build is 2-D, so a value for it could never be read.
+    key_t('bond.slip_law',                 TV_INT,  .false., '3'),                           &
+    key_t('bond.stress_scale',             TV_REAL, .false., ''),                            &
+    key_t('bond.transverse_model',         TV_STR,  .false., 'penalty'),                     &
+    key_t('bond.transverse_stiffness',     TV_REAL, .false., ''),                            &
     key_t('solver.linear',                 TV_STR,  .true.,  'profile|pardiso'),             &
     ! PARDISO's own settings, required by `solver_requires` exactly when `linear` selects
     ! it and forbidden otherwise. These are NUMERICS -- they choose how the same equations
@@ -238,7 +290,7 @@ module yl_authoring_keys
     key_t('solver.pardiso.threads',        TV_INT,  .false., ''),                            &
     key_t('solver.pardiso.message_level',  TV_INT,  .false., '0'),                           &
     key_t('output.format',                 TV_STR,  .true.,  'gid'),                         &
-    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y'),           &
+    key_t('output.field[]',                TV_STR,  .false., 'u|s|ep|ms|f|y|bcs'),           &
     key_t('output.field.count',            TV_INT,  .true.,  ''),                            &
     key_t('output.stress_averaging',       TV_STR,  .true.,                                  &
           'none|smoothed|direct|smoothed_legacy|direct_legacy')]
@@ -312,6 +364,9 @@ contains
     call model_requires(doc, file, errors)
     call initial_stress_requires(doc, file, errors)
     call solver_requires(doc, file, errors)
+    call section_requires(doc, file, errors)
+    call boundary_requires(doc, file, errors)
+    call bond_requires(doc, file, errors)
     call load_mode_requires(doc, file, errors)
     call load_type_requires(doc, file, errors)
     call check_loads(doc, file, errors)
@@ -467,6 +522,150 @@ contains
       end if
     end do
   end subroutine solver_requires
+
+  !> `section[].area` is required exactly for an `L2` section and forbidden everywhere else.
+  !>
+  !> Fifth instance of the same shape (model / initial_stress / load_mode / solver):
+  !> "required" is a property of a PAIR, here (the key, the element family). A Q4 section carrying an
+  !> area would have it silently ignored -- legacy reads the GEOMETRY record's `aera` into
+  !> the `thick` slot only when `nnode == 2` -- and an L2 section without one would take
+  !> its cross-section from whatever the material's geometry record was never given.
+  !>
+  !> STEEL is on the forbidden side ON PURPOSE and it is the interesting case: the bond
+  !> element does have an area, but legacy DERIVES it from the mesh (Material.f90:1113,
+  !> `element%area`) rather than reading it. Letting the author write one would invent an
+  !> input legacy does not have.
+  subroutine section_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: i, ke, ka
+    logical :: line_element
+    character(len=TOML_LEN_PATH) :: base
+
+    do i = 1_int32, doc%count_of('section')
+      base = 'section['//itoa(i)//']'
+      ke = doc%find(trim(base)//'.element')
+      if (ke == 0_int32) cycle                 ! a missing element is require_all's finding
+      line_element = trim(doc%entry(ke)%svalue) == 'L2'
+      ka = doc%find(trim(base)//'.area')
+      if (line_element .and. ka == 0_int32) then
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(ke)%line,         &
+                   trim(base)//'.area',                                                       &
+                   'an L2 section takes its cross-section from this area', '',                &
+                   'a cross-sectional area in m2')
+      end if
+      if (.not. line_element .and. ka /= 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(ka)%line,         &
+                   trim(base)//'.area',                                                       &
+                   'only an L2 section takes a cross-sectional area; legacy would never '//   &
+                   'read this one', trim(doc%entry(ke)%svalue), 'L2')
+      end if
+    end do
+  end subroutine section_requires
+
+  !> `[bond]` is required exactly when the deck declares a STEEL section, forbidden otherwise.
+  !>
+  !> Seventh instance of the same shape. The bond law is the STEEL element's constitutive
+  !> law -- legacy reads it from a .glb record rather than from .mat, which is legacy's
+  !> filing, not its meaning -- so a deck with no bond element that stated one would be
+  !> stating a law for elements it does not have, and a deck with bond elements that
+  !> omitted one would take `ikindks = 0` from the carrier's initialisation and hit
+  !> Material.f90:1330's `stop 'stop for ikind for steel!'`, which is a legacy STOP with no
+  !> diagnostic and no exit code of ours. Measured 2026-09-18: that is exactly what rcbeam
+  !> did before these keys existed.
+  subroutine bond_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=*), parameter :: BOND_KEYS(4) = [character(len=24) ::                       &
+      'slip_law', 'stress_scale', 'transverse_model', 'transverse_stiffness']
+    integer(int32) :: i, k, anchor
+    logical :: has_bond_element
+    integer :: f
+
+    has_bond_element = .false.
+    anchor = 0_int32
+    do i = 1_int32, doc%count_of('section')
+      k = doc%find('section['//itoa(i)//'].element')
+      if (k == 0_int32) cycle
+      if (anchor == 0_int32) anchor = k
+      if (trim(doc%entry(k)%svalue) == 'STEEL') then
+        has_bond_element = .true.
+        anchor = k
+      end if
+    end do
+    if (anchor == 0_int32) return              ! a sectionless file is require_all's finding
+
+    do f = 1, size(BOND_KEYS)
+      k = doc%find('bond.'//trim(BOND_KEYS(f)))
+      if (has_bond_element .and. k == 0_int32) then
+        call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(anchor)%line,     &
+                   'bond.'//trim(BOND_KEYS(f)),                                               &
+                   'a STEEL section is a bond element and needs its bond law', '',            &
+                   'a value for this key')
+      else if (.not. has_bond_element .and. k /= 0_int32) then
+        call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(k)%line,          &
+                   'bond.'//trim(BOND_KEYS(f)),                                               &
+                   'only a STEEL section reads a bond law; this file declares none', '',      &
+                   'no [bond] table')
+      end if
+    end do
+  end subroutine bond_requires
+
+  !> `step[].boundary[].amplitude` is required exactly for a NON-ZERO prescribed value and
+  !> forbidden for a zero one.
+  !>
+  !> Sixth instance of the same shape, and the sharpest of them, because both halves are
+  !> real failures rather than tidiness:
+  !>
+  !>   a non-zero value with no curve -- legacy multiplies the value by
+  !>   `tcurves(itcurve)%dfact`, and the contract's "no curve" is itcurve = 0, so the run
+  !>   would index tcurves(0). That is the M1 firewall abort at Fem.f90:12288, reached from
+  !>   an authoring file that looks complete.
+  !>
+  !>   a zero value with a curve -- the product is zero whichever curve it names, so the
+  !>   author would have written a physical statement that does nothing and never learn it.
+  !>   This is also why all eight earlier decks are unaffected: every prescribed value they
+  !>   carry is zero, which is exactly the half that must NOT name a curve.
+  subroutine boundary_requires(doc, file, errors)
+    type(toml_doc_t), intent(in) :: doc
+    character(len=*), intent(in) :: file
+    type(problem_errors_t), intent(inout) :: errors
+    integer(int32) :: st, i, kv, ka
+    logical :: moving
+    character(len=TOML_LEN_PATH) :: base
+
+    do st = 1_int32, doc%count_of('step')
+      do i = 1_int32, doc%count_of('step['//itoa(st)//'].boundary')
+        base = 'step['//itoa(st)//'].boundary['//itoa(i)//']'
+        kv = doc%find(trim(base)//'.value')
+        if (kv == 0_int32) cycle               ! a missing value is require_all's finding
+        moving = doc%entry(kv)%rvalue /= 0.0_real64
+        ka = doc%find(trim(base)//'.amplitude')
+        if (moving .and. ka == 0_int32) then
+          call raise(errors, PE_MISSING_FIELD, PE_EXIT_INPUT, file, doc%entry(kv)%line,       &
+                     trim(base)//'.amplitude',                                                &
+                     'a non-zero prescribed displacement is scaled by a curve; without '//    &
+                     'one legacy would index tcurves(0)', '', 'a declared [[amplitude]] name')
+        end if
+        if (.not. moving .and. ka /= 0_int32) then
+          call raise(errors, PE_INVALID_INPUT, PE_EXIT_INPUT, file, doc%entry(ka)%line,       &
+                     trim(base)//'.amplitude',                                                &
+                     'a zero prescribed displacement is zero under every curve; naming '//    &
+                     'one states nothing', '0.0', 'no amplitude')
+        end if
+        if (ka /= 0_int32) then
+          if (.not. name_exists(doc, 'amplitude', trim(doc%entry(ka)%svalue))) then
+            call raise(errors, PE_DANGLING_REF, PE_EXIT_INPUT, file, doc%entry(ka)%line,      &
+                       trim(base)//'.amplitude',                                              &
+                       'refers to an amplitude that this file does not define',               &
+                       trim(doc%entry(ka)%svalue), 'a declared [[amplitude]] name')
+          end if
+        end if
+      end do
+    end do
+  end subroutine boundary_requires
 
   !> `step[].initial_stress.fill_elevation` is required exactly when a DUNCANCHANG material
   !> is present, and forbidden otherwise.

@@ -1,7 +1,7 @@
 {
  "version": 1,
  "case": "solver_2d.benchmark_100x100",
- "binary": "/home/huijun/HSTAR_Next/hstar-evolution/build/trace/hstar",
+ "binary": "/home/huijun/HSTAR_Next/hstar-evolution/build/trace-m9r/hstar",
  "anchors": {
   "model_ready": "Fem.f90:1909",
   "phase_ready(1)": "Fem.f90:3603",

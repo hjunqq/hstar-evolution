@@ -56,7 +56,37 @@ reason = "title line of an empty .nrt section"
 [[not_adapted]]
 id = "NRT.global_data.transgroup"
 state_target = "empty_section"
-reason = "interpolation-group count, zero on both golden decks"
+reason = "interpolation-group count. Zero on eight golden decks; 1 on elements_2d.rcbeam, which is what made the four rows below necessary. Not adapted because .nrt is a MESH-COMPANION file, staged verbatim and read by legacy on both paths -- see the evidence on the rows below"
+
+# rcbeam opened this section for real (transgroup=1, translg=99, 61 nodes x 4 weights).
+# The table is a node-interpolation constraint indexed by node id, produced by the mesh
+# generator -- the same kind of thing .cor and .ele are -- so it is shipped with the mesh
+# rather than authored, and legacy reads it on the modern path too. That is why these four
+# carry real state_targets and yet have no adapter parser.
+
+[[not_adapted]]
+id = "NRT.global_data.transgroup_header"
+state_target = "not_migrated"
+reason = "ntransnode/translg: the group header. `translg` SELECTS the shape of every record after it (0 / 99 / other), so it could not be walked past blindly -- but it does not have to be walked past at all, because legacy still reads this file on the modern path"
+evidence = "measured 2026-09-18 on elements_2d.rcbeam: the modern run stages 1.nrt alongside 1.cor/1.ele (mesh.format = \"hstar-legacy-cor-ele-nrt\") and legacy reads it on BOTH paths -- Global.f90:1489-1531 carries no yl_input_enabled guard, exactly like the .ele reader at Elements.f90:1087. The gdb evidence records 1 hit on :1499 and 61 on each of :1526/:1528/:1529 on both runs, and 1.flavia.res is byte-identical to the frozen reference. A row here is therefore not a gap: there is no second reader to write."
+
+[[not_adapted]]
+id = "NRT.global_data.interp_node"
+state_target = "not_migrated"
+reason = "ipoin/nintf for one interpolated node; `nintf` sizes the two records after it"
+evidence = "measured 2026-09-18 on elements_2d.rcbeam: the modern run stages 1.nrt alongside 1.cor/1.ele (mesh.format = \"hstar-legacy-cor-ele-nrt\") and legacy reads it on BOTH paths -- Global.f90:1489-1531 carries no yl_input_enabled guard, exactly like the .ele reader at Elements.f90:1087. The gdb evidence records 1 hit on :1499 and 61 on each of :1526/:1528/:1529 on both runs, and 1.flavia.res is byte-identical to the frozen reference. A row here is therefore not a gap: there is no second reader to write."
+
+[[not_adapted]]
+id = "NRT.global_data.interp_list"
+state_target = "not_migrated"
+reason = "the source nodes one interpolated node reads from"
+evidence = "measured 2026-09-18 on elements_2d.rcbeam: the modern run stages 1.nrt alongside 1.cor/1.ele (mesh.format = \"hstar-legacy-cor-ele-nrt\") and legacy reads it on BOTH paths -- Global.f90:1489-1531 carries no yl_input_enabled guard, exactly like the .ele reader at Elements.f90:1087. The gdb evidence records 1 hit on :1499 and 61 on each of :1526/:1528/:1529 on both runs, and 1.flavia.res is byte-identical to the frozen reference. A row here is therefore not a gap: there is no second reader to write."
+
+[[not_adapted]]
+id = "NRT.global_data.interp_weights"
+state_target = "not_migrated"
+reason = "the interpolation weights, one per entry of listf"
+evidence = "measured 2026-09-18 on elements_2d.rcbeam: the modern run stages 1.nrt alongside 1.cor/1.ele (mesh.format = \"hstar-legacy-cor-ele-nrt\") and legacy reads it on BOTH paths -- Global.f90:1489-1531 carries no yl_input_enabled guard, exactly like the .ele reader at Elements.f90:1087. The gdb evidence records 1 hit on :1499 and 61 on each of :1526/:1528/:1529 on both runs, and 1.flavia.res is byte-identical to the frozen reference. A row here is therefore not a gap: there is no second reader to write."
 
 # ---------------------------------------------------------------------------- .ifs ----
 # Fluid-structure interaction and absorbing boundaries (M7 scope). Four sections, each a

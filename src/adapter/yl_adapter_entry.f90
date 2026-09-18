@@ -72,7 +72,7 @@ subroutine yl_adapter_override()
   use yl_authoring_keys, only: authoring_validate
   use yl_authoring_report, only: authoring_render
   use yl_authoring_map, only: authoring_build_problem
-  use yl_authoring_defaults, only: default_residue, default_existence
+  use yl_authoring_defaults, only: default_residue, default_existence, bond_transverse_code
 
   use yl_runtime_types, only: runtime_state_t
   use yl_runtime_contract, only: CONTRACT_TAG
@@ -198,6 +198,19 @@ contains
       if (k /= 0_int32) residue%uinitial(i) = merge(1_int32, 0_int32, doc%entry(k)%lvalue)
     end do
     call default_existence(existence, nelem, ngroup, mdofn)
+    ! The bond law (M9). These four .glb scalars are zero in the default table and stay
+    ! zero on every deck without a STEEL section; `bond_requires` has already refused both
+    ! halves of the mistake, so a present key here means the deck has bond elements and an
+    ! absent one means it has none. `ikindks = 0` reaching legacy is not a wrong number,
+    ! it is Material.f90:1330's bare `stop`.
+    k = doc%find('bond.slip_law')
+    if (k /= 0_int32) existence%scalars%ikindks = doc%entry(k)%ivalue
+    k = doc%find('bond.stress_scale')
+    if (k /= 0_int32) existence%scalars%coefMpa = doc%entry(k)%rvalue
+    k = doc%find('bond.transverse_stiffness')
+    if (k /= 0_int32) existence%scalars%ktan1 = doc%entry(k)%rvalue
+    k = doc%find('bond.transverse_model')
+    if (k /= 0_int32) existence%scalars%doubsig = bond_transverse_code(doc%entry(k)%svalue)
   end subroutine from_modern_input
 
   !> mdofn: degrees of freedom per node. On the whitelist it is the spatial dimension --

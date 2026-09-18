@@ -168,6 +168,26 @@ migration_phase = "M9"
 status = "reference-frozen"
 verification = "B02-repeat-exact-pass (3 runs, 1.flavia.res byte identical)"
 reference = "reference/"
+# The modern gate is OFF while M9 is open, and this is what it is hiding, stated so that
+# nobody has to guess (2026-09-18):
+#
+#   The modern deck EXISTS and RUNS end to end -- 120 blocks, 214 110 values, and 5377
+#   `Yield` values in (0,1] with none outside, so CONCRETE's damage branch is genuinely
+#   exercised here in a way damage_2d.concrete_gravdam never managed (PD-3).
+#   It does NOT yet reproduce the frozen reference: 133 477 mismatches, max|d| = 2.617e5.
+#
+#   The divergence is NOT the deck's. Measured the same day: `--adapter=off` on this deck
+#   is bit-exact against the reference, while the ADAPTER path on the SAME legacy deck
+#   gives the identical 133 477 / 2.617e5 as the modern path. So both modern-side paths
+#   agree with each other and differ from the legacy readers -- the fault is in the
+#   adapter -> RuntimeState -> commit chain for the line-element families, not in
+#   modern/case.toml. It grows linearly with the load factor from substep 1 (relative
+#   ~1.8e-4), so it is an elastic setup difference and not the damage path.
+#
+#   Localising it mechanically needs the state dump, which is the THIRD place carrying the
+#   one-element-kind assumption: yl_state_dump writes mesh.elements.nodes as nelem*nnode
+#   (2884) where the ragged truth is 2642. That is the next step, not a workaround.
+modern_gate = false
 # Chosen by measuring, not by taste. The two decks named as starting points were both
 # falsified: test_beam2d declares MDOFN=2 and an L2 group with dofs (1,2), then constrains
 # ifixvar=4 -- pristine legacy SIGSEGVs on it and our 1..mdofn guard is right; pile_beam's

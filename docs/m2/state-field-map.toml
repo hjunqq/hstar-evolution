@@ -77,6 +77,11 @@ nfixsets = "count(steps[0].boundary)"
 ndofix = "count of prescrib records = sum over sets of listed nodes with nodfn /= 0 (Prescrib.f90:257)"
 nblks = "count(steps) (1 on both cases)"
 nblks1 = "nblks+1: block columns 0..nblks of appear_process (Global.f90:964); column 0 = initial state, zeroed at :968"
+transgroup = "count of interpolation groups in .nrt (Global.f90:1496); 0 on eight golden decks, 1 on elements_2d.rcbeam"
+ntransnode = "nodes in one interpolation group = trans entries filled by it (61 on elements_2d.rcbeam)"
+nintf = "source nodes one interpolated node reads from = trans(itotv)%nintf (ragged; 4 on elements_2d.rcbeam)"
+nscurve = "count(scurves) = the .mat curve count (Material.f90:245); 0 on eight golden decks, 1 on elements_2d.rcbeam"
+npoints = "points in one stress-strain curve = scurves(i)%npoints (ragged; 7 on elements_2d.rcbeam)"
 np_unode = "per group: count of nodes attached to elements of that group (Global.f90:1383-1392, allocate at :1392); ragged over groups"
 ngaus_mass = "Gauss points of the second integration rule elkn(index)%ggaus(2)%ngaus (16 for Q4, Elements.f90:383); never consumed on static_2d (q4 order_intrules=(/1,1/), :377)"
 Stiff_length = "iseq(neq) after PROFILE SET (Solver.f90:7229) = size(global_stiff1)"
@@ -5686,11 +5691,11 @@ dtype = "f64"
 unit = "1"
 owner = "ProblemState.materials[].concrete.dev_stress_quadratic"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "coefficient of the quadratic deviatoric term in legacy's failure surface eqstr = A*steff**2/Fc + B*steff + C*sigma1 + 3*D*smean (Residu.f90:3265)"
 
 [[field]]
@@ -5704,11 +5709,11 @@ dtype = "f64"
 unit = "1"
 owner = "ProblemState.materials[].concrete.dev_stress_linear"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "coefficient of the linear deviatoric term, same expression"
 
 [[field]]
@@ -5722,11 +5727,11 @@ dtype = "f64"
 unit = "1"
 owner = "ProblemState.materials[].concrete.principal_stress"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "coefficient of the major principal stress, same expression"
 
 [[field]]
@@ -5740,11 +5745,11 @@ dtype = "f64"
 unit = "1"
 owner = "ProblemState.materials[].concrete.mean_stress"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "coefficient of the mean stress (entered as 3*D), same expression"
 
 [[field]]
@@ -5758,11 +5763,11 @@ dtype = "f64"
 unit = "Pa"
 owner = "ProblemState.materials[].concrete.compressive_strength"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "compressive strength; damage begins where eqstr reaches it, and it also normalises the quadratic term"
 
 [[field]]
@@ -5776,11 +5781,11 @@ dtype = "f64"
 unit = "1"
 owner = "ProblemState.materials[].concrete.tensile_ratio"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "legacy's own comment defines it as Ft/Fc, so the tensile strength is derived from it rather than authored"
 
 [[field]]
@@ -5794,11 +5799,11 @@ dtype = "f64"
 unit = "N/m"
 owner = "ProblemState.materials[].concrete.fracture_energy"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "fracture energy; feeds the derived softening parameter bb (Material.f90:688)"
 
 [[field]]
@@ -5812,11 +5817,11 @@ dtype = "f64"
 unit = "m"
 owner = "ProblemState.materials[].concrete.characteristic_length"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "the regularisation length the softening law divides by (Material.f90:688), so the answer depends on it -- legacy calls it `mesh size`"
 
 [[field]]
@@ -5830,9 +5835,135 @@ dtype = "i32"
 unit = "id"
 owner = "ProblemState.materials[].concrete.crack_model"
 index_by = "materials[].id"
-compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
+compare = { rule = "ignore", reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead" }
 emit = "none"
 determinism = "deterministic"
 snapshot_file = "materials.json"
-reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam carries a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
+reason = "per-model CONCRETE parameter; only damage_2d.concrete_gravdam and elements_2d.rcbeam carry a CONCRETE material, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The material domain accepts on final numerical equivalence instead"
 note = "SELECTS the crack model, and one value (2) makes legacy read a further record, so it is whitelisted rather than carried freely"
+
+[[field]]
+id = "sections.cross_section_area"
+checkpoint = "model_ready"
+legacy_symbol = "materials.props%geometry%aera"
+source = ["MAT.material_set.geometry_section"]
+consumers = ["STIFF_U", "RESIDU_F"]
+shape = ["nmats"]
+dtype = "f64"
+unit = "m2"
+owner = "ProblemState.sections[].cross_section_area"
+index_by = "sections[].name"
+compare = { rule = "ignore", reason = "line-element section property; only elements_2d.rcbeam carries a line-element group, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The element domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "groups.json"
+reason = "line-element section property; only elements_2d.rcbeam carries a line-element group, so the field is absent on every other golden deck and is not on the observation face (ADR-0009: only a field that BOTH affects results AND needs cross-path acceptance is emitted). The element domain accepts on final numerical equivalence instead"
+note = "the cross-sectional area of a line element. Stiff.f90:118 puts it in the SAME `thick` slot a 2-D continuum element fills from props%mechanical%solid%thickness, so the two are one slot but two physical quantities (m vs m2) and two map rows. Owner is the section per ADR-0003 although legacy stores it per MATERIAL, which is why shape is nmats -- the same documented shape/index mismatch sections.thickness carries, resolved section -> material by the bridge"
+
+[[field]]
+id = "mesh.interpolation.node"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.trans%nintf"
+source = ["NRT.global_data.transgroup_header", "NRT.global_data.interp_node"]
+consumers = ["global_data"]
+shape = ["ntransnode"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead"
+note = "two readers, one row, because the group header has no state of its own: `ntransnode` and `translg` are LOCALS of global_data (Global.f90:547) that size the loop and select the record shape (0 / 99 / other), and the only thing that survives the subroutine is what this loop writes into `trans`. rcbeam is translg=99 with 61 nodes. `nintf` sizes the two records after it, so it is read between them"
+
+[[field]]
+id = "mesh.interpolation.source_nodes"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.trans%listf"
+source = ["NRT.global_data.interp_list"]
+consumers = ["global_data"]
+shape = ["ntransnode", "nintf"]
+dtype = "i32"
+unit = "id"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead"
+note = "expanded per DOF through nodfn, so one record feeds mdofn slots of trans"
+
+[[field]]
+id = "mesh.interpolation.weights"
+checkpoint = "model_ready"
+legacy_symbol = "global_var.trans%rintf"
+source = ["NRT.global_data.interp_weights"]
+consumers = ["global_data"]
+shape = ["ntransnode", "nintf"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "constraints.sha256"
+reason = "legacy's nodal interpolation table (trans). It is READ on elements_2d.rcbeam and it IS consumed there, but it has no ProblemState owner on this build: rcbeam is the first deck with transgroup/=0, and giving the table an authoring vocabulary is a constraint domain of its own. The adapter reproduces the records so the cursor stays in step and the legacy reader still fills `trans`; the element domain accepts on final numerical equivalence instead"
+note = "the interpolation weights, one per entry of listf; rcbeam's sum to 1 per node"
+
+[[field]]
+id = "materials.curve.header"
+checkpoint = "model_ready"
+legacy_symbol = "materials.scurves%npoints"
+source = ["MAT.material_set.curve_header"]
+consumers = ["parameter_find"]
+shape = ["nscurve"]
+dtype = "i32"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "legacy's stress-strain curve table (scurves). Read on elements_2d.rcbeam and NEVER CONSUMED there -- every parameter_find call site is guarded by a curve index (csigma0/cfrict/cdilan, cft, cvstrain, humidification bline/eline) and rcbeam declares none of them. So on this path the records are a cursor advance, which is what the adapter reproduces; a deck that actually referenced a curve would be outside this build" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "legacy's stress-strain curve table (scurves). Read on elements_2d.rcbeam and NEVER CONSUMED there -- every parameter_find call site is guarded by a curve index (csigma0/cfrict/cdilan, cft, cvstrain, humidification bline/eline) and rcbeam declares none of them. So on this path the records are a cursor advance, which is what the adapter reproduces; a deck that actually referenced a curve would be outside this build"
+note = "read with `type_curve`; `npoints` sizes the two records after it"
+
+[[field]]
+id = "materials.curve.strain"
+checkpoint = "model_ready"
+legacy_symbol = "materials.scurves%strain_curve"
+source = ["MAT.material_set.curve_strain"]
+consumers = ["parameter_find"]
+shape = ["nscurve", "npoints"]
+dtype = "f64"
+unit = "1"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "legacy's stress-strain curve table (scurves). Read on elements_2d.rcbeam and NEVER CONSUMED there -- every parameter_find call site is guarded by a curve index (csigma0/cfrict/cdilan, cft, cvstrain, humidification bline/eline) and rcbeam declares none of them. So on this path the records are a cursor advance, which is what the adapter reproduces; a deck that actually referenced a curve would be outside this build" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "legacy's stress-strain curve table (scurves). Read on elements_2d.rcbeam and NEVER CONSUMED there -- every parameter_find call site is guarded by a curve index (csigma0/cfrict/cdilan, cft, cvstrain, humidification bline/eline) and rcbeam declares none of them. So on this path the records are a cursor advance, which is what the adapter reproduces; a deck that actually referenced a curve would be outside this build"
+note = "one record for the whole curve"
+
+[[field]]
+id = "materials.curve.stress"
+checkpoint = "model_ready"
+legacy_symbol = "materials.scurves%stress_curve"
+source = ["MAT.material_set.curve_stress"]
+consumers = ["parameter_find"]
+shape = ["nscurve", "npoints"]
+dtype = "f64"
+unit = "Pa"
+owner = "not_migrated"
+index_by = "component"
+compare = { rule = "ignore", reason = "legacy's stress-strain curve table (scurves). Read on elements_2d.rcbeam and NEVER CONSUMED there -- every parameter_find call site is guarded by a curve index (csigma0/cfrict/cdilan, cft, cvstrain, humidification bline/eline) and rcbeam declares none of them. So on this path the records are a cursor advance, which is what the adapter reproduces; a deck that actually referenced a curve would be outside this build" }
+emit = "none"
+determinism = "deterministic"
+snapshot_file = "materials.json"
+reason = "legacy's stress-strain curve table (scurves). Read on elements_2d.rcbeam and NEVER CONSUMED there -- every parameter_find call site is guarded by a curve index (csigma0/cfrict/cdilan, cft, cvstrain, humidification bline/eline) and rcbeam declares none of them. So on this path the records are a cursor advance, which is what the adapter reproduces; a deck that actually referenced a curve would be outside this build"
+note = "the other half of the pair"

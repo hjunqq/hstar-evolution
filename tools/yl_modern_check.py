@@ -98,11 +98,34 @@ def mesh_prefix(deck: Path) -> str:
     raise SystemExit(f"{deck}: no `file = \"...\"` line under [mesh]")
 
 
+MESH_FILES = {
+    "hstar-legacy-cor-ele": (".cor", ".ele"),
+    # The node-interpolation table is mesh-generator output indexed by node id, and legacy
+    # reads it on the modern path exactly as it reads .ele (neither read is guarded by
+    # yl_input_enabled). So it is staged, not authored -- and which files get staged is
+    # read off `mesh.format`, never widened silently.
+    "hstar-legacy-cor-ele-nrt": (".cor", ".ele", ".nrt"),
+}
+
+
+def mesh_format(deck: Path) -> str:
+    """`mesh.format` out of the contract deck, by the same line-regex rule as mesh_prefix."""
+    for line in deck.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"\s*format\s*=\s*\"([^\"]*)\"\s*(#.*)?$", line)
+        if m:
+            return m.group(1)
+    raise SystemExit(f"{deck}: no `format = \"...\"` line under [mesh]")
+
+
 def stage(case_dir: Path, work: Path) -> Path:
     """The mesh and the contract deck. Nothing else -- see N1."""
     deck = case_dir / "modern/case.toml"
     prefix = mesh_prefix(deck)
-    for suffix in (".cor", ".ele"):
+    fmt = mesh_format(deck)
+    if fmt not in MESH_FILES:
+        raise SystemExit(f"{deck}: mesh.format {fmt!r} is not one this gate knows how to "
+                         f"stage; add it to MESH_FILES with the files it names")
+    for suffix in MESH_FILES[fmt]:
         src = case_dir / "legacy" / (prefix + suffix)
         shutil.copyfile(src, work / src.name)
     shutil.copyfile(deck, work / "case.toml")
@@ -125,18 +148,40 @@ def nonzero_required(case_dir: Path, results: Path) -> list[tuple[str, int]]:
     if not obs.is_file():
         return []
     doc = tomllib.loads(obs.read_text(encoding="utf-8"))
-    wanted = {o.get("block") for o in doc.get("observable", []) if o.get("must_be_nonzero")}
-    wanted.discard(None)
+    wanted = {}
+    for o in doc.get("observable", []):
+        if not o.get("must_be_nonzero") or o.get("block") is None:
+            continue
+        # `in_range = [lo, hi]` is the half M11 was missing. damage_2d.concrete_gravdam's
+        # Yield block passed must_be_nonzero on 169 values ABOVE 1e9 -- an uninitialised
+        # local written into the output slot (PD-3) -- while a real damage value can only
+        # be 0 or 1-sqrt(cc). A count alone cannot tell those apart; a declared range can,
+        # and a non-zero count is only evidence when the values are values of the thing.
+        wanted[o["block"]] = o.get("in_range")
     if not wanted:
         return []
     parsed = json.loads(results.read_text(encoding="utf-8"))
     counts: dict[str, int] = {b: -1 for b in wanted}
+    outside: dict[str, int] = {b: 0 for b in wanted}
+    worst: dict[str, float] = {}
     for b in parsed["blocks"]:
         if b["name"] not in wanted:
             continue
-        counts[b["name"]] = max(counts[b["name"]], 0) + sum(
-            1 for row in b["rows"].values() for v in row if v != 0.0)
-    return sorted(counts.items())
+        lo_hi = wanted[b["name"]]
+        n = 0
+        for row in b["rows"].values():
+            for v in row:
+                if v == 0.0:
+                    continue
+                if lo_hi is not None and not (lo_hi[0] <= v <= lo_hi[1]):
+                    outside[b["name"]] += 1
+                    if abs(v) > abs(worst.get(b["name"], 0.0)):
+                        worst[b["name"]] = v
+                    continue
+                n += 1
+        counts[b["name"]] = max(counts[b["name"]], 0) + n
+    return [(b, counts[b], outside[b], wanted[b], worst.get(b))
+            for b in sorted(counts)]
 
 
 def compare(ref: Path, actual: Path) -> tuple[bool, str]:
@@ -186,8 +231,10 @@ def main(argv=None):
             print(f"  N2 {cid:<28} vs frozen reference  {line}")
             if not ok:
                 problems.append(f"N2 {cid}: the modern path does not reproduce the reference")
-            for block, n in nonzero_required(case_dir, out):
-                print(f"  N4 {cid:<28} {block} non-zero values: {n}")
+            for block, n, n_out, rng, worst in nonzero_required(case_dir, out):
+                rtxt = "" if rng is None else f" in [{rng[0]}, {rng[1]}]"
+                print(f"  N4 {cid:<28} {block} non-zero values{rtxt}: {n}"
+                      + (f", OUTSIDE: {n_out} (worst {worst:.6g})" if n_out else ""))
                 if n < 0:
                     problems.append(f"N4 {cid}: {block} is declared must_be_nonzero but the "
                                     f"results carry no such block -- the assertion checks "
@@ -195,6 +242,11 @@ def main(argv=None):
                 elif n == 0:
                     problems.append(f"N4 {cid}: {block} is declared must_be_nonzero and is "
                                     f"all zeros -- the case does not exercise what it is for")
+                if n_out:
+                    problems.append(f"N4 {cid}: {block} carries {n_out} value(s) outside the "
+                                    f"declared range [{rng[0]}, {rng[1]}], worst {worst:.6g} "
+                                    f"-- those are not values of the quantity, so counting "
+                                    f"them as evidence is what PD-3 did")
 
     # N3 -- a deck the contract rejects must stop, readably.
     bad_id, bad_dir = cases()[0]
@@ -233,6 +285,17 @@ def main(argv=None):
         def f(text: str) -> str:
             assert a in text, f"deck no longer carries the mutated line: {a}"
             return text.replace(a, b, 1)
+        return f
+
+    def resub(pattern: str, b: str):
+        """Regex form of `sub`, for a key whose VALUE differs between decks. The concrete
+        mutation below picks whichever deck the manifest lists first, and the two CONCRETE
+        decks write different crack models (6 and 3), so matching the literal line tied the
+        test to one deck's value and broke the moment the other came first."""
+        def f(text: str) -> str:
+            new_text, n = re.subn(pattern, b, text, count=1)
+            assert n == 1, f"deck no longer carries a line matching: {pattern}"
+            return new_text
         return f
 
     # a -- a whitelisted key carrying an unlisted value: a capability refusal, not a typo.
@@ -407,14 +470,22 @@ def main(argv=None):
     #   k2  a parameter deleted    exit 2, names the key                 (missing field)
     #   k3  the block on another model   exit 2, names the key           (forbidden)
     # SILENT: none of these may disturb the nine N2 comparisons above.
+    # A GATED concrete deck, not merely a concrete one: these three controls mutate a deck
+    # and read the refusal, and a deck whose modern gate is off is one whose numbers are
+    # not verified, so driving the controls from it would rest them on unchecked ground.
+    # The distinction only became real when a second concrete deck arrived with its gate
+    # off (elements_2d.rcbeam, 2026-09-18) and, being first in the manifest, silently
+    # became the deck every concrete control mutated.
+    _gated = {cid for cid, _ in cases()}
     conc = next((c["id"] for c in _doc.get("case", [])
-                 if (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
+                 if c["id"] in _gated
+                 and (ROOT / "cases" / c["path"] / "modern/case.toml").is_file()
                  and 'model   = "concrete"' in
                      (ROOT / "cases" / c["path"] / "modern/case.toml").read_text(encoding="utf-8")),
                 None)
     if conc is not None:
         blob = rejected("concrete crack model 2", "--input=case.toml",
-                        sub("crack_model          = 6", "crack_model          = 2"), case=conc)
+                        resub(r"crack_model(\s*)= *\d+", r"crack_model\g<1>= 2"), case=conc)
         if "crack_model" not in blob:
             problems.append("N3 concrete crack model: the refusal did not name the key")
 

@@ -152,18 +152,35 @@ legacy nblks = count(step)          legacy nstep = step.controls.substeps
 | `solver.symmetric` / `solver.profile.*` | 0 / (0,0,1,1) | PROFILE 的固定开关 |
 | `mesh.*` 的一切计数 | 由网格文件派生 | 计数不是输入 |
 | `interactions.absorbing.type` | 空 | 吸收边界不在白名单内（M7） |
+| `steps[].boundary[].record_reaction` | `true` | 纯输出开关，且写的是 `outact` 文件不是 `1.flavia.res`（Output.f90:288-320）。**作者可覆写**：`rcbeam` 四个集合都是 0，而在它到来之前这一条的理由写的是「两个冻结参考上都是 1」——那句话已经不成立了 |
+| `sections[].stress_averaging` | 取 `output.stress_averaging` | legacy 的标志是**逐组**的（`average_appear(1:ngroup)`）。**作者可覆写**：`rcbeam` 是 `[1,0,0]`，Q4 体做节点平均，两个线单元组不做 |
 
 **不在默认表里、必须由作者写的**：`case.name`、`units`、网格来源、节点/单元集、
 `materials[].{name,model,density,E,nu}`、`sections[].{elset,element,formulation,material}`、
 `amplitudes[].{name,type,points}`、`steps[].{procedure,controls.increments,
-controls.substeps,controls.time_increment,controls.max_iterations,controls.tolerance_*}`、边界的 `{nset,dof,value}`、
+controls.substeps,controls.time_increment,controls.max_iterations,controls.tolerance_*}`、边界的 `{nset,dof,value}`，以及 `value ≠ 0` 时的 `amplitude`（2026-09-18，两个方向都有反例：
+非零位移没有曲线会让 legacy 去索引 `tcurves(0)`，也就是 M1 防线在 Fem.f90:12288 的那次中止；
+零位移带曲线则是一句不产生任何效果的物理声明）、
 `steps[].load_mode`、荷载对象的 `{type,amplitude}` 与其按类型条件必填的字段（gravity：`{magnitude,direction,apply_to}`；pressure：`{surface,distribution.*}`，见 §8.3）、`[[surface]]` 的 `{name,kind,edges}`、`solver.linear`、`output.{format,field}`。
 
 ## 6. 白名单（超出即 `UNSUPPORTED_CAPABILITY`）
 
-- `mesh.dimension = 2`；`mesh.format = "hstar-legacy-cor-ele"`
-- `section.element = "Q4"`；`section.formulation = "plane_strain"`
-- `material.model ∈ {"elastic_isotropic", "classicalep", "duncanchang"}`；
+- `mesh.dimension = 2`；`mesh.format ∈ {"hstar-legacy-cor-ele", "hstar-legacy-cor-ele-nrt"}`
+  （2026-09-18）。`mesh.format` 声明的是这份 deck **随带哪几个网格文件**，所以节点插值表
+  是第二个取值，而不是一个「还有另一个文件」的布尔量。`.nrt` 与 `.cor`/`.ele` 同类：
+  由网格生成器产出、按节点号索引；legacy 在**两条路径上都读它**
+  （Global.f90:1489-1531 与 Elements.f90:1087 一样没有 `yl_input_enabled` 守卫），
+  因此它是原样随带的，不是作者写的
+- `section.element ∈ {"Q4", "L2", "STEEL"}`（2026-09-17）；`section.formulation = "plane_strain"`。
+  三者是**三个单元族**，不可互换：`Q4` 是 4 节点连续体；`L2` 是 2 节点杆/连续线单元，
+  与 Q4 走同一条高斯积分路径；`STEEL` 是 2 节点粘结单元，有自己的列式（Stiff.f90:121/572）。
+  `L2` 与 `STEEL` 节点数相同，这是拓扑的事实，不是两者的共性
+- `section.area`（2026-09-17）：**当且仅当** `section.element = "L2"` 时必填，否则禁止出现——
+  两个方向都有反例。它是线单元的**截面面积**（m²）。legacy 把它放进 2-D 连续体单元装厚度
+  （m）的同一个 `thick` 槽位（Stiff.f90:118），但那是两个物理量，所以是两个键、两条 map 行、
+  两个单位。`STEEL` 在禁止的一侧是**有意的**：粘结单元确实有面积，但 legacy 从网格
+  **派生**它（Material.f90:1113），作者写一个就是发明了一个 legacy 没有的输入
+- `material.model ∈ {"elastic_isotropic", "classicalep", "duncanchang", "concrete"}`；
   `classicalep` 需要 `criterion = "mohr_coulomb"` 及 `cohesion` / `hardening` /
   `friction_angle` / `dilation_angle`（**角度单位是度**，legacy 直接 `tand()`），
   且这些字段**只允许**出现在塑性材料上——两个方向都有反例
@@ -181,6 +198,15 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
   因此写 `criterion` 会被拒。只放行 `EB`：legacy 的 `EV`/`CR` 分支读的是另一条记录
   （`G`/`F`/`Vtf`，Material.f90:524-526），本构建没有对应的 ProblemState 组件，
   一条参数无处安放的定律只能拒绝，不能读一半
+- `concrete`（2026-09-17）需要 `dev_stress_quadratic` / `dev_stress_linear` /
+  `principal_stress` / `mean_stress` / `compressive_strength` / `tensile_ratio` /
+  `fracture_energy` / `characteristic_length` / `crack_model`。四个系数按它们在 legacy
+  破坏面表达式里**乘的东西**命名，不按字母（`eqstr = A*steff²/Fc + B*steff + C*sigma1 +
+  3*D*smean`，Residu.f90:3265）。`crack_model ∈ {3, 6}`（2026-09-18 放行 3）：它是**选择子**，
+  2 会再读一条记录（Material.f90:700），3/5/6 不再读而改为**派生** `bb`/`et0`；
+  放行的两个各有一个真实算例（6 = `concrete_gravdam`，3 = `rcbeam`），
+  且二者在读取期不可区分、在下游可区分——Residu.f90:520 对 {2,3,5} 加 `strain0` 而不对 6，
+  同一语义的 :1590 却对 {2,3,5,6} 都加，**legacy 自身两处不一致**，照抄不调和
 - `step.procedure = "static"`；`step.controls.increments = 1`
 - `step.controls.stiffness_update ∈ {"first_iteration", "every_iteration"}`（legacy `type_nl` 5 / 4）
 - 边界只有给定位移（`value`），`dof ∈ {1,2}`
@@ -190,7 +216,7 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
 - `surface.kind = "edge2"`（每行恰好 `[n1, n2, element]`）
 - `amplitude.type = "linear"`。`waterlevel` 在 2026-09-15 曾进入白名单，2026-09-16 又被移出：**没有任何 golden 算例使用它**，而白名单里一条没有算例支撑的能力就是一句没有证据的断言。它的线格式差异仍记录在 §8.2，等第一个真实算例进来再放回
 - `solver.linear = "profile"`
-- `output.format = "gid"`；`output.field ⊆ {"u","s","ep"}`；`output.stress_averaging ∈ {"none","smoothed","direct"}`
+- `output.format = "gid"`；`output.field ⊆ {"u","s","ep","ms","f","y","bcs"}`（`bcs` 不写入 `1.flavia.res`，legacy 另写 `1bcs.flavia.*`，因此它是输出请求但不在观察面上）；`output.stress_averaging ∈ {"none","smoothed","direct"}`
   （`"smoothed"` 与 `"direct"` 在本切片上不可区分：Output.f90:5128-5129 的分支只在
   `nnode==8 .and. ndimn==3` 下成立，2-D Q4 走同一条 else 分支。实测而非推断——改成
   `"smoothed"` 仍严格复现冻结参考，改成 `"none"` 应力偏离 1.5e5、位移不变。）

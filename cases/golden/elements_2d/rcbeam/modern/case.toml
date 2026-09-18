@@ -1,0 +1,201 @@
+# The second element family, on a real reinforced-concrete beam.
+#
+# rcbeam is the JOINT slice: it is the only 2-D deck in the corpus that carries a
+# line-element group AND runs, and its two prerequisites -- CONCRETE (M11) and PARDISO
+# (M10) -- were what suspended this domain on 2026-09-17. It is also the deck that makes
+# CONCRETE's damage branch real: 5371 values in (0,1), where damage_2d.concrete_gravdam
+# had none (PD-3, docs/m8/pre-migration-defects.md).
+#
+# Three element families in ONE .ele, with three different record lengths:
+#   GROUP1  Q4     kind 5   600 elements   the concrete body
+#   GROUP2  L2     kind 1    60 elements   the reinforcement, a continuum line element
+#   GROUP3  STEEL  kind 25   61 elements   the bond element, its own formulation
+# legacy reads .ele inside the group loop, one group's node count at a time
+# (Elements.f90:1081-1087); it never had a one-element-kind assumption. The adapter did,
+# and this deck is what removed it.
+#
+# The load is a PRESCRIBED DISPLACEMENT, not self-weight: both materials have density 0,
+# so gravity contributes nothing and the beam is pulled down at nodes 92 and 112 along a
+# ramp. That is why `[[step.boundary]]` needs an amplitude here and nowhere before.
+#
+# See docs/m5/authoring-contract.md and docs/m9/l2-element-domain.md.
+version = 1
+
+[case]
+name        = "rcbeam"
+units       = "SI"
+description = "793-node, 721-element 2D reinforced-concrete beam: Q4 concrete body, L2 reinforcement and STEEL bond elements, displacement-controlled over 30 substeps, PARDISO"
+
+[mesh]
+file      = "1"
+# The node-interpolation table (1.nrt) ships with the mesh: 61 nodes, each tied to 4
+# source nodes with weights. legacy reads it on both paths (no yl_input_enabled guard at
+# Global.f90:1489-1531), exactly as it reads 1.ele.
+format    = "hstar-legacy-cor-ele-nrt"
+dimension = 2
+
+[[elset]]
+name          = "body"
+element_count = 600
+
+[[elset]]
+name          = "rebar"
+element_count = 60
+
+[[elset]]
+name          = "bond"
+element_count = 61
+
+[[nset]]
+name  = "corner_x"
+nodes = [1]
+
+[[nset]]
+name  = "corner_y"
+nodes = [1]
+
+[[nset]]
+name  = "support_y"
+nodes = [2]
+
+[[nset]]
+name  = "pull_y"
+nodes = [92, 112]
+
+[[material]]
+name    = "concrete"
+model   = "concrete"
+density = 0.0
+E       = 2.4e10
+nu      = 0.167
+thermal_expansion = 1.0e-5
+# The failure surface, named for what each coefficient multiplies:
+#   eqstr = A*steff^2/Fc + B*steff + C*sigma1 + 3*D*smean
+dev_stress_quadratic = 0.02431
+dev_stress_linear    = 0.06264
+principal_stress     = 0.7661
+mean_stress          = 0.2712
+compressive_strength = 2.0e7    # Pa
+tensile_ratio        = 0.1      # Ft/Fc
+fracture_energy      = 120.0    # N/m
+characteristic_length = 0.2     # m; the softening law divides by it
+# legacy icr. 3 and 6 read the same record and derive bb/et0 the same way; they differ
+# downstream, and legacy itself disagrees about how (Residu.f90:520 vs :1590).
+crack_model          = 3
+
+[[material]]
+name    = "steel"
+model   = "elastic_isotropic"
+density = 0.0
+E       = 7.8e10
+nu      = 0.167
+thermal_expansion = 1.0e-5
+
+[[section]]
+name        = "body"
+elset       = "body"
+element     = "Q4"
+formulation = "plane_strain"
+material    = "concrete"
+
+[[section]]
+name        = "rebar"
+elset       = "rebar"
+element     = "L2"
+formulation = "plane_strain"
+material    = "steel"
+# The bar's cross-section. legacy puts it in the same `thick` slot a 2-D continuum element
+# fills with a thickness in m (Stiff.f90:118) -- one slot, two physical quantities.
+area        = 3.14e-4            # m2
+# No nodal stress averaging on a 2-node element.
+stress_averaging = "none"
+
+[[section]]
+name        = "bond"
+elset       = "bond"
+element     = "STEEL"
+formulation = "plane_strain"
+material    = "steel"
+stress_averaging = "none"
+
+[[amplitude]]
+name   = "hold"
+type   = "linear"
+points = [[0.0, 1.0], [1.0, 1.0]]
+
+[[amplitude]]
+name   = "ramp"
+type   = "linear"
+points = [[0.0, 0.0], [1.0, 1.0], [3.0, 3.0]]
+
+[[step]]
+name      = "pull_down"
+procedure = "static"
+load_mode = "load"
+reset_state   = false
+active_elsets = ["body", "rebar", "bond"]
+
+[step.controls]
+increments      = 1
+substeps        = 30
+time_increment  = 0.10
+max_iterations  = 100
+tolerance_force = 1.0e-5
+tolerance_dof   = 1.0e-5
+stiffness_update = "first_iteration"
+
+[[step.boundary]]
+nset  = "corner_x"
+dof   = [1]
+value = 0.0
+# legacy outfix = 0 on all four sets: no reaction report. An output switch only.
+record_reaction = false
+
+[[step.boundary]]
+nset  = "corner_y"
+dof   = [2]
+value = 0.0
+record_reaction = false
+
+[[step.boundary]]
+nset  = "support_y"
+dof   = [2]
+value = 0.0
+record_reaction = false
+
+[[step.boundary]]
+nset      = "pull_y"
+dof       = [2]
+value     = -1.5e-2
+amplitude = "ramp"
+record_reaction = false
+
+[[step.load]]
+type      = "gravity"
+magnitude = 9.81
+direction = [0.0, -1.0]
+amplitude = "hold"
+# legacy's tcurvegravity is [1, 0, 0]: only the concrete body carries a gravity curve.
+apply_to  = "body"
+
+# The reinforcement bond law. legacy keeps these on a .glb record with the crack
+# parameters (Global.f90:1062); they are the STEEL element's constitutive law, so the
+# contract requires them exactly when a STEEL section is declared.
+[bond]
+slip_law             = 3        # legacy ikindks: which tau(s) relation governs
+stress_scale         = 1.0e6    # legacy coefMpa: the law's coefficients are written in MPa
+transverse_model     = "penalty"  # legacy doubsig = 2
+transverse_stiffness = 1.0e8    # legacy ktan1, the transverse penalty in 2-D
+
+[solver]
+linear = "pardiso"
+
+[solver.pardiso]
+matrix_type   = -2
+threads       = 2
+message_level = 0
+
+[output]
+format = "gid"
+field  = ["u", "s", "f", "y", "bcs"]
+stress_averaging = "smoothed"

@@ -149,7 +149,10 @@ DTYPES = {"i32", "i64", "f64", "str", "bool"}
 # plane-strain slice of unit thickness is energy per unit length. Distinct from the N/m3
 # already in this set (a body force) -- worth spelling out, because the two look alike and
 # mean nothing like each other.
-UNITS = {"1", "id", "m", "N", "N/m", "N/m3", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
+# m2 arrived with the 2-D line-element domain: a bar's cross-sectional area. It fills
+# the same legacy slot a 2-D continuum element fills with a thickness in m, which is
+# exactly why the two are separate rows with separate units rather than one field.
+UNITS = {"1", "id", "m", "m2", "N", "N/m", "N/m3", "Pa", "kg", "kg/m3", "m/s2", "s", "K", "1/K", "deg"}
 DETERMINISM = {"deterministic", "uninitialized", "pointer", "order_dependent"}
 COMPARE_RULES = {"exact", "abs_tol", "rel_tol", "hash", "ignore"}
 OWNER_BUCKETS = {"derived", "not_migrated"}   # owners that are labels, not paths (rule 21)

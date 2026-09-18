@@ -34,7 +34,7 @@ module yl_authoring_defaults
   public :: default_controls, default_load, default_output, default_activation
   public :: default_interactions, default_load_mode, set_stress_averaging
   public :: default_surface_edge
-  public :: stress_averaging_code
+  public :: stress_averaging_code, bond_transverse_code
   public :: default_residue, default_existence
   public :: element_kind_of, nodes_per_element, formulation_code, amplitude_code
   public :: procedure_code, solver_code, legacy_material_name, enable_output_field
@@ -199,6 +199,18 @@ contains
   !> stresses by 1.5e5 and leaves the displacements untouched. Both names are kept because
   !> they are legacy's own two schemes and they diverge the day a 3-D 8-node element is
   !> whitelisted; nothing here may be re-derived from the fact that they agree today.
+  !> `doubsig`. The authoring vocabulary names what the setting DOES; 2 is legacy's code
+  !> for "the transverse bond stiffness is a fixed penalty" (Stiff.f90:624-626) and it also
+  !> makes steel_spring_parameter return before its second pass (Material.f90:1159). Only
+  !> that one is whitelisted, because it is the one elements_2d.rcbeam exercises.
+  pure integer(int32) function bond_transverse_code(name) result(c)
+    character(len=*), intent(in) :: name
+    select case (trim(name))
+    case ('penalty'); c = 2_int32
+    case default;     c = 0_int32
+    end select
+  end function bond_transverse_code
+
   pure integer(int32) function stress_averaging_code(name) result(c)
     character(len=*), intent(in) :: name
     select case (trim(name))
@@ -228,6 +240,11 @@ contains
     case ('ms'); call opt_set(o%field%ms, 1_int32)   ! principal stresses
     case ('f');  call opt_set(o%field%f, 1_int32)    ! nodal force, written as `tofor`
     case ('y');  call opt_set(o%field%y, 1_int32)    ! yield indicator
+    ! Boundary conditions. Unlike every other field here it does NOT go into
+    ! `<prefix>.flavia.res`: legacy writes it to a file of its own, `<prefix>bcs.flavia.*`.
+    ! So it is an output request like the rest, but it is not on the observation face --
+    ! the golden comparison reads 1.flavia.res only.
+    case ('bcs'); call opt_set(o%field%bcs, 1_int32)
     end select
   end subroutine enable_output_field
 

@@ -113,7 +113,7 @@ module yl_problem_pipeline
   !> the deck adapter sizes its `.ele` reads from the SAME table this module validates
   !> connectivity length against (V13); two copies of it would be a defect waiting to
   !> happen the first time a third element family arrives.
-  public :: nodes_of_kind
+  public :: nodes_of_kind, element_name_of_kind, element_rules_of_kind
 
   ! The element kinds this build knows the connectivity length of. These values are NOT
   ! capability constants -- the capability table says which kinds are SUPPORTED, this says
@@ -2120,6 +2120,62 @@ contains
       known = .false.
     end select
   end subroutine nodes_of_kind
+
+  !> The element FAMILY name for a kind code -- legacy's own `elkn(index)%name`, uppercased
+  !> (Elements.f90:240 'steel', :259 'l2', :366 'q4').
+  !>
+  !> The inverse of yl_authoring_defaults' `element_kind_of`, and the reason it exists is
+  !> rcbeam: a `.glb` group header carries a NAME tag beside the INDEX, and rcbeam's mesh
+  !> generator writes "L2" for both of its line groups, distinguishing them only by index
+  !> (1 = rod, 25 = bond). So the tag is not a family name and cannot be one -- the adapter
+  !> derives the family from the index instead, and the two entry paths then agree on the
+  !> same string instead of disagreeing on a deck-supplied label.
+  !>
+  !> Dropping the tag is safe because it HAS NO CONSUMER: Global.f90:1272 copies
+  !> group%name into a local, :1281 overwrites that local with group%sptype before the
+  !> local is used at :1297, and the only other reference is the print at :1223, which is
+  !> not on the observation face. Measured, not argued -- the eight decks whose tag already
+  !> equals the family name are bit-identical across this change.
+  !> The compile-time `elkn` entry for a kind, as far as this build needs it: the parent
+  !> dimension, the integration-rule count and the two rules' point counts.
+  !>
+  !> These are legacy's own literals (Elements.f90 q4_define :362, l2_define :255,
+  !> steel_define :236), not a capability claim -- the claim is the kind_code whitelist in
+  !> the capability table. STEEL is the interesting row: `nr_intrules = 0`, so legacy
+  !> allocates NO integration rules for it at all (Elements.f90:1116 is guarded), and a
+  !> commit that gave it two would hand the solver a shape legacy never builds.
+  pure subroutine element_rules_of_kind(kind_code, lndimn, nrules, ngaus_stiff, ngaus_mass, known)
+    integer(int32), intent(in) :: kind_code
+    integer, intent(out) :: lndimn, nrules, ngaus_stiff, ngaus_mass
+    logical, intent(out) :: known
+    known = .true.
+    select case (kind_code)
+    case (ELEMENT_KIND_Q4)
+      lndimn = 2; nrules = 2; ngaus_stiff = 4; ngaus_mass = 16
+    case (ELEMENT_KIND_L2)
+      lndimn = 1; nrules = 2; ngaus_stiff = 2; ngaus_mass = 2
+    case (ELEMENT_KIND_STEEL)
+      lndimn = 1; nrules = 0; ngaus_stiff = 0; ngaus_mass = 0
+    case default
+      lndimn = 0; nrules = 0; ngaus_stiff = 0; ngaus_mass = 0
+      known = .false.
+    end select
+  end subroutine element_rules_of_kind
+
+  pure subroutine element_name_of_kind(kind_code, name, known)
+    integer(int32), intent(in) :: kind_code
+    character(len=*), intent(out) :: name
+    logical, intent(out) :: known
+    known = .true.
+    select case (kind_code)
+    case (ELEMENT_KIND_Q4);    name = 'Q4'
+    case (ELEMENT_KIND_L2);    name = 'L2'
+    case (ELEMENT_KIND_STEEL); name = 'STEEL'
+    case default
+      name = ''
+      known = .false.
+    end select
+  end subroutine element_name_of_kind
 
   ! The element kind to judge an element's connectivity by: its own when finalize has
   ! already written one, otherwise its section's.

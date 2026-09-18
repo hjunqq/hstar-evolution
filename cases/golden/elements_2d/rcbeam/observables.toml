@@ -11,7 +11,7 @@ format = "gid-flavia-ascii"
 header_layout = "name, type(1=vector,3=matrix), step, ncomp, location, has_component_names; data rows: node_id + ncomp values (E format, 8 significant digits)"
 expected_node_count = 793
 expected_element_count = 721
-note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较；.rtt/.gpv/.bar/.bem 为二进制或派生输出，不解析。本算例 gid_f / gid_Y / gid_bcs 也为 1，但它们不写入 1.flavia.res——gid_bcs 另写 1bcs.flavia.res，不在观察面上"
+note = "唯一稳定文本观察量；.chk/stdout 含时间戳，不比较；.rtt/.gpv/.bar/.bem 为二进制或派生输出，不解析。本算例 gid_f / gid_Y / gid_bcs 都是 1：前两者**确实写入** 1.flavia.res（块名 `tofor` 与 `Yield`，2026-09-18 复核冻结参考所得，登记时的相反说法是错的），因此在观察面上；只有 gid_bcs 另写 1bcs.flavia.*，不在观察面上。冻结参考共 120 块：DISPLACEMENT / STRESS / tofor / Yield 各 30 个子步"
 
 [[observable]]
 id = "displacement"
@@ -29,6 +29,29 @@ kind = "nodal_tensor"
 components = ["SIGXX", "SIGYY", "SIGXY", "SIGZZ"]
 unit = "Pa"
 required = true
+
+# CONCRETE 的损伤，也是 M11 欠下的那条判据。`Yield` 块写的是 legacy 的 `damage`，
+# 它只有两种取值：`0.`，或 `1-sqrt(cc)`（Residu.f90:3664/3675）——**不可能大于 1**。
+# damage_2d.concrete_gravdam 的 `Yield` 有 169 个非零值，但它们全部 > 1e9：那是 PD-3
+# 写进输出槽的未初始化局部量，不是损伤。所以这里除了"非零"还声明**取值区间**，
+# 一个只数非零的断言正是当时通过了的那一个。
+[[observable]]
+id = "reaction"
+kind = "nodal_vector"
+components = ["ux", "uy"]
+unit = "N"
+required = true
+block = "tofor"
+
+[[observable]]
+id = "damage"
+kind = "gauss_scalar"
+components = ["Yield"]
+unit = "1"
+required = true
+block = "Yield"
+must_be_nonzero = true
+in_range = [0.0, 1.0]
 
 # 本算例真正新增的能力观察量是**混合拓扑**本身：同一个 .ele 里三种单元族、
 # 三种不同的每记录节点数。它在 1.flavia.res 上没有独立的块——它的效果体现在

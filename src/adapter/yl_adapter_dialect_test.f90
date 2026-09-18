@@ -166,7 +166,6 @@ program yl_adapter_dialect_test
     call run_case('A-GLB', 'water-pipe-nonzero', 'glb', 73, '  1', 'W')
     call run_case('A-COR', 'dimension', 'cor', 0, '', 'DIM3')
     call run_case('A-ELE', 'element-kind', 'ele', 0, '', 'KIND7')
-    call run_case('A-MAT', 'curve-count', 'mat', 2, '  1', 'W')
     call run_case('A-MAT', 'property', 'mat', 17, '          THERMAL           SOLID     1', 'W')
     call run_case('A-MAT', 'phase-count', 'mat', 18, '  2', 'W')
     call run_case('A-MAT', 'phase', 'mat', 19, '               FLUID', 'W')

@@ -128,7 +128,9 @@ contains
     character(len=200) :: iomsg_buf
     character(len=30) :: property, name, phase, material
     character(len=20) :: criteria
-    integer(int32) :: ios, nscurve, nline, iline, mmats, jmat
+    integer(int32) :: ios, nscurve, nline, iline, mmats, jmat, iscurve, npoints
+    character(len=20) :: type_curve
+    real(real64), allocatable :: curve_buf(:)   ! one curve record; read and discarded
     integer(int32) :: imat, nphase, icreep, kind_wt, jliqu
     integer(int32) :: iE_switch, iNu_switch
     integer(int32) :: csigma0, cfrict, cdilan
@@ -139,6 +141,12 @@ contains
     integer(int32) :: cc_icr
     real(real64) :: dc(12)   ! cohes phi K n Rf Nur Kur P0 Pa Kb m dphi -- see read_duncanchang
     real(real64), allocatable :: mat_thickness(:)   ! thickness by material id, filled below
+    !> Cross-sectional area by material id, filled by the GEOMETRY branch. Absent (< 0)
+    !> for a material that carries no geometry record, which is most of them: the sentinel
+    !> is negative because 0.0 is a real (if degenerate) area and must not be confused with
+    !> "never stated".
+    real(real64), allocatable :: mat_area(:)
+    real(real64) :: g_aera, g_j, g_iy, g_iz
     type(material_t) :: mat
     type(source_location_t) :: loc
 
@@ -158,10 +166,38 @@ contains
     ! RD: MAT.material_set.curve_count (Material.f90:245)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) nscurve
     if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.curve_count', 245_int32)) return
-    if (nscurve /= 0_int32) then
-      call mat_reject(errors, 'curve-count', 245_int32, itoa(nscurve))
-      return
-    end if
+    ! The stress-strain curve table. Three records per curve, and the FIRST sizes the
+    ! other two, so it has to be read between them.
+    !
+    ! No guard on `nscurve` or `npoints`: legacy has none either, and a list-directed read
+    ! of a zero-size array still consumes its record, so a degenerate count behaves the
+    ! same on both sides. Adding a check here would make the adapter refuse a deck legacy
+    ! accepts, which is a different defect from the one it would prevent.
+    !
+    ! Read and DISCARDED, which is the whole claim this build makes about curves: on the
+    ! decks admitted here nothing consumes `scurves`. Every parameter_find call site is
+    ! guarded by a curve index -- csigma0/cfrict/cdilan (CLASSICALEP, Stiff.f90:1995-2001),
+    ! cft (classicalEP, :2008), cvstrain (creep, Residu.f90:5086), bline/eline
+    ! (humidification, Material.f90:1345) -- and a deck that set one of those would be
+    ! refused by the branch that owns it before it could reach a curve. What is NOT
+    ! optional is CONSUMING THE RECORDS: they sit between the curve count and the comment
+    ! count, so skipping them would desynchronise every read after them.
+    do iscurve = 1_int32, nscurve
+      ! RD: MAT.material_set.curve_header (Material.f90:250)
+      read (unit, *, iostat=ios, iomsg=iomsg_buf) npoints, type_curve
+      if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.curve_header',         &
+                            250_int32, rec=iscurve)) return
+      if (allocated(curve_buf)) deallocate (curve_buf)
+      allocate (curve_buf(npoints))
+      ! RD: MAT.material_set.curve_strain (Material.f90:256)
+      read (unit, *, iostat=ios, iomsg=iomsg_buf) curve_buf
+      if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.curve_strain',         &
+                            256_int32, rec=iscurve)) return
+      ! RD: MAT.material_set.curve_stress (Material.f90:257)
+      read (unit, *, iostat=ios, iomsg=iomsg_buf) curve_buf
+      if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.curve_stress',         &
+                            257_int32, rec=iscurve)) return
+    end do
 
     ! RD: MAT.material_set.comment_line_count (Material.f90:261)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) nline
@@ -200,6 +236,7 @@ contains
     ! header), an out-of-range imat here is a memory-safety problem this routine
     ! cannot defer to a later stage.
     allocate (mat_thickness(mmats))
+    allocate (mat_area(mmats)); mat_area = -1.0_real64
 
     do jmat = 1_int32, mmats
 
@@ -223,6 +260,16 @@ contains
                         //'would be indexed out of bounds otherwise', &
                         actual=itoa(imat), expected='1..'//itoa(mmats), source=loc))
         return
+      end if
+      ! A material carries one record per PROPERTY CLASS, and `mmats` counts records rather
+      ! than materials -- which is how a rod/beam deck attaches a section record to a
+      ! material that already has a mechanical one. GEOMETRY is handled in full here and
+      ! then this iteration is done: it has no phase block of its own.
+      if (trim(property) == 'GEOMETRY') then
+        call read_geometry(unit, jmat, g_aera, g_j, g_iy, g_iz, errors)
+        if (errors%any()) return
+        mat_area(imat) = g_aera
+        cycle
       end if
       if (trim(property) /= 'MECHANICAL') then
         call mat_reject(errors, 'property', 294_int32, trim(property), rec=jmat)
@@ -378,6 +425,7 @@ contains
     end do
 
     call resolve_section_thickness(errors, ctx, mat_thickness, secparts)
+    call resolve_section_area(errors, ctx, mat_area, secparts)
   end subroutine parse_mat
 
   !> The CLASSICALEP branch of material_select (Material.f90:618-654).
@@ -445,8 +493,14 @@ contains
   !>   icr in {3,5,6}   reads nothing more, and instead DERIVES bb and et0 (:684-692)
   !>   other            neither
   !>
-  !> Only 6 is whitelisted -- the one a real deck exercises. Admitting 3 as well would be
-  !> a claim with no deck behind it: rcbeam uses 3, but rcbeam is M9's and suspended.
+  !> 6 and 3 are whitelisted, each because a real deck exercises it -- concrete_gravdam
+  !> uses 6, rcbeam uses 3. They are INDISTINGUISHABLE here (same record, same derivation)
+  !> and distinguishable downstream: Residu.f90:520 adds `strain0` for icr in {2,3,5} and
+  !> NOT for 6, while its sibling at :1590 adds it for {2,3,5,6}. The two sites disagree in
+  !> legacy itself. That is copied as found, not reconciled -- which of them is the typo is
+  !> a constitutive question, and this build's job is to reproduce, bit for bit, whatever
+  !> legacy does with the deck it is given.
+  !>
   !> Getting the branch wrong would not produce a wrong number, it would desynchronise the
   !> file, which is the same reason the DUNCANCHANG bulk law is checked between records.
   subroutine read_concrete(unit, jmat, cc, icr, errors)
@@ -464,11 +518,38 @@ contains
                                                  cc(7), cc(8), icr
     if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.concrete',               &
                           666_int32, rec=jmat)) return
-    if (icr /= 6_int32) then
+    if (icr /= 6_int32 .and. icr /= 3_int32) then
       call mat_reject(errors, 'concrete-crack-model', 666_int32, itoa(icr), rec=jmat)
       return
     end if
   end subroutine read_concrete
+
+  !> The GEOMETRY branch of the property select (Material.f90:1013-1018).
+  !>
+  !> One record, four numbers: the cross-sectional area and the torsion/bending constants.
+  !> Only `aera` has a ProblemState component. The other three are read -- the record is
+  !> one list-directed read either way, so skipping them is not an option -- and then
+  !> REFUSED if any is non-zero, rather than discarded: `J`/`Iy`/`Iz` are consumed only in
+  !> legacy's BEAM branch (Stiff.f90:206-213, element kinds 20/21), which this build does
+  !> not admit, so a deck that states them is asking for a capability that is not here.
+  !> Discarding them silently would let a beam section through as if it were a rod.
+  subroutine read_geometry(unit, jmat, aera, j, iy, iz, errors)
+    integer, intent(in) :: unit
+    integer(int32), intent(in) :: jmat
+    real(real64), intent(out) :: aera, j, iy, iz
+    type(problem_errors_t), intent(inout) :: errors
+    character(len=200) :: iomsg_buf
+    integer(int32) :: ios
+
+    ! RD: MAT.material_set.geometry_section (Material.f90:1016)
+    read (unit, *, iostat=ios, iomsg=iomsg_buf) aera, j, iy, iz
+    if (.not. mat_read_ok(errors, ios, iomsg_buf, 'MAT.material_set.geometry_section',       &
+                          1016_int32, rec=jmat)) return
+    if (j /= 0.0_real64 .or. iy /= 0.0_real64 .or. iz /= 0.0_real64) then
+      call mat_reject(errors, 'beam-section-constants', 1016_int32, 'J/Iy/Iz', rec=jmat)
+      return
+    end if
+  end subroutine read_geometry
 
   !> The DUNCANCHANG branch of material_select (Material.f90:501-543).
   !>
@@ -594,6 +675,35 @@ contains
       call opt_set(secparts%sections(igroup)%thickness, mat_thickness(matno))
     end do
   end subroutine resolve_section_thickness
+
+  !> Section -> material -> cross-sectional area, the same indirection thickness has and
+  !> for the same reason: legacy stores it per MATERIAL (props(imat)%geometry%aera) while
+  !> ADR-0003 gives it to the section.
+  !>
+  !> Simpler than its thickness sibling in one way and stricter in another. Simpler: a
+  !> material either has a geometry record or it does not, so there is no conflict to
+  !> detect -- two sections sharing a material necessarily resolve to the same value.
+  !> Stricter: absence is REPRESENTED. Most materials have no geometry record at all, and
+  !> a section whose material has none must leave `cross_section_area` unset rather than
+  !> take 0.0, because 0.0 is a real (degenerate) area and the three-state rule (ADR-0002)
+  !> is what keeps "no cross-section was stated" distinguishable from "it is zero".
+  subroutine resolve_section_area(errors, ctx, mat_area, secparts)
+    type(problem_errors_t), intent(inout) :: errors
+    type(deck_context_t), intent(in) :: ctx
+    real(real64), intent(in) :: mat_area(:)
+    type(section_parts_t), intent(inout) :: secparts
+
+    integer(int32) :: igroup, matno
+
+    do igroup = 1_int32, size(ctx%group_matno)
+      matno = ctx%group_matno(igroup)
+      ! Out-of-range material ids are resolve_section_thickness's finding, raised on the
+      ! same table a moment earlier; this routine runs after it and would only duplicate it.
+      if (matno < 1_int32 .or. matno > size(mat_area)) cycle
+      if (mat_area(matno) < 0.0_real64) cycle        ! no geometry record: stays absent
+      call opt_set(secparts%sections(igroup)%cross_section_area, mat_area(matno))
+    end do
+  end subroutine resolve_section_area
 
   ! ============================================================================
   ! .sol

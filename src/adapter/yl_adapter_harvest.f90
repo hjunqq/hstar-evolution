@@ -106,6 +106,7 @@ module yl_adapter_harvest
                               step_t, controls_t, load_t, gravity_t, output_t, boundary_t, &
                               activation_t
   use yl_problem_optional, only: opt_set
+  use yl_problem_pipeline, only: element_name_of_kind
   use yl_problem_builder
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 PE_UNSUPPORTED, PE_INTERNAL
@@ -551,6 +552,8 @@ contains
     type(section_t) :: sec
     type(source_location_t) :: loc
     integer(ink) :: g, e
+    character(len=10) :: gfamily
+    logical :: kind_known
 
     if (.not. allocated(group)) then
       loc = make_source_location(file='1.glb', reader='global_data')
@@ -565,7 +568,16 @@ contains
     end if
     do g = 1_ink, ngroup
       call opt_set(sec%name, trim(group(g)%kname))
-      call opt_set(sec%element, trim(group(g)%name))
+      ! The FAMILY from the index, for the same reason the model parser does it: the .glb
+      ! NAME tag is a label with no consumer, and rcbeam's generator writes the same tag
+      ! for two different kinds. Both sides of the shadow comparison must mean the same
+      ! thing by sections[].element, and that thing is the family.
+      call element_name_of_kind(int(group(g)%index, int32), gfamily, kind_known)
+      if (kind_known) then
+        call opt_set(sec%element, trim(gfamily))
+      else
+        call opt_set(sec%element, trim(group(g)%name))
+      end if
       call opt_set(sec%element_kind, int(group(g)%index, int32))
       call opt_set(sec%class, trim(group(g)%class))
       call opt_set(sec%fields, trim(group(g)%fieldid))
