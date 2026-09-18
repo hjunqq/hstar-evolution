@@ -184,9 +184,15 @@ reference = "reference/"
 #   modern/case.toml. It grows linearly with the load factor from substep 1 (relative
 #   ~1.8e-4), so it is an elastic setup difference and not the damage path.
 #
-#   Localising it mechanically needs the state dump, which is the THIRD place carrying the
-#   one-element-kind assumption: yl_state_dump writes mesh.elements.nodes as nelem*nnode
-#   (2884) where the ragged truth is 2642. That is the next step, not a workaround.
+#   LOCALISED, 2026-09-18, from the equation count in 1.chk and nothing cleverer:
+#     ntotv = 1586 on both paths;  legacy Neq = 1459 = 1586 - 122 - 5
+#                                  adapter Neq = 1581 = 1586 -   0 - 5
+#     122 = the 61 interpolated nodes x 2 dofs; 5 = the prescribed dofs.
+#   The adapter path applies the prescribed constraints and NOT the .nrt interpolation
+#   constraints, so the structure is 122 equations too free. See docs/m9 for why the
+#   "legacy reads .nrt on both paths" claim was wrong: the reads carry no yl_input_enabled
+#   guard, but global_data itself does not run on the adapter path, and absence of a guard
+#   is not evidence of execution.
 modern_gate = false
 # Chosen by measuring, not by taste. The two decks named as starting points were both
 # falsified: test_beam2d declares MDOFN=2 and an L2 group with dofs (1,2), then constrains

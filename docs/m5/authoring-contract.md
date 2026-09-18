@@ -168,9 +168,14 @@ controls.substeps,controls.time_increment,controls.max_iterations,controls.toler
 - `mesh.dimension = 2`；`mesh.format ∈ {"hstar-legacy-cor-ele", "hstar-legacy-cor-ele-nrt"}`
   （2026-09-18）。`mesh.format` 声明的是这份 deck **随带哪几个网格文件**，所以节点插值表
   是第二个取值，而不是一个「还有另一个文件」的布尔量。`.nrt` 与 `.cor`/`.ele` 同类：
-  由网格生成器产出、按节点号索引；legacy 在**两条路径上都读它**
-  （Global.f90:1489-1531 与 Elements.f90:1087 一样没有 `yl_input_enabled` 守卫），
-  因此它是原样随带的，不是作者写的
+  由网格生成器产出、按节点号索引。
+  **2026-09-18 当天更正**：最初的理由写的是「legacy 在两条路径上都读它，因为
+  Global.f90:1489-1531 没有 `yl_input_enabled` 守卫」。守卫确实没有，结论仍然是错的——
+  `global_data` 在适配器路径上**根本不执行**，「没有守卫」不蕴含「会被读到」。
+  实测（`1.chk` 的方程数）：两条路径 `ntotv` 同为 1586，legacy 读取器 `Neq = 1459`
+  （1586 − 122 个插值自由度 − 5 个给定位移），适配器路径 `Neq = 1581`（1586 − 0 − 5）。
+  所以这个取值目前**只让文件被暂存，插值约束并没有被施加**，
+  `elements_2d.rcbeam` 因此收不了口；见 `docs/m9/l2-element-domain.md` §5
 - `section.element ∈ {"Q4", "L2", "STEEL"}`（2026-09-17）；`section.formulation = "plane_strain"`。
   三者是**三个单元族**，不可互换：`Q4` 是 4 节点连续体；`L2` 是 2 节点杆/连续线单元，
   与 Q4 走同一条高斯积分路径；`STEEL` 是 2 节点粘结单元，有自己的列式（Stiff.f90:121/572）。
