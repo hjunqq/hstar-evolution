@@ -50,6 +50,23 @@
 **PD-4 归属接触与界面域**（CONTACT sptype / gap / 罚函数），在那个域开工时正面回答，材料域内不修。
 **下一个功能域：接触与界面（`.ctt` 16 处 + `.glb` 部分）。**
 
+**接触与界面域 阶段 0 完成（2026-09-20）：语义已还原，仍无可运行算例**。
+文档 [`docs/m12/contact-interface-domain.md`](m12/contact-interface-domain.md)。
+核心答案：`gap` 由 `.mat` 的 **`igap0`** 选择三条来源——常数 `gap0`(1) / 圆弧几何插值(2) /
+**纯网格法向间距(99)**；**`natural_thickness` 是第一步第一增量的初始几何间隙 `gapg`，
+只有 `igap0==99` 会建立它**，不是输入字段，**也不是 `elcod_local`**（该猜测已按证据否掉）。
+接触由 **`.mat` 材料头的 `name` 字段**声明（`MECHANICAL CONTACT n`），不是组头 SPTYPE——
+**上一轮 PD-4 里「全树 0 个 CONTACT」是量错字段**，正确测量是 1 340 份 `.mat` 中
+**11 份**声明 `name=CONTACT`。PD-4 归属随之改写为**两半**：deck 把节理材料声明成 `SOLID`
+（deck 缺陷）＋ legacy 在材料级分支里读声明级数组、缺 fail-closed 守卫（M1 防线范畴）。
+新登记 **PD-5**：`natural_thickness` 无条件分配却只在 `igap0==99` 下赋值，
+`igap0=1/2` 的接触 deck 会安静读到未初始化内存并据此翻转接触状态——与 PD-3 同形，
+当前语料恰好没踩到。**可运行算例：没有。** 唯一形状合格的是圆柱接触
+（2-D/`Q`/PARDISO/Q4/单块/`elcod_local≠0`/`igap0=99`，两份副本），
+但两份副本的 `.mat` `JANBU` 行都缺 `uniax_cohes`/`frict_angle` 两个真实物理参数，
+按裁定不补；能跑通的两个 CONTACT deck 是模态与渗流，`contact_state` 从未被调用
+（判据：运行目录没有 `fort.7`）。**PD-4 不关闭**——来源已给出，真实路径尚未恢复。
+
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
 M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是「逐任务 DONE + 条件解除」，

@@ -154,17 +154,17 @@ normal_gap = element(ielem)%field(1)%gapg(igaus) &
 `material=='GOODMAN'` 分配的（`Fem.f90:12018-12020`）。**门控不一致就是这个缺陷**：
 一条按材料进入的路径，去读一组按 sptype 分配的数组。
 
-**这不是这个 deck 特殊，是整条路径都走不通**——两项全树测量：
+> **归属已于 2026-09-20 当天改写，见本条末尾「归属更正」。** 下面这段测量**量错了字段**，
+> 保留原文以便对照：`name` 不是组头的 SPTYPE，而是 `.mat` 材料记录的第二个字段。
 
-| 测量 | 结果 |
-|---|---|
-| 全树 `.glb` 文件数 | **1 361** |
-| 其中把组 `SPTYPE` 声明为 `CONTACT` 的 | **0** |
-| 含 `GOODMAN` 材料记录的 `.mat` | 6 |
-| 其中 `GOODMAN` 的 `model` 是 `JANBU` 的 | **6（全部）** |
+~~**这不是这个 deck 特殊，是整条路径都走不通**——两项全树测量：~~
 
-即：语料里没有任何一个 deck 会让 `gapg` 被分配，而每一个 GOODMAN deck 都会走到读它的
-那一行。**GOODMAN/JANBU 路径在 5414e73 基线上无法运行。**
+| 测量 | 结果 | |
+|---|---|---|
+| ~~全树 `.glb` 文件数~~ | ~~1 361~~ | **量错字段，作废** |
+| ~~其中把组 `SPTYPE` 声明为 `CONTACT` 的~~ | ~~0~~ | **作废**：正确字段下是 `.mat` 里 **11 份**声明 `name=CONTACT` |
+| 含 `GOODMAN` 材料记录的 `.mat` | 6 | 仍然成立 |
+| 其中 `GOODMAN` 的 `model` 是 `JANBU` 的 | **6（全部）** | 仍然成立 |
 
 ### 为什么不修（与 PD-1 的门槛对照）
 
@@ -198,6 +198,54 @@ goodman_evolution  EXPERIMENT  分析跑完，1.flavia.res = 680 636 字节
 立项的缺陷，而是那个域开工时会正面撞上的第一件事：接触域必须回答「一个 Goodman 节理
 组的 gap 与自然厚度从哪来」，回答了它，PD-4 自然关闭。**因此不在材料域里修它。**
 
+
+### 归属更正（2026-09-20 当天）
+
+按 `docs/m12/contact-interface-domain.md` §1 的正确测量，归属是**两半**：
+
+- **一半是 deck 声明缺陷**：`goodman_evolution` / `goodmanLU` / `mini_goodman` 把节理材料
+  声明为 `MECHANICAL SOLID n`，不满足 `name=='CONTACT'`，九个接触数组从不分配，
+  `contact_state` 整个跳过。正确写法在语料里有实证——`cases/cases/disc_contact_3d`
+  写的是 `MECHANICAL CONTACT 3` 并追加 `igap0=99 gap0=0.0 ftcontact=-0.001 icft=1`。
+- **一半仍是 legacy 缺陷，但性质是「缺 fail-closed 守卫」而不是「计算逻辑错」**：
+  进入 `Stiff.f90:880` 只要求 `material=='GOODMAN'`（材料级），却读只在
+  `name=='CONTACT'`（声明级）下分配的数组。写错声明的 deck 得到 SIGSEGV 而不是点名诊断。
+  **这属于 M1 防线的范畴。**
+
+同时**否掉**本条原文里的一个猜测：`natural_thickness` **不是** `elcod_local`。
+它是 `igap0==99` 分支在 `istep==1 .and. iincs==1` 时取的初始几何间隙 `gapg`
+（`Fem.f90:12882-12884`），与 `elcod_local` 只有间接关系（后者决定 `coord`，
+`coord` 再经法向投影相减得 `gapnod`），**数值上未必相等**。
+
+---
+
+## PD-5 · `natural_thickness` 只在 `igap0==99` 分支赋值
+
+| | |
+|---|---|
+| 日期 | 2026-09-20 |
+| 位置 | 分配 `legacy/yl/Fem.f90:12008`（无条件，只要 `name=='CONTACT'`）；赋值 `:12882-12884`（**仅 `igap0==99`**） |
+| 读它的地方 | `Stiff.f90:880`、`Residu.f90:1158`、`Fem.f90:12936` |
+| 归属 | **legacy 原有缺陷** |
+| 现状 | **不修**，登记为边界；当前语料没有 deck 踩到 |
+
+`igap0==1`（常数 `gap0`）与 `igap0==2`（圆弧几何）两条分支都设了
+`gapg/gapg0/gapn/gapn0`，**都不设 `natural_thickness`**。由于它在 `CONTACT` 下
+**无条件分配**，这类 deck 不会得到 408「未关联指针」，而是安静地读到
+**未初始化的已分配内存**——与 **PD-3** 完全同形。
+
+后果会出现在两处有实际含义的地方：罚函数 `normal_gap = gapg - natural_thickness`
+（`Stiff.f90:880`），以及状态机的 `open → contact` 判据
+`current_gap < natural_gap`（`Fem.f90:12969`）。也就是说**接触状态的翻转会由垃圾值决定**。
+
+**为什么现在还没被踩到**：语料里唯一的 CONTACT+GOODMAN 模型（圆柱接触）用的正是
+`igap0=99`。这是运气，不是设计。**这是一个已经装好的陷阱**，在本域真正开工、
+或任何 `igap0=1/2` 的接触 deck 进来时会立刻生效。
+
+**为什么不修**：修它要回答「非 99 路径下自然厚度应当是什么」——那是接触语义判断，
+不是局部修复，与 PD-3 不修的理由同一条门槛。
+
+
 ---
 
 ## 不予修复的登记
@@ -208,4 +256,5 @@ goodman_evolution  EXPERIMENT  分析跑完，1.flavia.res = 680 636 字节
 |---|---|---|
 | `cases/cases/mini_goodman` | `Elements.f90:3368`，`elcod` 第 2 维越界 | 是**算例**缺陷不是代码缺陷：deck 把接缝组声明成 2 节点 b2，却给了 4 节点的 `1.ele` 表，组尾又按 b2 写，自相矛盾；且目录带 `gen_all.py`，是自造算例。legacy 这条路径对正常的 q4 接缝用法是正确的（全树 119 条带 `elcod_local` 的组定义里 95 条是 q4） |
 | `cases/cases/goodmanLU` | `Global.f90:878`，`1.ftr` 读到文件尾（`rc=2`，M1 守卫按设计拦下） | deck 不完整，不是代码问题 |
+| `cases/cases/disc_contact_3d`（名字带 3d，实为 2-D） | `Material.f90:547`，`.mat` 的 `JANBU` 行只有 3 个记号（正确为 5） | **deck 缺陷**：缺的两个是 `uniax_cohes` 与 `frict_angle`，是真实物理参数，按裁定不凭空填。另有 `nscurve/=0` 一道前置。它是语料里唯一形状合格的接触算例 |
 | `cases/cases/goodman_evolution` | **已定位 2026-09-20**：`Stiff.f90:880`，`gapg` 未关联 —— 见上方 **PD-4** | legacy 原有缺陷，但修它要回答「Goodman 节理的 gap 与自然厚度从哪来」，属**接触与界面域**；材料域内不修 |
