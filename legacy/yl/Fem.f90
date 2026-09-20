@@ -12765,7 +12765,7 @@
             igap0=0
             if (name=='CONTACT')then
                 gap0     =props(matno)%mechanical%solid%gap0
-                igap0    =props(matno)%mechanical%solid%igap0
+                igap0    =props(matno)%mechanical%solid%igap0; if(igap0/=99)call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Fem.f90:contact_state','PD-5: natural_thickness is assigned only under igap0=99 (Fem.f90:12882) but is consumed at Fem.f90:12936 and Stiff.f90:880; this CONTACT material (any constitutive model) has igap0='//trim(diag_itoa(int(igap0,i8)))//', which leaves it unassigned')   ! M1-03 R20 PD-5
 
                 if(igap0==2) then    !20231006
                     ngapx=props(matno)%mechanical%solid%gap_define%ngapx

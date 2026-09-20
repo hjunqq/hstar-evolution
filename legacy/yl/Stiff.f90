@@ -875,7 +875,7 @@
                     appear_process(igroup,iblks)==2))       &
                     .and.iincs==1.and.istep==inc_step.and.iiter==1.and.idiv==1) first=1
 10              continue
-                call PKPN(matno,evk,sgtot,first)
+                call PKPN(matno,evk,sgtot,first); if(props(matno)%name/='CONTACT')call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Stiff.f90:dep','PD-4: material '//trim(diag_itoa(int(matno,i8)))//' is GOODMAN/JANBU but its .mat header declares name="'//trim(props(matno)%name)//'", not CONTACT; gapg/natural_thickness are allocated only for a CONTACT material (Fem.f90:11999) so the penalty term below would dereference them unallocated')   ! M1-03 R20 PD-4; if(props(matno)%mechanical%solid%igap0/=99)call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Stiff.f90:dep','PD-5: natural_thickness is established only on the igap0=99 path (Fem.f90:12882); this material has igap0='//trim(diag_itoa(int(props(matno)%mechanical%solid%igap0,i8)))//', which allocates it but never assigns it')   ! M1-03 R20 PD-5
 
                 normal_gap = element(ielem)%field(1)%gapg(igaus)-element(ielem)%field(1)%natural_thickness(igaus)
 

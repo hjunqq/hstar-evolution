@@ -67,6 +67,20 @@
 按裁定不补；能跑通的两个 CONTACT deck 是模态与渗流，`contact_state` 从未被调用
 （判据：运行目录没有 `fort.7`）。**PD-4 不关闭**——来源已给出，真实路径尚未恢复。
 
+**接触与界面域 阶段 1（2026-09-20）：legacy 侧 fail-closed 防线建成，本域到此停止**。
+三条语句用 `;` 接到已有行尾（`Stiff.f90:878` / `Residu.f90:1156` / `Fem.f90:12768`），
+**三个文件行数不变**，io 站点普查与锚点原地不动（`runtime` 门禁的 `current scan` 实测通过）；
+去掉追加字节后复原的文件与上一提交逐字节相同，`source-manifest.json` 里散列变化的恰好是这三个文件。
+新门禁 `tools/yl_contact_guard_check.py` 已接入 release：
+**C3 正例**未改动 golden deck `rc=0`；**C1 反例**真实 deck `goodman_evolution` 由 `rc=174` SIGSEGV
+变为 `rc=3` 点名 `declares name="SOLID", not CONTACT`；**C2 反例**由 golden deck 运行时派生的
+`igap0=1` CONTACT 材料 `rc=3` 点名 `natural_thickness ... only under igap0=99`。
+**对照的对照**：同一份派生 deck 在无守卫的快照二进制上 `rc=0` 无声写出 1 798 B 结果——
+陷阱被真实演示，拒绝确由守卫产生。九个 golden 算例逐位不变（`max|d|=0.000e+00`）。
+**PD-5 关闭（陷阱已封闭）**——关闭的是「安静出错」，**不是**「非 99 路径的自然厚度语义已确定」。
+**PD-4 保持 OPEN**：SIGSEGV 已变成点名拒绝，但真实接触路径未恢复。
+**本阶段不计作接触能力迁移，没有产生任何接触能力或可冻结参考。**
+
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
 M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是「逐任务 DONE + 条件解除」，

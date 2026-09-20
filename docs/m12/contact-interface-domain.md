@@ -252,3 +252,93 @@ SIGSEGV，而不是一条点名的诊断。**这属于 M1 防线的范畴**，�
 「先做 legacy 侧的 fail-closed 守卫」之间二选一。后者是 M1 防线的自然延伸、
 不需要新算例、且能把 PD-4 的 SIGSEGV 变成一条点名诊断——但它**不产生接触能力**，
 也不关闭 PD-4。
+
+---
+
+# 阶段 1（2026-09-20）：legacy 侧 fail-closed 防线
+
+**本阶段不计作接触能力迁移，不关闭 PD-4。** 只做一件事：把两条会**静默出错**的路径
+变成**点名拒绝**。不新增 authoring schema、不扩 ProblemState、不改 GOODMAN/JANBU 数值实现、
+不补圆柱接触 deck 缺失的参数、不自造可运行接触算例。
+
+## 8.1 改了什么：三条语句，三个文件行数不变
+
+按既有纪律（M4-02 / M5 / M7 / M9 / M10 同形）用 `;` 接到**已有行**尾，
+所以 io 站点普查、检查点锚点与全部 reader 行号原地不动——`runtime` 门禁的
+`io-sites.json is a current scan` 当轮实测通过。
+
+| 文件:行 | 接在哪条语句后 | 守卫 |
+|---|---|---|
+| `Stiff.f90:878` | `call PKPN(matno,evk,sgtot,first)` | **PD-4** + PD-5（纵深） |
+| `Residu.f90:1156` | 同上（`residu_f` 的同一表达式） | **PD-4** + PD-5（纵深） |
+| `Fem.f90:12768` | `igap0 = props(matno)%mechanical%solid%igap0` | **PD-5** |
+
+**PD-4 守卫**（`Stiff.f90:dep` / `Residu.f90:residu_f`）：
+
+```fortran
+if(props(matno)%name/='CONTACT') call diag_abort('UNSUPPORTED',EXIT_UNSUPPORTED,'Stiff.f90:dep', &
+    'PD-4: material N is GOODMAN/JANBU but its .mat header declares name="SOLID", not CONTACT; &
+     gapg/natural_thickness are allocated only for a CONTACT material (Fem.f90:11999) ...')
+```
+
+它守的正是 §5 认定的那半个 legacy 缺陷：**进入分支看的是本构名（材料级），
+读的却是按声明名（`name=='CONTACT'`）分配的数组**。守卫把这个不一致变成一条点名诊断。
+
+**PD-5 守卫**（`Fem.f90:contact_state`）：`igap0/=99` 一律拒绝，**不限本构模型**——
+因为消费点 `Fem.f90:12936`（`open→contact` 判据）对所有接触材料都执行，不是 GOODMAN 专有。
+
+**改动恰好是这三处追加**：把追加的字节去掉后复原的三个文件与上一提交**逐字节相同**
+（Stiff 追加 752 B / Residu 764 B / Fem 353 B）。`legacy/source-manifest.json` 已重新生成，
+39 个文件里散列变化的恰好是 `yl/Stiff.f90`、`yl/Residu.f90`、`yl/Fem.f90`。
+
+## 8.2 正反例：三个对照，外加一个「对照的对照」
+
+门禁 `tools/yl_contact_guard_check.py`，已接入 `tools/build.sh release`。
+
+| 控制 | 是什么 | 实测（2026-09-20T08:05Z） |
+|---|---|---|
+| **C3 正例** | 未改动的 golden deck `plasticity/mini_mc` 必须照常跑完 | `rc=0`，5 818 B 结果 — **PASS** |
+| **C1 反例（PD-4）** | **真实 deck** `cases/cases/goodman_evolution`（节理材料声明成 `SOLID`） | `rc=3`，`site="Stiff.f90:dep"`，点名 `material 5 ... declares name="SOLID", not CONTACT`，**不写结果** — **PASS**（守卫前是 `rc=174` SIGSEGV、无输出、无诊断） |
+| **C2 反例（PD-5）** | 由 C3 那份 golden deck **运行时派生**：一个材料头改成 `MECHANICAL CONTACT`，插入一条 `igap0=1` 记录 | `rc=3`，`site="Fem.f90:contact_state"`，点名 `natural_thickness is assigned only under igap0=99` — **PASS** |
+
+**更宽的正例**是九个 golden 算例在本轮改动后仍逐位复现冻结参考
+（`N2` 全部 `mismatches=0 / max|d| = 0.000e+00`，`FALLBACK PASS`），门禁不重复它。
+
+C2 的派生**不发明任何物理**：插入的 `gap0 / ftcontact / icft` 三个数在运行被拒之前
+根本没被消费——拒绝发生在读到 `igap0` 的那一刻。派生结果只存在于临时目录，
+**不写进 `cases/`**。
+
+### 对照的对照
+
+按「阴性对照会失效并伪装成结论」这条纪律，还要证明 **C2 的 `rc=3` 来自守卫**，
+而不是派生本身把 deck 弄坏了。把**同一份派生 deck** 交给**无守卫的 5414e73 快照二进制**：
+
+```
+ctl  同一份派生 deck × 快照 hstar_orig   rc=0   1.flavia.res = 1 798 B   无 severe
+```
+
+**它无声地跑通了**，一边读着未赋值的 `natural_thickness` 一边写出结果——
+这正是 PD-5 描述的陷阱在真实二进制上的一次演示。所以 C2 的拒绝确实由守卫产生。
+
+### C1 的作用域，如实说明
+
+`goodman_evolution` 属于**本仓库之外**的策展算例库，因此 C1 在 deck 不存在时
+**打印 SKIP 并点名路径**，不静默、也不计为通过。C2 与 C3 是自足的。
+
+### 一处必须说清的不覆盖
+
+`mini_goodman` 在本轮之后**仍然 `rc=174`**。它崩在更早的 `Elements.f90:3368`
+（`elcod` 第二维越界，算例自身缺陷，已登记为不予修复），**与这两条守卫无关**。
+守卫不声称覆盖它。
+
+## 8.3 本阶段对两条债务的效果
+
+| | 状态 |
+|---|---|
+| **PD-5** | **关闭（陷阱已封闭）**。`igap0/=99` 的接触 deck 不再读未赋值内存，而是带诊断停机。**注意口径**：关闭的是「安静出错」这件事，**不是**「非 99 路径的自然厚度语义已确定」——那仍然未知，只是现在会被拒绝而不是被猜。 |
+| **PD-4** | **保持 OPEN**。SIGSEGV 变成了点名拒绝，**但真实接触路径仍未恢复**：语料里唯一形状合格的圆柱接触算例的 `.mat` 仍缺 `uniax_cohes` / `frict_angle`。按裁定，PD-4 要等真实完整 deck 并恢复可验收运行才关。 |
+
+## 8.4 本域到此停止
+
+按裁定，接触与界面域在本阶段之后**停止扩能力**，等待真实完整接触 deck
+或明确的参数来源。本阶段**没有**产生任何接触能力，也**没有**产生可冻结的接触参考。

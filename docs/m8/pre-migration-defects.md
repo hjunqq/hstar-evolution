@@ -140,7 +140,7 @@ field="nmats" value="3" allowed="2..2"
 | 位置 | `legacy/yl/Stiff.f90:880`（快照 5414e73 的 `Stiff.f90:877`，**逐字节相同**）；`Residu.f90:1158` 是同一表达式的第二处 |
 | 阻塞的算例 | `cases/cases/goodman_evolution`（SIGSEGV，`rc=174`，无输出） |
 | 归属 | **legacy 原有缺陷**；未改动的 5414e73 快照同样 `rc=174 res=0` |
-| 现状 | **不修**，登记为边界；GOODMAN/JANBU 不作为下一材料能力 |
+| 现状 | **仍 OPEN**。2026-09-20 已加 fail-closed 守卫：SIGSEGV 变成点名拒绝（`Stiff.f90:dep` / `Residu.f90:residu_f`，exit 3），**但真实接触路径未恢复**，按裁定不关闭 |
 
 `dep` 的 `GOODMAN` → `model=='JANBU'` → `type_stiff==1` 分支在调用 `PKPN` 之后直接读：
 
@@ -227,7 +227,7 @@ goodman_evolution  EXPERIMENT  分析跑完，1.flavia.res = 680 636 字节
 | 位置 | 分配 `legacy/yl/Fem.f90:12008`（无条件，只要 `name=='CONTACT'`）；赋值 `:12882-12884`（**仅 `igap0==99`**） |
 | 读它的地方 | `Stiff.f90:880`、`Residu.f90:1158`、`Fem.f90:12936` |
 | 归属 | **legacy 原有缺陷** |
-| 现状 | **不修**，登记为边界；当前语料没有 deck 踩到 |
+| 现状 | **已关闭 2026-09-20（陷阱已封闭）**——见本条末尾 |
 
 `igap0==1`（常数 `gap0`）与 `igap0==2`（圆弧几何）两条分支都设了
 `gapg/gapg0/gapn/gapn0`，**都不设 `natural_thickness`**。由于它在 `CONTACT` 下
@@ -245,6 +245,25 @@ goodman_evolution  EXPERIMENT  分析跑完，1.flavia.res = 680 636 字节
 **为什么不修**：修它要回答「非 99 路径下自然厚度应当是什么」——那是接触语义判断，
 不是局部修复，与 PD-3 不修的理由同一条门槛。
 
+
+### 关闭（2026-09-20）：陷阱已封闭，语义仍未知
+
+`Fem.f90:12768` 追加一条 `;` 接续的守卫：**任何 `igap0/=99` 的 CONTACT 材料一律
+`UNSUPPORTED` / exit 3 拒绝**，不限本构模型（消费点 `Fem.f90:12936` 的
+`open→contact` 判据对所有接触材料都执行，不是 GOODMAN 专有）。
+
+**反例**（`tools/yl_contact_guard_check.py` 的 C2，已接入 `tools/build.sh release`）：
+由 golden deck `plasticity/mini_mc` 运行时派生——一个材料头改成 `MECHANICAL CONTACT`、
+插入一条 `igap0=1` 记录——实测 `rc=3`、`site="Fem.f90:contact_state"`、不写结果。
+
+**对照的对照**：同一份派生 deck 交给**无守卫的 5414e73 快照二进制**，
+`rc=0` 并写出 1 798 B 结果、无任何 severe——**它无声地跑通了**，
+一边读着未赋值的 `natural_thickness`。这既证明拒绝来自守卫，
+也把本条描述的陷阱在真实二进制上演示了一次。
+
+**关闭口径，必须写死**：关闭的是「**安静出错**」这件事。
+「非 99 路径下自然厚度应当是什么」**仍然未知**——现在它会被**拒绝**，而不是被**猜**。
+若将来要支持 `igap0=1/2`，必须先回答那个语义问题，不能靠删掉这条守卫。
 
 ---
 

@@ -1303,6 +1303,17 @@ if [ "$TARGET" = solver ] && [ "$PROFILE" = "release" ] && [ "${HSTAR_SKIP_MODER
     [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build.sh: modern-input check failed" >&2; exit 6; }
 fi
 
+# M12 contact fail-closed guards. Not a capability gate -- it asserts REFUSALS: that the
+# two shapes PD-4 and PD-5 name are stopped with a diagnostic instead of a SIGSEGV (PD-4) or
+# a silent read of unassigned memory (PD-5), and that a legal deck is untouched. It runs
+# after the modern gate because its positive control is a golden deck, and the nine cases
+# reproducing their frozen references is the wider positive control it does not duplicate.
+if [ "$TARGET" = solver ] && [ "$PROFILE" = "release" ] && [ "${HSTAR_SKIP_MODERN:-0}" != "1" ]; then
+    log "=== contact fail-closed guards (M12)"
+    python3 "$ROOT/tools/yl_contact_guard_check.py" --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"
+    [ "${PIPESTATUS[0]}" -eq 0 ] || { echo "build.sh: contact-guard check failed" >&2; exit 6; }
+fi
+
 if [ "$PROFILE" = "trace" ] && [ "${HSTAR_SKIP_ANCHOR_ORDER:-0}" != "1" ]; then
     log "=== anchor order (M2-01 judgement 4)"
     python3 "$ROOT/tools/yl_anchor_order.py" check --binary "$OUT/hstar" 2>&1 | tee -a "$LOG"
