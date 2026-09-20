@@ -110,6 +110,8 @@ element(ielem)%field(1)%gpvar(nstre+2,igaus)=damage    ! :3696 照写不误
 
 ### 对本轮的后果
 
+> **已回填（2026-09-20）**：判据 5 由 **后补证据 BACKFILL-1** 满足——证据在 M9 的 `elements_2d.rcbeam` 上，不在本算例上。登记见 [`../acceptance/M7P4-M11-consolidated-matrix.md`](../acceptance/M7P4-M11-consolidated-matrix.md) §2，签收口径见同文件 §4（M11）。**下面这一段的结论不变**：本算例确实不触发损伤。
+
 判据 5「`Yield` 必须真实非零」**不成立**，且情形比全零更糟——是非零的垃圾值。
 按判据 6，本轮只能声称**读取、映射与派发链路成立**，
 **不能签收 CONCRETE 能力**。与 `mini_mc` 的 `PLASTICSTRAIN` 全零是同一类记账。

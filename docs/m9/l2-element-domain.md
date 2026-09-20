@@ -90,7 +90,8 @@ is whitelisted; this parser only knows how to shape a Q4 connectivity record
 `rcbeam` 现在由现代输入独立驱动（工作目录只有 `case.toml` + `1.cor`/`1.ele`/`1.nrt`），
 与冻结参考 **`atol = rtol = 0` 下 120 块 / 214 110 值 / mismatches = 0 / max|d| = 0.000e+00**。
 `Yield` 有 **5371 个落在 (0,1] 的真实损伤值、区间外 0 个**——
-这同时补上了 M11 欠下的判据 5：同一条断言在 `damage_2d.concrete_gravdam` 上是
+这同时补上了 M11 欠下的判据 5（登记为 **后补证据 BACKFILL-1**，两侧均已标注：
+[`../acceptance/M7P4-M11-consolidated-matrix.md`](../acceptance/M7P4-M11-consolidated-matrix.md) §2）：同一条断言在 `damage_2d.concrete_gravdam` 上是
 **0 个在区间内、169 个在区间外**（最大 3.17e10，恰是该材料的 `E`，即 PD-3）。
 预测在运行前写下（291 / 0 / 169），实测完全一致。
 

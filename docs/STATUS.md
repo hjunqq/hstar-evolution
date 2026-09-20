@@ -4,7 +4,7 @@
      不复制「当前在做 / 下一步」。.ccg/tasks/*/task.json 是执行器的工作队列，
      不是状态；两者不一致时以本文件为准。 -->
 
-更新日期：2026-09-17。此文件只登记已经发生的事；阶段验收以证据包为准。
+更新日期：2026-09-20。此文件只登记已经发生的事；阶段验收以证据包为准。
 
 ## 验收链（2026-09-12 总览时清点）
 
@@ -19,11 +19,22 @@
 | M6.4 材料域第一能力（CLASSICALEP/MC） | 完成 5/5 | **ACCEPTED（窄口径）** 2026-09-14 | `docs/m6/material-domain.md` + `cases/golden/plasticity/mini_mc`（三块严格相等，含 PLASTICSTRAIN） |
 | M6.5 强度折减 + 材料曲线（MAT_DE / mat_curve） | 完成 4/4 | **ACCEPTED（窄口径）** 2026-09-15 | `docs/m6/material-domain.md` §9 + `cases/golden/plasticity/slope_srm`（600 块 541 200 值 `max|d|=0`，**非零 PLASTICSTRAIN 18 924/45 100**） |
 | M7 `.loa` 输入家族 Phase 1–3（面荷载 + 多分析步） | 完成 | **ACCEPTED（窄口径）** 2026-09-17 | `docs/m7/loa-family-report.md` + `docs/m5/authoring-contract.md` §2.1/§8/§9 + `cases/golden/loads_2d/wall_reservoir`（**两分析步 + 施工分期 + 静水压，4 块 552 值 `max|d|=0`**） |
-| M7 Phase 4（集中力） | 完成 | **未签收** | `docs/m7/loa-family-report.md` Phase 4 + `cases/golden/loads_2d/beam_point_load`（**2 块 756 值 `max|d|=0`**，体力为零故位移场完全由集中力决定；6 条反例）+ 新门禁 `tools/yl_step_scope_check.py` |
-| M8 `DUNCANCHANG`（非线性弹性） | 完成 | **未签收** | `docs/m8/duncanchang.md` + `cases/golden/nonlinear_elastic/new_duncan_chang`（30 块 2 100 值 `max|d|=0`）。前置 `PD-1`（`kind_wt` 读未赋值局部量）单列在 `docs/m8/pre-migration-defects.md`，**不计入本域能力** |
-| M10 `PARDISO`（第二个线性求解器） | 完成 | **未签收** | `docs/m10/pardiso.md` + `cases/golden/solver_2d/benchmark_100x100`（2 块 61 206 值 `max|d|=0`）。**冻结参考自此包含执行环境**：`tools/yl_run.pinned_env()` 定义线程数与 MKL 变量，两个 checker 复用同一环境——未钉线程时 3 次运行 3 个哈希，钉住后 1 个 |
-| M11 `CONCRETE`（损伤本构） | 完成 | **未签收** | `docs/m11/concrete.md` + `cases/golden/damage_2d/concrete_gravdam`（30 块 3 220 值 `max|d|=0`）。**该算例不触发损伤**（`Yield` 全部越界，是 `PD-3` 写进输出槽的未初始化局部量）；损伤路径真正被触发的证据在 M9 的 `rcbeam` 上，见下一行 |
-| M9 2-D 线单元域（L2 / STEEL） | 完成 6/6 | **未签收** | `docs/m9/l2-element-domain.md` + `cases/golden/elements_2d/rcbeam`（**120 块 214 110 值 `max|d|=0`**，Q4×600 + L2×60 + STEEL×61 混合拓扑）。同时补上 M11 欠下的判据：`Yield` **5 371 个落在 (0,1]、区间外 0 个**。本轮真正打开六个域（单元族 / 截面面积 / `crack_model=3` / 材料曲线读丢 / `.nrt` 插值约束 / `[bond]` 粘结律），并去掉了适配器、`build_runtime`、commit 三层各自的「一个网格一种单元」假设 |
+| M7 Phase 4（集中力） | 完成 | **ACCEPTED（窄口径）** 2026-09-20 | `docs/m7/loa-family-report.md` Phase 4 + `cases/golden/loads_2d/beam_point_load`（**2 块 756 值 `max|d|=0`**，体力为零故位移场完全由集中力决定；6 条反例）+ 新门禁 `tools/yl_step_scope_check.py` |
+| M8 `DUNCANCHANG`（非线性弹性） | 完成 | **ACCEPTED（窄口径）** 2026-09-20 | `docs/m8/duncan-chang.md` + `cases/golden/nonlinear_elastic/new_duncan_chang`（30 块 2 100 值 `max|d|=0`）。前置 `PD-1`（`kind_wt` 读未赋值局部量）单列在 `docs/m8/pre-migration-defects.md`，**不计入本域能力** |
+| M10 `PARDISO`（第二个线性求解器） | 完成 | **ACCEPTED（窄口径）** 2026-09-20 | `docs/m10/pardiso.md` + `cases/golden/solver_2d/benchmark_100x100`（2 块 61 206 值 `max|d|=0`）。**冻结参考自此包含执行环境**：`tools/yl_run.pinned_env()` 定义线程数与 MKL 变量，两个 checker 复用同一环境——未钉线程时 3 次运行 3 个哈希，钉住后 1 个 |
+| M11 `CONCRETE`（损伤本构） | 完成 | **ACCEPTED（窄口径，两半）** 2026-09-20 | `docs/m11/concrete.md` + `cases/golden/damage_2d/concrete_gravdam`（30 块 3 220 值 `max|d|=0`）。**该算例不触发损伤**（`Yield` 全部越界，是 `PD-3` 写进输出槽的未初始化局部量）；损伤路径真正被触发的证据在 M9 的 `rcbeam` 上，见下一行 |
+| M9 2-D 线单元域（L2 / STEEL） | 完成 6/6 | **ACCEPTED（窄口径）** 2026-09-20 | `docs/m9/l2-element-domain.md` + `cases/golden/elements_2d/rcbeam`（**120 块 214 110 值 `max|d|=0`**，Q4×600 + L2×60 + STEEL×61 混合拓扑）。同时补上 M11 欠下的判据（登记为**后补证据 BACKFILL-1**）：`Yield` **5 371 个落在 (0,1]、区间外 0 个**。本轮真正打开六个域（单元族 / 截面面积 / `crack_model=3` / 材料曲线读丢 / `.nrt` 插值约束 / `[bond]` 粘结律），并去掉了适配器、`build_runtime`、commit 三层各自的「一个网格一种单元」假设 |
+
+**五域合并窄口径签收（2026-09-20）**：M7 P4 / M8 / M10 / M11 / M9 五个域一并签收，
+依据与口径**只在一处**：[`docs/acceptance/M7P4-M11-consolidated-matrix.md`](acceptance/M7P4-M11-consolidated-matrix.md)。
+该批**不是** M0–M5 那种重型验收工程，而是「证据归位 + 口径冻结」：每域只回答七问
+（声称什么 / 不声称什么 / 证据在哪 / 是否严格等价 / 能力是否真被触发 / 是否依赖后补证据 / 已知边界与 OPEN DEBT）。
+数值依据是 **2026-09-20 当日新鲜跑出**的三道门禁（release / adapter / runtime 全绿），
+九个 golden 算例 N2 全部 `mismatches=0`、`max|d| = 0.000e+00`。
+**引用本次签收时必须连同该域的「不声称」与「OPEN DEBT」两行一起引用**；单独引用能力声称是过度声称。
+本批新登记 **R34**（`yl_fallback_check.py` 打印的作用域大于它实际遍历的两个静力算例），
+以及跨域 **BACKFILL-1**（M11 判据 5 由 M9 的 `rcbeam` 满足，两侧均已标注）。
+**独立复核人一栏仍为空**（R28），不因本次签收而改变。
 
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
