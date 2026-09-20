@@ -36,6 +36,20 @@
 以及跨域 **BACKFILL-1**（M11 判据 5 由 M9 的 `rcbeam` 满足，两侧均已标注）。
 **独立复核人一栏仍为空**（R28），不因本次签收而改变。
 
+**GOODMAN/JANBU 可验收性恢复：不成立，材料域到此为止（2026-09-20）**。
+本轮按三问查 `goodman_evolution`（语料里唯一「真实工程 deck + GOODMAN/JANBU 材料记录」的算例）：
+第一失效点 `Stiff.f90:880`，`dep` 的 GOODMAN/JANBU 分支读未关联的 `gapg`；
+**legacy 原有缺陷**（快照同样 `rc=174`，失效行逐字节相同，上游 5414e73 之后无提交）；
+**也不是 deck 缺陷**——全树 1 361 个 `.glb` 里把组 SPTYPE 声明为 `CONTACT` 的有 **0 个**，
+而 `gapg` 只在 `CONTACT` 下分配，6 个含 GOODMAN 记录的 deck 其 `model` **全部**是 JANBU：
+整条路径在基线上不可运行。scratchpad 实验（未进仓库）证明只有这一处阻断、加保护后分析能跑完，
+但**得不到可验收参考**：被守卫的正是分支本身，`normal_gap` 该取什么值没有 oracle
+（与 PD-1 「被守卫分支可证不可达」的门槛正相反）。登记为 **PD-4**，
+见 [`docs/m8/pre-migration-defects.md`](m8/pre-migration-defects.md) 与
+[`docs/m8/sigsegv-investigation.md`](m8/sigsegv-investigation.md) 续查节。
+**PD-4 归属接触与界面域**（CONTACT sptype / gap / 罚函数），在那个域开工时正面回答，材料域内不修。
+**下一个功能域：接触与界面（`.ctt` 16 处 + `.glb` 部分）。**
+
 **M1 是验收链上唯一的洞，而且是最早的一段。** M2/M3/M4 的每一条证据都建立在
 `docs/m1/reader-inventory.toml` 之上——它是「这条路径上有哪些读取」的唯一登记。
 M0/M2/M3/M4 各有一份独立编制的验收矩阵，M1 没有；它走的是「逐任务 DONE + 条件解除」，

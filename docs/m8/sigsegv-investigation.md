@@ -203,3 +203,104 @@ mini_mc 210 / wall_reservoir 552 / beam_point_load 756，`max|d| = 0`。
 | `mini_goodman` | `Elements.f90:3368`，`elcod` 第 2 维越界 | **算例缺陷**，且是自造算例；legacy 代码对正常的 q4 接缝用法是正确的 | 不修，记为边界；不作为 GOODMAN/JANBU 的能力证据 |
 
 两个算例都已查清。材料域的下一个能力由用户选定；本文只提供证据，不做推荐。
+
+---
+
+# 续查（2026-09-20）：goodman_evolution
+
+上一轮把 `goodman_evolution` 记为「rc=174，未定位」。本轮按同样的三个问题查清。
+**先更正一处方向错误**：本轮原本的指示是「先查 `mini_goodman` 的 SIGSEGV」，
+而 `mini_goodman` 已在 2026-09-17 查清并结案（本文 §2，算例自身缺陷）。
+真正未答的是 `goodman_evolution`——语料里唯一同时具备「真实工程 deck + GOODMAN/JANBU
+材料记录」的算例（8 条 GOODMAN + 8 条 JANBU，1 288 节点 / 1 195 单元 / 23 组）。
+
+调查基线与 §0 相同，但**构建方式不同且必须说明**：`tools/build.sh release --src <快照>`
+已经无法构建纯快照——仓库的 `src/` 现在引用 M10 提升到模块作用域的 `isdefault`/`ncpu`
+与 M7 从 legacy 提取的 `edge_dofs` / `edge_geometry` / `edge_load_group_apply`，
+快照里都不存在。因此本轮按 `build.sh` 的**同一份源码顺序与同一组 `-O2` 选项**
+手工编译链接快照的 17 个 legacy 源文件，**不链接任何 `src/`**（`hstar_orig`，
+7 758 264 字节）。这比走 `build.sh` 更接近「未改动的 legacy」，代价是它不带 M1 诊断。
+
+## 问题 1：第一失效点
+
+debug 剖面（`-O0 -g -traceback -check bounds,pointers`，本仓库构建）：
+
+```
+forrtl: severe (408): Attempt to use pointer GAPG when it is not associated with a target
+  dep               Stiff.f90:880
+  stiff_u           Stiff.f90:404
+  static_u          Fem.f90:3736
+  process_analysis  Fem.f90:1939
+  fem90             Fem.f90:371
+```
+
+```fortran
+normal_gap = element(ielem)%field(1)%gapg(igaus) &
+           - element(ielem)%field(1)%natural_thickness(igaus)
+```
+
+在 `dep` 的 `GOODMAN` → `model=='JANBU'` → `type_stiff==1` 分支里，紧接 `call PKPN` 之后。
+
+## 问题 2：是否迁移引入
+
+**不是。** 三条，逐条是实测：
+
+1. 失效行在未改动快照里**逐字节相同**（快照 `Stiff.f90:877`；本仓库 880，差 3 行是
+   M1-02 的读包装）；
+2. 快照二进制同样崩：`goodman_evolution PRISTINE-5414e73 rc=174 res=0 SIGSEGV`；
+3. 上游仓库 `hstarYLOrig` 在 5414e73 之后**没有任何提交**，脏树里确有两处修复，
+   但都不涉及 `gapg`（一处是 `factw` 未初始化，一处是 `use_duncanchang` 的
+   非短路 `.and.` 解引用未关联的 `props%mechanical`）。
+
+**也不是 deck 缺陷**，这一点与 `mini_goodman` 正相反，判据是两项全树测量：
+
+| 测量 | 结果 |
+|---|---|
+| 全树 `.glb` | 1 361 |
+| 把组 `SPTYPE` 声明为 `CONTACT` 的 | **0** |
+| 含 `GOODMAN` 材料记录的 `.mat` | 6 |
+| 其中 `model` 为 `JANBU` | **6（全部）** |
+
+`gapg` / `natural_thickness` 只在 `name=='CONTACT'` 下分配（`Fem.f90:11999-12008`，
+`name` 即组头的 SPTYPE，`Global.f90:1280`），而同一段里 `evk` 按**材料**
+`GOODMAN` 分配（`Fem.f90:12018`）。**门控不一致**：一条按材料进入的路径去读一组按
+sptype 分配的数组。语料里没有任何 deck 能让它被分配，每个 GOODMAN deck 都会走到读它的
+那一行——**GOODMAN/JANBU 路径在基线上整体不可运行**，不是某个 deck 不走运。
+
+## 问题 3：能否以最小改动恢复稳定运行并得到可冻结参考
+
+**能恢复运行，不能得到可冻结参考。** 详细记账见
+[`pre-migration-defects.md`](pre-migration-defects.md) 的 **PD-4**。
+
+实验（**仅在 scratchpad，未进仓库**）：加 `associated` 保护、`normal_gap` 缺省 0、
+抑制同样读 `gapg` 的调试 `write(7,*)`。运行前写下两个预期——
+A「只有这一处阻断」/ B「别处再崩」——落地的是 **A**：
+
+```
+EXPERIMENT  分析跑完，1.flavia.res = 680 636 字节
+            rc=24 出现在分析之后：'give me the vdimn,coef1 and coef2?'
+            一个交互式后处理提问向 stdin 要输入，与求解无关
+```
+
+不能作为参考的三条理由（与 PD-1 的门槛逐条对照）见 PD-4。最要紧的一条：
+PD-1 能以一行修复，是因为全语料 `kind_wt = {0: 1810}` 使被守卫的分支**可证不可达**；
+这里**被守卫的正是分支本身**，`normal_gap` 该取什么值没有任何 oracle 能判定。
+
+## 顺带确认（不展开）
+
+| deck | 快照 | 本仓库 | 结论 |
+|---|---|---|---|
+| `mini_goodman` | rc=174 | rc=174 | 与 §2 记录一致，结论不变 |
+| `goodmanLU` | rc=24（`1.ftr` 读到文件尾） | rc=2（M1 守卫按名拦下同一件事） | deck 不完整，结论不变；本仓库把它从崩溃改成了可读诊断 |
+| `test_goodman_slip` | — | **rc=0，有结果** | 但 `.mat` 只有一条 `ELASTIC_ISOTROPIC`，`nmats=1`——又一个 `test_*` 占位桩，**不是 GOODMAN 能力证据** |
+
+## 结论
+
+| 问题 | 答案 |
+|---|---|
+| 第一失效点 | `Stiff.f90:880`（快照 877），`dep` 的 GOODMAN/JANBU 分支读未关联的 `gapg` |
+| 归属 | **legacy 原有缺陷**，非迁移引入、非 deck 缺陷；整条 GOODMAN/JANBU 路径在基线上不可运行 |
+| 最小修复 | 可恢复运行（只有一处阻断），但**得不到可验收参考**：修复要先定义 Goodman 节理的 gap 与自然厚度，那是**接触与界面域**的问题 |
+
+因此：**材料域保持当前边界，GOODMAN/JANBU 不作为下一材料能力。**
+PD-4 归属接触与界面域，在那个域开工时正面回答，不在材料域里修。

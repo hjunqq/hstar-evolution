@@ -132,6 +132,74 @@ field="nmats" value="3" allowed="2..2"
 
 ---
 
+## PD-4 · GOODMAN/JANBU 分支读 `CONTACT` 门控的 `gapg` / `natural_thickness`
+
+| | |
+|---|---|
+| 日期 | 2026-09-20 |
+| 位置 | `legacy/yl/Stiff.f90:880`（快照 5414e73 的 `Stiff.f90:877`，**逐字节相同**）；`Residu.f90:1158` 是同一表达式的第二处 |
+| 阻塞的算例 | `cases/cases/goodman_evolution`（SIGSEGV，`rc=174`，无输出） |
+| 归属 | **legacy 原有缺陷**；未改动的 5414e73 快照同样 `rc=174 res=0` |
+| 现状 | **不修**，登记为边界；GOODMAN/JANBU 不作为下一材料能力 |
+
+`dep` 的 `GOODMAN` → `model=='JANBU'` → `type_stiff==1` 分支在调用 `PKPN` 之后直接读：
+
+```fortran
+normal_gap = element(ielem)%field(1)%gapg(igaus) &
+           - element(ielem)%field(1)%natural_thickness(igaus)
+```
+
+而这两个数组**只在 `name=='CONTACT'` 时分配**（`Fem.f90:11999-12008`，`name` 即组头的
+`SPTYPE` 字段，`Global.f90:1280`）。同一段分配代码里，`evk` 却是按**材料**
+`material=='GOODMAN'` 分配的（`Fem.f90:12018-12020`）。**门控不一致就是这个缺陷**：
+一条按材料进入的路径，去读一组按 sptype 分配的数组。
+
+**这不是这个 deck 特殊，是整条路径都走不通**——两项全树测量：
+
+| 测量 | 结果 |
+|---|---|
+| 全树 `.glb` 文件数 | **1 361** |
+| 其中把组 `SPTYPE` 声明为 `CONTACT` 的 | **0** |
+| 含 `GOODMAN` 材料记录的 `.mat` | 6 |
+| 其中 `GOODMAN` 的 `model` 是 `JANBU` 的 | **6（全部）** |
+
+即：语料里没有任何一个 deck 会让 `gapg` 被分配，而每一个 GOODMAN deck 都会走到读它的
+那一行。**GOODMAN/JANBU 路径在 5414e73 基线上无法运行。**
+
+### 为什么不修（与 PD-1 的门槛对照）
+
+做过一次**仅在 scratchpad 的实验**（未进仓库）：把那一行加 `associated` 保护、
+`normal_gap` 缺省取 0，并抑制同样读 `gapg` 的调试 `write(7,*)`。结果是
+
+```
+goodman_evolution  EXPERIMENT  分析跑完，1.flavia.res = 680 636 字节
+                   rc=24 出现在分析之后：'give me the vdimn,coef1 and coef2?'
+                   ——一个交互式后处理提问向 stdin 要输入，与求解无关
+```
+
+**只有这一处阻断，没有级联**（运行前写下的两个预期是 A「只有这一处」/ B「别处再崩」，
+落地的是 A）。但它**仍然不能给出可验收参考**，三条理由：
+
+1. **跳过罚函数是一个行为选择，不是恢复既有行为。** PD-1 能修，是因为全语料
+   `kind_wt` 分布为 `{0: 1810}`，被守卫的分支**可证不可达**，那一行只能把「读未初始化
+   整数」变成「读确定的 0」。这里被守卫的**正是分支本身**——`normal_gap` 该是什么，
+   没有任何 oracle 能判定。
+2. **`natural_thickness` 对 Goodman 节理应当取什么值是设计问题**（很可能是组头的
+   `elcod_local`，本 deck 为 `2.00E-02`）。定下它就是发明一条输入映射，
+   越过「不扩 schema、不重构本构」的边界。
+3. **deck 自带的 `1.flavia.res` 不能充当 oracle**：690 960 字节，与实验输出
+   680 636 字节不同，且**产出它的二进制未知**（本仓库基线 5414e73 提交于 2026-02-09，
+   该结果文件时间戳为 2026-04-09；上游仓库在 5414e73 之后没有任何提交）。
+   按 M0 规则，参考必须由可重现的构建产出。
+
+### 它属于哪个域
+
+`CONTACT` sptype、gap、罚函数——**这是接触与界面域的东西**。PD-4 不是一个需要单独
+立项的缺陷，而是那个域开工时会正面撞上的第一件事：接触域必须回答「一个 Goodman 节理
+组的 gap 与自然厚度从哪来」，回答了它，PD-4 自然关闭。**因此不在材料域里修它。**
+
+---
+
 ## 不予修复的登记
 
 同批查清但**不**修的，列在这里，以免以后重复调查：
@@ -140,4 +208,4 @@ field="nmats" value="3" allowed="2..2"
 |---|---|---|
 | `cases/cases/mini_goodman` | `Elements.f90:3368`，`elcod` 第 2 维越界 | 是**算例**缺陷不是代码缺陷：deck 把接缝组声明成 2 节点 b2，却给了 4 节点的 `1.ele` 表，组尾又按 b2 写，自相矛盾；且目录带 `gen_all.py`，是自造算例。legacy 这条路径对正常的 q4 接缝用法是正确的（全树 119 条带 `elcod_local` 的组定义里 95 条是 q4） |
 | `cases/cases/goodmanLU` | `Global.f90:878`，`1.ftr` 读到文件尾（`rc=2`，M1 守卫按设计拦下） | deck 不完整，不是代码问题 |
-| `cases/cases/goodman_evolution` | 未定位（`rc=174`） | GOODMAN 暂记为「无可验收真实算例」，不消耗主线资源；有完整可运行 deck 时再恢复 |
+| `cases/cases/goodman_evolution` | **已定位 2026-09-20**：`Stiff.f90:880`，`gapg` 未关联 —— 见上方 **PD-4** | legacy 原有缺陷，但修它要回答「Goodman 节理的 gap 与自然厚度从哪来」，属**接触与界面域**；材料域内不修 |
