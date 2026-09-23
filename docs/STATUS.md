@@ -6,6 +6,8 @@
 
 更新日期：2026-09-23。此文件只登记已经发生的事；阶段验收以证据包为准。
 
+**当前主线下一步**：两路径收口已完成；按负责人裁定，此后再考虑 `mini_3d`（3-D），尚未开工。
+
 **口径**：M0–M11 既定切片已实现，并按各自口径签收（多数为窄口径）。
 这**不是**生产级全能力完成：当前没有 production 现代输入能力，每项签收只在其证据包点名的算例与口径内成立。
 
@@ -19,7 +21,7 @@
 |---|---|---|
 | 1 | `beam_point_load`（集中力）在 legacy-deck 适配器路径上恢复 | **完成 2026-09-23** |
 | 2 | `wall_reservoir`（`runblks>1` + 面荷载）在 legacy-deck 适配器路径上恢复；`mini_gravdam` 只作后续扩展算例 | **完成 2026-09-23** |
-| 3 | R34 改为真正的跨路径门禁：九个 golden 都检查两条路径的能力边界与结果 | 未开始 |
+| 3 | R34 改为真正的跨路径门禁：全部 golden（实为 **10** 例）都检查两条路径的能力边界与结果 | **完成 2026-09-23** |
 
 **步 1 证据**：`--adapter=on` 直接跑 legacy deck，`rc=0`、状态 COMPLETED，stdout 有
 `commit ok; the solve below runs on adapter state`（确由适配器驱动，不是回落）；对冻结参考
@@ -42,7 +44,7 @@ meshc/rmesh/Bparameter 已拒绝）；`.loa` 的边表进 `surface_edges[]`、�
 （只放行 water=2、code_load=0）、`A5/pressure-edge-range`。覆盖登记 181 = 163 + 18（五个边/面荷载站点转为标记）。
 - **验收对象**：`wall_reservoir` legacy deck `--adapter=on` → COMPLETED，确由适配器驱动，
   对冻结参考 **4 块 552 值 `max|d|=0.000e+00`**。
-- **九个 golden 全部**走 legacy-deck 适配器路径对冻结参考逐位相等（`rcbeam` 120 块 214 110 值、`slope_srm` 600 块 541 200 值在内）。
+- **全部 10 个 golden**（此前 STATUS 与第 2 步提交说明写作「九个」，是沿用 09-20 的错误计数；`cases/manifest.toml` 为 10 例，逐例实跑也是 10 例）走 legacy-deck 适配器路径对冻结参考逐位相等（`rcbeam` 120 块 214 110 值、`slope_srm` 600 块 541 200 值在内）。
 - **反例先失效、后补上**：第一组扰动（`fact` 9810→5000、`cor0` 50→40）在**两条路径上都与参考逐位相等**——
   不是适配器的问题，是该算例迎水面节点全被 x 向约束，水压只进反力，冻结参考**分辨不出面荷载**（登记 **R36**）。
   改用派生 deck（x 向约束只留节点 1、6），预先写下预期后运行，全部成立：
@@ -55,7 +57,16 @@ meshc/rmesh/Bparameter 已拒绝）；`.loa` 的边表进 `surface_edges[]`、�
 - 三道门禁（release / adapter / runtime）2026-09-23 全绿；方言套件 419/419 × 两 deck。
 - 补跑故障探针：19 PASS / 28 FAIL，**与上一提交基线二进制逐探针相同**，非本轮回归；探针自 M4-02 起已随默认入口变化而过期，登记 **R35**。
 **限定**：`capability-frontier.md` §2 的首条拒绝统计（`runblks` 行 14 例等）是改动前测的，**本轮未重测**，已过期；
-`mini_gravdam` 等扩展算例未跑，不作声称。R34 仍未改，步 2 同样尚无门禁守住。
+`mini_gravdam` 等扩展算例未跑，不作声称。
+
+**步 3 证据（R34 关闭）**：`tools/yl_fallback_check.py` 改为遍历 `cases/manifest.toml` 全部 10 例并与
+`cases/golden/*/*` 对账，新增 **F5**（`--input=case.toml` 的 modern 路径与默认 legacy-deck 路径结果直接逐位互比）
+与 **F6**（两路径对每个 golden 的接受边界一致，不一致时点名哪条路径拒绝）；已在 release 门禁内。
+当前二进制：10 例 F1/F2/F3/F5 全部 `max|d|=0`、F6 全部 both accept、F4 仍拒绝并点名。
+**门禁自身的反例**：对收口前提交 `ed22739` 的二进制，预期「恰好 wall_reservoir 与 beam_point_load 两条 F6」，实测即此两条。
+**两路径分叉收口至此完成**：已签收能力在两条输入路径上的一致性恢复，并有门禁守住。
+**限定**：F6 只覆盖 golden 集合上的「都接受」；golden 之外的拒绝边界是否一致，只由方言反例（适配器侧）与 N3 反例（modern 侧）各自守住，
+两侧没有逐条对应的机械对账。R35（探针过期）、R36（`wall_reservoir` 分辨不出面荷载）仍 OPEN。
 
 ## 验收链（2026-09-12 总览时清点）
 

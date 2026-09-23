@@ -16,6 +16,22 @@ Four assertions, and the fourth is the one worth the tool:
       still produces numbers, with nothing in the output saying which path made them --
       which is exactly what the M4 exit condition forbids.
 
+  F5  the MODERN path (`--input=case.toml`) and the LEGACY-DECK path (default entry,
+      the adapter) agree with each other, strictly. F1 and N2 (yl_modern_check) each
+      compare one path to the reference; this compares the two paths directly, which is
+      the red line M4-02 drew ("the two paths are equivalent").
+  F6  the two paths have ONE capability boundary on the golden set: every golden case is
+      accepted by both. A case one path runs and the other refuses is named, with which
+      path refused it. Until 2026-09-23 this gate walked only the two M2 static cases, so
+      wall_reservoir and beam_point_load had been refused on the legacy-deck path since
+      M7 without any gate noticing (R34, docs/capability-frontier.md section 4).
+
+SCOPE IS WHAT IS WALKED. The case list is cases/manifest.toml, checked against the
+directories under cases/golden/: a golden directory the manifest does not list, or a
+listed case missing its legacy deck, modern deck or reference, is a failure, not a skip.
+The summary line names the count it actually walked. (R34: this tool used to print
+"every golden case" while walking two.)
+
 Usage:
     tools/yl_fallback_check.py [--binary build/release/hstar]
 """
@@ -38,11 +54,56 @@ _spec = _ilu.spec_from_file_location("yl_run", ROOT / "tools/yl_run.py")
 _yl_run = _ilu.module_from_spec(_spec); _spec.loader.exec_module(_yl_run)
 pinned_env = _yl_run.pinned_env
 
-MAP = ROOT / "docs/m2/state-field-map.toml"
+MANIFEST = ROOT / "cases/manifest.toml"
+
+_spec_m = _ilu.spec_from_file_location("yl_modern_check", ROOT / "tools/yl_modern_check.py")
+_yl_modern = _ilu.module_from_spec(_spec_m); _spec_m.loader.exec_module(_yl_modern)
+stage_modern = _yl_modern.stage
 
 
-def cases() -> list[str]:
-    return tomllib.loads(MAP.read_text(encoding="utf-8"))["cases"]
+def cases(problems: list[str]) -> list[dict]:
+    """Every case in cases/manifest.toml, reconciled with cases/golden/*/* on disk."""
+    doc = tomllib.loads(MANIFEST.read_text(encoding="utf-8"))
+    listed = doc.get("case", [])
+    on_disk = {str(p.relative_to(ROOT / "cases")) for p in (ROOT / "cases/golden").glob("*/*")
+               if p.is_dir()}
+    in_manifest = {c["path"] for c in listed}
+    for extra in sorted(on_disk - in_manifest):
+        problems.append(f"SCOPE cases/{extra} is a golden directory the manifest does not list")
+    out = []
+    for c in listed:
+        d = ROOT / "cases" / c["path"]
+        ref = d / "reference/results.json"
+        if not ref.is_file():
+            ref = d / "reference/results.json.gz"
+        missing = [what for what, ok in (("legacy/", (d / "legacy").is_dir()),
+                                         ("modern/case.toml", (d / "modern/case.toml").is_file()),
+                                         ("reference/results.json[.gz]", ref.is_file()))
+                   if not ok]
+        if missing:
+            problems.append(f"SCOPE {c['id']}: missing {', '.join(missing)}")
+            continue
+        out.append({"id": c["id"], "dir": d, "ref": ref,
+                    "modern": c.get("modern_gate") is not False})
+    if not out:
+        raise SystemExit(f"{MANIFEST}: no case to walk")
+    return out
+
+
+def run_modern(case_dir: Path, binary: Path, work: Path) -> tuple[int, Path | None, str]:
+    """The authoring path, staged exactly as yl_modern_check stages it (mesh + case.toml)."""
+    stage_modern(case_dir, work)
+    cp = subprocess.run([str(binary), "--input=case.toml"], cwd=work, stdin=subprocess.DEVNULL,
+                        capture_output=True, text=True, errors="replace", env=pinned_env())
+    res = work / "1.flavia.res"
+    if cp.returncode != 0 or not (res.is_file() and res.stat().st_size > 0):
+        return cp.returncode, None, cp.stdout + cp.stderr
+    out = work / "results.json"
+    pp = subprocess.run([sys.executable, str(ROOT / "tools/yl_parse_flavia.py"), str(res),
+                         "-o", str(out)], capture_output=True, text=True)
+    if pp.returncode != 0:
+        return 99, None, pp.stdout + pp.stderr
+    return 0, out, cp.stdout
 
 
 def run(case_id: str, binary: Path, root: Path, label: str, args: str | None,
@@ -79,38 +140,63 @@ def main(argv=None):
 
     root = Path(tempfile.mkdtemp(prefix="yl-fallback."))
     problems: list[str] = []
+    walked = cases(problems)
+    print(f"  scope: {len(walked)} case(s) from cases/manifest.toml, reconciled with "
+          f"cases/golden/*/*")
 
-    for cid in cases():
-        name = cid.split(".", 1)[1]
-        ref = ROOT / "cases/golden/static_2d" / name / "reference/results.json"
+    for c in walked:
+        cid, ref = c["id"], c["ref"]
 
         rc, d_def, out = run(cid, binary, root, "default", None)
-        if rc != 0 or d_def is None:
-            problems.append(f"F1 {cid}: the DEFAULT run did not complete\n{out[-600:]}")
-            continue
-        ok, line = compare(ref, d_def / "results.json")
-        print(f"  F1 {cid:<28} default        {line}")
-        if not ok:
-            problems.append(f"F1 {cid}: the default path does not reproduce the reference")
+        def_ok = rc == 0 and d_def is not None
+        if def_ok:
+            ok, line = compare(ref, d_def / "results.json")
+            print(f"  F1 {cid:<34} default        {line}")
+            if not ok:
+                problems.append(f"F1 {cid}: the default path does not reproduce the reference")
+        else:
+            print(f"  F1 {cid:<34} default        REFUSED/FAILED")
+            problems.append(f"F1 {cid}: the DEFAULT (legacy-deck adapter) run did not "
+                            f"complete\n{out[-600:]}")
 
         rc, d_off, out = run(cid, binary, root, "off", "--adapter=off")
-        if rc != 0 or d_off is None:
+        off_ok = rc == 0 and d_off is not None
+        if off_ok:
+            ok, line = compare(ref, d_off / "results.json")
+            print(f"  F2 {cid:<34} --adapter=off  {line}")
+            if not ok:
+                problems.append(f"F2 {cid}: the fallback path does not reproduce the reference")
+        else:
             problems.append(f"F2 {cid}: --adapter=off did not complete\n{out[-600:]}")
-            continue
-        ok, line = compare(ref, d_off / "results.json")
-        print(f"  F2 {cid:<28} --adapter=off  {line}")
-        if not ok:
-            problems.append(f"F2 {cid}: the fallback path does not reproduce the reference")
 
-        ok, line = compare(d_off / "results.json", d_def / "results.json")
-        print(f"  F3 {cid:<28} off vs default {line}")
-        if not ok:
-            problems.append(f"F3 {cid}: the two paths disagree with each other")
+        if def_ok and off_ok:
+            ok, line = compare(d_off / "results.json", d_def / "results.json")
+            print(f"  F3 {cid:<34} off vs default {line}")
+            if not ok:
+                problems.append(f"F3 {cid}: the two paths disagree with each other")
+
+        if not c["modern"]:
+            print(f"  -- {cid:<34} F5/F6 OFF by manifest (modern_gate = false)")
+            continue
+        with tempfile.TemporaryDirectory(prefix="yl-fallback-modern.") as td:
+            rc_m, res_m, out_m = run_modern(c["dir"], binary, Path(td))
+            mod_ok = res_m is not None
+            if def_ok != mod_ok:
+                which = "legacy-deck path refuses" if mod_ok else "modern path refuses"
+                print(f"  F6 {cid:<34} boundary       DIFFERS ({which})")
+                problems.append(f"F6 {cid}: one boundary for two paths is broken -- the "
+                                f"{which} what the other runs\n"
+                                f"{(out if mod_ok else out_m)[-600:]}")
+            elif def_ok:
+                print(f"  F6 {cid:<34} boundary       both accept")
+                ok, line = compare(res_m, d_def / "results.json")
+                print(f"  F5 {cid:<34} modern vs deck {line}")
+                if not ok:
+                    problems.append(f"F5 {cid}: the modern and legacy-deck paths disagree")
 
     # F4 -- a deck the adapter refuses must STOP, not fall back.
     with tempfile.TemporaryDirectory(prefix="yl-fallback-deck.") as td:
-        name = cases()[0].split(".", 1)[1]
-        src = ROOT / "cases/golden/static_2d" / name / "legacy"
+        src = ROOT / "cases/golden/static_2d/cooks_membrane/legacy"
         work = Path(td)
         for f in src.iterdir():
             (work / f.name).write_bytes(f.read_bytes())
@@ -148,9 +234,10 @@ def main(argv=None):
     if problems:
         print(f"FALLBACK FAIL: {len(problems)} problem(s)")
         return 1
-    print("FALLBACK PASS: default path == fallback path == frozen reference on every "
-          "golden case (strict), and a refused deck stops with its dialect named instead "
-          "of falling back")
+    print(f"FALLBACK PASS: on all {len(walked)} manifest cases -- default (legacy-deck) path "
+          "== fallback path == frozen reference, modern path == legacy-deck path (strict), "
+          "both paths accept every case; a refused deck stops with its dialect named "
+          "instead of falling back")
     return 0
 
 
