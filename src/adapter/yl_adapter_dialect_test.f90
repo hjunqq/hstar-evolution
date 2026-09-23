@@ -236,7 +236,12 @@ program yl_adapter_dialect_test
     call run_case('A-SOL', 'pivot-file', 'sol', 2, '  1  0  1  1', 'W')
     call run_case('A1', 'stochastic-curve-modifier-unsupported', 'loa', 3, '  2  LINEAR  1  2', 'W')
     call run_case('A2', 'curve-type-unsupported', 'loa', 3, '  2  HARMONIC  0  2', 'W')
-    call run_case('A3', 'point-load-unsupported', 'loa', 7, '  1  0', 'W')
+    ! Point loads are carried now (kpload==1). The two rows that remain: the corlist form,
+    ! refused on the count line itself; and a group header whose force-vector length is 0,
+    ! which needs the header line spliced in after the count so the parser reaches it.
+    call run_case('A3', 'point-load-form-unsupported', 'loa', 7, '  1  2', 'W')
+    call run_case('A3', 'point-load-degenerate-counts', 'loa', 7, &
+                  '  1  1'//new_line('a')//'  1  0  1  2', 'W')
     call run_case('A4', 'edge-definition-unsupported', 'loa', 9, '  1', 'W')
     call run_case('A5', 'pressure-load-unsupported', 'loa', 12, '  1  0', 'W')
     call run_case('A6', 'beam-load-unsupported', 'loa', 18, '  1', 'W')

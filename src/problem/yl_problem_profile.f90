@@ -667,11 +667,19 @@ module yl_problem_profile
                       message='only ''LINEAR'' (Load.f90:218-222) is in the static-q4/1 whitelist; every other '//   &
                               'named case (Load.f90:175-217) reads a different record shape that is not '//   &
                               'reproduced'),                                                                        &
-    capability_item_t(rule_id='A3', condition='point-load-unsupported',                                             &
-                      item='loa.nplgroup', object_path='steps[0].load',                                             &
+    ! Point loads themselves are carried (kpload==1, the group form M7 Phase 4 admits on the
+    ! authoring path); what is left refused is the OTHER record shape and a group whose two
+    ! counts cannot size its reads.
+    capability_item_t(rule_id='A3', condition='point-load-form-unsupported',                                        &
+                      item='loa.kpload', object_path='steps[0].load',                                               &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
-                      message='nplgroup /= 0: point loads (Load.f90:246-333) are outside the static-q4/1 '//   &
-                              'whitelist'),                                                                         &
+                      message='nplgroup /= 0 with kpload /= 1: only the group form (Load.f90:250-266) is '//   &
+                              'reproduced; the corlist form (Load.f90:305-311) is not'),                            &
+    capability_item_t(rule_id='A3', condition='point-load-degenerate-counts',                                       &
+                      item='loa.nudofn/npload', object_path='steps[0].load.concentrated',                           &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='a point-load group with nudofn <= 0 or npload <= 0 (Load.f90:250): the two '//   &
+                              'counts size the force and node reads that follow'),                                  &
     capability_item_t(rule_id='A12', condition='temp-surface-unsupported',                                          &
                       item='tem.ntemp_surface', object_path='derived.counts',                                       &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &

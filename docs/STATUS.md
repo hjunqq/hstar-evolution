@@ -4,7 +4,33 @@
      不复制「当前在做 / 下一步」。.ccg/tasks/*/task.json 是执行器的工作队列，
      不是状态；两者不一致时以本文件为准。 -->
 
-更新日期：2026-09-20。此文件只登记已经发生的事；阶段验收以证据包为准。
+更新日期：2026-09-23。此文件只登记已经发生的事；阶段验收以证据包为准。
+
+**口径**：M0–M11 既定切片已实现，并按各自口径签收（多数为窄口径）。
+这**不是**生产级全能力完成：当前没有 production 现代输入能力，每项签收只在其证据包点名的算例与口径内成立。
+
+## 当前主线：两条输入路径的分叉收口（2026-09-23 起）
+
+本轮目标**不是增加新能力**，而是恢复**已签收能力在两条输入路径上的一致性**
+（authoring 路径 与 legacy-deck 适配器路径）。分叉的测量见
+[`docs/capability-frontier.md`](capability-frontier.md) §4；3-D（`mini_3d`）在收口完成前不开。
+
+| 步 | 内容 | 状态 |
+|---|---|---|
+| 1 | `beam_point_load`（集中力）在 legacy-deck 适配器路径上恢复 | **完成 2026-09-23** |
+| 2 | `wall_reservoir`（`runblks>1` + 面荷载）在 legacy-deck 适配器路径上恢复；`mini_gravdam` 只作后续扩展算例 | 未开始 |
+| 3 | R34 改为真正的跨路径门禁：九个 golden 都检查两条路径的能力边界与结果 | 未开始 |
+
+**步 1 证据**：`--adapter=on` 直接跑 legacy deck，`rc=0`、状态 COMPLETED，stdout 有
+`commit ok; the solve below runs on adapter state`（确由适配器驱动，不是回落）；对冻结参考
+**2 块 756 值 `max|d|=0.000e+00`**（参考位移 249/252 非零，体力为零，故相等即证明集中力被搬运）。
+适配器只接 `kpload==1` 的组形式；`kpload==2`（corlist 形式）与 `nudofn/npload<=0` 各为一条
+具名拒绝行 `A3/point-load-form-unsupported` / `A3/point-load-degenerate-counts`，各有反例
+（方言套件 399/399，两个 golden deck）。原 `A3/point-load-unsupported` 行删除。
+三个集中力读取站点从 `docs/m1/adapter-coverage.toml` 的未适配登记移到适配器标记（181 = 158 + 23）。
+release / adapter / runtime 三道门禁 2026-09-23 全绿，既有 golden 逐位不变。
+**限定**：只恢复 legacy-deck 路径上的集中力；`wall_reservoir` 在该路径上仍 `rc=3`（`runblks must be 1`），
+回退门禁（R34）仍只遍历两个静力算例，这次恢复**尚无门禁守住**，靠步 3 补上。
 
 ## 验收链（2026-09-12 总览时清点）
 

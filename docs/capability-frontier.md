@@ -60,7 +60,7 @@
 |---|---|
 | `cooks_membrane` / `lame_cylinder` / `mini_mc` / `slope_srm` / `new_duncan_chang` / `benchmark_100x100` / `concrete_gravdam` / `rcbeam` | **rc=0** |
 | **`loads_2d/wall_reservoir`** | **rc=3** `derived.counts.runblks: runblks must be 1` |
-| **`loads_2d/beam_point_load`** | **rc=3** `steps[0].load: nplgroup /= 0` |
+| **`loads_2d/beam_point_load`** | **rc=3** `steps[0].load: nplgroup /= 0`　→　**2026-09-23 已恢复**：rc=0，2 块 756 值 `max|d|=0`（见 STATUS「两条输入路径的分叉收口」步 1） |
 
 **M7 的两项能力（面荷载+多分析步、集中力）只在 authoring 路径上成立；
 legacy-deck 适配器路径仍停在 M4-02 的单块静力。** 两者都已按窄口径签收——

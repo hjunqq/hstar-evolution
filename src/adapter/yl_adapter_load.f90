@@ -118,7 +118,7 @@ contains
     call require_context(errors, ctx, ok)
     if (.not. ok) return
 
-    call external_load_1(unit, b, residue, errors, ok)
+    call external_load_1(unit, b, parts, residue, errors, ok)
     if (.not. ok) return
     call external_load_2(unit, ctx, parts, residue, errors, ok)
   end subroutine parse_loa
@@ -303,13 +303,14 @@ contains
   end subroutine parse_pre
 
   ! ==========================================================================
-  ! Load.f90:109 external_load_1 -- time curves, point loads (rejected if
-  ! present), edge definitions (rejected if present)
+  ! Load.f90:109 external_load_1 -- time curves, point loads, edge definitions
+  ! (rejected if present)
   ! ==========================================================================
 
-  subroutine external_load_1(unit, b, residue, errors, ok)
+  subroutine external_load_1(unit, b, parts, residue, errors, ok)
     integer, intent(in) :: unit
     type(problem_builder_t), intent(inout) :: b
+    type(step_parts_t), intent(inout) :: parts
     type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
@@ -318,6 +319,7 @@ contains
     integer :: ios
     integer :: ntcurve, itcurve, ntime, nstoch_curve, nline
     integer :: nplgroup, kpload, nedge
+    integer :: iplgroup, order_time_curve, nudofn, npload
     real(real64), allocatable :: ttime_curve(:), dfact_curve(:)
     type(amplitude_builder_t) :: ab
     type(amplitude_t) :: amp
@@ -427,15 +429,75 @@ contains
                   'steps[0].load', io_ok)
     if (.not. io_ok) return
 
-    ! Load.f90:245-333 -- nplgroup/=0 defines concentrated point loads; out of
-    ! the static-q4/1 whitelist (gravity and fixed/prescribed displacement
-    ! only).
-    if (nplgroup /= 0) then
+    ! Load.f90:245-333 -- nplgroup/=0 defines concentrated point loads. The authoring path
+    ! has carried these since M7 Phase 4 (`[[step.load]] type="concentrated"`); this is the
+    ! same capability on the legacy-deck path, so that the two paths have ONE acceptable
+    ! boundary rather than two. No force is computed here and none is invented: legacy's
+    ! point-load record has no derived part (docs/m7 Phase 4 SS3), so this is pure carriage
+    ! into `concentrated_t`, which `commit_point_loads` already publishes.
+    ! (Load.f90:269-285 rotates pxyz by prot at nodes with icpnorm /= 0 and widens it to
+    ! ndimn. Unreachable: the only assignment to icpnorm anywhere in legacy is the
+    ! `icpnorm=0` at Global.f90:710, so the vector legacy uses is the one it read.)
+    !
+    ! kpload selects the RECORD SHAPE. kpload==1 is the group form reproduced here;
+    ! kpload==2 (Load.f90:305-311) is a second, `corlist`-based form that no golden deck
+    ! uses and that M7 left suspended, so it stays a named refusal -- guessing the shape
+    ! would desynchronise the file cursor and every later read would be wrong.
+    if (nplgroup /= 0 .and. kpload /= 1) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.point_load_count', &
                                   line=241_int32)
-      call reject_dialect(errors, 'A3', 'point-load-unsupported', loc, &
-                          actual=itoa(nplgroup), expected='0')
+      call reject_dialect(errors, 'A3', 'point-load-form-unsupported', loc, &
+                          actual=itoa(kpload), expected='1')
       return
+    end if
+
+    if (nplgroup /= 0) then
+      allocate (parts%load%concentrated(nplgroup))
+      do iplgroup = 1, nplgroup
+        ! RD: LOA.external_load_1.point_load_group (Load.f90:250)
+        read (unit, *, iostat=ios) order_time_curve, nudofn, npload, nline
+        call check_io(errors, ios, 'LOA.external_load_1.point_load_group', SRC_LOA, 250, &
+                      'steps[0].load.concentrated', io_ok, record=int(iplgroup, int32))
+        if (.not. io_ok) return
+
+        loc = make_source_location(file=SRC_LOA, &
+                reader='LOA.external_load_1.point_load_group', line=250_int32, &
+                record=int(iplgroup, int32))
+
+        ! nudofn and npload SIZE the two reads below; a non-positive size is not a
+        ! capability question but a malformed record, and reading on it would consume
+        ! the wrong number of values.
+        if (nudofn <= 0 .or. npload <= 0) then
+          call reject_dialect(errors, 'A3', 'point-load-degenerate-counts', loc, &
+                              actual=itoa(nudofn)//'/'//itoa(npload), expected='both > 0', &
+                              idx=int(iplgroup, int32))
+          return
+        end if
+
+        call opt_set(parts%load%concentrated(iplgroup)%amplitude, int(order_time_curve, int32))
+        allocate (parts%load%concentrated(iplgroup)%value(nudofn))
+        allocate (parts%load%concentrated(iplgroup)%nodes(npload))
+
+        ! RD: LOA.external_load_1.point_load_force (Load.f90:261)
+        read (unit, *, iostat=ios) parts%load%concentrated(iplgroup)%value(1:nudofn)
+        call check_io(errors, ios, 'LOA.external_load_1.point_load_force', SRC_LOA, 261, &
+                      'steps[0].load.concentrated', io_ok, record=int(iplgroup, int32))
+        if (.not. io_ok) return
+
+        ! Load.f90:264-297 branches on the curve type: EXTRAPOLATION reads a listep table
+        ! instead of a plain node list. A2 above already refuses every curve type but
+        ! LINEAR, so that branch is unreachable from here -- this read is the LINEAR one
+        ! (Load.f90:266), and the refusal that keeps it unreachable is A2, not silence.
+        ! RD: LOA.external_load_1.point_load_nodes (Load.f90:266)
+        read (unit, *, iostat=ios) parts%load%concentrated(iplgroup)%nodes(1:npload)
+        call check_io(errors, ios, 'LOA.external_load_1.point_load_nodes', SRC_LOA, 266, &
+                      'steps[0].load.concentrated', io_ok, record=int(iplgroup, int32))
+        if (.not. io_ok) return
+      end do
+    else
+      ! "ran, found none" is not the same state as "never ran" (ADR-0002): an explicitly
+      ! empty array is what tells commit this deck carries no concentrated force.
+      allocate (parts%load%concentrated(0))
     end if
 
     ! RD: LOA.external_load_1.title#3 (Load.f90:363)
