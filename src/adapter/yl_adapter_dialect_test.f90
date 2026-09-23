@@ -37,7 +37,7 @@
 program yl_adapter_dialect_test
 
   use iso_fortran_env, only: int32, real64, output_unit, iostat_end
-  use yl_problem_optional, only: opt_value_or
+  use yl_problem_optional, only: opt_value_or, opt_set
   use yl_problem_errors, only: problem_errors_t, problem_error_t, source_location_t,           &
                                make_source_location, PE_UNSUPPORTED, PE_INTERNAL,              &
                                PE_STAGE_ADAPT, PE_STAGE_CAPABILITY, PE_EXIT_INTERNAL,          &
@@ -88,7 +88,7 @@ program yl_adapter_dialect_test
     call run_case('F1', 'adina', 'inp', 2, '0  0  0  1  0  0', 'W')
     call run_case('F1', 'uopt_r', 'inp', 2, '0  0  0  0  1  0', 'W')
     call run_case('F1', 'gamamax', 'inp', 2, '0  0  0  0  0  1', 'W')
-    call run_case('F1', 'runblks', 'inp', 5, '2', 'W')
+    call run_case('F1', 'runblks-nonpositive', 'inp', 5, '0', 'W')
     call run_case('F2', 'multi-increment', 'man', 2, '  2  0  0  0', 'W')
     call run_case('F2', 'cwater', 'man', 3, '  5  1.0  1  1  1  1  1  1  0', 'W')
     call run_case('F2', 'qstatic', 'man', 3, '  5  1.0  1  1  1  1  1  0  1', 'W')
@@ -116,7 +116,14 @@ program yl_adapter_dialect_test
     call run_case('A-GLB', 'stab-matde-enabled', 'glb', 2, &
                   '  289  289  256  2  1  1  0  GIDR  0.0  0  0  0  0  0  1', &
                   'W')
-    call run_case('A-GLB', 'multiple-blocks', 'glb', 6, &
+    ! More than one block is admitted since M7 on this path too; what is refused is a
+    ! block count that is not positive, and one that disagrees with inp's runblks. The
+    ! case context carries runblks = 1 (parse_inp runs first in the driver), so nblks = 2
+    ! is the disagreement and nblks = 0 the non-positive count.
+    call run_case('A-GLB', 'blocks-nonpositive', 'glb', 6, &
+                  '  0  0  0  0  0  0  0  0  0  0  0  FIX  0  0  0  0  0  0  0', &
+                  'W')
+    call run_case('A-GLB', 'runblks-not-nblks', 'glb', 6, &
                   '  0  0  0  2  0  0  0  0  0  0  0  FIX  0  0  0  0  0  0  0', &
                   'W')
     call run_case('A-GLB', 'nlinks-nonzero', 'glb', 6, &
@@ -153,7 +160,12 @@ program yl_adapter_dialect_test
                   '       1.500E+06  1.0e6  0  2  1.0e8  1.0e8  1  0  1', &
                   'W')
     call run_case('A-GLB', 'ntrans-nonzero', 'glb', 42, '  1  0  1.0e0  0.02  2  1980.0  25.0', 'W')
-    call run_case('A-GLB', 'uinitial-nonzero', 'glb', 50, '  1', 'W')
+    ! The activation matrix in the shape the modern path states it: a flag, and the
+    ! section's own material. Lines 26/28 are the golden deck's one APPEAR/MATNO record.
+    call run_case('A-GLB', 'activation-not-a-flag', 'glb', 26, '  2', 'W')
+    call run_case('A-GLB', 'block-material-not-section', 'glb', 28, '  2', 'W')
+    ! 1 is `reset_state = true` and is admitted now; 2 is not a flag.
+    call run_case('A-GLB', 'uinitial-not-a-flag', 'glb', 50, '  2', 'W')
     ! The five .glb section counts that used to be read into a local and DISCARDED
     ! (found 2026-09-10, while the adapter first drove a solve). Deck lines are the
     ! counts themselves in 1.glb: 65 tension_joint, 67 contact_joint, 69 the contact
@@ -242,8 +254,16 @@ program yl_adapter_dialect_test
     call run_case('A3', 'point-load-form-unsupported', 'loa', 7, '  1  2', 'W')
     call run_case('A3', 'point-load-degenerate-counts', 'loa', 7, &
                   '  1  1'//new_line('a')//'  1  0  1  2', 'W')
-    call run_case('A4', 'edge-definition-unsupported', 'loa', 9, '  1', 'W')
-    call run_case('A5', 'pressure-load-unsupported', 'loa', 12, '  1  0', 'W')
+    ! The edge table and the per-block pressure loads are carried now (M7 on this path).
+    ! What stays refused: an edge shape the contract cannot state (a 3-node chunk here),
+    ! a distribution it cannot state (water = 0, the per-node table), and a range that
+    ! does not index the edge table (the golden deck has no edges, so edge 1 is outside).
+    call run_case('A4', 'edge-table-unsupported', 'loa', 9, &
+                  '  1'//new_line('a')//' sedge nnode index vdimn'//new_line('a')//'  1  3  1  0', 'W')
+    call run_case('A5', 'pressure-distribution-unsupported', 'loa', 12, &
+                  '  1  1'//new_line('a')//'  1  1  1  0  0', 'W')
+    call run_case('A5', 'pressure-edge-range', 'loa', 12, &
+                  '  1  1'//new_line('a')//'  1  1  1  2  0', 'W')
     call run_case('A6', 'beam-load-unsupported', 'loa', 18, '  1', 'W')
     call run_case('A7', 'plate-load-unsupported', 'loa', 20, '  1', 'W')
     ! The four `.tem` counts (M4-01 step 4b). Line numbers are the golden 1.tem's, which
@@ -532,7 +552,7 @@ contains
     type(problem_error_t) :: f
     type(deck_context_t) :: ctx
     type(problem_builder_t) :: b
-    type(step_parts_t) :: parts
+    type(step_parts_t), allocatable :: parts(:)
     type(solver_parts_t) :: sparts
     type(section_parts_t) :: secparts
     character(len=:), allocatable :: src, dst, key
@@ -576,7 +596,12 @@ contains
       if (allocated(ctx%group_nnode)) deallocate (ctx%group_nnode)
     end if
     call builder_begin(b)
-    call step_parts_reset(parts)
+    ! One block, as make_context says; parse_glb reallocates this to its own nblks.
+    allocate (parts(1))
+    call step_parts_reset(parts(1))
+    ! The driver runs parse_inp before parse_glb, and parse_glb checks nblks against the
+    ! runblks parse_inp left in the residue -- so a .glb case starts from that state.
+    call opt_set(residue%runblks, 1_int32)
     call solver_parts_reset(sparts)
     call section_parts_reset(secparts)
 
@@ -722,6 +747,7 @@ contains
     ctx%type_problem = 'Q'
     ctx%nbackdt = 0_int32
     ctx%ntrans = 0_int32
+    ctx%nblks = 1_int32
 
     select case (variant)
     case ('W')        ! the whitelisted context, unchanged

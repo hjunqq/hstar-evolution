@@ -321,7 +321,7 @@ module yl_runtime_commit
     commit_provenance_t('control.run.restart', COMMIT_FROM_DECK, 'F1/restart'),                                                        &
     commit_provenance_t('control.run.relis', COMMIT_FROM_DECK, 'F1/relis'),                                                          &
     commit_provenance_t('control.run.adina', COMMIT_FROM_DECK, 'F1/adina'),                                                          &
-    commit_provenance_t('derived.counts.runblks', COMMIT_FROM_DECK, 'F1/runblks'),                                                     &
+    commit_provenance_t('derived.counts.runblks', COMMIT_FROM_DECK, 'A-GLB/runblks-not-nblks'),                                                     &
     commit_provenance_t('derived.counts.npoin', COMMIT_FROM_RUNTIME, 'extent npoin'),                                           &
     commit_provenance_t('derived.counts.npoinb', COMMIT_FROM_DECK, 'no gate: read+discarded'),                                                      &
     commit_provenance_t('derived.counts.nelem', COMMIT_FROM_RUNTIME, 'extent nelem'),                                           &
@@ -389,7 +389,7 @@ module yl_runtime_commit
     commit_provenance_t('control.glb.nbackf', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                         &
     commit_provenance_t('control.glb.ebody', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                          &
     commit_provenance_t('control.glb.ninit', COMMIT_FROM_DECK, 'A-GLB/ninit-nonzero'),                                                          &
-    commit_provenance_t('control.glb.uinitial', COMMIT_FROM_DECK, 'A-GLB/pinned all-zero'),                                                       &
+    commit_provenance_t('control.glb.uinitial', COMMIT_FROM_DECK, 'A-GLB/uinitial-not-a-flag'),                                                       &
     commit_provenance_t('control.glb.state_change', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                   &
     commit_provenance_t('control.glb.bparameter', COMMIT_FROM_DECK, 'A-GLB/pinned'),                                                     &
     commit_provenance_t('control.glb.stab_matde', COMMIT_FROM_DECK, 'A-GLB/interval > nblks'),                                                     &
@@ -449,9 +449,9 @@ module yl_runtime_commit
     commit_provenance_t('steps0.load.gravity.magnitude', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity.magnitude'),                                              &
     commit_provenance_t('steps0.load.gravity.direction', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity'),                                              &
     commit_provenance_t('steps0.load.gravity.amplitude', COMMIT_FROM_PROBLEM, 'steps[0].load.gravity'),                                              &
-    commit_provenance_t('derived.counts.nplgroup', COMMIT_FROM_DECK, 'A3/point-load'),                                                    &
-    commit_provenance_t('derived.counts.nedge', COMMIT_FROM_DECK, 'A4/edge-definition'),                                                       &
-    commit_provenance_t('derived.counts.edge_load_group', COMMIT_FROM_DECK, 'A5/pressure-load'),                                             &
+    commit_provenance_t('derived.counts.nplgroup', COMMIT_FROM_DECK, 'A3/point-load-*'),                                                    &
+    commit_provenance_t('derived.counts.nedge', COMMIT_FROM_DECK, 'A4/edge-table'),                                                       &
+    commit_provenance_t('derived.counts.edge_load_group', COMMIT_FROM_DECK, 'A5/pressure-*'),                                             &
     commit_provenance_t('derived.counts.delgroup', COMMIT_FROM_DECK, 'no gate: shares A5 read'),                                                    &
     commit_provenance_t('derived.counts.nbeamload', COMMIT_FROM_DECK, 'A6/beam-load'),                                                   &
     commit_provenance_t('derived.counts.nplateload', COMMIT_FROM_DECK, 'A7/plate-load'),                                                  &

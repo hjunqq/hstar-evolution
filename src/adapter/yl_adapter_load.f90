@@ -3,13 +3,16 @@
 !
 ! Scope
 !   Reproduces the read PROTOCOL of `external_load_1` and `external_load_2`
-!   (legacy/yl/Load.f90) and `prescrib_set` (legacy/yl/Prescrib.f90) for the
-!   static-q4/1 whitelisted slice only: gravity plus fixed/prescribed
-!   displacement. Point loads, edge/pressure loads, beam loads, plate loads,
-!   stochastic curve modifiers, MIF/VIE boundaries and restart-linked boundary
-!   records are all OUTSIDE that whitelist; every one of those, when a deck
-!   carries it, is reported as PE_UNSUPPORTED with a rule id -- never silently
-!   skipped, never guessed, never defaulted (docs/m4/adapter-contract.md SS5).
+!   (legacy/yl/Load.f90) and `prescrib_set` (legacy/yl/Prescrib.f90): gravity,
+!   fixed/prescribed displacement, point loads (group form) and, since 2026-09-23,
+!   the edge table and per-block edge pressure loads -- each in exactly the shape
+!   the authoring contract can state, so both input paths have one boundary.
+!   `.pre` and external_load_2 are read once PER BLOCK into that block's
+!   `step_parts_t`. Beam loads, plate loads, stochastic curve modifiers, MIF/VIE
+!   boundaries, restart-linked boundary records and every edge/pressure shape
+!   outside that one are OUTSIDE the whitelist; each, when a deck carries it, is
+!   reported as PE_UNSUPPORTED with a rule id -- never silently skipped, never
+!   guessed, never defaulted (docs/m4/adapter-contract.md SS5).
 !
 !   Every read below carries the reader-inventory id it reproduces
 !   (docs/m1/reader-inventory.toml) in an adjacent marker comment, with the
@@ -26,10 +29,11 @@
 !   This module therefore never touches `yl_problem_builder`'s step routines
 !   at all: it writes only the leaves `src/adapter/yl_adapter_step_parts.f90`
 !   assigns it -- `load%gravity%magnitude`, `load%gravity%direction`,
-!   `load%gravity%amplitude` (from `.loa`) and `boundary(:)` (from `.pre`) --
-!   into the shared `step_parts_t` the L2-a driver assembles once, at the end,
-!   through the real builder. `amplitudes[]` is not part of that split (it is
-!   a top-level `ProblemState` collection, not a `steps[0]` leaf), so it is
+!   `load%gravity%amplitude`, `load%concentrated`, `load%pressure` (from `.loa`)
+!   and `boundary(:)` (from `.pre`) -- into each block's `step_parts_t`, which the
+!   L2-a driver assembles into one step per block, at the end, through the real
+!   builder. `amplitudes[]` and `surface_edges[]` are not part of that split (they
+!   are top-level `ProblemState` collections, not step leaves), so they are
 !   written the ordinary way, through `b`.
 !
 ! Context from `.glb` (contract SS2.2, yl_adapter_parts.f90 deck_context_t)
@@ -74,15 +78,17 @@
 module yl_adapter_load
 
   use iso_fortran_env, only: int32, real64
-  use yl_problem_types, only: boundary_t, amplitude_t, amplitude_point_t
-  use yl_problem_optional, only: opt_set
+  use yl_problem_types, only: boundary_t, amplitude_t, amplitude_point_t, surface_edge_t, &
+                              pressure_t
+  use yl_problem_optional, only: opt_set, opt_value_or
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
                                 make_problem_error, PE_INVALID_INPUT, PE_INTERNAL,             &
                                 PE_STAGE_ADAPT
   use yl_problem_builder, only: problem_builder_t, amplitude_builder_t, &
                                 builder_amplitude_begin, builder_amplitude_set_name, &
                                 builder_amplitude_set_type, builder_amplitude_add_point, &
-                                builder_amplitude_finish, builder_add_amplitude
+                                builder_amplitude_finish, builder_add_amplitude, &
+                                builder_add_surface_edge, builder_surface_edges_empty
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_adapter_parts, only: step_parts_t, deck_context_t, TYPE_ABC_MIF, reject_dialect
 
@@ -105,29 +111,85 @@ contains
   !> both run against the same unit in the legacy call sequence
   !> (Fem.f90 -> STATIC_U), so a rewind between them would desynchronise the
   !> cursor from the deck the driver actually opened.
-  subroutine parse_loa(unit, ctx, b, parts, residue, errors)
+  !>
+  !> legacy reads external_load_1 ONCE, before the block loop (Fem.f90:1682), and
+  !> external_load_2 once PER BLOCK inside it (Fem.f90:1896), each time from where the
+  !> previous block stopped. So the file is: the analysis-wide part (curves, point loads,
+  !> the edge table), then one external_load_2 section per block, in block order.
+  subroutine parse_loa(unit, ctx, b, blocks, residue, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
-    type(step_parts_t), intent(inout) :: parts
+    !> One per block; see yl_adapter_parts.f90's deck_context_t%nblks.
+    type(step_parts_t), intent(inout) :: blocks(:)
     type(deck_residue_t), intent(inout) :: residue
     type(problem_errors_t), intent(inout) :: errors
 
     logical :: ok
+    integer :: nedge, iblk
 
     call require_context(errors, ctx, ok)
     if (.not. ok) return
-
-    call external_load_1(unit, b, parts, residue, errors, ok)
+    call require_blocks(errors, ctx, size(blocks), ok)
     if (.not. ok) return
-    call external_load_2(unit, ctx, parts, residue, errors, ok)
+
+    call external_load_1(unit, b, blocks(1), residue, nedge, errors, ok)
+    if (.not. ok) return
+    ! The point-load table belongs to the analysis, not to a block (legacy has one
+    ! `pload` for the whole run), and the contract writes it under every step; commit
+    ! refuses steps that disagree about it. So every block carries block 1's.
+    do iblk = 2, size(blocks)
+      blocks(iblk)%load%concentrated = blocks(1)%load%concentrated
+    end do
+
+    do iblk = 1, size(blocks)
+      call external_load_2(unit, ctx, blocks(iblk), nedge, iblk, errors, ok)
+      if (.not. ok) return
+    end do
+    call require_face_ranges(errors, blocks, ok)
+    if (.not. ok) return
+
+    ! The four external_load_2 counts are PER BLOCK, and commit_block_state publishes
+    ! the edge-load pair itself, block by block. commit therefore requires the residue
+    ! to carry 0 for edge_load_group (a second source of truth otherwise) and the
+    ! modern path's default table carries 0 for all four; the beam and plate counts are
+    ! gated to 0 in every block above. `delgroup` has no consumer in either path but
+    ! the differential compares globals, so it is carried like the others.
+    call opt_set(residue%edge_load_group, 0_int32)
+    call opt_set(residue%delgroup, 0_int32)
+    call opt_set(residue%nbeamload, 0_int32)
+    call opt_set(residue%nplateload, 0_int32)
   end subroutine parse_loa
 
-  !> Parses `.pre`: `prescrib_set` in full.
-  subroutine parse_pre(unit, ctx, b, parts, errors)
+  !> Parses `.pre`: `prescrib_set` in full, once per block. legacy calls prescrib_set at
+  !> the top of every block (Fem.f90:1873) and the file is not rewound between them on
+  !> this whitelist (Prescrib.f90:111-112: meshc / rmesh / Bparameter, all refused), so
+  !> block k's section is the k-th one in the file.
+  subroutine parse_pre(unit, ctx, b, blocks, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b  ! unused: .pre writes only parts%boundary, no top-level collection
+    type(step_parts_t), intent(inout) :: blocks(:)
+    type(problem_errors_t), intent(inout) :: errors
+
+    logical :: ok
+    integer :: iblk, mark
+
+    call require_context(errors, ctx, ok)
+    if (.not. ok) return
+    call require_blocks(errors, ctx, size(blocks), ok)
+    if (.not. ok) return
+    do iblk = 1, size(blocks)
+      mark = errors%count()
+      call parse_pre_block(unit, ctx, blocks(iblk), errors)
+      if (errors%count() > mark) return
+    end do
+  end subroutine parse_pre
+
+  !> One block's `prescrib_set` section.
+  subroutine parse_pre_block(unit, ctx, parts, errors)
+    integer, intent(in) :: unit
+    type(deck_context_t), intent(in) :: ctx
     type(step_parts_t), intent(inout) :: parts
     type(problem_errors_t), intent(inout) :: errors
 
@@ -142,25 +204,14 @@ contains
     type(boundary_t) :: bd
     integer :: n_rows, k
     type(source_location_t) :: loc
-    logical :: io_ok, ctx_ok
+    logical :: io_ok
 
-    call require_context(errors, ctx, ctx_ok)
-    if (.not. ctx_ok) return
-
-    ! Prescrib.f90:170-178 -- a restart pre-scan ("do jblks=1,iblks-1 read ...")
-    ! gated on restart==1, running BEFORE the rewind guards and BEFORE the
-    ! nbackdT check below. Not reproduced, and deliberately not threaded in as
-    ! context: its loop bound is iblks-1, and prescrib_set is only ever called
-    ! from inside "do iblks=lblks+1,runblks" (Fem.f90:1683) with runblks =
-    ! nblks, which the static-q4/1 whitelist fixes at 1 (GLB.global_data.
-    ! init_and_blocks: "nblks:derived(steps)"; single-stage static). So
-    ! iblks==1 always on this whitelist and the loop bound is 1-1=0 --
-    ! structurally empty regardless of restart's value, not because restart
-    ! happens to be 0 on the golden decks. (It also carries no reader-
-    ! inventory id, the same shape as the docs/m1/M1-finding-2026-09-08-
-    ! unwrapped-loa-read.md gap -- flagged to the lead, but unlike that one
-    ! this branch cannot execute on this whitelist under any restart value,
-    ! so nothing here is at risk of silently misreading.)
+    ! Prescrib.f90:102-110 -- a restart pre-scan ("do jblks=1,iblks-1 read ...") gated on
+    ! restart==1, which skips the sections of the blocks a restart does not re-run. Not
+    ! reproduced: `restart` is refused by name in parse_inp (F1/restart), so on this
+    ! whitelist every block is run from the start and reads its own section in turn.
+    ! (Until M7 this comment argued from nblks==1 instead; that premise is gone, and the
+    ! refusal of restart is what now keeps the branch unreachable.)
     n_rows = 0
 
     ! RD: PRE.prescrib_set.title#1 (Prescrib.f90:211)
@@ -300,26 +351,30 @@ contains
     else
       allocate (parts%boundary(0))
     end if
-  end subroutine parse_pre
+  end subroutine parse_pre_block
 
   ! ==========================================================================
-  ! Load.f90:109 external_load_1 -- time curves, point loads, edge definitions
-  ! (rejected if present)
+  ! Load.f90:109 external_load_1 -- time curves, point loads, the edge table
   ! ==========================================================================
 
-  subroutine external_load_1(unit, b, parts, residue, errors, ok)
+  subroutine external_load_1(unit, b, parts, residue, nedge, errors, ok)
     integer, intent(in) :: unit
     type(problem_builder_t), intent(inout) :: b
     type(step_parts_t), intent(inout) :: parts
     type(deck_residue_t), intent(inout) :: residue
+    !> The size of the edge table, which every block's edge-load ranges index into.
+    integer, intent(out) :: nedge
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
 
     character(len=20) :: text, type_curve
     integer :: ios
     integer :: ntcurve, itcurve, ntime, nstoch_curve, nline
-    integer :: nplgroup, kpload, nedge
+    integer :: nplgroup, kpload
     integer :: iplgroup, order_time_curve, nudofn, npload
+    integer :: tedge, sedge, nnode, index, vdimn, iedge, i0, aelem
+    integer :: lnode(2)
+    type(surface_edge_t) :: se
     real(real64), allocatable :: ttime_curve(:), dfact_curve(:)
     type(amplitude_builder_t) :: ab
     type(amplitude_t) :: amp
@@ -329,6 +384,7 @@ contains
     logical :: io_ok
 
     ok = .false.
+    nedge = 0
 
     ! RD: LOA.external_load_1.title#1 (Load.f90:143)
     read (unit, *, iostat=ios) text
@@ -510,14 +566,68 @@ contains
     call check_io(errors, ios, 'LOA.external_load_1.edge_count', SRC_LOA, 365, 'steps[0].load', io_ok)
     if (.not. io_ok) return
 
-    ! Load.f90:369-465 -- nedge/=0 defines the edges external_load_2 later
-    ! attaches pressure loads to; out of the static-q4/1 whitelist.
-    if (nedge /= 0) then
+    ! Load.f90:369-392 -- the edge table external_load_2's pressure loads index into, "for
+    ! whole analysis": chunks of `sedge` edges sharing one (nnode, index, vdimn) header,
+    ! until nedge edges have been read. Carried as ProblemState.surface_edges[], the same
+    ! flattened table the modern path lays its named faces out into, row for row.
+    !
+    ! Admitted: the one edge shape the contract can state -- `kind = "edge2"`, i.e.
+    ! nnode 2, element class (index) 1, no flattened coordinate (vdimn 0); the modern map
+    ! encodes exactly that (yl_authoring_map.f90). Any other header is a shape the other
+    ! path cannot express, so it is refused rather than carried on one path only. A
+    ! chunk of sedge < 1 is refused too: legacy's `do while (tedge < nedge)` would never
+    ! advance on it, and one that overruns nedge would write past `edges(nedge)`.
+    if (nedge < 0) then
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.edge_count', line=365_int32)
-      call reject_dialect(errors, 'A4', 'edge-definition-unsupported', loc, &
-                          actual=itoa(nedge), expected='0')
+      call reject_dialect(errors, 'A4', 'edge-table-unsupported', loc, &
+                          actual='nedge='//itoa(nedge), expected='nedge >= 0')
       return
     end if
+    if (nedge == 0) then
+      ! "ran, found none" (ADR-0002), as the modern path states it.
+      loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.edge_count', line=365_int32)
+      call builder_surface_edges_empty(b, loc, errors)
+    end if
+    tedge = 0
+    do while (tedge < nedge)
+      ! RD: LOA.external_load_1.edge_chunk_title (Load.f90:377)
+      read (unit, *, iostat=ios) text
+      call check_io(errors, ios, 'LOA.external_load_1.edge_chunk_title', SRC_LOA, 377, &
+                    'surface_edges', io_ok, record=int(tedge + 1, int32))
+      if (.not. io_ok) return
+      ! RD: LOA.external_load_1.edge_chunk_header (Load.f90:379)
+      read (unit, *, iostat=ios) sedge, nnode, index, vdimn
+      call check_io(errors, ios, 'LOA.external_load_1.edge_chunk_header', SRC_LOA, 379, &
+                    'surface_edges', io_ok, record=int(tedge + 1, int32))
+      if (.not. io_ok) return
+      loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.edge_chunk_header', &
+                                  line=379_int32, record=int(tedge + 1, int32))
+      if (nnode /= 2 .or. index /= 1 .or. vdimn /= 0 .or. sedge < 1 .or. tedge + sedge > nedge) then
+        call reject_dialect(errors, 'A4', 'edge-table-unsupported', loc, &
+                            actual='sedge='//itoa(sedge)//' nnode='//itoa(nnode)//' index='// &
+                                   itoa(index)//' vdimn='//itoa(vdimn), &
+                            expected='nnode=2 index=1 vdimn=0, 1 <= sedge <= '//itoa(nedge - tedge))
+        return
+      end if
+      do iedge = 1, sedge
+        tedge = tedge + 1
+        ! RD: LOA.external_load_1.edge_nodes (Load.f90:388)
+        read (unit, *, iostat=ios) i0, lnode(1:nnode), aelem
+        call check_io(errors, ios, 'LOA.external_load_1.edge_nodes', SRC_LOA, 388, &
+                      'surface_edges', io_ok, record=int(tedge, int32))
+        if (.not. io_ok) return
+        ! i0 is the row's own ordinal, which legacy reads and discards.
+        if (allocated(se%nodes)) deallocate (se%nodes)
+        allocate (se%nodes(2))
+        se%nodes = int(lnode, int32)
+        call opt_set(se%element, int(aelem, int32))
+        call opt_set(se%element_class, int(index, int32))
+        call opt_set(se%projection_axis, int(vdimn, int32))
+        loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_1.edge_nodes', &
+                                    line=388_int32, record=int(tedge, int32))
+        call builder_add_surface_edge(b, se, loc, errors)
+      end do
+    end do
 
     ! Carried out after the gates, as everywhere else on this surface.
     call opt_set(residue%nplgroup, int(nplgroup, int32))
@@ -527,22 +637,25 @@ contains
   end subroutine external_load_1
 
   ! ==========================================================================
-  ! Load.f90:721 external_load_2 -- edge pressure loads (rejected if present),
-  ! gravity, beam loads (rejected if present), plate loads (rejected if
-  ! present)
+  ! Load.f90:903 external_load_2 -- ONE BLOCK's edge pressure loads, gravity,
+  ! beam loads (rejected if present), plate loads (rejected if present)
   ! ==========================================================================
 
-  subroutine external_load_2(unit, ctx, parts, residue, errors, ok)
+  subroutine external_load_2(unit, ctx, parts, nedge, iblk, errors, ok)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(step_parts_t), intent(inout) :: parts
-    type(deck_residue_t), intent(inout) :: residue
+    integer, intent(in) :: nedge   ! the edge table's size, from external_load_1
+    integer, intent(in) :: iblk    ! which block this section is, for locations only
     type(problem_errors_t), intent(inout) :: errors
     logical, intent(out) :: ok
 
     character(len=20) :: text
     integer :: ios
     integer :: edge_load_group, delgroup, nbeamload, nplateload, nline
+    integer :: ipegroup, begin_edge, end_edge, itcurve, water, code_load, total
+    real(real64) :: cor0, cor1, p0, p1, fact
+    type(pressure_t), allocatable :: prs(:)
     integer(int32) :: ndimn, ngroup
     real(real64) :: gravy
     real(real64), allocatable :: factg(:), factf(:)
@@ -564,21 +677,86 @@ contains
     call check_io(errors, ios, 'LOA.external_load_2.title#2', SRC_LOA, 751, 'steps[0].load', io_ok)
     if (.not. io_ok) return
 
-    ! RD: LOA.external_load_2.edge_load_groups (Load.f90:754)
+    ! RD: LOA.external_load_2.edge_load_groups (Load.f90:932)
     read (unit, *, iostat=ios) edge_load_group, delgroup
-    call check_io(errors, ios, 'LOA.external_load_2.edge_load_groups', SRC_LOA, 754, &
+    call check_io(errors, ios, 'LOA.external_load_2.edge_load_groups', SRC_LOA, 932, &
                   'steps[0].load', io_ok)
     if (.not. io_ok) return
 
-    ! Load.f90:757-908 -- edge_load_group/=0 defines edge pressure / water-
-    ! pressure loads (delgroup is only meaningful inside that same block); out
-    ! of the static-q4/1 whitelist.
-    if (edge_load_group /= 0) then
+    ! Load.f90:938-969 -- this block's edge-load groups. `edge_load_group` is the total
+    ! number of loaded edges and `delgroup` the number of groups; legacy reads no group
+    ! at all when edge_load_group == 0 (its `goto 33`), whatever delgroup says. Each group
+    ! is one pressure_t, the shape the modern path builds from a `type = "pressure"`
+    ! load, and commit_block_state hands it to legacy's own edge_load_group_apply.
+    !
+    ! Admitted: what the contract can state. `water` (the distribution axis) = 2, i.e.
+    ! "y, deepening downward" -- the one value the modern map writes; `water == 0` is a
+    ! per-node pressure TABLE read inside edge_load_group_apply, which the contract has
+    ! no key for; `code_load /= 0` is legacy's second, far-side distribution, which it
+    ! reads into a local and the contract does not carry either. A range outside the
+    ! edge table, or ranges that do not add up to edge_load_group, would make legacy
+    ! index past `edges` or leave `edgeload` entries unset: refused by name too.
+    if (edge_load_group == 0 .and. delgroup /= 0) then
+      ! legacy reads no group here and leaves `delgroup` (and the previous block's
+      ! edge loads) standing; commit publishes this block's own, i.e. none. Refused
+      ! rather than let the two disagree about a count the deck states.
       loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.edge_load_groups', &
-                                  line=754_int32)
-      call reject_dialect(errors, 'A5', 'pressure-load-unsupported', loc, &
-                          actual=itoa(edge_load_group), expected='0')
+                                  line=932_int32, record=int(iblk, int32))
+      call reject_dialect(errors, 'A5', 'pressure-edge-range', loc, &
+                          actual='edge_load_group=0 delgroup='//itoa(delgroup), expected='delgroup=0')
       return
+    end if
+    if (edge_load_group /= 0) then
+      allocate (prs(max(delgroup, 0)))
+      total = 0
+      do ipegroup = 1, delgroup
+        ! RD: LOA.external_load_2.edge_load_group (Load.f90:944)
+        read (unit, *, iostat=ios) begin_edge, end_edge, itcurve, water, code_load
+        call check_io(errors, ios, 'LOA.external_load_2.edge_load_group', SRC_LOA, 944, &
+                      'steps[].load.pressure', io_ok, record=int(ipegroup, int32))
+        if (.not. io_ok) return
+        loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.edge_load_group', &
+                                    line=944_int32, record=int(ipegroup, int32))
+        if (water /= 2 .or. code_load /= 0) then
+          call reject_dialect(errors, 'A5', 'pressure-distribution-unsupported', loc, &
+                              actual='water='//itoa(water)//' code_load='//itoa(code_load), &
+                              expected='water=2 code_load=0', idx=int(ipegroup, int32))
+          return
+        end if
+        if (begin_edge < 1 .or. end_edge < begin_edge .or. end_edge > nedge) then
+          call reject_dialect(errors, 'A5', 'pressure-edge-range', loc, &
+                              actual=itoa(begin_edge)//'..'//itoa(end_edge), &
+                              expected='1 <= begin <= end <= '//itoa(nedge), &
+                              idx=int(ipegroup, int32))
+          return
+        end if
+        ! RD: LOA.external_load_2.edge_load_distribution (Load.f90:950)
+        read (unit, *, iostat=ios) cor0, cor1, p0, p1, fact
+        call check_io(errors, ios, 'LOA.external_load_2.edge_load_distribution', SRC_LOA, 950, &
+                      'steps[].load.pressure', io_ok, record=int(ipegroup, int32))
+        if (.not. io_ok) return
+        call opt_set(prs(ipegroup)%first_edge, int(begin_edge, int32))
+        call opt_set(prs(ipegroup)%last_edge, int(end_edge, int32))
+        call opt_set(prs(ipegroup)%amplitude, int(itcurve, int32))
+        call opt_set(prs(ipegroup)%distribution_axis, int(water, int32))
+        allocate (prs(ipegroup)%at(2), prs(ipegroup)%value(2))
+        prs(ipegroup)%at = [cor0, cor1]
+        prs(ipegroup)%value = [p0, p1]
+        call opt_set(prs(ipegroup)%scale, fact)
+        total = total + end_edge - begin_edge + 1
+      end do
+      if (total /= edge_load_group) then
+        loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.edge_load_groups', &
+                                    line=932_int32, record=int(iblk, int32))
+        call reject_dialect(errors, 'A5', 'pressure-edge-range', loc, &
+                            actual='groups cover '//itoa(total)//' edges', &
+                            expected='edge_load_group = '//itoa(edge_load_group))
+        return
+      end if
+      call move_alloc(prs, parts%load%pressure)
+    else
+      ! "ran, found none" (ADR-0002): this block carries no pressure.
+      allocate (parts%load%pressure(0))
     end if
 
     ! RD: LOA.external_load_2.title#3 (Load.f90:910)
@@ -669,16 +847,7 @@ contains
       return
     end if
 
-    ! `delgroup` is carried even though NOTHING consumes it -- not legacy, not the new
-    ! path. It shares a read with edge_load_group (Load.f90:754) and legacy leaves it in
-    ! the applied_load module, and the differential compares GLOBALS: "no consumer" is not
-    ! an exemption (L2c-fold-design.md 1.7.2). It is also the only one of these six whose
-    ! own gate is the neighbouring field's rather than its own.
-    call opt_set(residue%edge_load_group, int(edge_load_group, int32))
-    call opt_set(residue%delgroup, int(delgroup, int32))
-    call opt_set(residue%nbeamload, int(nbeamload, int32))
-    call opt_set(residue%nplateload, int(nplateload, int32))
-
+    ! The four counts go to the residue once, in parse_loa, not per block here.
     ok = .true.
   end subroutine external_load_2
 
@@ -703,6 +872,61 @@ contains
                                        message='parse_loa/parse_pre called with an unfilled ' // &
                                        'deck_context_t; parse_glb must run first'))
   end subroutine require_context
+
+  !> Every pressure range, across every block, must be either IDENTICAL to or DISJOINT
+  !> from every other. That is exactly the set of ranges the modern path can produce:
+  !> it lays named faces out as non-overlapping contiguous ranges and a load names one
+  !> whole face. Partially overlapping ranges (1..2 and 2..3) are legal to legacy but
+  !> have no case.toml that states them, so they are refused by the range row.
+  subroutine require_face_ranges(errors, blocks, ok)
+    type(problem_errors_t), intent(inout) :: errors
+    type(step_parts_t), intent(in) :: blocks(:)
+    logical, intent(out) :: ok
+    integer :: ib, jb, ip, jp, a1, a2, c1, c2
+    type(source_location_t) :: loc
+
+    ok = .true.
+    do ib = 1, size(blocks)
+      if (.not. allocated(blocks(ib)%load%pressure)) cycle
+      do ip = 1, size(blocks(ib)%load%pressure)
+        a1 = int(opt_value_or(blocks(ib)%load%pressure(ip)%first_edge, 0_int32))
+        a2 = int(opt_value_or(blocks(ib)%load%pressure(ip)%last_edge, 0_int32))
+        do jb = ib, size(blocks)
+          if (.not. allocated(blocks(jb)%load%pressure)) cycle
+          do jp = 1, size(blocks(jb)%load%pressure)
+            if (jb == ib .and. jp <= ip) cycle
+            c1 = int(opt_value_or(blocks(jb)%load%pressure(jp)%first_edge, 0_int32))
+            c2 = int(opt_value_or(blocks(jb)%load%pressure(jp)%last_edge, 0_int32))
+            if ((a1 == c1 .and. a2 == c2) .or. a2 < c1 .or. c2 < a1) cycle
+            ok = .false.
+            loc = make_source_location(file=SRC_LOA, reader='LOA.external_load_2.edge_load_group', &
+                                        line=944_int32, record=int(jp, int32))
+            call reject_dialect(errors, 'A5', 'pressure-edge-range', loc, &
+                                actual=itoa(a1)//'..'//itoa(a2)//' (block '//itoa(ib)//') vs '// &
+                                       itoa(c1)//'..'//itoa(c2)//' (block '//itoa(jb)//')', &
+                                expected='identical or disjoint ranges')
+            return
+          end do
+        end do
+      end do
+    end do
+  end subroutine require_face_ranges
+
+  !> The driver sizes the per-block parts from `.glb`'s nblks; a mismatch here is the
+  !> driver's fault, not the deck's.
+  subroutine require_blocks(errors, ctx, n, ok)
+    type(problem_errors_t), intent(inout) :: errors
+    type(deck_context_t), intent(in) :: ctx
+    integer, intent(in) :: n
+    logical, intent(out) :: ok
+
+    ok = (n == ctx%nblks .and. n >= 1)
+    if (ok) return
+    call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
+                                       rule_id='A0/blocks-not-sized', object_path='steps', &
+                                       message='parse_loa/parse_pre were handed '//itoa(n)// &
+                                       ' block parts for a deck of '//itoa(int(ctx%nblks))//' blocks'))
+  end subroutine require_blocks
 
   !> Raises PE_INVALID_INPUT and sets ok=.false. on a nonzero iostat; leaves
   !> ok=.true. and raises nothing otherwise. Every read in this module is

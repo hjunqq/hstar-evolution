@@ -210,7 +210,8 @@ contains
     character(len=:), allocatable :: prefix
     type(problem_builder_t) :: b
     type(deck_context_t) :: ctx
-    type(step_parts_t) :: parts
+    ! One per legacy block, sized by parse_glb once it has read nblks.
+    type(step_parts_t), allocatable :: parts(:)
     type(solver_parts_t) :: sparts
     type(section_parts_t) :: secparts
     type(step_builder_t) :: sb
@@ -219,7 +220,7 @@ contains
     type(source_location_t) :: loc
     character(len=:), allocatable :: text_val
     logical :: ok, found
-    integer :: mark0, mark, i
+    integer :: mark0, mark, i, iblk
 
     u_inp = UNSET_UNIT; u_glb = UNSET_UNIT; u_cor = UNSET_UNIT; u_ele = UNSET_UNIT
     u_mat = UNSET_UNIT; u_sol = UNSET_UNIT; u_loa = UNSET_UNIT; u_pre = UNSET_UNIT
@@ -228,7 +229,6 @@ contains
     u_man = UNSET_UNIT
 
     call deck_context_reset(ctx)
-    call step_parts_reset(parts)
     call solver_parts_reset(sparts)
     call section_parts_reset(secparts)
     call builder_begin(b)
@@ -340,83 +340,93 @@ contains
         end if
       end if
 
-      ! -- assemble steps[0] exactly once, from the shared step_parts_t (contract SS2.1) --
-      loc = make_source_location(reader=SITE, &
-              file='(steps[0] assembly: not one deck record, see module header)')
-
-      call builder_step_begin(sb)
-
-      ! procedure_/load_mode are opt_text, .glb's exclusive leaves (yl_adapter_parts.f90's
-      ! leaf table); every other steps[0] leaf below is a typed aggregate already, filled
-      ! leaf-by-leaf across files, and is handed to its singleton setter as a whole value.
-      call opt_get(parts%procedure_, text_val, found)
-      if (.not. found) then
-        call builder_note_failure(b, PE_INTERNAL, 'D1/procedure-unset', 'steps[0]', &
-          'procedure', 'parse_glb should have filled steps[0].procedure_ on success; ' // &
-          'it did not', loc, errors)
+      ! -- assemble one step per block, each from its own step_parts_t (contract SS2.1) --
+      ! steps[k-1] is legacy block k. Every setter below is still called exactly once PER
+      ! STEP, which is the singleton rule the builder enforces.
+      if (.not. allocated(parts)) then
+        call builder_note_failure(b, PE_INTERNAL, 'D1/blocks-unset', 'steps', '', &
+          'parse_glb should have sized the per-block parts on success; it did not', &
+          make_source_location(reader=SITE), errors)
         exit parse_all
       end if
-      call builder_step_set_procedure(b, sb, text_val, loc, errors)
-      if (builder_failed(b)) exit parse_all
+      do iblk = 1, size(parts)
+        loc = make_source_location(reader=SITE, &
+                file='(steps[] assembly, block '//itoa(iblk)//': not one deck record, see module header)')
 
-      call opt_get(parts%load_mode, text_val, found)
-      if (.not. found) then
-        call builder_note_failure(b, PE_INTERNAL, 'D1/load-mode-unset', 'steps[0]', &
-          'load_mode', 'parse_glb should have filled steps[0].load_mode on success; ' // &
-          'it did not', loc, errors)
-        exit parse_all
-      end if
-      call builder_step_set_load_mode(b, sb, text_val, loc, errors)
-      if (builder_failed(b)) exit parse_all
+        call builder_step_begin(sb)
 
-      call builder_step_set_controls(b, sb, parts%controls, loc, errors)
-      if (builder_failed(b)) exit parse_all
-
-      call builder_step_set_load(b, sb, parts%load, loc, errors)
-      if (builder_failed(b)) exit parse_all
-
-      call builder_step_set_output(b, sb, parts%output, loc, errors)
-      if (builder_failed(b)) exit parse_all
-
-      ! parse_glb always fills this (the `.glb` record is unconditional), so unlike the
-      ! collections below there is no "the parser never ran" state to distinguish.
-      call builder_step_set_initial_stress(b, sb, parts%initial_stress, loc, errors)
-      if (builder_failed(b)) exit parse_all
-
-      ! boundary(:)/activation(:): unallocated means the owning parser never got this
-      ! far (unreachable here -- both .pre and .glb always allocate, size 0 included, on
-      ! their own success path), allocated size 0 means "ran, found none" and must reach
-      ! the builder as an explicit empty declaration, not silence (yl_adapter_parts.f90's
-      ! three-state comment; ADR-0002).
-      if (allocated(parts%boundary)) then
-        if (size(parts%boundary) == 0) then
-          call builder_step_boundary_empty(b, sb, loc, errors)
-          if (builder_failed(b)) exit parse_all
-        else
-          do i = 1, size(parts%boundary)
-            call builder_step_add_boundary(b, sb, parts%boundary(i), loc, errors)
-            if (builder_failed(b)) exit parse_all
-          end do
+        ! procedure_/load_mode are opt_text, .glb's exclusive leaves (yl_adapter_parts.f90's
+        ! leaf table); every other steps[0] leaf below is a typed aggregate already, filled
+        ! leaf-by-leaf across files, and is handed to its singleton setter as a whole value.
+        call opt_get(parts(iblk)%procedure_, text_val, found)
+        if (.not. found) then
+          call builder_note_failure(b, PE_INTERNAL, 'D1/procedure-unset', 'steps[0]', &
+            'procedure', 'parse_glb should have filled steps[0].procedure_ on success; ' // &
+            'it did not', loc, errors)
+          exit parse_all
         end if
-      end if
+        call builder_step_set_procedure(b, sb, text_val, loc, errors)
+        if (builder_failed(b)) exit parse_all
 
-      if (allocated(parts%activation)) then
-        if (size(parts%activation) == 0) then
-          call builder_step_activation_empty(b, sb, loc, errors)
-          if (builder_failed(b)) exit parse_all
-        else
-          do i = 1, size(parts%activation)
-            call builder_step_add_activation(b, sb, parts%activation(i), loc, errors)
-            if (builder_failed(b)) exit parse_all
-          end do
+        call opt_get(parts(iblk)%load_mode, text_val, found)
+        if (.not. found) then
+          call builder_note_failure(b, PE_INTERNAL, 'D1/load-mode-unset', 'steps[0]', &
+            'load_mode', 'parse_glb should have filled steps[0].load_mode on success; ' // &
+            'it did not', loc, errors)
+          exit parse_all
         end if
-      end if
+        call builder_step_set_load_mode(b, sb, text_val, loc, errors)
+        if (builder_failed(b)) exit parse_all
 
-      call builder_step_finish(b, sb, step_val, loc, errors, ok)
-      if (.not. ok) exit parse_all
+        call builder_step_set_controls(b, sb, parts(iblk)%controls, loc, errors)
+        if (builder_failed(b)) exit parse_all
 
-      call builder_add_step(b, step_val, loc, errors)
-      if (builder_failed(b)) exit parse_all
+        call builder_step_set_load(b, sb, parts(iblk)%load, loc, errors)
+        if (builder_failed(b)) exit parse_all
+
+        call builder_step_set_output(b, sb, parts(iblk)%output, loc, errors)
+        if (builder_failed(b)) exit parse_all
+
+        ! parse_glb always fills this (the `.glb` record is unconditional), so unlike the
+        ! collections below there is no "the parser never ran" state to distinguish.
+        call builder_step_set_initial_stress(b, sb, parts(iblk)%initial_stress, loc, errors)
+        if (builder_failed(b)) exit parse_all
+
+        ! boundary(:)/activation(:): unallocated means the owning parser never got this
+        ! far (unreachable here -- both .pre and .glb always allocate, size 0 included, on
+        ! their own success path), allocated size 0 means "ran, found none" and must reach
+        ! the builder as an explicit empty declaration, not silence (yl_adapter_parts.f90's
+        ! three-state comment; ADR-0002).
+        if (allocated(parts(iblk)%boundary)) then
+          if (size(parts(iblk)%boundary) == 0) then
+            call builder_step_boundary_empty(b, sb, loc, errors)
+            if (builder_failed(b)) exit parse_all
+          else
+            do i = 1, size(parts(iblk)%boundary)
+              call builder_step_add_boundary(b, sb, parts(iblk)%boundary(i), loc, errors)
+              if (builder_failed(b)) exit parse_all
+            end do
+          end if
+        end if
+
+        if (allocated(parts(iblk)%activation)) then
+          if (size(parts(iblk)%activation) == 0) then
+            call builder_step_activation_empty(b, sb, loc, errors)
+            if (builder_failed(b)) exit parse_all
+          else
+            do i = 1, size(parts(iblk)%activation)
+              call builder_step_add_activation(b, sb, parts(iblk)%activation(i), loc, errors)
+              if (builder_failed(b)) exit parse_all
+            end do
+          end if
+        end if
+
+        call builder_step_finish(b, sb, step_val, loc, errors, ok)
+        if (.not. ok) exit parse_all
+
+        call builder_add_step(b, step_val, loc, errors)
+        if (builder_failed(b)) exit parse_all
+      end do
 
       ! -- solver: .glb's linear/symmetric + .sol's profile%*, one singleton call ---------
       call builder_set_solver(b, sparts%solver, loc, errors)

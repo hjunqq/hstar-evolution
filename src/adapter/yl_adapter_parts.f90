@@ -196,6 +196,12 @@ module yl_adapter_parts
     character(len=LEN_TYPE_ABC) :: type_solver = ''
     integer(int32) :: nbackdt = 0      ! GLB.global_data.init_and_blocks
     integer(int32) :: ntrans = 0       ! GLB.global_data.init_and_blocks
+    !> GLB.global_data.init_and_blocks. How many blocks the per-block files repeat:
+    !> `.pre` and `.man` restate a whole section per block, and `.loa`'s
+    !> external_load_2 part does too. Each parser reads that many sections, in order,
+    !> into the matching `step_parts_t` -- none of these files is rewound between blocks
+    !> on this whitelist (meshc / rmesh / Bparameter, the rewind triggers, are refused).
+    integer(int32) :: nblks = 0
   end type deck_context_t
 
   !> The `sections[]` collection, held back until BOTH files that feed it have run.

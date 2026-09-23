@@ -22,6 +22,8 @@
 
 ## 2. 前沿：按「真实可跑 deck 数」排序
 
+> **2026-09-23 注**：适配器已放开多块（`runblks == nblks`）与 edge2 面荷载，下表 `runblks` 行及其后的首条拒绝统计是改动前测的，**已过期、未重测**。
+
 | 首条拒绝 | deck 数 | 其中 legacy 可跑 | 属哪个未迁移域 |
 |---|---|---|---|
 | **`derived.counts.runblks`：runblks 必须为 1** | 14 | **10** | 施工/加载过程（多分析块） |
@@ -59,7 +61,7 @@
 | golden 算例 | `--adapter=on` |
 |---|---|
 | `cooks_membrane` / `lame_cylinder` / `mini_mc` / `slope_srm` / `new_duncan_chang` / `benchmark_100x100` / `concrete_gravdam` / `rcbeam` | **rc=0** |
-| **`loads_2d/wall_reservoir`** | **rc=3** `derived.counts.runblks: runblks must be 1` |
+| **`loads_2d/wall_reservoir`** | **rc=3** `derived.counts.runblks: runblks must be 1`　→　**2026-09-23 已恢复**：rc=0，4 块 552 值 `max|d|=0`（见 STATUS「两条输入路径的分叉收口」步 2；该参考分辨不出面荷载，见 R36） |
 | **`loads_2d/beam_point_load`** | **rc=3** `steps[0].load: nplgroup /= 0`　→　**2026-09-23 已恢复**：rc=0，2 块 756 值 `max|d|=0`（见 STATUS「两条输入路径的分叉收口」步 1） |
 
 **M7 的两项能力（面荷载+多分析步、集中力）只在 authoring 路径上成立；

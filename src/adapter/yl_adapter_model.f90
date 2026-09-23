@@ -104,10 +104,11 @@
 !         supposed to defer to.
 !     (b) Fields with NO ProblemState home at all -- pinned legacy switches
 !         (rmesh, ntlink, mat_curve, meshc, level_set_problem, ljdp, nlinks,
-!         block_stab, nbackf, ebody, ninit, uinitial, state_change, Bparameter, nlayer,
+!         block_stab, nbackf, ebody, ninit, state_change, Bparameter, nlayer,
 !         ntrans, nlocalbeam/ndimnrt) plus two fields this parser is the sole guard for
-!         because nothing downstream inspects them (`type_ABC`, `type_nl`) and one
-!         structural limit this parser's own single-step design imposes (`nblks`) -- are
+!         because nothing downstream inspects them (`type_ABC`, `type_nl`) and the block
+!         count's agreement with inp's runblks (`nblks`; one step per block since
+!         2026-09-23, `uinitial` then became the per-block reset flag it is) -- are
 !         checked HERE, against the value docs/m2/state-field-map.toml's notes record as
 !         observed/required on both golden decks ("pinned guard: value 0 keeps control
 !         flow on static_2d path"), because if this parser does not check them nothing
@@ -122,7 +123,7 @@
 !   value is stab_matde > nblks (both golden decks carry 99999, a disable sentinel), not
 !   0. An earlier reading of docs/m2/state-field-map.toml's note had this backwards and
 !   rejected every real deck; the map's note has since been corrected. See the check
-!   itself, right after nblks is read and pinned to 1 (seq 7), for the exact condition.
+!   itself, right after nblks is read and checked (seq 7), for the exact condition.
 !
 ! nsmat, nmass, nhmat, nqmat, nldfl, kgmat, nswkw, uwcpl, nflow, ECWPIPE (material_class_counts),
 !   kinit/winit/neuman/equvs/nbspring/outind/nbackdT/ninistn (init_and_blocks),
@@ -140,13 +141,13 @@
 module yl_adapter_model
 
   use iso_fortran_env, only: int32, real64, iostat_end
-  use yl_problem_optional, only: opt_set
+  use yl_problem_optional, only: opt_set, opt_get
   use yl_problem_types, only: section_t, interactions_t, output_t, &
                                output_field_t, activation_t
   use yl_problem_builder, only: problem_builder_t, builder_set_mesh_dimension, &
                                  builder_set_interactions, builder_failed
   use yl_problem_errors, only: problem_errors_t, source_location_t, make_source_location, &
-                                make_problem_error, PE_INVALID_INPUT, PE_STAGE_ADAPT
+                                make_problem_error, PE_INVALID_INPUT, PE_INTERNAL, PE_STAGE_ADAPT
   use yl_problem_deck_residue, only: deck_residue_t
   use yl_problem_existence, only: deck_existence_t
   use yl_problem_pipeline, only: nodes_of_kind, element_name_of_kind
@@ -180,11 +181,15 @@ contains
   ! parser fills its leaves in the shared aggregate exactly as it does for `parts`, and
   ! never calls `builder_set_solver` / `builder_add_section` itself. `sections[].thickness`
   ! is `.mat`'s leaf (read AFTER .glb, Fem.f90:117 then :191) and is left unset here.
-  subroutine parse_glb(unit, ctx, b, parts, sparts, secparts, residue, existence, errors)
+  subroutine parse_glb(unit, ctx, b, blocks, sparts, secparts, residue, existence, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(inout) :: ctx
     type(problem_builder_t), intent(inout) :: b
-    type(step_parts_t), intent(inout) :: parts
+    !> One `step_parts_t` per legacy block, allocated here once `nblks` is known and
+    !> accepted. Everything `.glb` says ONCE for the whole analysis is filled into the
+    !> local `parts` below and copied into every block; the two things it says per block
+    !> (activation, from APPEAR/MATNO_PROCESS, and `hdam`) are then set block by block.
+    type(step_parts_t), allocatable, intent(inout) :: blocks(:)
     type(solver_parts_t), intent(inout) :: sparts
     type(section_parts_t), intent(inout) :: secparts
     !> Carries out the 13 `.glb` values ADR-0003 does not model. Filled only once every
@@ -198,6 +203,10 @@ contains
     character(len=256) :: iomsg_buf
     type(source_location_t) :: loc
     character(len=80) :: text
+    ! The per-analysis template every block starts from (see `blocks` above).
+    type(step_parts_t) :: parts
+    integer(int32) :: iblk, runblks
+    logical :: runblks_found
 
     ! sizes_and_switches (Global.f90:694)
     integer(int32) :: npoin, npoinb, nelem, ndimn, nmats, ngroup
@@ -230,7 +239,8 @@ contains
 
     ! per-ngroup arrays (Global.f90:976,983,989,998,1015,1023)
     integer(int32), allocatable :: equvs_process(:), appear_level(:)
-    integer(int32), allocatable :: appear_process(:), matno_process(:)
+    ! (ngroup, nblks): one record per block, read inside `do iblk=1,nblks` (Global.f90:988-999)
+    integer(int32), allocatable :: appear_process(:, :), matno_process(:, :)
     integer(int32), allocatable :: force_process(:), average_appear(:)
 
     ! gid_flags (Global.f90:1027) -- 20 GiD result-write flags, one .glb record
@@ -259,8 +269,8 @@ contains
     integer(int32) :: ntrans, nlaymif, ifixvar0_inpb
     real(real64) :: epsMIFb, gamaMIF, camif, dxmif
 
-    ! block-indexed arrays (Global.f90:1079,1084,1089,1093) -- sized nblks, pinned to 1
-    ! by the time these are read (init_and_blocks, seq 7, runs first).
+    ! block-indexed arrays (Global.f90:1079,1084,1089,1093) -- sized nblks, which
+    ! init_and_blocks (seq 7) has read and accepted by the time these are read.
     real(real64), allocatable :: hdam(:), water_level(:)
     integer(int32), allocatable :: modf_dis_blocks(:), uinitial(:)
 
@@ -394,8 +404,28 @@ contains
     if (ios /= 0) then
       call fail_read(errors, loc, 'solver', 'init_and_blocks', iomsg_buf); return
     end if
-    if (nblks /= 1_int32) then
-      call reject_dialect(errors, 'A-GLB', 'multiple-blocks', loc, actual=itoa(nblks), expected='1')
+    ! nblks is the number of blocks (steps). Legacy runs `do iblks=lblks+1,runblks`
+    ! (Fem.f90:1683) with runblks from `inp`, so a runblks below nblks would run only a
+    ! prefix of the analysis and one above it would index past every [nblks] array. The
+    ! modern path has no such split -- runblks IS count(step) -- so the one boundary both
+    ! paths can share is runblks == nblks. parse_inp has read runblks already (Fem.f90
+    ! reads inp first); its absence here is a driver-order fault, not a deck defect.
+    if (nblks < 1_int32) then
+      call reject_dialect(errors, 'A-GLB', 'blocks-nonpositive', loc, actual=itoa(nblks), &
+                          expected='>= 1')
+      return
+    end if
+    call opt_get(residue%runblks, runblks, runblks_found)
+    if (.not. runblks_found) then
+      call errors%add(make_problem_error(code=PE_INTERNAL, stage=PE_STAGE_ADAPT, &
+             rule_id='A-GLB/runblks-not-read', object_path='derived.counts.runblks', &
+             message='parse_glb needs runblks from parse_inp to check it against nblks; '// &
+             'parse_inp has not run', source=loc))
+      return
+    end if
+    if (runblks /= nblks) then
+      call reject_dialect(errors, 'A-GLB', 'runblks-not-nblks', loc, actual=itoa(runblks), &
+                          expected=itoa(nblks))
       return
     end if
     ! stab_matde (read at seq 2, sizes_and_switches): CORRECTED 2026-09-08 -- an earlier
@@ -629,19 +659,21 @@ contains
       call fail_read(errors, loc, 'case', 'title', iomsg_buf); return
     end if
 
-    ! seq 28 -- RD: GLB.global_data.appear_process (Global.f90:989), loop iblk=1..nblks.
-    ! nblks==1 (pinned above), so this is exactly one record; iblk=1 IS steps[0]
-    ! (state-field-map.toml note: "YL iblks=1 maps to steps[0]"). Column 0 (the block-0
-    ! initial state) is never read from file (zeroed at Global.f90:968) and the
-    ! Fem.f90:1719-1720 mutation it can trigger needs column0==1, which is therefore
-    ! always false on this path -- so the value read here IS the value at model_ready,
-    ! with no further transform needed.
-    allocate (appear_process(max(ngroup, 0_int32)))
-    read (unit, *, iostat=ios, iomsg=iomsg_buf) appear_process(1:ngroup)
-    loc = here(989_int32)
-    if (ios /= 0) then
-      call fail_read(errors, loc, 'steps[0].activation', 'appear_process', iomsg_buf); return
-    end if
+    ! seq 28 -- RD: GLB.global_data.appear_process (Global.f90:989), loop iblk=1..nblks:
+    ! one record per block, block iblk IS steps[iblk-1] (state-field-map.toml note: "YL
+    ! iblks=1 maps to steps[0]"). Column 0 (the block-0 initial state) is never read from
+    ! file (zeroed at Global.f90:968); commit re-establishes it the same way. What legacy
+    ! then does BETWEEN blocks with these columns (Fem.f90:1715-1720, a group switched
+    ! off) it does on both paths alike, because commit publishes the whole matrix.
+    allocate (appear_process(max(ngroup, 0_int32), nblks))
+    do iblk = 1_int32, nblks
+      read (unit, *, iostat=ios, iomsg=iomsg_buf) appear_process(1:ngroup, iblk)
+      loc = here(989_int32, iblk)
+      if (ios /= 0) then
+        call fail_read(errors, loc, 'steps[].activation', 'appear_process', iomsg_buf, iblk)
+        return
+      end if
+    end do
 
     ! seq 29 -- RD: GLB.global_data.title#15 (Global.f90:994)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -651,13 +683,16 @@ contains
     end if
 
     ! seq 30 -- RD: GLB.global_data.matno_process (Global.f90:998), loop iblk=1..nblks;
-    ! same single-block simplification as appear_process above.
-    allocate (matno_process(max(ngroup, 0_int32)))
-    read (unit, *, iostat=ios, iomsg=iomsg_buf) matno_process(1:ngroup)
-    loc = here(998_int32)
-    if (ios /= 0) then
-      call fail_read(errors, loc, 'steps[0].activation', 'matno_process', iomsg_buf); return
-    end if
+    ! one record per block, exactly as appear_process above.
+    allocate (matno_process(max(ngroup, 0_int32), nblks))
+    do iblk = 1_int32, nblks
+      read (unit, *, iostat=ios, iomsg=iomsg_buf) matno_process(1:ngroup, iblk)
+      loc = here(998_int32, iblk)
+      if (ios /= 0) then
+        call fail_read(errors, loc, 'steps[].activation', 'matno_process', iomsg_buf, iblk)
+        return
+      end if
+    end do
 
     ! seq 31 -- RD: GLB.global_data.title#16 (Global.f90:1012)
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -797,12 +832,11 @@ contains
       call fail_read(errors, loc, 'case', 'title', iomsg_buf); return
     end if
 
-    ! seq 46 -- RD: GLB.global_data.hdam (Global.f90:1079) -- nblks==1
-    ! ONE record holding one value per block, and it is the step's initial-stress datum:
-    ! `steps[0].initial_stress.fill_elevation`. nblks is pinned to 1 above, so element 1 IS
-    ! this parser's only step; the per-block nature of the field is carried by the contract
-    ! writing it under the step, not by this read.
-    allocate (hdam(1))
+    ! seq 46 -- RD: GLB.global_data.hdam (Global.f90:1079)
+    ! ONE record holding one value per block, and it is each step's initial-stress datum:
+    ! `steps[k].initial_stress.fill_elevation` = hdam(k+1). The template below takes
+    ! block 1's; the fan-out at the end of this routine gives every block its own.
+    allocate (hdam(nblks))
     read (unit, *, iostat=ios, iomsg=iomsg_buf) hdam(1:nblks)
     loc = here(1079_int32)
     if (ios /= 0) then
@@ -818,7 +852,7 @@ contains
     end if
 
     ! seq 48 -- RD: GLB.global_data.water_level (Global.f90:1084) -- -99 = none
-    allocate (water_level(1))
+    allocate (water_level(nblks))
     read (unit, *, iostat=ios, iomsg=iomsg_buf) water_level(1:nblks)
     loc = here(1084_int32)
     if (ios /= 0) then
@@ -833,7 +867,7 @@ contains
     end if
 
     ! seq 50 -- RD: GLB.global_data.modf_dis_blocks (Global.f90:1089)
-    allocate (modf_dis_blocks(1))
+    allocate (modf_dis_blocks(nblks))
     read (unit, *, iostat=ios, iomsg=iomsg_buf) modf_dis_blocks(1:nblks)
     loc = here(1089_int32)
     if (ios /= 0) then
@@ -858,15 +892,23 @@ contains
     end if
 
     ! seq 52 -- RD: GLB.global_data.uinitial (Global.f90:1093)
-    allocate (uinitial(1))
+    allocate (uinitial(nblks))
     read (unit, *, iostat=ios, iomsg=iomsg_buf) uinitial(1:nblks)
     loc = here(1093_int32)
     if (ios /= 0) then
       call fail_read(errors, loc, 'control.glb', 'uinitial', iomsg_buf); return
     end if
-    if (any(uinitial(1:nblks) /= 0_int32)) then
-      call reject_pinned(errors, loc, 'uinitial-nonzero', uinitial(1)); return
-    end if
+    ! uinitial(iblks)==1 zeroes result_zero/first/second at the top of that block
+    ! (Fem.f90:1707-1711) -- the modern contract's `reset_state`, which is a flag. legacy
+    ! tests `==1` only, so any other value reads as 0 there; a deck that writes one is
+    ! saying something the flag cannot carry, and is refused rather than read as false.
+    do iblk = 1_int32, nblks
+      if (uinitial(iblk) /= 0_int32 .and. uinitial(iblk) /= 1_int32) then
+        call reject_dialect(errors, 'A-GLB', 'uinitial-not-a-flag', here(1093_int32, iblk), &
+                            actual=itoa(uinitial(iblk)), expected='0 or 1', idx=iblk)
+        return
+      end if
+    end do
 
     ! seq 53 -- RD: GLB.global_data.title#27 (Global.f90:1099) -- backf() title; nbackf=0
     read (unit, *, iostat=ios, iomsg=iomsg_buf) text
@@ -1066,8 +1108,8 @@ contains
         ! steps[0].activation[igroup]: fully .glb-sourced (appear_process/matno_process
         ! at block 1, both read above before this loop). Owned entirely by this parser
         ! per yl_adapter_parts.f90's leaf table.
-        call opt_set(activation(igroup)%material, matno_process(igroup))
-        call opt_set(activation(igroup)%active, appear_process(igroup))
+        call opt_set(activation(igroup)%material, matno_process(igroup, 1))
+        call opt_set(activation(igroup)%active, appear_process(igroup, 1))
 
         ! deck_context_t (adapter-contract.md SS2.2) used to describe "the (single) group"
         ! and carried group 1's node count as the value every other parser saw. That was
@@ -1265,6 +1307,41 @@ contains
     if (allocated(residue%uinitial)) deallocate (residue%uinitial)
     allocate (residue%uinitial(nblks))
     residue%uinitial = uinitial(1:nblks)
+
+    ! ---- one step_parts_t per block ------------------------------------------------
+    ! Everything above went into the template `parts` once, because `.glb` says it once
+    ! for the whole analysis. Two things it says per block, and those are set here.
+    if (allocated(blocks)) deallocate (blocks)
+    allocate (blocks(nblks))
+    ! The activation matrix is admitted in the shape the modern path can state: `active`
+    ! is a flag (yl_authoring_map.f90 writes merge(1, 0, ...)), and a group's material is
+    ! its section's material in every step (the contract has no per-step material). A
+    ! deck that switches a group's material between blocks, or writes another appear
+    ! value, says something the other path cannot, and is refused rather than carried.
+    do iblk = 1_int32, nblks
+      do igroup = 1_int32, ngroup
+        if (appear_process(igroup, iblk) /= 0_int32 .and. appear_process(igroup, iblk) /= 1_int32) then
+          call reject_dialect(errors, 'A-GLB', 'activation-not-a-flag', here(989_int32, iblk), &
+                              actual=itoa(appear_process(igroup, iblk)), expected='0 or 1', idx=igroup)
+          return
+        end if
+        if (matno_process(igroup, iblk) /= ctx%group_matno(igroup)) then
+          call reject_dialect(errors, 'A-GLB', 'block-material-not-section', here(998_int32, iblk), &
+                              actual=itoa(matno_process(igroup, iblk)), &
+                              expected=itoa(ctx%group_matno(igroup)), idx=igroup)
+          return
+        end if
+      end do
+    end do
+    do iblk = 1_int32, nblks
+      blocks(iblk) = parts
+      do igroup = 1_int32, ngroup
+        call opt_set(blocks(iblk)%activation(igroup)%material, matno_process(igroup, iblk))
+        call opt_set(blocks(iblk)%activation(igroup)%active, appear_process(igroup, iblk))
+      end do
+      call opt_set(blocks(iblk)%initial_stress%fill_elevation, hdam(iblk))
+    end do
+    ctx%nblks = nblks
 
 
     include 'yl_adapter_scalars.inc'

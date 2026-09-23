@@ -240,11 +240,13 @@ contains
     if (.not. check_read(b, errors, ios, iomsg_buf, 'F0/inp-runblks', &
                          'derived.counts.runblks', loc)) return
 
-    ! Whitelist: static-q4/1 is single-stage. derived.counts.runblks's own map note reads
-    ! "= len(steps) executed; equals nblks=1 on both cases" -- a runblks other than 1 asks for
-    ! a `steps` array this capability slice does not cover.
-    if (runblks /= 1_int32) then
-      call reject_dialect(errors, 'F1', 'runblks', loc, actual=itoa(int(runblks)), expected='1')
+    ! derived.counts.runblks's map note: "= len(steps) executed". A staged analysis has
+    ! more than one block (M7), so the gate here is only that at least one block runs.
+    ! Whether runblks agrees with the deck's nblks is .glb's question, and parse_glb asks
+    ! it (A-GLB/runblks-not-nblks) -- this file has not read nblks yet.
+    if (runblks < 1_int32) then
+      call reject_dialect(errors, 'F1', 'runblks-nonpositive', loc, actual=itoa(int(runblks)), &
+                          expected='>= 1')
       return
     end if
     call opt_set(residue%runblks, runblks)
@@ -262,22 +264,18 @@ contains
   !>
   !> `ctx` itself is not read for anything but `%filled` -- this module has no site that
   !> needs `ndimn`/`ngroup`/etc, only the ordering guarantee `%filled` stands for (see below).
-  subroutine parse_man(unit, ctx, b, parts, errors)
+  subroutine parse_man(unit, ctx, b, blocks, errors)
     integer, intent(in) :: unit
     type(deck_context_t), intent(in) :: ctx
     type(problem_builder_t), intent(inout) :: b
-    type(step_parts_t), intent(inout) :: parts
+    !> One per block. `.man` restates its whole STATIC_U section for every block
+    !> (legacy reads it inside the block loop, from where the previous block stopped),
+    !> so block k's section fills blocks(k).
+    type(step_parts_t), intent(inout) :: blocks(:)
     type(problem_errors_t), intent(inout) :: errors
 
-    character(len=80) :: title
-    integer(int32) :: nincs, lincs, iincs
-    integer(int32) :: miter, noutn, noutf, nstep, inc_step, nresta, cwater, qstatic
-    real(real64) :: ditime
-    real(real64) :: toler_force
-    real(real64) :: toler_var(WHITELIST_MDOFN)
-    integer :: ios
-    character(len=IOMSG_LEN) :: iomsg_buf
     type(source_location_t) :: loc
+    integer :: iblk, mark
 
     ! Ordering guard, not a deck read: `ctx%filled` is set only by parse_glb, which FEM90's
     ! own body runs before STATIC_U (`call global_data` at Fem.f90:117, long before STATIC_U
@@ -297,6 +295,38 @@ contains
         loc, errors)
       return
     end if
+    if (size(blocks) /= ctx%nblks) then
+      loc = make_source_location(reader='STATIC_U')
+      call builder_note_failure(b, PE_INTERNAL, 'F3/blocks-not-sized', 'deck_context', '', &
+        'parse_man was handed '//itoa(size(blocks))//' block parts for a deck of '// &
+        itoa(int(ctx%nblks))//' blocks', loc, errors)
+      return
+    end if
+
+    do iblk = 1, size(blocks)
+      mark = errors%count()
+      call parse_man_block(unit, b, blocks(iblk), errors)
+      if (errors%count() > mark) return
+    end do
+  end subroutine parse_man
+
+  !> One block's STATIC_U section of `.man`.
+  subroutine parse_man_block(unit, b, parts, errors)
+    integer, intent(in) :: unit
+    type(problem_builder_t), intent(inout) :: b
+    type(step_parts_t), intent(inout) :: parts
+    type(problem_errors_t), intent(inout) :: errors
+
+    character(len=80) :: title
+    integer(int32) :: nincs, lincs, iincs
+    integer(int32) :: miter, noutn, noutf, nstep, inc_step, nresta, cwater, qstatic
+    real(real64) :: ditime
+    real(real64) :: toler_force
+    real(real64) :: toler_var(WHITELIST_MDOFN)
+    integer :: ios
+    character(len=IOMSG_LEN) :: iomsg_buf
+    type(source_location_t) :: loc
+
 
     ! RD: MAN.STATIC_U.title#1 (Fem.f90:3593) -- guard type_problem=='Q' (STATIC_U)
     ! read(mainunit,*,iostat=yl_ios,iomsg=yl_msg)text
@@ -406,7 +436,7 @@ contains
     ! output%field are `.glb`'s and are deliberately left untouched.
     call opt_set(parts%output%frequency%nodes, noutn)
     call opt_set(parts%output%frequency%fields, noutf)
-  end subroutine parse_man
+  end subroutine parse_man_block
 
   ! ============================================================================================
   ! private helpers

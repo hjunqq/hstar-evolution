@@ -358,11 +358,11 @@ module yl_problem_profile
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
                       message='gamamax/=0 opens an equivalent-linearisation soil-constitutive file '//   &
                               '(Fem.f90:1724-1730)'),                                                               &
-    capability_item_t(rule_id='F1', condition='runblks',                                                            &
+    capability_item_t(rule_id='F1', condition='runblks-nonpositive',                                                &
                       item='inp.runblks', object_path='derived.counts.runblks',                                     &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
-                      message='runblks must be 1 under static-q4/1 (single-stage static); this build cannot '//   &
-                              'represent a multi-block analysis'),                                                  &
+                      message='runblks must be >= 1: it is how many blocks legacy runs (Fem.f90:1683), and '//   &
+                              'a run of no block has no steps to state'),                                           &
     capability_item_t(rule_id='F2', condition='multi-increment',                                                    &
                       item='man.nincs', object_path='steps0.controls.increments',                                   &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
@@ -423,11 +423,18 @@ module yl_problem_profile
                       message='only the GIDR text flavia writer is reproduced; GIDA (append) and any other '//   &
                               'value select a different .glb.flavia.res open discipline (Global.f90:736-737) '//   &
                               'this build does not implement'),                                                     &
-    capability_item_t(rule_id='A-GLB', condition='multiple-blocks',                                                 &
+    ! A multi-block deck is one step per block since M7 on this path as well; what is left
+    ! refused is a block count that states no step, and a runblks that runs a different
+    ! number of blocks than the deck declares (the modern path has no such split).
+    capability_item_t(rule_id='A-GLB', condition='blocks-nonpositive',                                              &
                       item='glb.nblks', object_path='steps',                                                        &
                       field='nblks', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &
-                      message='this parser assembles exactly one steps[0] (adapter-contract.md SS2.1); a '//   &
-                              'multi-block deck needs a step_parts_t per block, which does not exist yet'),         &
+                      message='nblks must be >= 1: it is the number of steps the deck declares'),                 &
+    capability_item_t(rule_id='A-GLB', condition='runblks-not-nblks',                                               &
+                      item='glb.nblks', object_path='derived.counts.runblks',                                       &
+                      field='nblks', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                           &
+                      message='inp runblks must equal .glb nblks: fewer runs only a prefix of the declared '//   &
+                              'steps, more indexes past every [nblks] array (Fem.f90:1683)'),                       &
     capability_item_t(rule_id='A-GLB', condition='stab-matde-enabled',                                              &
                       item='glb.stab_matde', object_path='control.glb',                                             &
                       field='stab_matde', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                      &
@@ -497,11 +504,11 @@ module yl_problem_profile
                       field='ntrans', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                          &
                       message='pinned guard: value 0 keeps control flow on static_2d path '//   &
                               '(docs/m2/state-field-map.toml, control.glb.ntrans)'),                                &
-    capability_item_t(rule_id='A-GLB', condition='uinitial-nonzero',                                                &
+    capability_item_t(rule_id='A-GLB', condition='uinitial-not-a-flag',                                             &
                       item='glb.uinitial', object_path='control.glb.uinitial',                                      &
                       field='uinitial', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                        &
-                      message='pinned guard: value 0 keeps control flow on static_2d path '//   &
-                              '(docs/m2/state-field-map.toml, control.glb.uinitial)'),                              &
+                      message='uinitial(iblks) must be 0 or 1: it is the step''s reset_state flag and legacy '//   &
+                              'tests it against 1 (Fem.f90:1707)'),                                                 &
     ! The five .glb section counts the parser used to read into a local and DISCARD.
     ! Found 2026-09-10 while the adapter first drove a solve: every one of them is
     ! followed in legacy by count-many records, so a non-zero value did not fail -- it
@@ -700,16 +707,36 @@ module yl_problem_profile
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
                       message='npipe /= 0: pipe cooling (Temper.f90:316 onwards) is outside the '//                 &
                               'static-q4/1 whitelist'),                                                             &
-    capability_item_t(rule_id='A4', condition='edge-definition-unsupported',                                        &
-                      item='loa.nedge', object_path='steps[0].load',                                                &
+    ! The edge table and the per-block edge loads are carried (M7, and on this path since
+    ! 2026-09-23) in the one shape the authoring contract can state; these three rows are
+    ! what is left outside it.
+    capability_item_t(rule_id='A4', condition='edge-table-unsupported',                                             &
+                      item='loa.edges', object_path='surface_edges',                                                &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
-                      message='nedge /= 0: edge definitions (Load.f90:369-465) feed only pressure loads, which '//   &
-                              'are outside the static-q4/1 whitelist'),                                             &
-    capability_item_t(rule_id='A5', condition='pressure-load-unsupported',                                          &
-                      item='loa.edge_load_group', object_path='steps[0].load',                                      &
+                      message='only 2-node edges on element class 1 with no flattened coordinate (nnode=2 '//   &
+                              'index=1 vdimn=0, kind "edge2") in whole chunks of the table are reproduced '//   &
+                              '(Load.f90:369-392)'),                                                                &
+    capability_item_t(rule_id='A5', condition='pressure-distribution-unsupported',                                  &
+                      item='loa.water/code_load', object_path='steps[].load.pressure',                              &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
-                      message='edge_load_group /= 0: edge / water-pressure loads (Load.f90:757-908) are outside '//   &
-                              'the static-q4/1 whitelist'),                                                         &
+                      message='only the linear head distribution along y (water=2) without a second far-side '//   &
+                              'distribution (code_load=0) is reproduced; water=0 reads a per-node table '//   &
+                              '(Load.f90:944-958)'),                                                                &
+    capability_item_t(rule_id='A5', condition='pressure-edge-range',                                                &
+                      item='loa.begin_edge/end_edge', object_path='steps[].load.pressure',                          &
+                      field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &
+                      message='edge-load ranges must lie in 1..nedge, sum to edge_load_group (no group '//   &
+                              'when 0) and be identical or disjoint -- one whole face each (Load.f90:930-969)'),    &
+    capability_item_t(rule_id='A-GLB', condition='activation-not-a-flag',                                           &
+                      item='glb.appear_process', object_path='steps[].activation',                                  &
+                      field='active', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                          &
+                      message='APPEAR_PROCESS must be 0 or 1: it is whether the step contains the group '//   &
+                              '(Global.f90:989)'),                                                                  &
+    capability_item_t(rule_id='A-GLB', condition='block-material-not-section',                                      &
+                      item='glb.matno_process', object_path='steps[].activation',                                   &
+                      field='material', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                        &
+                      message='MATNO_PROCESS must name the group header''s own material in every block: the '//   &
+                              'contract gives a section one material for the whole analysis (Global.f90:998)'),   &
     capability_item_t(rule_id='A6', condition='beam-load-unsupported',                                              &
                       item='loa.nbeamload', object_path='steps[0].load',                                            &
                       field='', stage=CAP_STAGE_ADAPT, value_kind=PROFILE_KIND_NONE,                                &

@@ -18,7 +18,7 @@
 | 步 | 内容 | 状态 |
 |---|---|---|
 | 1 | `beam_point_load`（集中力）在 legacy-deck 适配器路径上恢复 | **完成 2026-09-23** |
-| 2 | `wall_reservoir`（`runblks>1` + 面荷载）在 legacy-deck 适配器路径上恢复；`mini_gravdam` 只作后续扩展算例 | 未开始 |
+| 2 | `wall_reservoir`（`runblks>1` + 面荷载）在 legacy-deck 适配器路径上恢复；`mini_gravdam` 只作后续扩展算例 | **完成 2026-09-23** |
 | 3 | R34 改为真正的跨路径门禁：九个 golden 都检查两条路径的能力边界与结果 | 未开始 |
 
 **步 1 证据**：`--adapter=on` 直接跑 legacy deck，`rc=0`、状态 COMPLETED，stdout 有
@@ -29,8 +29,33 @@
 （方言套件 399/399，两个 golden deck）。原 `A3/point-load-unsupported` 行删除。
 三个集中力读取站点从 `docs/m1/adapter-coverage.toml` 的未适配登记移到适配器标记（181 = 158 + 23）。
 release / adapter / runtime 三道门禁 2026-09-23 全绿，既有 golden 逐位不变。
-**限定**：只恢复 legacy-deck 路径上的集中力；`wall_reservoir` 在该路径上仍 `rc=3`（`runblks must be 1`），
-回退门禁（R34）仍只遍历两个静力算例，这次恢复**尚无门禁守住**，靠步 3 补上。
+**限定**：只恢复 legacy-deck 路径上的集中力；回退门禁（R34）仍只遍历两个静力算例，这次恢复**尚无门禁守住**，靠步 3 补上。
+
+**步 2 证据**：适配器从「单块」改为**每块一个 `step_parts_t`**——`parse_glb` 按 `nblks` 分配，
+`APPEAR_PROCESS`/`MATNO_PROCESS` 每块一行、`hdam` 每块一值、`uinitial` 放开为 0/1 标志；
+`.pre`、`.man` 与 `.loa` 的 external_load_2 段按块顺序逐段读（三者在白名单内都不 rewind：
+meshc/rmesh/Bparameter 已拒绝）；`.loa` 的边表进 `surface_edges[]`、逐块面荷载进
+`steps[].load.pressure[]`，与 authoring 映射层逐字段同形。接受边界**与 authoring 契约相同**，
+其外各为具名拒绝并各有反例：`F1/runblks-nonpositive`、`A-GLB/blocks-nonpositive`、
+`A-GLB/runblks-not-nblks`（runblks 必须等于 nblks——现代路径没有这种分裂）、`A-GLB/uinitial-not-a-flag`、
+`A4/edge-table-unsupported`（只放行 edge2：nnode=2/index=1/vdimn=0）、`A5/pressure-distribution-unsupported`
+（只放行 water=2、code_load=0）、`A5/pressure-edge-range`。覆盖登记 181 = 163 + 18（五个边/面荷载站点转为标记）。
+- **验收对象**：`wall_reservoir` legacy deck `--adapter=on` → COMPLETED，确由适配器驱动，
+  对冻结参考 **4 块 552 值 `max|d|=0.000e+00`**。
+- **九个 golden 全部**走 legacy-deck 适配器路径对冻结参考逐位相等（`rcbeam` 120 块 214 110 值、`slope_srm` 600 块 541 200 值在内）。
+- **反例先失效、后补上**：第一组扰动（`fact` 9810→5000、`cor0` 50→40）在**两条路径上都与参考逐位相等**——
+  不是适配器的问题，是该算例迎水面节点全被 x 向约束，水压只进反力，冻结参考**分辨不出面荷载**（登记 **R36**）。
+  改用派生 deck（x 向约束只留节点 1、6），预先写下预期后运行，全部成立：
+  D0/D1/G 三组 `on` 对 `off` 均 4 块 0 差异；D1（`fact`=5000）对 D0 step 1 两块 0 差异、step 2 位移 84 / 应力 184 值不同；
+  G（block 2 重力 9.81→5.0）对参考 step 1 为 0、step 2 为 76 / 184。**面荷载与逐块重力在两条路径上逐位相同地被施加。**
+- **审查**（Claude 子代理按合同审 diff，**不是**独立于实现者的人工复核，R28 不变）：读取协议无缺陷；指出三处「适配器接受、authoring 表达不了」的形状，已全部收口为具名拒绝：
+  `A-GLB/activation-not-a-flag`（APPEAR_PROCESS 只取 0/1）、`A-GLB/block-material-not-section`（MATNO_PROCESS 每块必须等于组头材料）、
+  `A5/pressure-edge-range` 扩为「全分析内任意两段范围要么相同要么不交」并拒绝 `edge_load_group=0` 而 `delgroup≠0`。
+  派生 deck 把 block 2 面荷载拆成 1..2 与 2..3 两组 → `rc=3` 点名该行。收口后九例、D0/D1/G 对照全部重跑，结论不变。
+- 三道门禁（release / adapter / runtime）2026-09-23 全绿；方言套件 419/419 × 两 deck。
+- 补跑故障探针：19 PASS / 28 FAIL，**与上一提交基线二进制逐探针相同**，非本轮回归；探针自 M4-02 起已随默认入口变化而过期，登记 **R35**。
+**限定**：`capability-frontier.md` §2 的首条拒绝统计（`runblks` 行 14 例等）是改动前测的，**本轮未重测**，已过期；
+`mini_gravdam` 等扩展算例未跑，不作声称。R34 仍未改，步 2 同样尚无门禁守住。
 
 ## 验收链（2026-09-12 总览时清点）
 
